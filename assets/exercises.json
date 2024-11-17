@@ -1,0 +1,9 @@
+[
+    {"exerciseID": 1, "name": "Bench Press Barbell", "targetMuscle": "Chest" , "accessoryMuscles": "Triceps,Deltoids"},
+    {"exerciseID": 2, "name": "Squat", "targetMuscle": "Quadriceps" , "accessoryMuscles": "Gluteal,Hamstring"},
+    {"exerciseID": 3, "name": "V Bar Pushdown", "targetMuscle": "Triceps" , "accessoryMuscles": ""},
+    {"exerciseID": 4, "name": "Bayesian Curl", "targetMuscle": "Biceps" , "accessoryMuscles": ""},
+    {"exerciseID": 5, "name": "Romanian Deadlift", "targetMuscle": "Hamstring" , "accessoryMuscles": "Gluteal,Lower-Back"},
+    {"exerciseID": 6, "name": "TOTORO Deadlift", "targetMuscle": "Gluteal" , "accessoryMuscles": "Lower-Back"},
+    {"exerciseID": 7, "name": "INITAIL D", "targetMuscle": "Gluteal" , "accessoryMuscles": "Lower-Back"}
+  ]
