@@ -25,13 +25,28 @@ const Current = () => {
 
     const [exercises, setExercises] = useState([]);
 
+    const [currentWorkout, setCurrentWorkout] = useState([])
+
+
+
     useEffect(() => {
-      fetchExercises()
+        fetchExercises()
         .then(data => setExercises(data))
+        .catch(err => console.error(err));
+
+        fetchCurrentWorkout()
+        .then(data => setCurrentWorkout(data))
         .catch(err => console.error(err));
     }, []);
 
-
+    
+    const groupedWorkouts = currentWorkout.reduce((acc, { exerciseID, weight, reps }) => {
+        if (!acc[exerciseID]) {
+          acc[exerciseID] = [];
+        }
+        acc[exerciseID].push({ weight, reps });
+        return acc;
+      }, {});
 
 
     NavigationBar.setBackgroundColorAsync("black");
@@ -110,57 +125,59 @@ const Current = () => {
 
     return (
         <SafeAreaView style={styles.container}>
+        {!workoutInProgress && (
+            <TouchableOpacity style={styles.button} onPress={startWorkout}>
+                <Text style={styles.buttonText}>Start Workout</Text>
+            </TouchableOpacity>
+        )}
+
+        {workoutInProgress && (
             <ScrollView 
                 showsVerticalScrollIndicator={false} 
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.buttonContainer}
             >
-                {!workoutInProgress && (
-                    <TouchableOpacity style={styles.button} onPress={startWorkout}>
-                        <Text style={styles.buttonText}>Start Workout</Text>
-                    </TouchableOpacity>
-                )}
+                {Object.keys(groupedWorkouts).map((exerciseID) => (
+                    <View key={exerciseID} style={styles.exerciseContainer}>
+                        <Text style={styles.exerciseTitle}>Exercise ID: {exerciseID}</Text>
+                        <FlatList
+                            data={groupedWorkouts[exerciseID]}
+                            renderItem={({ item, index }) => (
+                                <View>
+                                    <Text style={styles.exerciseText}>Set {index + 1}</Text>
+                                    <Text style={styles.exerciseText}>Weight: {item.weight}kg</Text>
+                                    <Text style={styles.exerciseText}>Reps: {item.reps}</Text>
+                                </View>
+                            )}
+                            keyExtractor={(item, index) => index.toString()}
+                            contentContainerStyle={styles.setListContainer}
+                        />
+                    </View>
+                ))}
 
-                {workoutInProgress && (
+                <TouchableOpacity
+                    key={"addWorkout"}
+                    style={styles.button}
+                    onPress={addExercise}
+                >
+                    <AntDesign name="plus" size={24} color="#737373" />
+                </TouchableOpacity>
 
-                    
-
-
-
-
-
-
-
-
-                    <>
-                        <TouchableOpacity
-                            key={"addWorkout"}
-                            style={styles.button}
-                            onPress={addExercise}
-                        >
-                            <AntDesign name="plus" size={24} color="#737373" />
-
-                        </TouchableOpacity>
-
-                        <ActionSheet ref={actionSheetRef} overlayColor="transparent" containerStyle={{ backgroundColor: 'black' }}>
-                            
-                        <Text style={styles.header}>Exercises</Text>
-                            <FlatList
-                                data={exercises}
-                                keyExtractor={(item) => item.exerciseID.toString()} // Use exerciseID as a unique key
-                                renderItem={renderItem}
-                            />
-
-                        </ActionSheet>
-                        
-                        <TouchableOpacity style={styles.button} onPress={endWorkout}>
-                            <Text style={styles.buttonText}>Finish Workout</Text>
-                        </TouchableOpacity>
-                        
-                    </>
-                )}
+                <ActionSheet ref={actionSheetRef} overlayColor="transparent" containerStyle={{ backgroundColor: 'black' }}>
+                    <Text style={styles.header}>Exercises</Text>
+                    <FlatList
+                        data={exercises}
+                        keyExtractor={(item) => item.exerciseID.toString()}
+                        renderItem={renderItem}
+                    />
+                </ActionSheet>
+                
+                <TouchableOpacity style={[styles.button, styles.finishButton]} onPress={endWorkout}>
+                    <Text style={styles.buttonText}>Finish Workout</Text>
+                </TouchableOpacity>
             </ScrollView>
-        </SafeAreaView>
+        )}
+    </SafeAreaView>
     );
 };
 
@@ -207,5 +224,40 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: "bold",
       },
+      exerciseTitle: {
+        color: "#737373",
+        fontSize: 20,
+        fontWeight: "bold",
+      },
+      container: {
+        flex: 1,
+        backgroundColor: 'black',
+    },
+    buttonContainer: {
+        padding: 15,
+    },
+    exerciseContainer: {
+        marginBottom: 15,
+        padding: 10,
+        backgroundColor: '#333',
+        borderRadius: 8,
+    },
+    exerciseTitle: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 8,
+    },
+    exerciseText: {
+        color: 'white',
+        fontSize: 16,
+
+    },
+    setListContainer: {
+        marginTop: 8,
+    },
+    finishButton: {
+        marginBottom: 70, // Add some space above the finish button
+    }
 });
 export default Current;
