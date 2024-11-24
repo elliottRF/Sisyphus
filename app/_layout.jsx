@@ -37,9 +37,9 @@ const _layout = () => {
                 }}
             />
             <Tabs.Screen
-                name="create"
+                name="history"
                 options={{
-                    title:"Create",
+                    title:"History",
                     headerShown: false // Hides the top header
                 }}
             />

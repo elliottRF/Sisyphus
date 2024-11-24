@@ -6,7 +6,7 @@ import Body from "react-native-body-highlighter";
 
 
 
-const backgroundColour = "#07080a";
+const backgroundColour = "#121212";
 
 
 const Home = () => {

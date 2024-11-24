@@ -4,7 +4,7 @@ import { TouchableOpacity } from 'react-native';
 
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
-
+import Octicons from '@expo/vector-icons/Octicons';
 
 
 
@@ -16,7 +16,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
 
         index: (props)=> <FontAwesome name="home" size={26} color={greyColor} {...props}/>,
         current: (props)=> <FontAwesome6 name="dumbbell" size={26} color={greyColor} {...props}/>,
-        create: (props)=> <FontAwesome name="plus-circle" size={26} color={greyColor} {...props}/>,
+        history: (props)=><Octicons name="checklist" size={26} color={greyColor} {...props}/>,
         profile: (props)=> <FontAwesome name="user" size={26} color={greyColor} {...props}/>
     }
 

@@ -15,12 +15,17 @@
     "ios": {
       "supportsTablet": true
     },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      }
-    },
+"android": {
+  "softwareKeyboardLayoutMode": "pan",
+  "adaptiveIcon": {
+    "foregroundImage": "./assets/images/adaptive-icon.png",
+    "backgroundColor": "#ffffff"
+  },
+  "package": "com.elliottr.sisyphus",
+  "compileSdkVersion": 34,
+  "targetSdkVersion": 34,
+  "minSdkVersion": 21
+},
     "web": {
       "bundler": "metro",
       "output": "static",
@@ -28,10 +33,19 @@
     },
     "plugins": [
       "expo-router",
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "dc7d3768-1a31-47d3-a316-5a79b1349765"
+      }
     }
   }
 }

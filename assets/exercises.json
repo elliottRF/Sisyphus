@@ -1,9 +1,22 @@
 [
-    {"exerciseID": 1, "name": "Bench Press Barbell", "targetMuscle": "Chest" , "accessoryMuscles": "Triceps,Deltoids"},
-    {"exerciseID": 2, "name": "Squat", "targetMuscle": "Quadriceps" , "accessoryMuscles": "Gluteal,Hamstring"},
-    {"exerciseID": 3, "name": "V Bar Pushdown", "targetMuscle": "Triceps" , "accessoryMuscles": ""},
-    {"exerciseID": 4, "name": "Bayesian Curl", "targetMuscle": "Biceps" , "accessoryMuscles": ""},
-    {"exerciseID": 5, "name": "Romanian Deadlift", "targetMuscle": "Hamstring" , "accessoryMuscles": "Gluteal,Lower-Back"},
-    {"exerciseID": 6, "name": "TOTORO Deadlift", "targetMuscle": "Gluteal" , "accessoryMuscles": "Lower-Back"},
-    {"exerciseID": 7, "name": "INITAIL D", "targetMuscle": "Gluteal" , "accessoryMuscles": "Lower-Back"}
-  ]
+  {"exerciseID": 1, "name": "Bench Press Barbell", "targetMuscle": "Chest", "accessoryMuscles": "Triceps,Deltoids"},
+  {"exerciseID": 2, "name": "Squat", "targetMuscle": "Quadriceps", "accessoryMuscles": "Gluteal,Hamstring"},
+  {"exerciseID": 3, "name": "V Bar Pushdown", "targetMuscle": "Triceps", "accessoryMuscles": ""},
+  {"exerciseID": 4, "name": "Bayesian Curl", "targetMuscle": "Biceps", "accessoryMuscles": ""},
+  {"exerciseID": 5, "name": "Romanian Deadlift", "targetMuscle": "Hamstring", "accessoryMuscles": "Gluteal,Lower-Back"},
+  {"exerciseID": 6, "name": "Pull-Up", "targetMuscle": "Upper-Back", "accessoryMuscles": "Biceps,Shoulders"},
+  {"exerciseID": 7, "name": "Deadlift", "targetMuscle": "Lower-Back", "accessoryMuscles": "Hamstrings,Glutes,Forearms"},
+  {"exerciseID": 8, "name": "Overhead Press", "targetMuscle": "Shoulders", "accessoryMuscles": "Triceps,Upper Chest"},
+  {"exerciseID": 9, "name": "Leg Press", "targetMuscle": "Quadriceps", "accessoryMuscles": "Gluteal,Hamstrings"},
+  {"exerciseID": 10, "name": "Lat Pulldown", "targetMuscle": "Upper-Back", "accessoryMuscles": "Biceps,Shoulders"},
+  {"exerciseID": 11, "name": "Dumbbell Flyes", "targetMuscle": "Chest", "accessoryMuscles": "Deltoids,Triceps"},
+  {"exerciseID": 12, "name": "Incline Dumbbell Press", "targetMuscle": "Upper Chest", "accessoryMuscles": "Shoulders,Triceps"},
+  {"exerciseID": 13, "name": "Barbell Row", "targetMuscle": "Upper Back", "accessoryMuscles": "Upper-Back,Biceps,Traps"},
+  {"exerciseID": 14, "name": "Leg Curl Machine", "targetMuscle": "Hamstrings", "accessoryMuscles": "Gluteal"},
+  {"exerciseID": 15, "name": "Seated Calf Raise", "targetMuscle": "Calves", "accessoryMuscles": ""},
+  {"exerciseID": 16, "name": "Dips", "targetMuscle": "Chest", "accessoryMuscles": "Triceps,Shoulders"},
+  {"exerciseID": 17, "name": "Barbell Shrug", "targetMuscle": "Traps", "accessoryMuscles": "Deltoids"},
+  {"exerciseID": 18, "name": "Chest Fly Machine", "targetMuscle": "Chest", "accessoryMuscles": "Deltoids,Triceps"},
+  {"exerciseID": 19, "name": "T-Bar Row", "targetMuscle": "Back", "accessoryMuscles": "Biceps,Upper-Back"},
+  {"exerciseID": 20, "name": "Preacher Curl", "targetMuscle": "Biceps", "accessoryMuscles": "Forearms"}
+]

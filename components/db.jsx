@@ -21,13 +21,17 @@ export const setupDatabase = () => {
       );
 
       tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS currentWorkout (
-          workoutNum INTEGER,
+        `CREATE TABLE IF NOT EXISTS workoutHistory (
+          workoutSession INTEGER,
+          exerciseNum INTEGER,
           setNum INTEGER,
           exerciseID INTEGER,
           weight FLOAT,
           reps INTEGER,
-          PRIMARY KEY (workoutNum, setNum),
+          oneRM FLOAT,
+          time time,
+          name TEXT,
+          pr INTEGER,
           FOREIGN KEY (exerciseID) REFERENCES exercises(exerciseID)
         );`
       );
@@ -51,36 +55,8 @@ export const setupDatabase = () => {
           }
         }
       );
-
-      // Check if currentWorkout table is empty before populating with debugging data
-      tx.executeSql(
-        'SELECT COUNT(*) as count FROM currentWorkout;',
-        [],
-        (_, { rows }) => {
-          const count = rows._array[0].count;
-          
-          // Only populate if the table is empty
-          if (count === 0) {
-            const debuggingWorkout = [
-              { workoutNum: 1, setNum: 1, exerciseID: 1, weight: 0, reps: 20 },
-              { workoutNum: 1, setNum: 2, exerciseID: 1, weight: 0, reps: 25 },
-              { workoutNum: 2, setNum: 1, exerciseID: 2, weight: 50, reps: 12 }, 
-              { workoutNum: 2, setNum: 2, exerciseID: 2, weight: 55, reps: 10 },
-              { workoutNum: 3, setNum: 1, exerciseID: 3, weight: 100, reps: 8 },
-              { workoutNum: 3, setNum: 2, exerciseID: 3, weight: 110, reps: 6 }
-            ];
-
-            debuggingWorkout.forEach(({ workoutNum, setNum, exerciseID, weight, reps }) => {
-              tx.executeSql(
-                `INSERT INTO currentWorkout (workoutNum, setNum, exerciseID, weight, reps) 
-                VALUES (?, ?, ?, ?, ?);`,
-                [workoutNum, setNum, exerciseID, weight, reps]
-              );
-            });
-          }
-        }
-      );
     }, 
+
     (error) => {
       console.error('Database setup error:', error);
       reject(error);
@@ -107,13 +83,152 @@ export const fetchExercises = () => {
 };
 
 // Fetch all exercises from the database
-export const fetchCurrentWorkout = () => {
+export const fetchWorkoutHistory = () => {
   return new Promise((resolve, reject) => {
     db.transaction(tx => {
       tx.executeSql(
-        `SELECT * FROM currentWorkout;`,
+        `SELECT * FROM workoutHistory;`,
         [],
         (_, { rows }) => resolve(rows._array),
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+
+// Get the latest workout session number
+export const getLatestWorkoutSession = () => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `SELECT MAX(workoutSession) as latestSession FROM workoutHistory;`,
+        [],
+        (_, { rows }) => {
+          const latestSession = rows._array[0].latestSession;
+          resolve(latestSession !== null ? latestSession : 0);
+        },
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+// Insert workout history entries
+export const insertWorkoutHistory = (workoutEntries, workoutTitle) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(
+      tx => {
+        workoutEntries.forEach(entry => {
+          tx.executeSql(
+            `INSERT INTO workoutHistory 
+            (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            [
+              entry.workoutSession, 
+              entry.exerciseNum, 
+              entry.setNum, 
+              entry.exerciseID, 
+              entry.weight, 
+              entry.reps, 
+              entry.oneRM, 
+              entry.time,
+              workoutTitle,
+              entry.pr
+            ]
+          );
+        });
+      },
+      error => reject(error),
+      () => resolve()
+    ); // Fixed: Added the missing closing parenthesis
+  });
+};
+
+// Fetch workout history for a specific session
+export const fetchWorkoutHistoryBySession = (sessionNumber) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `SELECT wh.*, e.name as exerciseName 
+         FROM workoutHistory wh
+         JOIN exercises e ON wh.exerciseID = e.exerciseID
+         WHERE workoutSession = ?
+         ORDER BY exerciseNum, setNum;`,
+        [sessionNumber],
+        (_, { rows }) => resolve(rows._array),
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+// Calculate total volume for a specific workout session
+export const calculateSessionVolume = (sessionNumber) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `SELECT 
+          SUM(weight * reps) as totalVolume,
+          COUNT(DISTINCT exerciseID) as uniqueExercises
+         FROM workoutHistory
+         WHERE workoutSession = ?;`,
+        [sessionNumber],
+        (_, { rows }) => resolve(rows._array[0]),
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+// Delete a specific workout session
+export const deleteWorkoutSession = (sessionNumber) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `DELETE FROM workoutHistory WHERE workoutSession = ?;`,
+        [sessionNumber],
+        () => resolve(),
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+// Fetch exercise history for a specific exerciseID
+export const fetchExerciseHistory = (exerciseID) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `SELECT * FROM workoutHistory
+          WHERE exerciseID= ?;`,
+        [exerciseID],
+        (_, { rows }) => resolve(rows._array),
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+//
+export const calculateIfPR = (exerciseID, oneRM) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `SELECT 
+          MAX(oneRM) as maxOneRM
+         FROM workoutHistory
+         WHERE exerciseID = ?;`,
+        [exerciseID],
+        (_, { rows }) => {
+          const maxOneRM = rows._array[0]?.maxOneRM || 0;
+          // Check if the provided oneRM is greater than the existing max oneRM
+          if (oneRM > maxOneRM) {
+            resolve(1);  // PR (Personal Record) achieved
+          } else {
+            resolve(0);  // No PR
+          }
+        },
         (_, error) => reject(error)
       );
     });

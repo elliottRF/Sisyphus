@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, StyleSheet, Button, TouchableOpacity, FlatList } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, Button, TouchableOpacity, FlatList, TextInput } from 'react-native'
 import React, { useState, useEffect, useRef  } from 'react';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,9 +11,12 @@ import ActionSheet from "react-native-actions-sheet";
 
 import * as NavigationBar from 'expo-navigation-bar';
 
-import { fetchExercises, fetchCurrentWorkout } from '../components/db';
+import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR } from '../components/db';
 
 
+import ExerciseEditable from '../components/exerciseEditable'
+
+import FilteredExerciseList from '../components/FilteredExerciseList';
 
 
 const backgroundColour = "#07080a";
@@ -21,89 +24,187 @@ const backgroundColour = "#07080a";
 
 const Current = () => {
 
-
-
     const [exercises, setExercises] = useState([]);
-
-    const [currentWorkout, setCurrentWorkout] = useState([])
-
-
 
     useEffect(() => {
         fetchExercises()
         .then(data => setExercises(data))
         .catch(err => console.error(err));
 
-        fetchCurrentWorkout()
-        .then(data => setCurrentWorkout(data))
-        .catch(err => console.error(err));
     }, []);
-
-    
-    const groupedWorkouts = currentWorkout.reduce((acc, { exerciseID, weight, reps }) => {
-        if (!acc[exerciseID]) {
-          acc[exerciseID] = [];
-        }
-        acc[exerciseID].push({ weight, reps });
-        return acc;
-      }, {});
 
 
     NavigationBar.setBackgroundColorAsync("black");
 
-    const [workoutInProgress, setWorkoutInProgress] = useState(false);
-
-    // Load workout status from AsyncStorage on component mount
-    useEffect(() => {
-        const loadWorkoutStatus = async () => {
-            try {
-                const value = await AsyncStorage.getItem('@WorkoutStatus');
-                if (value === 'inProgress') {
-                    setWorkoutInProgress(true);
-                }
-            } catch (error) {
-                console.error("Error loading workout status:", error);
-            }
-        };
-        loadWorkoutStatus();
-    }, []);
-
     const startWorkout = async () => {
-        try {
-            await AsyncStorage.setItem('@WorkoutStatus', 'inProgress');
-            setWorkoutInProgress(true);
-            console.log("Workout started!");
-        } catch (error) {
-            console.error("Error starting workout:", error);
-        }
+        actionSheetRef.current?.show();
+
     };
 
+
+//add 1rm, calcuate every workout before current exercise in history tab? or calculate if 1rm on end of workout, then edit would be incorrect.
+//add PR true false to each set, fill in on workout end, then also when workout viewed in history
+//title and date glow turqoise for PR, set glow also on click
+//calculate by checking every set before the current date
+
+//dont show 1RM? show goal weight and reps, based on user input rep target
+
+
+
+    const calculateOneRepMax = (weight, reps) => {
+        const oneRepMax = weight * (1 + reps / 30);
+        return Math.round(oneRepMax * 100) / 100; // Truncates to 2 decimal places
+    };
+    
     const endWorkout = async () => {
         try {
-            await AsyncStorage.removeItem('@WorkoutStatus');
-            setWorkoutInProgress(false);
-            console.log("Workout ended!");
+            const latestSessionQuery = await getLatestWorkoutSession();
+            const nextSessionNumber = latestSessionQuery + 1;
+            console.log(JSON.stringify(currentWorkout));
+            if (!currentWorkout || !currentWorkout.length) {
+                console.log("No workout data to save");
+                return;
+            }
+    
+            // Create entries with Promise.all to handle async PR calculations
+            const workoutHistoryEntries = await Promise.all(
+                currentWorkout.flatMap((exerciseGroup, exerciseIndex) =>
+                    exerciseGroup.exercises.flatMap((exercise) =>
+                        exercise.sets.map(async (set) => {
+    
+                            // Skip sets with missing weight or reps
+                            if (!set.weight || !set.reps) {
+                                console.log(`Skipping set due to missing weight or reps`);
+                                return null; // Skip this set
+                            }
+    
+                            // Calculate One Rep Max and check if it's a PR
+                            const calculatedOneRM = calculateOneRepMax(parseFloat(set.weight), parseInt(set.reps));
+                            const isPR = await calculateIfPR(exercise.exerciseID, calculatedOneRM);
+                            
+                            return {
+                                workoutSession: nextSessionNumber,
+                                exerciseNum: exerciseIndex + 1,
+                                exerciseID: exercise.exerciseID,
+                                weight: parseFloat(set.weight),
+                                reps: parseInt(set.reps),
+                                oneRM: calculatedOneRM,
+                                time: new Date().toISOString(),
+                                name: workoutTitle,
+                                pr: isPR
+                            };
+                        })
+                    )
+                ).flat()
+            );
+    
+            // Filter out invalid entries (nulls)
+            const validWorkoutHistoryEntries = workoutHistoryEntries.filter(entry => entry !== null);
+    
+            // Re-number the valid sets sequentially starting from set 1
+            validWorkoutHistoryEntries.forEach((entry, index) => {
+                entry.setNum = index + 1; // Reassign setNum to be sequential
+            });
+    
+            // Only insert valid entries if there are any
+            if (validWorkoutHistoryEntries.length > 0) {
+                console.log(workoutTitle);
+                await insertWorkoutHistory(validWorkoutHistoryEntries, workoutTitle);
+                console.log("Workout saved successfully");
+            } else {
+                console.log("No valid workout history entries to save.");
+            }
+    
+            // Clear AsyncStorage and state
+            await AsyncStorage.removeItem('@currentWorkout');
+            console.log('Workout cleared from AsyncStorage');
+            setCurrentWorkout([]);
+    
         } catch (error) {
-            console.error("Error ending workout:", error);
+            console.error("Error in endWorkout:", error);
         }
     };
+    
 
-    const addExercise = () => {
+
+
+
+
+    const plusButtonShowExerciseList = () => {
         actionSheetRef.current?.show();
       };
     
 
-
     const actionSheetRef = useRef(null);
+
+    const[currentWorkout, setCurrentWorkout] = useState([]);
+    const[workoutTitle, setWorkoutTitle] = useState("New Workout");
+
+
+
+    const saveWorkoutToAsyncStorage = async (workout) => {
+
+        const dataToSave = {
+            workout,
+            workoutTitle,
+        };
+
+        try {
+            await AsyncStorage.setItem('@currentWorkout', JSON.stringify(dataToSave));
+        } catch (error) {
+            console.error('Error saving workout to AsyncStorage:', error);
+        }
+    };
+
+    useEffect(() => {
+        const loadWorkout = async () => {
+            try {
+                const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
+                if (storedWorkout) {
+
+                    const { workout, title } = JSON.parse(storedWorkout);
+                    console.log(JSON.stringify(storedWorkout));
+                    setCurrentWorkout(JSON.parse(workout));
+                    if(title) setWorkoutTitle(title);
+
+                }
+            } catch (error) {
+                console.error('Error loading workout from AsyncStorage:', error);
+            }
+        };
+
+        loadWorkout();
+    }, []);
+
+    useEffect(() => {
+        if (currentWorkout.length > 0) {
+            saveWorkoutToAsyncStorage(currentWorkout);
+        }
+    }, [currentWorkout]); 
 
 
 
     const inputExercise = (item) => {
         actionSheetRef.current?.hide();
-        console.log(item.exerciseID);
-      };
-
-
+    
+        setCurrentWorkout((prevWorkouts) => [
+            ...prevWorkouts,
+            {
+                exercises: [
+                    {
+                        exerciseID: item.exerciseID,
+                        sets: [
+                            {
+                                weight: null,
+                                reps: null
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]);
+        console.log(JSON.stringify(currentWorkout))
+    };
 
 
 
@@ -111,7 +212,7 @@ const Current = () => {
         
         <TouchableOpacity 
             style={styles.exerciseButton} 
-            onPress={() => inputExercise(item)}  // Pass a function reference
+            onPress={() => inputExercise(item)}  
         >
             <Text style={styles.exerciseButtonText}>{item.name} </Text>
             
@@ -120,63 +221,83 @@ const Current = () => {
 
       );
 
+      const [searchQuery, setSearchQuery] = useState('');
+
+      const filteredExercises = exercises.filter(exercise =>
+          exercise.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+
 
 
 
     return (
         <SafeAreaView style={styles.container}>
-        {!workoutInProgress && (
-            <TouchableOpacity style={styles.button} onPress={startWorkout}>
-                <Text style={styles.buttonText}>Start Workout</Text>
-            </TouchableOpacity>
+        {currentWorkout.length === 0 && (
+            <View style={styles.startContainer}>
+                <TouchableOpacity style={styles.startButton} onPress={startWorkout}>
+                    <Text style={styles.buttonText}>Start Workout</Text>
+                </TouchableOpacity>
+            </View>
         )}
 
-        {workoutInProgress && (
+        {currentWorkout.length > 0 && (
             <ScrollView 
                 showsVerticalScrollIndicator={false} 
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.buttonContainer}
-            >
-                {Object.keys(groupedWorkouts).map((exerciseID) => (
-                    <View key={exerciseID} style={styles.exerciseContainer}>
-                        <Text style={styles.exerciseTitle}>Exercise ID: {exerciseID}</Text>
-                        <FlatList
-                            data={groupedWorkouts[exerciseID]}
-                            renderItem={({ item, index }) => (
-                                <View>
-                                    <Text style={styles.exerciseText}>Set {index + 1}</Text>
-                                    <Text style={styles.exerciseText}>Weight: {item.weight}kg</Text>
-                                    <Text style={styles.exerciseText}>Reps: {item.reps}</Text>
-                                </View>
-                            )}
-                            keyExtractor={(item, index) => index.toString()}
-                            contentContainerStyle={styles.setListContainer}
+
+            >        
+            <TextInput
+                        style={styles.input}
+                        onChangeText={setWorkoutTitle}
+                        value={workoutTitle}
+                        placeholder="Enter Workout Name"
+                        keyboardType="text"
                         />
-                    </View>
-                ))}
+
+                
+            {currentWorkout.map((workout, workoutIndex) => (
+                <View key={workoutIndex} style={styles.exerciseContainer}>
+                    {workout.exercises.map((exercise, exerciseIndex) => {
+                        const exerciseDetails = exercises.find(
+                            (e) => e.exerciseID === exercise.exerciseID
+                        );
+
+                        return (
+                            <ExerciseEditable
+                                exerciseID={exercise.exerciseID}
+                                key={exerciseIndex}
+                                exercise={exercise}
+                                exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
+                                updateCurrentWorkout={setCurrentWorkout}
+                            />
+                        );
+                    })}
+                </View>
+            ))}
+
+
+
+
 
                 <TouchableOpacity
                     key={"addWorkout"}
                     style={styles.button}
-                    onPress={addExercise}
+                    onPress={plusButtonShowExerciseList}
                 >
-                    <AntDesign name="plus" size={24} color="#737373" />
+                    <AntDesign name="plus" size={24} color="#fff" />
                 </TouchableOpacity>
 
-                <ActionSheet ref={actionSheetRef} overlayColor="transparent" containerStyle={{ backgroundColor: 'black' }}>
-                    <Text style={styles.header}>Exercises</Text>
-                    <FlatList
-                        data={exercises}
-                        keyExtractor={(item) => item.exerciseID.toString()}
-                        renderItem={renderItem}
-                    />
-                </ActionSheet>
                 
                 <TouchableOpacity style={[styles.button, styles.finishButton]} onPress={endWorkout}>
                     <Text style={styles.buttonText}>Finish Workout</Text>
                 </TouchableOpacity>
             </ScrollView>
         )}
+            <FilteredExerciseList 
+                exercises={exercises}
+                actionSheetRef={actionSheetRef}
+                setCurrentWorkout={setCurrentWorkout}
+            />
     </SafeAreaView>
     );
 };
@@ -185,13 +306,32 @@ const primaryColor = '#0891b2';
 const greyColor = '#737373';
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: backgroundColour,
-        alignItems: "center",
-        justifyContent: "center",
-        paddingBottom: 70, 
+    input: {
+        height: 40,
+        margin: 12,
+        padding: 0,
+        color: 'white', // Sets text color to white
+        fontWeight: 'bold', // Makes the text bold
+        borderWidth: 0, // Removes the border
+        backgroundColor: '#121212', // Optional: Set a background color for contrast
+        fontSize: 24,
     },
+    startContainer: {
+        flex: 1, // Make the container take the full height of the screen
+        justifyContent: 'center', // Center vertically
+        alignItems: 'center', // Optional: Center horizontally
+        marginBottom: 50,
+      },
+      startButton: {
+        alignItems: 'center',
+        backgroundColor: '#1c1d1f',
+        paddingVertical: 10, // Adjust the vertical padding for more space
+        paddingHorizontal: 20, // Add horizontal padding for text space
+        marginBottom: 10,
+        borderRadius: 25,
+        marginHorizontal: 10,
+        paddingVertical: 10,
+      },
     buttonContainer: {
         width: '80%',
         justifyContent: "center",
@@ -205,7 +345,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     buttonText: {
-        color: greyColor,
+        color: '#fff',
         fontSize: 24,
         fontWeight: "bold",
     },
@@ -220,44 +360,34 @@ const styles = StyleSheet.create({
         
       },
       exerciseButtonText: {
-        color: "#737373",
+        color: "#fff",
         fontSize: 20,
         fontWeight: "bold",
       },
       exerciseTitle: {
-        color: "#737373",
-        fontSize: 20,
+        color: "#fff",
+        fontSize: 2,
         fontWeight: "bold",
       },
       container: {
         flex: 1,
-        backgroundColor: 'black',
+        backgroundColor: '#121212',
     },
     buttonContainer: {
         padding: 15,
     },
     exerciseContainer: {
         marginBottom: 15,
-        padding: 10,
-        backgroundColor: '#333',
+        color: "#fff",
+
         borderRadius: 8,
     },
-    exerciseTitle: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 8,
-    },
-    exerciseText: {
-        color: 'white',
-        fontSize: 16,
 
-    },
     setListContainer: {
         marginTop: 8,
     },
     finishButton: {
-        marginBottom: 70, // Add some space above the finish button
+        marginBottom: 100, // Add some space above the finish button
     }
 });
 export default Current;
