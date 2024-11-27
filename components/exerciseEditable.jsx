@@ -17,19 +17,61 @@ const ExerciseEditable = ({
     exerciseName, 
     updateCurrentWorkout 
 }) => {
+
+    function unflattenExercises(flattenedExercises) {
+        return flattenedExercises.reduce((acc, exercise) => {
+          const { workoutIndex, ...exerciseData } = exercise;
+      
+          // Initialize the workout if it doesn't exist
+          if (!acc[workoutIndex]) {
+            acc[workoutIndex] = { exercises: [] };
+          }
+      
+          // Add the exercise data to the corresponding workout
+          acc[workoutIndex].exercises.push(exerciseData);
+      
+          return acc;
+        }, []);
+      }
+
+
+
+      const flattenWorkout = (workouts) => {
+        return workouts.reduce((acc, workout, workoutIndex) => {
+          return acc.concat(
+            workout.exercises.map((exercise, exerciseIndex) => ({
+              ...exercise,
+              workoutIndex,
+              exerciseIndex,
+              key: `workout-${workoutIndex}-exercise-${exerciseIndex}`
+            }))
+          );
+        }, []);
+      };
+
+      const updateWorkout = (newWorkout) => {
+        updateCurrentWorkout(newWorkout); // Update the nested structure
+        setFlattenedExercises(flattenWorkout(newWorkout)); // Re-flatten after updating
+      };
+
     const handleWeightChange = (text, setIndex) => {
-        updateCurrentWorkout(prevWorkout => 
-            prevWorkout.map(workout => 
+        
+        updateCurrentWorkout(prevWorkout => {
+            // First, unflatten the workout
+            const nestedWorkout = unflattenExercises(prevWorkout);
+
+            // Update the nested structure
+            return flattenWorkout(nestedWorkout.map(workout =>
                 workout.exercises.includes(exercise)
                     ? {
                         ...workout,
                         exercises: workout.exercises.map(ex => 
-                            ex === exercise 
+                            ex === exercise
                                 ? {
                                     ...ex,
-                                    sets: ex.sets.map((set, index) => 
-                                        index === setIndex 
-                                            ? { ...set, weight: text } 
+                                    sets: ex.sets.map((set, index) =>
+                                        index === setIndex
+                                            ? { ...set, weight: text }
                                             : set
                                     )
                                 }
@@ -37,10 +79,14 @@ const ExerciseEditable = ({
                         )
                     }
                     : workout
-            )
-        );
+            ));
+        });
     };
 
+
+
+
+    
     const handleRepsChange = (text, setIndex) => {
         updateCurrentWorkout(prevWorkout => 
             prevWorkout.map(workout => 
@@ -118,6 +164,7 @@ const ExerciseEditable = ({
     };
 
     const handleExerciseDelete = () => {
+        console.log("HERE")
         // Perform deletion of the entire exercise
         updateCurrentWorkout(prevWorkout => 
             prevWorkout.map(workout => ({
@@ -144,12 +191,11 @@ const ExerciseEditable = ({
 
     const showHistory = () => {
         actionSheetRef.current?.show();
+        console.log(exerciseID);
 
     }
 
-    const handleClose = () => {
-        actionSheetRef.current?.hide();
-    };
+
     
 
     const actionSheetRef = useRef(null);
@@ -208,19 +254,13 @@ const ExerciseEditable = ({
                     ref={actionSheetRef} 
                     containerStyle={{ 
                         backgroundColor: '#121212', 
-                        height: '100%', // or any specific value
+                        height: '80%', // or any specific value
                         borderTopLeftRadius: 20, // optional for rounded corners
-                        borderTopRightRadius: 20,
-                        overflow: 'hidden',
-
+                        borderTopRightRadius: 20 
                     }}
 >                    
-                <View style={styles.closeIconContainerUpperPosition}>
-                    <TouchableOpacity onPress={handleClose} style={styles.closeIcon}>
-                        <Feather name="x" size={30} color="#fff" />
-                    </TouchableOpacity>
-                </View>
-                    <ExerciseHistory exerciseID = {exerciseID} exerciseName={exerciseName}/>
+
+                    <ExerciseHistory exerciseID = {exerciseID}/>
 
                 </ActionSheet>
 
@@ -231,26 +271,6 @@ const ExerciseEditable = ({
 };
 
 const styles = StyleSheet.create({
-    closeIconContainer: {
-        position: 'absolute',
-        bottom: 10,
-        right: 10,
-        zIndex: 1,
-    },
-    closeIconContainerUpperPosition: {
-        position: 'absolute',
-        top:10,
-        right: 10,
-        zIndex: 1,
-    },
-
-
-
-    closeIcon: {
-        backgroundColor: 'rgba(85, 85, 85, 0.5)',
-        padding: 10,
-        borderRadius: 20,
-    },
     rootContainer: {
         flex: 1
     },

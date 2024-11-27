@@ -1,5 +1,5 @@
-import { View, Text, ScrollView, StyleSheet, Button, TouchableOpacity, FlatList, TextInput } from 'react-native'
-import React, { useState, useEffect, useRef  } from 'react';
+import { View, Text, ScrollView, StyleSheet, Button, TouchableOpacity, FlatList, TextInput, Pressable } from 'react-native'
+import React, { useState, useEffect, useRef   } from 'react';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Body from "react-native-body-highlighter";
@@ -17,6 +17,10 @@ import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, ins
 import ExerciseEditable from '../components/exerciseEditable'
 
 import FilteredExerciseList from '../components/FilteredExerciseList';
+
+import DraggableFlatList, { 
+    ScaleDecorator 
+  } from 'react-native-draggable-flatlist';
 
 
 const backgroundColour = "#07080a";
@@ -36,6 +40,15 @@ const Current = () => {
         .catch(err => console.error(err));
 
         actionSheetRef.current?.show();
+
+
+        const time = new Date();
+        console.log("START WORKOUT DATA JSON",JSON.stringify(time));
+
+        await AsyncStorage.setItem('@startTime', JSON.stringify(time));
+
+
+        setStartTime(time);
 
     };
 
@@ -185,6 +198,21 @@ const Current = () => {
 
             try {
                 const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
+
+                try {
+                    const startTime = await AsyncStorage.getItem('@startTime');
+                    if (startTime !== null) {
+                        setStartTime(new Date(JSON.parse(startTime)));
+
+                    } else {
+                        console.log("No start time found in AsyncStorage.");
+                    }
+                } catch (error) {
+                    console.error("Error fetching startTime from AsyncStorage:", error);
+                }
+
+
+
                 if (storedWorkout) {
 
                     const { workout, title } = JSON.parse(storedWorkout);
@@ -192,6 +220,9 @@ const Current = () => {
                     if(title) setWorkoutTitle(title);
 
                 }
+
+
+
             } catch (error) {
                 console.error('Error loading workout from AsyncStorage:', error);
             }
@@ -203,6 +234,7 @@ const Current = () => {
     useEffect(() => {
         if (currentWorkout.length > 0) {
             saveWorkoutToAsyncStorage(currentWorkout);
+            console.log(JSON.stringify(currentWorkout));
         }
     }, [currentWorkout]); 
 
@@ -231,18 +263,7 @@ const Current = () => {
 
 
 
-    const renderItem = ({ item }) => (
-        
-        <TouchableOpacity 
-            style={styles.exerciseButton} 
-            onPress={() => inputExercise(item)}  
-        >
-            <Text style={styles.exerciseButtonText}>{item.name} </Text>
-            
-        </TouchableOpacity>
 
-
-      );
 
       const [searchQuery, setSearchQuery] = useState('');
 
@@ -251,7 +272,104 @@ const Current = () => {
       );
 
 
-      const [time, setTime] = useState("55m");
+      const [startTime, setStartTime] = useState();
+      const [elapsedTime, setElapsedTime] = useState(0);
+      const [formattedElapsedTime, setFormattedElapsedTime] = useState(0);
+
+      useEffect(() => {
+        let interval;
+        if (startTime !== null) {
+          interval = setInterval(() => {
+            const now = Date.now();
+            const elapsed = Math.floor((now - startTime) / 1000); // Elapsed time in seconds
+            setElapsedTime(elapsed);
+            setFormattedElapsedTime(formatElapsedTime(elapsed));
+          }, 1000); // Update every 1000ms (1 second)
+        } else {
+          setElapsedTime(0); // Reset elapsed time when startTime is null
+        }
+    
+        return () => {
+          clearInterval(interval); // Cleanup interval when the component unmounts or startTime changes
+        };
+      }, [startTime]);
+
+
+
+      const formatElapsedTime = (elapsedTimeInSeconds) => {
+        const minutes = Math.floor(elapsedTimeInSeconds / 60); // Calculate minutes
+        const seconds = elapsedTimeInSeconds % 60; // Get remaining seconds
+    
+        // Format minutes and seconds as "MM:SS" with leading zeros if necessary
+        return `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
+    };
+
+
+
+    // Convert your nested data structure into a flat array for draggable list
+    const flattenedExercises = currentWorkout.reduce((acc, workout, workoutIndex) => {
+        return acc.concat(
+          workout.exercises.map((exercise, exerciseIndex) => ({
+            ...exercise,
+            workoutIndex,
+            exerciseIndex,
+            key: `workout-${workoutIndex}-exercise-${exerciseIndex}`
+          }))
+
+        
+        );
+        
+      }, []);
+
+      
+
+    const renderItem = ({ item, drag, isActive }) => {
+        const exerciseDetails = exercises.find(
+          (e) => e.exerciseID === item.exerciseID
+        );
+        console.log(flattenedExercises);
+        return (
+          <Pressable 
+            onLongPress={drag} 
+            disabled={isActive}
+            style={[
+              isActive && { opacity: 0.5 }  // Optional: visual feedback while dragging
+            ]}
+          >
+            <ExerciseEditable
+              exerciseID={item.exerciseID}
+              exercise={item}
+              exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
+              updateCurrentWorkout={setCurrentWorkout}
+            />
+          </Pressable>
+        );
+      };
+
+      const onDragEnd = ({ data }) => {
+        // Convert flat array back to nested structure
+        const newWorkout = [];
+        let currentWorkoutIndex = 0;
+        
+        data.forEach((item) => {
+          if (!newWorkout[currentWorkoutIndex]) {
+            newWorkout[currentWorkoutIndex] = { exercises: [] };
+          }
+          
+          newWorkout[currentWorkoutIndex].exercises.push({
+            exerciseID: item.exerciseID,
+            sets: item.sets
+          });
+          
+          // If this was the last exercise in the original workout group,
+          // increment the workout index
+          if (item.exerciseIndex === currentWorkout[item.workoutIndex].exercises.length - 1) {
+            currentWorkoutIndex++;
+          }
+        });
+        
+        setCurrentWorkout(newWorkout);
+      };
 
 
     return (
@@ -265,58 +383,55 @@ const Current = () => {
         )}
 
         {currentWorkout.length > 0 && (
-            <ScrollView 
-                showsVerticalScrollIndicator={false} 
-                showsHorizontalScrollIndicator={false}
+            <View style={{ flex: 1 }}>
+
+
+                <DraggableFlatList
+                    data={flattenedExercises}
+                    renderItem={renderItem}
+                    keyExtractor={(item) => item.key}
+                    onDragEnd={onDragEnd}
+                    containerStyle={styles.exerciseContainer}
+                    scrollEnabled={true}
+                    autoscrollSpeed={5}
+
+                    ListHeaderComponent={                
                     
-            >        
-            <TextInput
+                    <View>
+                    <TextInput
                         style={styles.input}
                         onChangeText={setWorkoutTitle}
                         value={workoutTitle}
                         placeholder="Enter Workout Name"
                         keyboardType="text"
-                        />
-            <Text>{time}</Text>
+                    />
+                    <Text style={styles.timer}>{formattedElapsedTime}</Text>
+                    
+                    </View>
+                    }
 
-                
-            {currentWorkout.map((workout, workoutIndex) => (
-                <View key={workoutIndex} style={styles.exerciseContainer}>
-                    {workout.exercises.map((exercise, exerciseIndex) => {
-                        const exerciseDetails = exercises.find(
-                            (e) => e.exerciseID === exercise.exerciseID
-                        );
-
-                        return (
-                            <ExerciseEditable
-                                exerciseID={exercise.exerciseID}
-                                key={exerciseIndex}
-                                exercise={exercise}
-                                exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
-                                updateCurrentWorkout={setCurrentWorkout}
-                            />
-                        );
-                    })}
-                </View>
-            ))}
+                    ListFooterComponent={
+                        <View style={styles.buttonContainer}>
 
 
-
-
-
-                <TouchableOpacity
-                    key={"addWorkout"}
-                    style={styles.button}
-                    onPress={plusButtonShowExerciseList}
-                >
-                    <AntDesign name="plus" size={24} color="#fff" />
-                </TouchableOpacity>
-
-                
-                <TouchableOpacity style={[styles.button, styles.finishButton]} onPress={endWorkout}>
-                    <Text style={styles.buttonText}>Finish Workout</Text>
-                </TouchableOpacity>
-            </ScrollView>
+                            <TouchableOpacity
+                                style={styles.button}
+                                onPress={plusButtonShowExerciseList}
+                            >
+                                <AntDesign name="plus" size={24} color="#fff" />
+                            </TouchableOpacity>
+                    
+                            <TouchableOpacity 
+                                style={[styles.button, styles.finishButton]} 
+                                onPress={endWorkout}
+                            >
+                                <Text style={styles.buttonText}>Finish Workout</Text>
+                            </TouchableOpacity>
+                        </View>
+                    }
+                    contentContainerStyle={{ paddingBottom: 150 }}
+                />
+            </View>
         )}
             <FilteredExerciseList 
                 exercises={exercises}
@@ -331,6 +446,11 @@ const primaryColor = '#0891b2';
 const greyColor = '#737373';
 
 const styles = StyleSheet.create({
+    timer:{
+        color: '#fff',
+        fontSize: 16,
+        margin: 12
+    },
     input: {
         height: 40,
         margin: 12,
@@ -357,10 +477,13 @@ const styles = StyleSheet.create({
         marginHorizontal: 10,
         paddingVertical: 10,
       },
-    buttonContainer: {
-        width: '80%',
-        justifyContent: "center",
-        alignItems: "center",
+      buttonContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        padding: 15,
+        backgroundColor: '#121212', // Match your background color
     },
     button: {
 
@@ -402,9 +525,9 @@ const styles = StyleSheet.create({
         padding: 15,
     },
     exerciseContainer: {
+        flex: 1,
         marginBottom: 15,
         color: "#fff",
-
         borderRadius: 8,
     },
 
