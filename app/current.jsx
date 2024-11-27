@@ -37,6 +37,15 @@ const Current = () => {
 
         actionSheetRef.current?.show();
 
+
+        const time = new Date();
+        console.log("START WORKOUT DATA JSON",JSON.stringify(time));
+
+        await AsyncStorage.setItem('@startTime', JSON.stringify(time));
+
+
+        setStartTime(time);
+
     };
 
 
@@ -185,6 +194,21 @@ const Current = () => {
 
             try {
                 const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
+
+                try {
+                    const startTime = await AsyncStorage.getItem('@startTime');
+                    if (startTime !== null) {
+                        setStartTime(new Date(JSON.parse(startTime)));
+
+                    } else {
+                        console.log("No start time found in AsyncStorage.");
+                    }
+                } catch (error) {
+                    console.error("Error fetching startTime from AsyncStorage:", error);
+                }
+
+
+
                 if (storedWorkout) {
 
                     const { workout, title } = JSON.parse(storedWorkout);
@@ -192,6 +216,9 @@ const Current = () => {
                     if(title) setWorkoutTitle(title);
 
                 }
+
+
+
             } catch (error) {
                 console.error('Error loading workout from AsyncStorage:', error);
             }
@@ -251,7 +278,38 @@ const Current = () => {
       );
 
 
-      const [time, setTime] = useState("55m");
+
+      const [startTime, setStartTime] = useState();
+      const [elapsedTime, setElapsedTime] = useState();
+      const [formattedElapsedTime, setFormattedElapsedTime] = useState("0:00");
+
+      useEffect(() => {
+        let interval;
+        if (startTime !== null) {
+          interval = setInterval(() => {
+            const now = Date.now();
+            const elapsed = Math.floor((now - startTime) / 1000); // Elapsed time in seconds
+            setElapsedTime(elapsed);
+            setFormattedElapsedTime(formatElapsedTime(elapsed));
+          }, 1000); // Update every 1000ms (1 second)
+        } else {
+          setElapsedTime(0); // Reset elapsed time when startTime is null
+        }
+    
+        return () => {
+          clearInterval(interval); // Cleanup interval when the component unmounts or startTime changes
+        };
+      }, [startTime]);
+
+
+
+      const formatElapsedTime = (elapsedTimeInSeconds) => {
+        const minutes = Math.floor(elapsedTimeInSeconds / 60); // Calculate minutes
+        const seconds = elapsedTimeInSeconds % 60; // Get remaining seconds
+    
+        // Format minutes and seconds as "MM:SS" with leading zeros if necessary
+        return `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
+    };
 
 
     return (
@@ -277,7 +335,7 @@ const Current = () => {
                         placeholder="Enter Workout Name"
                         keyboardType="text"
                         />
-            <Text>{time}</Text>
+            <Text style={styles.timer}>{formattedElapsedTime}</Text>
 
                 
             {currentWorkout.map((workout, workoutIndex) => (
@@ -299,10 +357,6 @@ const Current = () => {
                     })}
                 </View>
             ))}
-
-
-
-
 
                 <TouchableOpacity
                     key={"addWorkout"}
@@ -331,6 +385,11 @@ const primaryColor = '#0891b2';
 const greyColor = '#737373';
 
 const styles = StyleSheet.create({
+    timer:{
+        color: '#fff',
+        fontSize: 16,
+        margin: 12
+    },
     input: {
         height: 40,
         margin: 12,
