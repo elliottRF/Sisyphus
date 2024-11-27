@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { View, TextInput, FlatList, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
 import ActionSheet from "react-native-actions-sheet";
 import { fetchExercises } from '../components/db';
+import Feather from '@expo/vector-icons/Feather';
 
-const FilteredExerciseList = ({  exercises, actionSheetRef, setCurrentWorkout }) => {
+
+const FilteredExerciseList = ({  exercises, actionSheetRef, setCurrentWorkout, openCreateExerciseSheet }) => {
     const [searchQuery, setSearchQuery] = useState('');
 
 
@@ -65,6 +67,13 @@ const FilteredExerciseList = ({  exercises, actionSheetRef, setCurrentWorkout })
                     returnKeyType="done"
                     onSubmitEditing={Keyboard.dismiss}
                 />
+                <TouchableOpacity 
+                    style={styles.threeDotButton} 
+                    onPress={openCreateExerciseSheet}
+                >
+                    <Feather name="plus" size={24} color="#fff" />
+                </TouchableOpacity>
+
             </View>
             <FlatList
                 data={sortedAndFilteredExercises}
@@ -78,6 +87,7 @@ const FilteredExerciseList = ({  exercises, actionSheetRef, setCurrentWorkout })
 
 const styles = StyleSheet.create({
     searchContainer: {
+        flexDirection: 'row', // Add this to align items horizontally
         padding: 10,
         borderBottomWidth: 1,
         borderBottomColor: '#333',
@@ -87,13 +97,15 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 20, // Rounded corners on top-right
         backgroundColor: '#121212' 
       },
-    searchInput: {
+      searchInput: {
+        flex: 1, // Take up remaining space
         height: 40,
         backgroundColor: '#242424',
         borderRadius: 8,
         paddingHorizontal: 12,
         color: '#fff',
         fontSize: 16,
+        marginRight: 10, // Add some spacing between input and three dots
     },
     exerciseButton: {
         padding: 15,
@@ -103,7 +115,10 @@ const styles = StyleSheet.create({
     exerciseButtonText: {
         color: '#fff',
         fontSize: 16,
-    }
+    },
+    threeDotButton: {
+        padding: 10,
+    },
 });
 
 export default FilteredExerciseList;

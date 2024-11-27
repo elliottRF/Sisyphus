@@ -18,6 +18,9 @@ import ExerciseEditable from '../components/exerciseEditable'
 
 import FilteredExerciseList from '../components/FilteredExerciseList';
 
+import NewExercise from "../components/NewExercise"
+
+
 
 const backgroundColour = "#07080a";
 
@@ -311,6 +314,23 @@ const Current = () => {
         return `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
     };
 
+    const createExerciseActionSheetRef = useRef(null);
+
+    const handleCloseCreateExerciseSheet = () => {
+        createExerciseActionSheetRef.current?.hide();
+
+        fetchExercises()
+        .then(data => setExercises(data))
+        .catch(err => console.error(err));
+
+    };
+
+    // New function to handle exercise creation action sheet
+    const openCreateExerciseSheet = () => {
+        actionSheetRef.current?.hide();
+        createExerciseActionSheetRef.current?.show();
+    };
+
 
     return (
         <SafeAreaView style={styles.container}>
@@ -376,7 +396,20 @@ const Current = () => {
                 exercises={exercises}
                 actionSheetRef={actionSheetRef}
                 setCurrentWorkout={setCurrentWorkout}
+                openCreateExerciseSheet={openCreateExerciseSheet}
             />
+
+            <ActionSheet
+                ref={createExerciseActionSheetRef}
+                containerStyle={styles.actionSheetContainer}
+            >
+                <NewExercise close={handleCloseCreateExerciseSheet}/>
+            </ActionSheet>
+
+
+
+
+
     </SafeAreaView>
     );
 };
@@ -385,6 +418,13 @@ const primaryColor = '#0891b2';
 const greyColor = '#737373';
 
 const styles = StyleSheet.create({
+    actionSheetContainer: {
+        height: '100%',
+        overflow: 'hidden',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        backgroundColor: '#121212' 
+    },
     timer:{
         color: '#fff',
         fontSize: 16,
