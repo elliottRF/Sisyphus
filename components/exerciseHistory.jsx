@@ -5,10 +5,92 @@ import { ActivityIndicator } from 'react-native';
 import { fetchWorkoutHistory, fetchWorkoutHistoryBySession, calculateSessionVolume, fetchExercises, fetchExerciseHistory } from './db';
 import { useFocusEffect } from 'expo-router';
 
+import Body from "react-native-body-highlighter";
+
+
+
 const exerciseHistory = props => {
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
+    const [formattedTargets, setFormattedTargets] = useState([]);
+
+
+    useEffect(() => {
+        if (exercisesList)
+        {
+            
+            const { targetMuscles, accessoryMuscles } = getExerciseMuscles(props.exerciseID, exercisesList);
+            handleMuscleStrings(targetMuscles, accessoryMuscles)
+        }
+    }, [exercisesList]);
+
+
+
+    const getExerciseMuscles = (exerciseID, exerciseLog) => {
+        // Find the exercise with the matching exerciseID
+        const exercise = exerciseLog.find(ex => ex.exerciseID === exerciseID);
+    
+        // If exercise not found, return empty arrays
+        if (!exercise) return { targetMuscles: [], accessoryMuscles: [] };
+    
+        // Split the muscles strings into arrays, handling potential empty strings
+        const targetMuscles = exercise.targetMuscle ? exercise.targetMuscle.split(',') : [];
+        const accessoryMuscles = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',') : [];
+    
+        // Return an object with two arrays of muscles
+        return { targetMuscles, accessoryMuscles };
+    };
+
+
+
+    const handleMuscleStrings = (targetSelected, accessorySelected) => {
+
+
+        // Process target muscles (intensity 1)
+        const sluggedTargets = targetSelected.map(target => {
+            const name = typeof target === 'object' && target !== null 
+                ? target.name 
+                : target;
+            
+            const slug = typeof name === 'string' 
+                ? name.toLowerCase()
+                : '';
+            
+            return {
+                slug,
+                intensity: 1
+            };
+        });
+    
+        // Process accessory muscles (intensity 2)
+        const sluggedAccessories = accessorySelected.map(accessory => {
+            const name = typeof accessory === 'object' && accessory !== null 
+                ? accessory.name 
+                : accessory;
+            
+            const slug = typeof name === 'string' 
+                ? name.toLowerCase()
+                : '';
+            
+            return {
+                slug,
+                intensity: 2
+            };
+        });
+    
+        // Combine both arrays
+        const combinedTargets = [...sluggedTargets, ...sluggedAccessories];
+    
+        setFormattedTargets(combinedTargets);
+    };
+
+
+
+
+
+
+
 
     useEffect(() => {
         fetchExercises()
@@ -19,7 +101,6 @@ const exerciseHistory = props => {
     useFocusEffect(
         React.useCallback(() => {
             loadWorkoutHistory();
-            console.log(props.exerciseID)
         }, [])
     );
 
@@ -28,7 +109,6 @@ const exerciseHistory = props => {
             const history = await fetchExerciseHistory(props.exerciseID);
             const groupedHistory = groupBySession(history);
             setWorkoutHistory(groupedHistory);
-            console.log(JSON.stringify(groupedHistory));
         } catch (error) {
             console.error("Error loading workout history:", error);
         } finally {
@@ -81,14 +161,54 @@ const exerciseHistory = props => {
         );
     }
 
+
+
+
+
+
+
     return (
         <View style={{ height: '100%', width: '100%' }}>
-            {workoutHistory.length > 0 ? (
+
+
+
+
+
+
+            {true ? (
                 <FlatList
+                    
                     data={workoutHistory}
                     style={[styles.list, { height: '90%' }]}
                     contentContainerStyle={styles.listContentContainer}
                     keyExtractor={([session]) => session}
+                    ListHeaderComponent={
+                        <View style={styles.bodyContainer}>
+                            <View style={styles.exerciseNameContainer}>
+                                <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
+                            </View>
+                            <View style={styles.bodyImagesContainer}>
+                                <Body
+                                    data={formattedTargets}
+                                    gender="male"
+                                    side="front"
+                                    scale={1}
+                                    border="#262626"
+                                />
+                                <Body
+                                    data={formattedTargets}
+                                    gender="male"
+                                    side="back"
+                                    scale={1}
+                                    border="#262626"
+                                />
+                            </View>
+                        </View>
+                    }
+
+
+
+
                     renderItem={({item: [session, exercises]}) => (
                         <View style={styles.sessionContainer}>
                             <View style={styles.sessionHeader}>
@@ -135,8 +255,29 @@ const exerciseHistory = props => {
 };
 
 const styles = StyleSheet.create({
+
+    exerciseTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        padding:'2%',
+        textAlign: 'center',
+        color:'#fff',
+    },
+    bodyContainer: {
+        width: '100%', // Ensure the container takes up full width
+        marginBottom: 20, // Add space below the body section
+    },
+    exerciseNameContainer: {
+        alignItems: 'center', // Center the exercise name horizontally
+        marginBottom: 10, // Add some space between the name and body images
+    },
+    bodyImagesContainer: {
+        flexDirection: 'row', // Align the body images horizontally
+        justifyContent: 'space-between', // Space out the images
+    },
     listContentContainer: {
-        paddingBottom: 100,
+        paddingTop: 0,
+        
     },
     container: {
         flex: 1,

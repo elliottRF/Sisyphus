@@ -46,7 +46,7 @@ const _layout = () => {
             <Tabs.Screen
                 name="profile"
                 options={{
-                    title:"Profile",
+                    title:"Exercises",
                     headerShown: false // Hides the top header
                 }}
             />

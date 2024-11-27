@@ -118,7 +118,6 @@ const ExerciseEditable = ({
     };
 
     const handleExerciseDelete = () => {
-        console.log("HERE")
         // Perform deletion of the entire exercise
         updateCurrentWorkout(prevWorkout => 
             prevWorkout.map(workout => ({
@@ -145,11 +144,12 @@ const ExerciseEditable = ({
 
     const showHistory = () => {
         actionSheetRef.current?.show();
-        console.log(exerciseID);
 
     }
 
-
+    const handleClose = () => {
+        actionSheetRef.current?.hide();
+    };
     
 
     const actionSheetRef = useRef(null);
@@ -208,13 +208,19 @@ const ExerciseEditable = ({
                     ref={actionSheetRef} 
                     containerStyle={{ 
                         backgroundColor: '#121212', 
-                        height: '80%', // or any specific value
+                        height: '100%', // or any specific value
                         borderTopLeftRadius: 20, // optional for rounded corners
-                        borderTopRightRadius: 20 
+                        borderTopRightRadius: 20,
+                        overflow: 'hidden',
+
                     }}
 >                    
-
-                    <ExerciseHistory exerciseID = {exerciseID}/>
+                <View style={styles.closeIconContainerUpperPosition}>
+                    <TouchableOpacity onPress={handleClose} style={styles.closeIcon}>
+                        <Feather name="x" size={30} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+                    <ExerciseHistory exerciseID = {exerciseID} exerciseName={exerciseName}/>
 
                 </ActionSheet>
 
@@ -225,6 +231,26 @@ const ExerciseEditable = ({
 };
 
 const styles = StyleSheet.create({
+    closeIconContainer: {
+        position: 'absolute',
+        bottom: 10,
+        right: 10,
+        zIndex: 1,
+    },
+    closeIconContainerUpperPosition: {
+        position: 'absolute',
+        top:10,
+        right: 10,
+        zIndex: 1,
+    },
+
+
+
+    closeIcon: {
+        backgroundColor: 'rgba(85, 85, 85, 0.5)',
+        padding: 10,
+        borderRadius: 20,
+    },
     rootContainer: {
         flex: 1
     },

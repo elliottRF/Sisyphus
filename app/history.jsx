@@ -48,15 +48,18 @@ const History = () => {
 
     const groupExercisesByName = (exercises) => {
         const grouped = {};
+        const order = [];
+    
         exercises.forEach(exercise => {
-            // Use exerciseID as the key instead of combining with exerciseNum
             const key = exercise.exerciseID;
             if (!grouped[key]) {
                 grouped[key] = [];
+                order.push(key);
             }
             grouped[key].push(exercise);
         });
-        return Object.values(grouped);
+    
+        return order.map(key => grouped[key]);
     };
 
     const toggleSession = (sessionNumber) => {
@@ -91,6 +94,7 @@ const History = () => {
         <SafeAreaView style={styles.container}>
             <Text style={styles.title}>Workout History</Text>
             <FlatList
+
                 data={workoutHistory}
                 style={styles.list}
                 contentContainerStyle={styles.listContentContainer}

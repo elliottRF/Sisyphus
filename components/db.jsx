@@ -14,7 +14,7 @@ export const setupDatabase = () => {
       tx.executeSql(
         `CREATE TABLE IF NOT EXISTS exercises (
           exerciseID INTEGER PRIMARY KEY,
-          name TEXT NOT NULL,
+          name TEXT NOT NULL UNIQUE,
           targetMuscle TEXT NOT NULL,
           accessoryMuscles TEXT
         );`
@@ -82,7 +82,45 @@ export const fetchExercises = () => {
   });
 };
 
-// Fetch all exercises from the database
+
+// SPELLING MISTAKE TARGET MUSCLE SHOULD BE MUSCLES
+// Insert exercise entries
+export const insertExercise = (exerciseName, targetMuscles, accessoryMuscles) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(
+      tx => {
+        tx.executeSql(
+          `INSERT INTO exercises (name, targetMuscle, accessoryMuscles) 
+           VALUES (?, ?, ?);`,
+          [
+            exerciseName, 
+            targetMuscles,
+            accessoryMuscles
+          ],
+          () => resolve("Exercise inserted successfully!"), // Success callback
+          (_, error) => {
+            if (error.message.includes("UNIQUE constraint failed")) {
+              reject("Exercise name must be unique.");
+            } else {
+              reject(error);
+            }
+            return false; // Prevents default handling
+          }
+        );
+      },
+      error => reject(error), // Transaction error
+      () => resolve() // Transaction success
+    );
+  });
+};
+
+
+
+
+
+
+
+// Fetch all workouts from the database
 export const fetchWorkoutHistory = () => {
   return new Promise((resolve, reject) => {
     db.transaction(tx => {
@@ -144,6 +182,16 @@ export const insertWorkoutHistory = (workoutEntries, workoutTitle) => {
     ); // Fixed: Added the missing closing parenthesis
   });
 };
+
+
+
+
+
+
+
+
+
+
 
 // Fetch workout history for a specific session
 export const fetchWorkoutHistoryBySession = (sessionNumber) => {

@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, TextInput, FlatList, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
 import ActionSheet from "react-native-actions-sheet";
+import { fetchExercises } from '../components/db';
 
-const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) => {
+const FilteredExerciseList = ({  exercises, actionSheetRef, setCurrentWorkout }) => {
     const [searchQuery, setSearchQuery] = useState('');
+
+
 
     // Sort exercises alphabetically and then filter based on search
     const sortedAndFilteredExercises = exercises
@@ -13,29 +16,27 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
         );
 
     const inputExercise = (item) => {
-        Keyboard.dismiss();
         
-        setTimeout(() => {
-            actionSheetRef.current?.hide();
-            
-            setCurrentWorkout((prevWorkouts) => [
-                ...prevWorkouts,
-                {
-                    exercises: [
-                        {
-                            exerciseID: item.exerciseID,
-                            sets: [
-                                {
-                                    weight: null,
-                                    reps: null
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]);
-        }, 50);
+        actionSheetRef.current?.hide();
+        
+        setCurrentWorkout((prevWorkouts) => [
+            ...prevWorkouts,
+            {
+                exercises: [
+                    {
+                        exerciseID: item.exerciseID,
+                        sets: [
+                            {
+                                weight: null,
+                                reps: null
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]);
     };
+
 
     const renderItem = ({ item }) => (
         <TouchableOpacity 
@@ -50,8 +51,10 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
         <ActionSheet 
             ref={actionSheetRef} 
             overlayColor="transparent" 
-            containerStyle={{ backgroundColor: '#121212' }}
+            containerStyle={styles.actionSheetContainer}
+
         >
+            
             <View style={styles.searchContainer}>
                 <TextInput
                     style={styles.searchInput}
@@ -79,6 +82,11 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#333',
     },
+    actionSheetContainer: {
+        borderTopLeftRadius: 20, // Rounded corners on top-left
+        borderTopRightRadius: 20, // Rounded corners on top-right
+        backgroundColor: '#121212' 
+      },
     searchInput: {
         height: 40,
         backgroundColor: '#242424',

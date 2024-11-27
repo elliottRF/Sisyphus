@@ -26,17 +26,15 @@ const Current = () => {
 
     const [exercises, setExercises] = useState([]);
 
-    useEffect(() => {
-        fetchExercises()
-        .then(data => setExercises(data))
-        .catch(err => console.error(err));
-
-    }, []);
-
 
     NavigationBar.setBackgroundColorAsync("black");
 
     const startWorkout = async () => {
+
+        fetchExercises()
+        .then(data => setExercises(data))
+        .catch(err => console.error(err));
+
         actionSheetRef.current?.show();
 
     };
@@ -51,86 +49,107 @@ const Current = () => {
 
 
 
+//SHOW MUSCLES WORKED WITH EXERCISE HISTORY ON EXERCISE
+//swipe looks weird if dtag too high can disable stretch but looks bad
+
+//ADD TIMER TO WORKOUT
+//gesureEnabled stops scroll down, dont use
+//WHY EXERCSIE HISTORY ACTION SHEET NOT ROUDNED CORNERS ANYMORE?
+
     const calculateOneRepMax = (weight, reps) => {
         const oneRepMax = weight * (1 + reps / 30);
         return Math.round(oneRepMax * 100) / 100; // Truncates to 2 decimal places
     };
     
+
+
     const endWorkout = async () => {
         try {
             const latestSessionQuery = await getLatestWorkoutSession();
             const nextSessionNumber = latestSessionQuery + 1;
-            console.log(JSON.stringify(currentWorkout));
+            
             if (!currentWorkout || !currentWorkout.length) {
                 console.log("No workout data to save");
                 return;
             }
     
-            // Create entries with Promise.all to handle async PR calculations
-            const workoutHistoryEntries = await Promise.all(
-                currentWorkout.flatMap((exerciseGroup, exerciseIndex) =>
-                    exerciseGroup.exercises.flatMap((exercise) =>
-                        exercise.sets.map(async (set) => {
-    
-                            // Skip sets with missing weight or reps
-                            if (!set.weight || !set.reps) {
-                                console.log(`Skipping set due to missing weight or reps`);
-                                return null; // Skip this set
-                            }
-    
-                            // Calculate One Rep Max and check if it's a PR
-                            const calculatedOneRM = calculateOneRepMax(parseFloat(set.weight), parseInt(set.reps));
-                            const isPR = await calculateIfPR(exercise.exerciseID, calculatedOneRM);
-                            
-                            return {
-                                workoutSession: nextSessionNumber,
-                                exerciseNum: exerciseIndex + 1,
-                                exerciseID: exercise.exerciseID,
-                                weight: parseFloat(set.weight),
-                                reps: parseInt(set.reps),
-                                oneRM: calculatedOneRM,
-                                time: new Date().toISOString(),
-                                name: workoutTitle,
-                                pr: isPR
-                            };
-                        })
+            // Filter out sets with null weight or reps
+            const filteredWorkout = currentWorkout.map(exerciseGroup => ({
+                ...exerciseGroup,
+                exercises: exerciseGroup.exercises.map(exercise => ({
+                    ...exercise,
+                    sets: exercise.sets.filter(set => 
+                        set.weight !== null && set.reps !== null
                     )
-                ).flat()
-            );
+                }))
+            }));
     
-            // Filter out invalid entries (nulls)
-            const validWorkoutHistoryEntries = workoutHistoryEntries.filter(entry => entry !== null);
+            // Prepare workout entries for database insertion
+            const workoutEntries = [];
+            let globalExerciseNum = 1;
     
-            // Re-number the valid sets sequentially starting from set 1
-            validWorkoutHistoryEntries.forEach((entry, index) => {
-                entry.setNum = index + 1; // Reassign setNum to be sequential
-            });
+            for (const exerciseGroup of filteredWorkout) {
+                for (const exercise of exerciseGroup.exercises) {
+                    let setNum = 1;
+                    
+                    for (const set of exercise.sets) {
+                        // Calculate One Rep Max
+                        const calculatedOneRM = calculateOneRepMax(
+                            parseFloat(set.weight), 
+                            parseInt(set.reps)
+                        );
     
-            // Only insert valid entries if there are any
-            if (validWorkoutHistoryEntries.length > 0) {
-                console.log(workoutTitle);
-                await insertWorkoutHistory(validWorkoutHistoryEntries, workoutTitle);
-                console.log("Workout saved successfully");
-            } else {
-                console.log("No valid workout history entries to save.");
+                        // Check if it's a PR
+                        const isPR = await calculateIfPR(exercise.exerciseID, calculatedOneRM);
+    
+                        // Prepare entry for database
+                        workoutEntries.push({
+                            workoutSession: nextSessionNumber,
+                            exerciseNum: globalExerciseNum,
+                            setNum: setNum,
+                            exerciseID: exercise.exerciseID,
+                            weight: set.weight,
+                            reps: set.reps,
+                            oneRM: calculatedOneRM,
+                            time: new Date().toISOString(), // Current timestamp
+                            name: workoutTitle,
+                            pr: isPR
+                        });
+    
+                        setNum++;
+                    }
+                    
+                    globalExerciseNum++;
+                }
             }
-    
+            console.log(JSON.stringify(workoutEntries));
+            // Insert workout history
+            await insertWorkoutHistory(workoutEntries, workoutTitle);
+            
             // Clear AsyncStorage and state
             await AsyncStorage.removeItem('@currentWorkout');
             console.log('Workout cleared from AsyncStorage');
             setCurrentWorkout([]);
-    
-        } catch (error) {
-            console.error("Error in endWorkout:", error);
+
+
+            console.log("Workout saved successfully");
+        }
+        catch (error) {
+            console.error("Error saving workout:", error);
         }
     };
-    
 
 
 
 
 
     const plusButtonShowExerciseList = () => {
+
+
+        fetchExercises()
+        .then(data => setExercises(data))
+        .catch(err => console.error(err));
+
         actionSheetRef.current?.show();
       };
     
@@ -158,13 +177,18 @@ const Current = () => {
 
     useEffect(() => {
         const loadWorkout = async () => {
+            fetchExercises()
+            .then(data => setExercises(data))
+            .catch(err => console.error(err));
+
+
+
             try {
                 const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
                 if (storedWorkout) {
 
                     const { workout, title } = JSON.parse(storedWorkout);
-                    console.log(JSON.stringify(storedWorkout));
-                    setCurrentWorkout(JSON.parse(workout));
+                    setCurrentWorkout(workout);
                     if(title) setWorkoutTitle(title);
 
                 }
@@ -203,7 +227,6 @@ const Current = () => {
                 ]
             }
         ]);
-        console.log(JSON.stringify(currentWorkout))
     };
 
 
@@ -228,6 +251,7 @@ const Current = () => {
       );
 
 
+      const [time, setTime] = useState("55m");
 
 
     return (
@@ -244,7 +268,7 @@ const Current = () => {
             <ScrollView 
                 showsVerticalScrollIndicator={false} 
                 showsHorizontalScrollIndicator={false}
-
+                    
             >        
             <TextInput
                         style={styles.input}
@@ -253,6 +277,7 @@ const Current = () => {
                         placeholder="Enter Workout Name"
                         keyboardType="text"
                         />
+            <Text>{time}</Text>
 
                 
             {currentWorkout.map((workout, workoutIndex) => (

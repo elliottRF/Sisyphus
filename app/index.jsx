@@ -22,7 +22,7 @@ const Home = () => {
                 <Body
                     data={[
                         { slug: "upper-back", intensity: 1, side: "both" },
-                        { slug: "quadriceps", intensity: 1 },
+                        { slug: "quadriceps", intensity: 2 },
                         { slug: "deltoids", intensity: 1 },
                     ]}
                     gender="male"
