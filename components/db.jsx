@@ -92,12 +92,12 @@ export const insertExercise = (exerciseName, targetMuscles, accessoryMuscles) =>
         tx.executeSql(
           `INSERT INTO exercises (name, targetMuscle, accessoryMuscles) 
            VALUES (?, ?, ?);`,
-          [
-            exerciseName, 
-            targetMuscles,
-            accessoryMuscles
-          ],
-          () => resolve("Exercise inserted successfully!"), // Success callback
+          [exerciseName, targetMuscles, accessoryMuscles],
+          (_, result) => {
+            // Access the last inserted row ID
+            const insertedId = result.insertId;
+            resolve(insertedId); // Resolve with the ID
+          },
           (_, error) => {
             if (error.message.includes("UNIQUE constraint failed")) {
               reject("Exercise name must be unique.");

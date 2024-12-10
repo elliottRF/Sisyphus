@@ -312,6 +312,17 @@ const Current = () => {
     };
 
 
+
+    const refreshExercises = () => {
+
+
+        fetchExercises()
+        .then(data => setExercises(data))
+        .catch(err => console.error(err));
+
+      };
+    
+
     return (
         <SafeAreaView style={styles.container}>
         {currentWorkout.length === 0 && (
@@ -376,6 +387,7 @@ const Current = () => {
                 exercises={exercises}
                 actionSheetRef={actionSheetRef}
                 setCurrentWorkout={setCurrentWorkout}
+                refreshExercises={refreshExercises}
             />
     </SafeAreaView>
     );

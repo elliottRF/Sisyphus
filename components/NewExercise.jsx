@@ -67,11 +67,27 @@ const NewExercise = props => {
           .join(","); // Join with commas
       }
 
-    const createExercise = async () => {
-        await insertExercise(exerciseName, formatListToString(targetSelected), formatListToString(accessorySelected));
-        props.close();
+      const createExercise = async () => {
+        try {
+          const insertedId = await insertExercise(
+            exerciseName, 
+            formatListToString(targetSelected), 
+            formatListToString(accessorySelected)
+          );
 
-    }
+
+          
+          props.inputExercise({ exerciseID: insertedId })
+
+
+
+          props.close();
+
+
+        } catch (error) {
+          console.error("Error inserting exercise:", error);
+        }
+      };
 
 
     const targetMuscle = [
