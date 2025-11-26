@@ -1,125 +1,117 @@
-import { View, Text, StyleSheet} from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import React from 'react'
 import { TouchableOpacity } from 'react-native';
-
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import Octicons from '@expo/vector-icons/Octicons';
-
 import Entypo from '@expo/vector-icons/Entypo';
-
-
+import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 
 const TabBar = ({ state, descriptors, navigation }) => {
 
-    const icons ={
-
-        index: (props)=> <FontAwesome name="home" size={26} color={greyColor} {...props}/>,
-        current: (props)=> <Entypo name="circle-with-plus" size={26} color={greyColor} {...props}/>,
-        history: (props)=><Octicons name="checklist" size={26} color={greyColor} {...props}/>,
-        profile: (props)=> <FontAwesome6 name="dumbbell" size={26} color={greyColor} {...props}/>
+    const icons = {
+        index: (props) => <FontAwesome name="home" size={24} {...props} />,
+        current: (props) => <Entypo name="circle-with-plus" size={24} {...props} />,
+        history: (props) => <Octicons name="checklist" size={24} {...props} />,
+        profile: (props) => <FontAwesome6 name="dumbbell" size={24} {...props} />
     }
 
-
-    const primaryColor = '#0891b2';
-    const greyColor = '#737373';
-
-    
     return (
+        <View style={styles.container}>
             <View style={styles.tabBar}>
-            {state.routes.map((route, index) => {
-                const { options } = descriptors[route.key];
-                const label =
-                    options.tabBarLabel !== undefined
-                        ? options.tabBarLabel
-                        : options.title !== undefined
-                            ? options.title
-                            : "route.name";
+                {state.routes.map((route, index) => {
+                    const { options } = descriptors[route.key];
+                    const label =
+                        options.tabBarLabel !== undefined
+                            ? options.tabBarLabel
+                            : options.title !== undefined
+                                ? options.title
+                                : route.name;
 
-                if(['_sitemap', '+not-found'].includes(route.name)) return null;
+                    if (['_sitemap', '+not-found'].includes(route.name)) return null;
 
-                const isFocused = state.index === index;
+                    const isFocused = state.index === index;
 
-                const onPress = () => {
-                    const event = navigation.emit({
-                        type: 'tabPress',
-                        target: route.key,
-                        canPreventDefault: true,
-                    });
+                    const onPress = () => {
+                        const event = navigation.emit({
+                            type: 'tabPress',
+                            target: route.key,
+                            canPreventDefault: true,
+                        });
 
-                    if (!isFocused && !event.defaultPrevented) {
-                        navigation.navigate(route.name, route.params);
-                    }
-                };
-
-                const onLongPress = () => {
-                    navigation.emit({
-                        type: 'tabLongPress',
-                        target: route.key,
-                    });
-                };
-
-                return (
-                    <TouchableOpacity
-                        key={route.name}
-                        style={styles.tabBarItem}
-                        accessibilityRole="button"
-                        accessibilityState={isFocused ? { selected: true } : {}}
-                        accessibilityLabel={options.tabBarAccessibilityLabel}
-                        testID={options.tabBarButtonTestID}
-                        onPress={onPress}
-                        onLongPress={onLongPress}
-                    >
-
-                        {
-                            icons[route.name]({
-                                color: isFocused? primaryColor: greyColor
-                            })
+                        if (!isFocused && !event.defaultPrevented) {
+                            navigation.navigate(route.name, route.params);
                         }
+                    };
 
-                        <Text style={{
-                            color: isFocused ? primaryColor : greyColor,
-                            fontSiz: 11
+                    const onLongPress = () => {
+                        navigation.emit({
+                            type: 'tabLongPress',
+                            target: route.key,
+                        });
+                    };
 
-                        }}>
-                            {label}
-                        </Text>
-                    </TouchableOpacity>
-                );
-            })}
+                    return (
+                        <TouchableOpacity
+                            key={route.name}
+                            style={styles.tabBarItem}
+                            accessibilityRole="button"
+                            accessibilityState={isFocused ? { selected: true } : {}}
+                            accessibilityLabel={options.tabBarAccessibilityLabel}
+                            testID={options.tabBarButtonTestID}
+                            onPress={onPress}
+                            onLongPress={onLongPress}
+                        >
+                            {
+                                icons[route.name]({
+                                    color: isFocused ? COLORS.primary : COLORS.textSecondary
+                                })
+                            }
+
+                            <Text style={{
+                                color: isFocused ? COLORS.primary : COLORS.textSecondary,
+                                fontSize: 10,
+                                fontFamily: isFocused ? FONTS.bold : FONTS.medium,
+                                marginTop: 4
+                            }}>
+                                {label}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
         </View>
     )
 }
 
-
 const styles = StyleSheet.create({
-
-    tabBar:{
+    container: {
         position: 'absolute',
-        bottom: 10,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        paddingBottom: 20, // Safe area padding simulation
+    },
+    tabBar: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems:'center',
-        backgroundColor:'#1c1d1f',
-        marginHorizontal: 10,
-        paddingVertical: 10,
-        borderRadius: 25,
-        borderCurve: 'continuous',
-        shadowColor: 'black',
-        shadowOffset: {width: 0, height: 10},
-        shadowRadius: 10,
-        shadowOpacity: 0.1
+        alignItems: 'center',
+        backgroundColor: COLORS.surface,
+        width: '90%',
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+        borderRadius: 35,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        ...SHADOWS.medium,
     },
-    tabBarItem:{
-        flex:1,
+    tabBarItem: {
+        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 4
     }
-
 })
-
-
 
 export default TabBar
 

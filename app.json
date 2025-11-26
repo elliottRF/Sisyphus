@@ -3,6 +3,7 @@
     "name": "sisyphus",
     "slug": "sisyphus",
     "version": "1.0.0",
+    "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
@@ -15,17 +16,17 @@
     "ios": {
       "supportsTablet": true
     },
-"android": {
-  "softwareKeyboardLayoutMode": "pan",
-  "adaptiveIcon": {
-    "foregroundImage": "./assets/images/adaptive-icon.png",
-    "backgroundColor": "#ffffff"
-  },
-  "package": "com.elliottr.sisyphus",
-  "compileSdkVersion": 34,
-  "targetSdkVersion": 34,
-  "minSdkVersion": 21
-},
+    "android": {
+      "softwareKeyboardLayoutMode": "pan",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.elliottr.sisyphus",
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "minSdkVersion": 21
+    },
     "web": {
       "bundler": "metro",
       "output": "static",

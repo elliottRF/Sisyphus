@@ -1,284 +1,204 @@
 import * as SQLite from 'expo-sqlite';
 import exerciseData from '../assets/exercises.json';
 
-// Open or create the database
-const db = SQLite.openDatabase('sisyphus.db');
+let db;
+
+const getDb = async () => {
+  if (!db) {
+    db = await SQLite.openDatabaseAsync('sisyphus.db');
+  }
+  return db;
+};
 
 // Create and populate the exercises table
-export const setupDatabase = () => {
-  return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql('PRAGMA foreign_keys = ON;');
+export const setupDatabase = async () => {
+  try {
+    const database = await getDb();
+    await database.execAsync('PRAGMA foreign_keys = ON;');
+
+    // Create the tables if they don't exist
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS exercises (
+        exerciseID INTEGER PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        targetMuscle TEXT NOT NULL,
+        accessoryMuscles TEXT
+      );
       
-      // Create the tables if they don't exist
-      tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS exercises (
-          exerciseID INTEGER PRIMARY KEY,
-          name TEXT NOT NULL UNIQUE,
-          targetMuscle TEXT NOT NULL,
-          accessoryMuscles TEXT
-        );`
+      CREATE TABLE IF NOT EXISTS workoutHistory (
+        workoutSession INTEGER,
+        exerciseNum INTEGER,
+        setNum INTEGER,
+        exerciseID INTEGER,
+        weight FLOAT,
+        reps INTEGER,
+        oneRM FLOAT,
+        time time,
+        name TEXT,
+        pr INTEGER,
+        FOREIGN KEY (exerciseID) REFERENCES exercises(exerciseID)
       );
+    `);
 
-      tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS workoutHistory (
-          workoutSession INTEGER,
-          exerciseNum INTEGER,
-          setNum INTEGER,
-          exerciseID INTEGER,
-          weight FLOAT,
-          reps INTEGER,
-          oneRM FLOAT,
-          time time,
-          name TEXT,
-          pr INTEGER,
-          FOREIGN KEY (exerciseID) REFERENCES exercises(exerciseID)
-        );`
-      );
+    // Check if exercises table is empty before populating
+    const result = await database.getFirstAsync('SELECT COUNT(*) as count FROM exercises;');
+    const count = result?.count || 0;
 
-      // Check if exercises table is empty before populating
-      tx.executeSql(
-        'SELECT COUNT(*) as count FROM exercises;',
-        [],
-        (_, { rows }) => {
-          const count = rows._array[0].count;
-          
-          // Only populate if the table is empty
-          if (count === 0) {
-            exerciseData.forEach(({ exerciseID, name, targetMuscle, accessoryMuscles }) => {
-              tx.executeSql(
-                `INSERT OR REPLACE INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles) 
-                VALUES (?, ?, ?, ?);`,
-                [exerciseID, name, targetMuscle, accessoryMuscles]
-              );
-            });
-          }
-        }
-      );
-    }, 
-
-    (error) => {
-      console.error('Database setup error:', error);
-      reject(error);
-    },
-    () => {
-      console.log('Database setup completed successfully');
-      resolve();
-    });
-  });
+    // Only populate if the table is empty
+    if (count === 0) {
+      for (const { exerciseID, name, targetMuscle, accessoryMuscles } of exerciseData) {
+        await database.runAsync(
+          `INSERT OR REPLACE INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles) 
+           VALUES (?, ?, ?, ?);`,
+          [exerciseID, name, targetMuscle, accessoryMuscles]
+        );
+      }
+    }
+    console.log('Database setup completed successfully');
+  } catch (error) {
+    console.error('Database setup error:', error);
+    throw error;
+  }
 };
 
 // Fetch all exercises from the database
-export const fetchExercises = () => {
-  return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        `SELECT * FROM exercises;`,
-        [],
-        (_, { rows }) => resolve(rows._array),
-        (_, error) => reject(error)
-      );
-    });
-  });
+export const fetchExercises = async () => {
+  const database = await getDb();
+  return await database.getAllAsync('SELECT * FROM exercises;');
 };
 
-
-// SPELLING MISTAKE TARGET MUSCLE SHOULD BE MUSCLES
 // Insert exercise entries
-export const insertExercise = (exerciseName, targetMuscles, accessoryMuscles) => {
-  return new Promise((resolve, reject) => {
-    db.transaction(
-      tx => {
-        tx.executeSql(
-          `INSERT INTO exercises (name, targetMuscle, accessoryMuscles) 
-           VALUES (?, ?, ?);`,
-          [
-            exerciseName, 
-            targetMuscles,
-            accessoryMuscles
-          ],
-          () => resolve("Exercise inserted successfully!"), // Success callback
-          (_, error) => {
-            if (error.message.includes("UNIQUE constraint failed")) {
-              reject("Exercise name must be unique.");
-            } else {
-              reject(error);
-            }
-            return false; // Prevents default handling
-          }
-        );
-      },
-      error => reject(error), // Transaction error
-      () => resolve() // Transaction success
+export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscles) => {
+  const database = await getDb();
+  try {
+    await database.runAsync(
+      `INSERT INTO exercises (name, targetMuscle, accessoryMuscles) 
+       VALUES (?, ?, ?);`,
+      [exerciseName, targetMuscles, accessoryMuscles]
     );
-  });
+    return "Exercise inserted successfully!";
+  } catch (error) {
+    if (error.message && error.message.includes("UNIQUE constraint failed")) {
+      throw new Error("Exercise name must be unique.");
+    }
+    throw error;
+  }
 };
-
-
-
-
-
-
 
 // Fetch all workouts from the database
-export const fetchWorkoutHistory = () => {
-  return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        `SELECT * FROM workoutHistory;`,
-        [],
-        (_, { rows }) => resolve(rows._array),
-        (_, error) => reject(error)
-      );
-    });
-  });
+export const fetchWorkoutHistory = async () => {
+  const database = await getDb();
+  return await database.getAllAsync('SELECT * FROM workoutHistory;');
 };
 
-
 // Get the latest workout session number
-export const getLatestWorkoutSession = () => {
-  return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        `SELECT MAX(workoutSession) as latestSession FROM workoutHistory;`,
-        [],
-        (_, { rows }) => {
-          const latestSession = rows._array[0].latestSession;
-          resolve(latestSession !== null ? latestSession : 0);
-        },
-        (_, error) => reject(error)
-      );
-    });
-  });
+export const getLatestWorkoutSession = async () => {
+  const database = await getDb();
+  const result = await database.getFirstAsync('SELECT MAX(workoutSession) as latestSession FROM workoutHistory;');
+  return result?.latestSession !== null ? result.latestSession : 0;
 };
 
 // Insert workout history entries
-export const insertWorkoutHistory = (workoutEntries, workoutTitle) => {
-  return new Promise((resolve, reject) => {
-    db.transaction(
-      tx => {
-        workoutEntries.forEach(entry => {
-          tx.executeSql(
-            `INSERT INTO workoutHistory 
-            (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-            [
-              entry.workoutSession, 
-              entry.exerciseNum, 
-              entry.setNum, 
-              entry.exerciseID, 
-              entry.weight, 
-              entry.reps, 
-              entry.oneRM, 
-              entry.time,
-              workoutTitle,
-              entry.pr
-            ]
-          );
-        });
-      },
-      error => reject(error),
-      () => resolve()
-    ); // Fixed: Added the missing closing parenthesis
+export const insertWorkoutHistory = async (workoutEntries, workoutTitle) => {
+  const database = await getDb();
+  // Use a transaction for bulk insert if possible, or just sequential awaits
+  // expo-sqlite new API has withTransactionAsync
+  await database.withTransactionAsync(async () => {
+    for (const entry of workoutEntries) {
+      await database.runAsync(
+        `INSERT INTO workoutHistory 
+        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          entry.workoutSession,
+          entry.exerciseNum,
+          entry.setNum,
+          entry.exerciseID,
+          entry.weight,
+          entry.reps,
+          entry.oneRM,
+          entry.time,
+          workoutTitle,
+          entry.pr
+        ]
+      );
+    }
   });
 };
 
-
-
-
-
-
-
-
-
-
-
 // Fetch workout history for a specific session
-export const fetchWorkoutHistoryBySession = (sessionNumber) => {
-  return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        `SELECT wh.*, e.name as exerciseName 
-         FROM workoutHistory wh
-         JOIN exercises e ON wh.exerciseID = e.exerciseID
-         WHERE workoutSession = ?
-         ORDER BY exerciseNum, setNum;`,
-        [sessionNumber],
-        (_, { rows }) => resolve(rows._array),
-        (_, error) => reject(error)
-      );
-    });
-  });
+export const fetchWorkoutHistoryBySession = async (sessionNumber) => {
+  const database = await getDb();
+  return await database.getAllAsync(
+    `SELECT wh.*, e.name as exerciseName 
+     FROM workoutHistory wh
+     JOIN exercises e ON wh.exerciseID = e.exerciseID
+     WHERE workoutSession = ?
+     ORDER BY exerciseNum, setNum;`,
+    [sessionNumber]
+  );
 };
 
 // Calculate total volume for a specific workout session
-export const calculateSessionVolume = (sessionNumber) => {
-  return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        `SELECT 
-          SUM(weight * reps) as totalVolume,
-          COUNT(DISTINCT exerciseID) as uniqueExercises
-         FROM workoutHistory
-         WHERE workoutSession = ?;`,
-        [sessionNumber],
-        (_, { rows }) => resolve(rows._array[0]),
-        (_, error) => reject(error)
-      );
-    });
-  });
+export const calculateSessionVolume = async (sessionNumber) => {
+  const database = await getDb();
+  return await database.getFirstAsync(
+    `SELECT 
+      SUM(weight * reps) as totalVolume,
+      COUNT(DISTINCT exerciseID) as uniqueExercises
+     FROM workoutHistory
+     WHERE workoutSession = ?;`,
+    [sessionNumber]
+  );
 };
 
 // Delete a specific workout session
-export const deleteWorkoutSession = (sessionNumber) => {
-  return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        `DELETE FROM workoutHistory WHERE workoutSession = ?;`,
-        [sessionNumber],
-        () => resolve(),
-        (_, error) => reject(error)
-      );
-    });
-  });
+export const deleteWorkoutSession = async (sessionNumber) => {
+  const database = await getDb();
+  await database.runAsync(
+    `DELETE FROM workoutHistory WHERE workoutSession = ?;`,
+    [sessionNumber]
+  );
 };
 
 // Fetch exercise history for a specific exerciseID
-export const fetchExerciseHistory = (exerciseID) => {
-  return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        `SELECT * FROM workoutHistory
-          WHERE exerciseID= ?;`,
-        [exerciseID],
-        (_, { rows }) => resolve(rows._array),
-        (_, error) => reject(error)
-      );
-    });
-  });
+export const fetchExerciseHistory = async (exerciseID) => {
+  const database = await getDb();
+  return await database.getAllAsync(
+    `SELECT * FROM workoutHistory
+      WHERE exerciseID= ?;`,
+    [exerciseID]
+  );
 };
 
-//
-export const calculateIfPR = (exerciseID, oneRM) => {
-  return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        `SELECT 
-          MAX(oneRM) as maxOneRM
-         FROM workoutHistory
-         WHERE exerciseID = ?;`,
-        [exerciseID],
-        (_, { rows }) => {
-          const maxOneRM = rows._array[0]?.maxOneRM || 0;
-          // Check if the provided oneRM is greater than the existing max oneRM
-          if (oneRM > maxOneRM) {
-            resolve(1);  // PR (Personal Record) achieved
-          } else {
-            resolve(0);  // No PR
-          }
-        },
-        (_, error) => reject(error)
-      );
-    });
-  });
+// Check if PR
+export const calculateIfPR = async (exerciseID, oneRM) => {
+  const database = await getDb();
+  const result = await database.getFirstAsync(
+    `SELECT 
+      MAX(oneRM) as maxOneRM
+     FROM workoutHistory
+     WHERE exerciseID = ?;`,
+    [exerciseID]
+  );
+
+  const maxOneRM = result?.maxOneRM || 0;
+  return oneRM > maxOneRM ? 1 : 0;
+};
+
+// Fetch muscle usage from the last N days
+export const fetchRecentMuscleUsage = async (days) => {
+  const database = await getDb();
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  const dateString = date.toISOString();
+
+  return await database.getAllAsync(
+    `SELECT e.targetMuscle, e.accessoryMuscles, COUNT(*) as sets
+     FROM workoutHistory wh
+     JOIN exercises e ON wh.exerciseID = e.exerciseID
+     WHERE wh.time >= ?
+     GROUP BY wh.exerciseID;`,
+    [dateString]
+  );
 };

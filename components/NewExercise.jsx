@@ -1,187 +1,193 @@
-import { View, Text, ScrollView, StyleSheet, TextInput, Button, FlatList, TouchableOpacity } from 'react-native'
-import React, { useState, useEffect } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity } from 'react-native'
+import React, { useState } from 'react';
 import Body from "react-native-body-highlighter";
-
-import { MultipleSelectList  } from 'react-native-dropdown-select-list'
-
+import { MultipleSelectList } from 'react-native-dropdown-select-list'
 import { insertExercise } from '../components/db';
+import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const NewExercise = props => {
-
-
     const [exerciseName, setExerciseName] = useState("");
     const [targetSelected, setTargetSelected] = useState([]);
     const [accessorySelected, setAccessorySelected] = useState([]);
     const [formattedTargets, setFormattedTargets] = useState([]);
-    
+
     const handleOpened1 = () => {
-
-
         // Process target muscles (intensity 1)
         const sluggedTargets = targetSelected.map(target => {
-            const name = typeof target === 'object' && target !== null 
-                ? target.name 
+            const name = typeof target === 'object' && target !== null
+                ? target.name
                 : target;
-            
-            const slug = typeof name === 'string' 
+
+            const slug = typeof name === 'string'
                 ? name.toLowerCase()
                 : '';
-            
+
             return {
                 slug,
                 intensity: 1
             };
         });
-    
+
         // Process accessory muscles (intensity 2)
         const sluggedAccessories = accessorySelected.map(accessory => {
-            const name = typeof accessory === 'object' && accessory !== null 
-                ? accessory.name 
+            const name = typeof accessory === 'object' && accessory !== null
+                ? accessory.name
                 : accessory;
-            
-            const slug = typeof name === 'string' 
+
+            const slug = typeof name === 'string'
                 ? name.toLowerCase()
                 : '';
-            
+
             return {
                 slug,
                 intensity: 2
             };
         });
-    
+
         // Combine both arrays
         const combinedTargets = [...sluggedTargets, ...sluggedAccessories];
-    
+
         setFormattedTargets(combinedTargets);
     };
 
     function formatListToString(list) {
         // Ensure the input is an array
         if (!Array.isArray(list)) {
-          throw new Error("Input must be an array");
+            throw new Error("Input must be an array");
         }
-      
+
         return list
-          .map(item => String(item).toLowerCase().replace(/\s+/g, "")) // Convert to string, lowercase, remove spaces
-          .join(","); // Join with commas
-      }
-
-    const createExercise = async () => {
-        await insertExercise(exerciseName, formatListToString(targetSelected), formatListToString(accessorySelected));
-        props.close();
-
+            .map(item => String(item).toLowerCase().replace(/\s+/g, "")) // Convert to string, lowercase, remove spaces
+            .join(","); // Join with commas
     }
 
+    const createExercise = async () => {
+        if (!exerciseName.trim()) return;
+        await insertExercise(exerciseName, formatListToString(targetSelected), formatListToString(accessorySelected));
+        props.close();
+    }
 
     const targetMuscle = [
-        {key:'1', value:'Chest'},
-        {key:'2', value:'Triceps'},
-        {key:'3', value:'Deltoids'},
-        {key:'4', value:'Trapezius'},
-        {key:'5', value:'Upper-Back'},
-        {key:'6', value:'Lower-Back'},
-        {key:'7', value:'Biceps'},
-        {key:'8', value:'Forearm'},
-        {key:'9', value:'Abs'},
-        {key:'10', value:'Quadriceps'},
-        {key:'11', value:'Hamstring'},
-        {key:'12', value:'Gluteal'},
-        {key:'13', value:'Calves'},
-        {key:'14', value:'Adductors'},
+        { key: '1', value: 'Chest' },
+        { key: '2', value: 'Triceps' },
+        { key: '3', value: 'Deltoids' },
+        { key: '4', value: 'Trapezius' },
+        { key: '5', value: 'Upper-Back' },
+        { key: '6', value: 'Lower-Back' },
+        { key: '7', value: 'Biceps' },
+        { key: '8', value: 'Forearm' },
+        { key: '9', value: 'Abs' },
+        { key: '10', value: 'Quadriceps' },
+        { key: '11', value: 'Hamstring' },
+        { key: '12', value: 'Gluteal' },
+        { key: '13', value: 'Calves' },
+        { key: '14', value: 'Adductors' },
     ]
 
     const accessoryMuscles = [
-        {key:'1', value:'Chest'},
-        {key:'2', value:'Triceps'},
-        {key:'3', value:'Deltoids'},
-        {key:'4', value:'Trapezius'},
-        {key:'5', value:'Upper-Back'},
-        {key:'6', value:'Lower-Back'},
-        {key:'7', value:'Biceps'},
-        {key:'8', value:'Forearm'},
-        {key:'9', value:'Abs'},
-        {key:'10', value:'Quadriceps'},
-        {key:'11', value:'Hamstring'},
-        {key:'12', value:'Gluteal'},
-        {key:'13', value:'Calves'},
-        {key:'14', value:'Adductors'},
+        { key: '1', value: 'Chest' },
+        { key: '2', value: 'Triceps' },
+        { key: '3', value: 'Deltoids' },
+        { key: '4', value: 'Trapezius' },
+        { key: '5', value: 'Upper-Back' },
+        { key: '6', value: 'Lower-Back' },
+        { key: '7', value: 'Biceps' },
+        { key: '8', value: 'Forearm' },
+        { key: '9', value: 'Abs' },
+        { key: '10', value: 'Quadriceps' },
+        { key: '11', value: 'Hamstring' },
+        { key: '12', value: 'Gluteal' },
+        { key: '13', value: 'Calves' },
+        { key: '14', value: 'Adductors' },
     ]
 
     return (
-        <View style={{ height: '100%', width: '100%' }}>
-            <ScrollView 
-                horizontal={false} // Set to false for vertical scrolling
-                showsVerticalScrollIndicator={false} 
+        <View style={styles.container}>
+            <ScrollView
+                horizontal={false}
+                showsVerticalScrollIndicator={false}
                 showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
             >
-                {/* Body images container */}
                 <View style={styles.bodyContainer}>
                     <Body
                         data={formattedTargets}
                         gender="male"
                         side="front"
                         scale={1}
-                        border="#262626"
+                        border={COLORS.border}
                     />
                     <Body
                         data={formattedTargets}
                         gender="male"
                         side="back"
                         scale={1}
-                        border="#262626"
+                        border={COLORS.border}
                     />
                 </View>
 
-                {/* Name input box */}
                 <TextInput
                     style={styles.input}
                     onChangeText={setExerciseName}
                     value={exerciseName}
                     placeholder="Add Name"
-                    placeholderTextColor="#B0B0B0" // Set placeholder text color here
+                    placeholderTextColor={COLORS.textSecondary}
                     keyboardType="text"
                     keyboardShouldPersistTaps="always"
-
                 />
 
-                {/* Multiple selection boxes */}
-                <MultipleSelectList 
-                    setSelected={(val) => setTargetSelected(val)} 
-                    data={targetMuscle} 
-                    save="value"
-                    label="Target Muscles"
-                    dropdownItemStyles={{color:"white"}}
-                    labelStyles={{color:"white"}}
-                    placeholder={"Target Muscles"}
-                    checkBoxStyles={{backgroundColor:"white"}}
-                    maxHeight={1000}
-                    search={false}
-                    dropdownTextStyles={{color:"white"}} 
-                    inputStyles={{color:"white"}}
-                    badgeStyles={{backgroundColor:"#0084e3"}}
-                    onSelect={handleOpened1}
-                />
-                <MultipleSelectList 
-                    setSelected={(val) => setAccessorySelected(val)} 
-                    data={accessoryMuscles} 
-                    save="value"
-                    label="Accessory Muscles"
-                    boxStyles={styles.selectionBox} // Apply selection box styles here
-                    inputStyles={{color:"white"}}
-                    dropdownItemStyles={{color:"white"}}
-                    labelStyles={{color:"white"}}
-                    placeholder={"Accessory Muscles"}
-                    checkBoxStyles={{backgroundColor:"white"}}
-                    maxHeight={1000}
-                    search={false}
-                    dropdownTextStyles={{color:"white"}} 
-                    badgeStyles={{backgroundColor:"#74b9ff"}}
-                    onSelect={handleOpened1}
-                />
+                <View style={styles.dropdownContainer}>
+                    <MultipleSelectList
+                        setSelected={(val) => setTargetSelected(val)}
+                        data={targetMuscle}
+                        save="value"
+                        label="Target Muscles"
+                        placeholder="Target Muscles"
+                        maxHeight={200}
+                        search={false}
+                        boxStyles={styles.dropdownBox}
+                        inputStyles={styles.dropdownInput}
+                        dropdownStyles={styles.dropdownList}
+                        dropdownItemStyles={styles.dropdownItem}
+                        dropdownTextStyles={styles.dropdownText}
+                        checkBoxStyles={styles.checkbox}
+                        badgeStyles={{ backgroundColor: COLORS.primary }}
+                        labelStyles={{ color: COLORS.text, fontFamily: FONTS.medium, marginBottom: 8 }}
+                        onSelect={handleOpened1}
+                    />
+                </View>
 
-                <TouchableOpacity style={[styles.button, styles.finishButton]} onPress={createExercise}>
-                    <Text style={styles.buttonText}>Create Exercise</Text>
+                <View style={styles.dropdownContainer}>
+                    <MultipleSelectList
+                        setSelected={(val) => setAccessorySelected(val)}
+                        data={accessoryMuscles}
+                        save="value"
+                        label="Accessory Muscles"
+                        placeholder="Accessory Muscles"
+                        maxHeight={200}
+                        search={false}
+                        boxStyles={styles.dropdownBox}
+                        inputStyles={styles.dropdownInput}
+                        dropdownStyles={styles.dropdownList}
+                        dropdownItemStyles={styles.dropdownItem}
+                        dropdownTextStyles={styles.dropdownText}
+                        checkBoxStyles={styles.checkbox}
+                        badgeStyles={{ backgroundColor: COLORS.secondary }}
+                        labelStyles={{ color: COLORS.text, fontFamily: FONTS.medium, marginBottom: 8 }}
+                        onSelect={handleOpened1}
+                    />
+                </View>
+
+                <TouchableOpacity onPress={createExercise} activeOpacity={0.8}>
+                    <LinearGradient
+                        colors={[COLORS.primary, COLORS.secondary]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.createButton}
+                    >
+                        <Text style={styles.createButtonText}>Create Exercise</Text>
+                    </LinearGradient>
                 </TouchableOpacity>
 
             </ScrollView>
@@ -190,41 +196,76 @@ const NewExercise = props => {
 };
 
 const styles = StyleSheet.create({
-    button: {
-
-        paddingVertical: 20,
-        paddingHorizontal: 40,
-        borderRadius: 10,
-        alignItems: "center",
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 24,
-        fontWeight: "bold",
-    },
-    finishButton: {
-        marginBottom: 100, // Add some space above the finish button
-    },
     container: {
-        flex: 1,
-        backgroundColor: "#121212",
-        justifyContent: 'center', // Center the content vertically
-        alignItems: 'center', // Center the content horizontally
-        
+        height: '100%',
+        backgroundColor: COLORS.background,
+    },
+    scrollContent: {
+        paddingBottom: 100,
+        paddingHorizontal: 20,
     },
     bodyContainer: {
-        flexDirection: 'row', // Align the body images horizontally
-        justifyContent: 'space-between', // Space out the images
-        width: '100%', // Ensure the container takes up full width
-        marginBottom: 20, // Add space below the body images
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        width: '100%',
+        marginBottom: 30,
+        marginTop: 20,
     },
     input: {
-        backgroundColor: '#4A4A4A', // Dark gray background
-        color: 'white', // White text color
-        borderRadius: 10, // Rounded corners
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        margin:10
-    }
+        backgroundColor: COLORS.surface,
+        color: COLORS.text,
+        fontFamily: FONTS.medium,
+        fontSize: 16,
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    dropdownContainer: {
+        marginBottom: 20,
+    },
+    dropdownBox: {
+        backgroundColor: COLORS.surface,
+        borderColor: COLORS.border,
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+    },
+    dropdownInput: {
+        color: COLORS.text,
+        fontFamily: FONTS.medium,
+        fontSize: 16,
+    },
+    dropdownList: {
+        backgroundColor: COLORS.surface,
+        borderColor: COLORS.border,
+        marginTop: 8,
+    },
+    dropdownItem: {
+        borderBottomColor: COLORS.border,
+    },
+    dropdownText: {
+        color: COLORS.text,
+        fontFamily: FONTS.medium,
+    },
+    checkbox: {
+        borderColor: COLORS.textSecondary,
+    },
+    createButton: {
+        paddingVertical: 18,
+        borderRadius: 30,
+        alignItems: 'center',
+        marginTop: 20,
+        ...SHADOWS.medium,
+    },
+    createButtonText: {
+        color: COLORS.text,
+        fontSize: 18,
+        fontFamily: FONTS.bold,
+        letterSpacing: 1,
+    },
 });
+
 export default NewExercise;

@@ -4,10 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator } from 'react-native';
 import { fetchWorkoutHistory, fetchWorkoutHistoryBySession, calculateSessionVolume, fetchExercises, fetchExerciseHistory } from './db';
 import { useFocusEffect } from 'expo-router';
+import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { Feather } from '@expo/vector-icons';
 
 import Body from "react-native-body-highlighter";
-
-
 
 const exerciseHistory = props => {
     const [workoutHistory, setWorkoutHistory] = useState([]);
@@ -15,87 +15,71 @@ const exerciseHistory = props => {
     const [exercisesList, setExercises] = useState([]);
     const [formattedTargets, setFormattedTargets] = useState([]);
 
-
     useEffect(() => {
-        if (exercisesList)
-        {
-            
+        if (exercisesList) {
             const { targetMuscles, accessoryMuscles } = getExerciseMuscles(props.exerciseID, exercisesList);
             handleMuscleStrings(targetMuscles, accessoryMuscles)
         }
     }, [exercisesList]);
 
-
-
     const getExerciseMuscles = (exerciseID, exerciseLog) => {
         // Find the exercise with the matching exerciseID
         const exercise = exerciseLog.find(ex => ex.exerciseID === exerciseID);
-    
+
         // If exercise not found, return empty arrays
         if (!exercise) return { targetMuscles: [], accessoryMuscles: [] };
-    
+
         // Split the muscles strings into arrays, handling potential empty strings
         const targetMuscles = exercise.targetMuscle ? exercise.targetMuscle.split(',') : [];
         const accessoryMuscles = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',') : [];
-    
+
         // Return an object with two arrays of muscles
         return { targetMuscles, accessoryMuscles };
     };
 
-
-
     const handleMuscleStrings = (targetSelected, accessorySelected) => {
-
-
         // Process target muscles (intensity 1)
         const sluggedTargets = targetSelected.map(target => {
-            const name = typeof target === 'object' && target !== null 
-                ? target.name 
+            const name = typeof target === 'object' && target !== null
+                ? target.name
                 : target;
-            
-            const slug = typeof name === 'string' 
+
+            const slug = typeof name === 'string'
                 ? name.toLowerCase()
                 : '';
-            
+
             return {
                 slug,
                 intensity: 1
             };
         });
-    
+
         // Process accessory muscles (intensity 2)
         const sluggedAccessories = accessorySelected.map(accessory => {
-            const name = typeof accessory === 'object' && accessory !== null 
-                ? accessory.name 
+            const name = typeof accessory === 'object' && accessory !== null
+                ? accessory.name
                 : accessory;
-            
-            const slug = typeof name === 'string' 
+
+            const slug = typeof name === 'string'
                 ? name.toLowerCase()
                 : '';
-            
+
             return {
                 slug,
                 intensity: 2
             };
         });
-    
+
         // Combine both arrays
         const combinedTargets = [...sluggedTargets, ...sluggedAccessories];
-    
+
         setFormattedTargets(combinedTargets);
     };
 
-
-
-
-
-
-
-
     useEffect(() => {
         fetchExercises()
-        .then(data => setExercises(data))
-        .catch(err => console.error(err));
+            .then(data => setExercises(data))
+            .catch(err => console.error(err));
     }, []);
 
     useFocusEffect(
@@ -156,170 +140,179 @@ const exerciseHistory = props => {
     if (loading) {
         return (
             <View style={styles.container}>
-                <ActivityIndicator size="large" color="#fff" />
+                <ActivityIndicator size="large" color={COLORS.primary} />
             </View>
         );
     }
 
-
-
-
-
-
-
     return (
-        <View style={{ height: '100%', width: '100%' }}>
-
-
-
-
-
-
-            {true ? (
-                <FlatList
-                    
-                    data={workoutHistory}
-                    style={[styles.list, { height: '90%' }]}
-                    contentContainerStyle={styles.listContentContainer}
-                    keyExtractor={([session]) => session}
-                    ListHeaderComponent={
+        <View style={styles.container}>
+            <FlatList
+                data={workoutHistory}
+                style={styles.list}
+                contentContainerStyle={styles.listContentContainer}
+                keyExtractor={([session]) => session}
+                ListHeaderComponent={
+                    <View style={styles.headerContainer}>
+                        <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
                         <View style={styles.bodyContainer}>
-                            <View style={styles.exerciseNameContainer}>
-                                <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
-                            </View>
-                            <View style={styles.bodyImagesContainer}>
-                                <Body
-                                    data={formattedTargets}
-                                    gender="male"
-                                    side="front"
-                                    scale={1}
-                                    border="#262626"
-                                />
-                                <Body
-                                    data={formattedTargets}
-                                    gender="male"
-                                    side="back"
-                                    scale={1}
-                                    border="#262626"
-                                />
-                            </View>
+                            <Body
+                                data={formattedTargets}
+                                gender="male"
+                                side="front"
+                                scale={1.1}
+                                border={COLORS.border}
+                            />
+                            <Body
+                                data={formattedTargets}
+                                gender="male"
+                                side="back"
+                                scale={1.1}
+                                border={COLORS.border}
+                            />
                         </View>
-                    }
+                    </View>
+                }
+                renderItem={({ item: [session, exercises] }) => (
+                    <View style={styles.sessionContainer}>
+                        <View style={styles.sessionHeader}>
+                            <Text style={styles.sessionTitle}>
+                                Workout {session} - {formatDate(exercises[0].time)}
+                            </Text>
+                        </View>
 
+                        <View style={styles.exercisesList}>
+                            {groupExercisesByName(exercises).map((exerciseGroup, index) => {
+                                const exerciseDetails = exercisesList.find(
+                                    ex => ex.exerciseID === exerciseGroup[0].exerciseID
+                                );
 
-
-
-                    renderItem={({item: [session, exercises]}) => (
-                        <View style={styles.sessionContainer}>
-                            <View style={styles.sessionHeader}>
-                                <Text style={styles.sessionTitle}>
-                                    Workout {session} - {formatDate(exercises[0].time)}
-                                </Text>
-                            </View>
-                            
-                            <View style={styles.exercisesList}>
-                                {groupExercisesByName(exercises).map((exerciseGroup, index) => {
-                                    const exerciseDetails = exercisesList.find(
-                                        ex => ex.exerciseID === exerciseGroup[0].exerciseID
-                                    );
-                                    
-                                    return (
-                                        <View key={index} style={styles.exercise}>
-                                            <Text style={styles.exerciseName}>
-                                                {exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseGroup[0].exerciseID}`}
-                                            </Text>
-                                            {exerciseGroup.map((set, setIndex) => (
-                                            <Text
-                                                key={setIndex}
-                                                style={[
+                                return (
+                                    <View key={index} style={styles.exercise}>
+                                        {exerciseGroup.map((set, setIndex) => (
+                                            <View key={setIndex} style={styles.setRow}>
+                                                <Text style={[
                                                     styles.setInfo,
-                                                    set.pr === 1 && { color: '#30c5b7' }  // Apply this color if set.pr is 1
-                                                ]}
-                                            >
-                                                Set {set.setNum}: {set.weight}kg × {set.reps}
-                                            </Text>
-))}
-                                        </View>
-                                    );
-                                })}
-                            </View>
+                                                    set.pr === 1 && styles.prText
+                                                ]}>
+                                                    Set {set.setNum}: {set.weight}kg × {set.reps}
+                                                </Text>
+                                                {set.pr === 1 && (
+                                                    <View style={styles.prBadge}>
+                                                        <Text style={styles.prBadgeText}>PR</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        ))}
+                                    </View>
+                                );
+                            })}
                         </View>
-                    )}
-                    showsVerticalScrollIndicator={false}
-                />
-            ) : (
-                <Text style={[styles.title, { color: '#888' }]}>No workout history available</Text>
-            )}
+                    </View>
+                )}
+                ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>No workout history available</Text>
+                    </View>
+                }
+                showsVerticalScrollIndicator={false}
+            />
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-
-    exerciseTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        padding:'2%',
-        textAlign: 'center',
-        color:'#fff',
-    },
-    bodyContainer: {
-        width: '100%', // Ensure the container takes up full width
-        marginBottom: 20, // Add space below the body section
-    },
-    exerciseNameContainer: {
-        alignItems: 'center', // Center the exercise name horizontally
-        marginBottom: 10, // Add some space between the name and body images
-    },
-    bodyImagesContainer: {
-        flexDirection: 'row', // Align the body images horizontally
-        justifyContent: 'space-between', // Space out the images
-    },
-    listContentContainer: {
-        paddingTop: 0,
-        
-    },
     container: {
-        flex: 1,
-        backgroundColor: "#121212",
+        height: '100%',
+        backgroundColor: COLORS.background,
     },
     list: {
+        flex: 1,
+    },
+    listContentContainer: {
+        paddingBottom: 40,
+    },
+    headerContainer: {
+        alignItems: 'center',
+        paddingVertical: 20,
+        backgroundColor: COLORS.background,
+    },
+    exerciseTitle: {
+        fontSize: 24,
+        fontFamily: FONTS.bold,
+        color: COLORS.text,
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    bodyContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
         width: '100%',
-        backgroundColor: '#121212',
+        height: 300,
+        marginBottom: 20,
     },
     sessionContainer: {
         marginHorizontal: 16,
-        marginVertical: 8,
-        backgroundColor: '#1E1E1E',
-        borderRadius: 8,
+        marginBottom: 16,
+        backgroundColor: COLORS.surface,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        ...SHADOWS.small,
         overflow: 'hidden',
     },
     sessionHeader: {
         padding: 16,
-        backgroundColor: '#2A2A2A',
+        backgroundColor: COLORS.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
     },
     sessionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#fff',
+        fontSize: 16,
+        fontFamily: FONTS.bold,
+        color: COLORS.text,
     },
     exercisesList: {
         padding: 16,
     },
     exercise: {
-        marginBottom: 16,
+        // marginBottom: 8,
     },
-    exerciseName: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#fff',
+    setRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginBottom: 8,
     },
     setInfo: {
-        color: '#B0B0B0',
-        marginLeft: 16,
-        marginBottom: 4,
+        color: COLORS.textSecondary,
+        fontFamily: FONTS.medium,
+        fontSize: 14,
     },
+    prText: {
+        color: COLORS.primary,
+        fontFamily: FONTS.bold,
+    },
+    prBadge: {
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginLeft: 8,
+    },
+    prBadgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontFamily: FONTS.bold,
+    },
+    emptyContainer: {
+        padding: 40,
+        alignItems: 'center',
+    },
+    emptyText: {
+        color: COLORS.textSecondary,
+        fontFamily: FONTS.medium,
+        fontSize: 16,
+    }
 });
 
 export default exerciseHistory;

@@ -4,6 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator } from 'react-native';
 import { fetchWorkoutHistory, fetchWorkoutHistoryBySession, calculateSessionVolume, fetchExercises } from '../components/db';
 import { useFocusEffect } from 'expo-router';
+import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import AntDesign from '@expo/vector-icons/AntDesign';
 
 const History = () => {
     const [workoutHistory, setWorkoutHistory] = useState([]);
@@ -13,8 +16,8 @@ const History = () => {
 
     useEffect(() => {
         fetchExercises()
-        .then(data => setExercises(data))
-        .catch(err => console.error(err));
+            .then(data => setExercises(data))
+            .catch(err => console.error(err));
     }, []);
 
     useFocusEffect(
@@ -49,7 +52,7 @@ const History = () => {
     const groupExercisesByName = (exercises) => {
         const grouped = {};
         const order = [];
-    
+
         exercises.forEach(exercise => {
             const key = exercise.exerciseID;
             if (!grouped[key]) {
@@ -58,7 +61,7 @@ const History = () => {
             }
             grouped[key].push(exercise);
         });
-    
+
         return order.map(key => grouped[key]);
     };
 
@@ -85,7 +88,7 @@ const History = () => {
     if (loading) {
         return (
             <SafeAreaView style={styles.container}>
-                <ActivityIndicator size="large" color="#fff" />
+                <ActivityIndicator size="large" color={COLORS.primary} />
             </SafeAreaView>
         );
     }
@@ -94,108 +97,147 @@ const History = () => {
         <SafeAreaView style={styles.container}>
             <Text style={styles.title}>Workout History</Text>
             <FlatList
-
                 data={workoutHistory}
                 style={styles.list}
                 contentContainerStyle={styles.listContentContainer}
                 keyExtractor={([session]) => session}
-                renderItem={({item: [session, exercises]}) => (
-                    <View style={styles.sessionContainer}>
-                        <TouchableOpacity 
-                            style={styles.sessionHeader}
-                            onPress={() => toggleSession(session)}
-                        >
-                            <Text style={styles.sessionTitle}>
-                                {exercises[0].name} - {formatDate(exercises[0].time)}
-                            </Text>
-                        </TouchableOpacity>
-                        
-                        {expandedSessions.has(session) && (
-                            <View style={styles.exercisesList}>
-                                {groupExercisesByName(exercises).map((exerciseGroup, index) => {
-                                    const exerciseDetails = exercisesList.find(
-                                        ex => ex.exerciseID === exerciseGroup[0].exerciseID
-                                    );
-                                    
-                                    return (
-                                        <View key={index} style={styles.exercise}>
-                                            <Text style={styles.exerciseName}>
-                                                {exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseGroup[0].exerciseID}`}
+                renderItem={({ item: [session, exercises] }) => {
+                    const isExpanded = expandedSessions.has(session);
+                    return (
+                        <View style={styles.cardContainer}>
+                            <TouchableOpacity
+                                activeOpacity={0.9}
+                                onPress={() => toggleSession(session)}
+                            >
+                                <LinearGradient
+                                    colors={[COLORS.surface, COLORS.surface]} // Keep it subtle or use a slight gradient if desired
+                                    style={styles.cardHeader}
+                                >
+                                    <View style={styles.headerContent}>
+                                        <View>
+                                            <Text style={styles.sessionTitle}>
+                                                {exercises[0].name}
                                             </Text>
-                                            {exerciseGroup.map((set, setIndex) => (
-                                            <Text
-                                                key={setIndex}
-                                                style={[
-                                                    styles.setInfo,
-                                                    set.pr === 1 && { color: '#30c5b7' }  // Apply this color if set.pr is 1
-                                                ]}
-                                            >
-                                                Set {set.setNum}: {set.weight}kg × {set.reps}
+                                            <Text style={styles.sessionDate}>
+                                                {formatDate(exercises[0].time)}
                                             </Text>
-))}
                                         </View>
-                                    );
-                                })}
-                            </View>
-                        )}
-                    </View>
-                )}
+                                        <AntDesign name={isExpanded ? "up" : "down"} size={20} color={COLORS.textSecondary} />
+                                    </View>
+                                </LinearGradient>
+                            </TouchableOpacity>
+
+                            {isExpanded && (
+                                <View style={styles.exercisesList}>
+                                    {groupExercisesByName(exercises).map((exerciseGroup, index) => {
+                                        const exerciseDetails = exercisesList.find(
+                                            ex => ex.exerciseID === exerciseGroup[0].exerciseID
+                                        );
+
+                                        return (
+                                            <View key={index} style={styles.exercise}>
+                                                <Text style={styles.exerciseName}>
+                                                    {exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseGroup[0].exerciseID}`}
+                                                </Text>
+                                                {exerciseGroup.map((set, setIndex) => (
+                                                    <View key={setIndex} style={styles.setRow}>
+                                                        <Text style={[styles.setInfo, set.pr === 1 && styles.prText]}>
+                                                            Set {set.setNum}
+                                                        </Text>
+                                                        <Text style={[styles.setInfo, set.pr === 1 && styles.prText]}>
+                                                            {set.weight}kg × {set.reps}
+                                                        </Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            )}
+                        </View>
+                    );
+                }}
             />
         </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    listContentContainer: {
-        paddingBottom: 100,
-    },
     container: {
         flex: 1,
-        backgroundColor: "#121212",
+        backgroundColor: COLORS.background,
     },
     title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#fff',
-        padding: 16,
-        textAlign: 'center',
+        fontSize: 28,
+        fontFamily: FONTS.bold,
+        color: COLORS.text,
+        padding: 20,
     },
     list: {
         flex: 1,
         width: '100%',
     },
-    sessionContainer: {
-        marginHorizontal: 16,
-        marginVertical: 8,
-        backgroundColor: '#1E1E1E',
-        borderRadius: 8,
-        overflow: 'hidden',
+    listContentContainer: {
+        paddingBottom: 100,
+        paddingHorizontal: 16,
     },
-    sessionHeader: {
+    cardContainer: {
+        marginBottom: 16,
+        borderRadius: 16,
+        backgroundColor: COLORS.surface,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        ...SHADOWS.small,
+    },
+    cardHeader: {
         padding: 16,
-        backgroundColor: '#2A2A2A',
+    },
+    headerContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     sessionTitle: {
         fontSize: 18,
-        fontWeight: 'bold',
-        color: '#fff',
+        fontFamily: FONTS.semiBold,
+        color: COLORS.text,
+        marginBottom: 4,
+    },
+    sessionDate: {
+        fontSize: 14,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
     },
     exercisesList: {
         padding: 16,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+        backgroundColor: '#181818', // Slightly darker than surface
     },
     exercise: {
         marginBottom: 16,
     },
     exerciseName: {
         fontSize: 16,
-        fontWeight: 'bold',
-        color: '#fff',
+        fontFamily: FONTS.semiBold,
+        color: COLORS.primary,
         marginBottom: 8,
     },
-    setInfo: {
-        color: '#B0B0B0',
-        marginLeft: 16,
+    setRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         marginBottom: 4,
+        paddingLeft: 10,
+    },
+    setInfo: {
+        fontSize: 14,
+        fontFamily: FONTS.regular,
+        color: COLORS.textSecondary,
+    },
+    prText: {
+        color: COLORS.success,
+        fontFamily: FONTS.bold,
     },
 });
 

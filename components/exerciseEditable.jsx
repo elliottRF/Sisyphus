@@ -1,35 +1,32 @@
-import React, { useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
-import { AntDesign } from '@expo/vector-icons';
-import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
-import EvilIcons from '@expo/vector-icons/EvilIcons';
-import ActionSheet from "react-native-actions-sheet";
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native'
+import React, { useState, useRef } from 'react'
+import { COLORS, FONTS, SHADOWS } from '../constants/theme'
+import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Swipeable } from 'react-native-gesture-handler';
 
-import ExerciseHistory from './exerciseHistory';
+if (Platform.OS === 'android') {
+    if (UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+}
 
+const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, drag }) => {
 
-import Feather from '@expo/vector-icons/Feather';
+    const [sets, setSets] = useState(exercise.sets);
 
-
-const ExerciseEditable = ({ 
-    exerciseID,
-    exercise, 
-    exerciseName, 
-    updateCurrentWorkout 
-}) => {
     const handleWeightChange = (text, setIndex) => {
-        updateCurrentWorkout(prevWorkout => 
-            prevWorkout.map(workout => 
+        updateCurrentWorkout(prevWorkout =>
+            prevWorkout.map(workout =>
                 workout.exercises.includes(exercise)
                     ? {
                         ...workout,
-                        exercises: workout.exercises.map(ex => 
-                            ex === exercise 
+                        exercises: workout.exercises.map(ex =>
+                            ex === exercise
                                 ? {
                                     ...ex,
-                                    sets: ex.sets.map((set, index) => 
-                                        index === setIndex 
-                                            ? { ...set, weight: text } 
+                                    sets: ex.sets.map((set, index) =>
+                                        index === setIndex
+                                            ? { ...set, weight: text }
                                             : set
                                     )
                                 }
@@ -42,18 +39,42 @@ const ExerciseEditable = ({
     };
 
     const handleRepsChange = (text, setIndex) => {
-        updateCurrentWorkout(prevWorkout => 
-            prevWorkout.map(workout => 
+        updateCurrentWorkout(prevWorkout =>
+            prevWorkout.map(workout =>
                 workout.exercises.includes(exercise)
                     ? {
                         ...workout,
-                        exercises: workout.exercises.map(ex => 
-                            ex === exercise 
+                        exercises: workout.exercises.map(ex =>
+                            ex === exercise
                                 ? {
                                     ...ex,
-                                    sets: ex.sets.map((set, index) => 
-                                        index === setIndex 
-                                            ? { ...set, reps: text } 
+                                    sets: ex.sets.map((set, index) =>
+                                        index === setIndex
+                                            ? { ...set, reps: text }
+                                            : set
+                                    )
+                                }
+                                : ex
+                        )
+                    }
+                    : workout
+            )
+        );
+    };
+
+    const toggleSetComplete = (setIndex) => {
+        updateCurrentWorkout(prevWorkout =>
+            prevWorkout.map(workout =>
+                workout.exercises.includes(exercise)
+                    ? {
+                        ...workout,
+                        exercises: workout.exercises.map(ex =>
+                            ex === exercise
+                                ? {
+                                    ...ex,
+                                    sets: ex.sets.map((set, index) =>
+                                        index === setIndex
+                                            ? { ...set, completed: !set.completed }
                                             : set
                                     )
                                 }
@@ -66,20 +87,21 @@ const ExerciseEditable = ({
     };
 
     const addNewSet = () => {
-        updateCurrentWorkout(prevWorkout => 
-            prevWorkout.map(workout => 
+        updateCurrentWorkout(prevWorkout =>
+            prevWorkout.map(workout =>
                 workout.exercises.includes(exercise)
                     ? {
                         ...workout,
-                        exercises: workout.exercises.map(ex => 
-                            ex === exercise 
+                        exercises: workout.exercises.map(ex =>
+                            ex === exercise
                                 ? {
                                     ...ex,
                                     sets: [
                                         ...ex.sets,
                                         {
                                             weight: null,
-                                            reps: null
+                                            reps: null,
+                                            completed: false
                                         }
                                     ]
                                 }
@@ -90,21 +112,16 @@ const ExerciseEditable = ({
             )
         );
     };
-    const swipeableRefs = useRef({});
+
     const deleteSet = (setIndex) => {
-        // Close the swipeable
-        if (swipeableRefs.current[setIndex]) {
-            swipeableRefs.current[setIndex].close();
-        }
-    
-        // Perform deletion
-        updateCurrentWorkout(prevWorkout => 
-            prevWorkout.map(workout => 
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        updateCurrentWorkout(prevWorkout =>
+            prevWorkout.map(workout =>
                 workout.exercises.includes(exercise)
                     ? {
                         ...workout,
-                        exercises: workout.exercises.map(ex => 
-                            ex === exercise 
+                        exercises: workout.exercises.map(ex =>
+                            ex === exercise
                                 ? {
                                     ...ex,
                                     sets: ex.sets.filter((_, index) => index !== setIndex)
@@ -117,221 +134,263 @@ const ExerciseEditable = ({
         );
     };
 
-    const handleExerciseDelete = () => {
-        // Perform deletion of the entire exercise
-        updateCurrentWorkout(prevWorkout => 
+    const deleteExercise = () => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        updateCurrentWorkout(prevWorkout =>
             prevWorkout.map(workout => ({
                 ...workout,
                 exercises: workout.exercises.filter(ex => ex !== exercise)
-            }))
+            })).filter(workout => workout.exercises.length > 0)
         );
     };
 
 
-    const renderRightActions = (setIndex) => {
+    const renderRightActions = (progress, dragX, index) => {
         return (
-            <View style={styles.deleteButtonContainer}>
-            <TouchableOpacity 
-                style={styles.deleteButton} 
-                onPress={() => deleteSet(setIndex)}
+            <TouchableOpacity
+                style={styles.deleteAction}
+                onPress={() => deleteSet(index)}
             >
-                <EvilIcons name="trash" size={24} color="white" />
+                <Feather name="trash-2" size={20} color={COLORS.text} />
             </TouchableOpacity>
-        </View>
         );
     };
 
-
-    const showHistory = () => {
-        actionSheetRef.current?.show();
-
-    }
-
-    const handleClose = () => {
-        actionSheetRef.current?.hide();
-    };
-    
-
-    const actionSheetRef = useRef(null);
-    
     return (
-        <GestureHandlerRootView style={styles.rootContainer}>
-            <View style={styles.exerciseContainer}>
-
-            <View style={styles.exerciseNameContainer}>
-                    <TouchableOpacity onPress={showHistory} style={styles.exerciseNameWrapper}>
-                        <Text style={styles.exerciseName}>{exerciseName}</Text>
+        <View style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
+                <View style={styles.headerLeft}>
+                    <TouchableOpacity
+                        onLongPress={drag}
+                        delayLongPress={100}
+                        style={styles.dragHandle}
+                        activeOpacity={0.7}
+                    >
+                        <MaterialIcons name="drag-handle" size={24} color={COLORS.textSecondary} />
                     </TouchableOpacity>
-
-
-                    <TouchableOpacity onPress={handleExerciseDelete} style={styles.deleteExercise}>
-                    <Feather name="x" size={24} color="#fff" />
-                    </TouchableOpacity>
+                    <Text style={styles.exerciseName}>{exerciseName}</Text>
                 </View>
+                <TouchableOpacity
+                    onPress={deleteExercise}
+                    style={styles.menuButton}
+                >
+                    <Feather name="x" size={20} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+            </View>
 
+            {/* Table Header */}
+            <View style={styles.tableHeader}>
+                <Text style={[styles.columnHeader, styles.colSet]}>SET</Text>
+                <Text style={[styles.columnHeader, styles.colPrev]}>PREVIOUS</Text>
+                <Text style={[styles.columnHeader, styles.colKg]}>KG</Text>
+                <Text style={[styles.columnHeader, styles.colReps]}>REPS</Text>
+                <View style={styles.colCheck} />
+            </View>
 
-                {exercise.sets.map((set, setIndex) => (
-                <Swipeable 
-                key={setIndex} 
-                ref={ref => swipeableRefs.current[setIndex] = ref}
-                renderRightActions={() => renderRightActions(setIndex)}
-            >
-                        <View style={styles.setContainer}>
-                            <Text style={styles.setNumberText}>{setIndex + 1}</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Weight"
-                                placeholderTextColor="#737373"
-                                keyboardType="numeric"
-                                value={set.weight ? set.weight.toString() : ''}
-                                onChangeText={(text) => handleWeightChange(text, setIndex)}
-                            />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Reps"
-                                placeholderTextColor="#737373"
-                                keyboardType="numeric"
-                                value={set.reps ? set.reps.toString() : ''}
-                                onChangeText={(text) => handleRepsChange(text, setIndex)}
-                            />
+            {/* Sets */}
+            <View style={styles.setsContainer}>
+                {exercise.sets.map((set, index) => (
+                    <Swipeable
+                        key={index}
+                        renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, index)}
+                        containerStyle={styles.swipeableContainer}
+                    >
+                        <View style={[
+                            styles.setRow,
+                            set.completed && styles.setRowCompleted
+                        ]}>
+                            <View style={styles.colSet}>
+                                <View style={styles.setNumberBadge}>
+                                    <Text style={styles.setNumberText}>{index + 1}</Text>
+                                </View>
+                            </View>
+
+                            <Text style={[styles.prevText, styles.colPrev]}>-</Text>
+
+                            <View style={styles.colKg}>
+                                <TextInput
+                                    style={styles.input}
+                                    value={set.weight?.toString()}
+                                    onChangeText={(text) => handleWeightChange(text, index)}
+                                    placeholder="0"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    keyboardType="numeric"
+                                    maxLength={5}
+                                />
+                            </View>
+
+                            <View style={styles.colReps}>
+                                <TextInput
+                                    style={styles.input}
+                                    value={set.reps?.toString()}
+                                    onChangeText={(text) => handleRepsChange(text, index)}
+                                    placeholder="0"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    keyboardType="numeric"
+                                    maxLength={3}
+                                />
+                            </View>
+
+                            <View style={styles.colCheck}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.checkButton,
+                                        set.completed && styles.checkButtonCompleted
+                                    ]}
+                                    onPress={() => toggleSetComplete(index)}
+                                >
+                                    <Feather
+                                        name="check"
+                                        size={16}
+                                        color={set.completed ? COLORS.background : 'transparent'}
+                                    />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </Swipeable>
                 ))}
-                <TouchableOpacity 
-                    style={styles.addSetButton} 
-                    onPress={addNewSet}
-                >
-                    <Text style={styles.setNumberText}>Add Set</Text>
-                </TouchableOpacity>
-
-                <ActionSheet 
-                    ref={actionSheetRef} 
-                    containerStyle={{ 
-                        backgroundColor: '#121212', 
-                        height: '100%', // or any specific value
-                        borderTopLeftRadius: 20, // optional for rounded corners
-                        borderTopRightRadius: 20,
-                        overflow: 'hidden',
-
-                    }}
->                    
-                <View style={styles.closeIconContainerUpperPosition}>
-                    <TouchableOpacity onPress={handleClose} style={styles.closeIcon}>
-                        <Feather name="x" size={30} color="#fff" />
-                    </TouchableOpacity>
-                </View>
-                    <ExerciseHistory exerciseID = {exerciseID} exerciseName={exerciseName}/>
-
-                </ActionSheet>
-
-
             </View>
-        </GestureHandlerRootView>
-    );
-};
+
+            {/* Footer */}
+            <TouchableOpacity
+                style={styles.addSetButton}
+                onPress={addNewSet}
+            >
+                <Text style={styles.addSetText}>+ Add Set</Text>
+            </TouchableOpacity>
+        </View>
+    )
+}
 
 const styles = StyleSheet.create({
-    closeIconContainer: {
-        position: 'absolute',
-        bottom: 10,
-        right: 10,
-        zIndex: 1,
+    container: {
+        backgroundColor: COLORS.surface,
+        borderRadius: 16,
+        marginBottom: 16,
+        overflow: 'hidden',
+        ...SHADOWS.small,
     },
-    closeIconContainerUpperPosition: {
-        position: 'absolute',
-        top:10,
-        right: 10,
-        zIndex: 1,
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.05)',
     },
-
-
-
-    closeIcon: {
-        backgroundColor: 'rgba(85, 85, 85, 0.5)',
-        padding: 10,
-        borderRadius: 20,
-    },
-    rootContainer: {
-        flex: 1
-    },
-    exerciseContainer: {
-        marginBottom: 10,
-        marginHorizontal: 16,
-        marginVertical: 8,
-
-        borderRadius: 8
-    },
-    deleteExercise: { 
-        position: 'absolute', 
-        right: '0%'
-
-    },
-    exerciseNameContainer:{
-        flexDirection: 'row', alignItems: 'center'
-    },
-    exerciseName: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        padding:'2%',
-        textAlign: 'center',
-        color:'#fff',
-    },
-    setContainer: {
-        backgroundColor: '#1E1E1E',
+    headerLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 5,
-        padding: 8,
-        borderRadius: 10
+        flex: 1,
     },
-    setNumberText: {
+    dragHandle: {
+        padding: 4,
+        marginRight: 8,
+        marginLeft: -4,
+    },
+    exerciseName: {
         fontSize: 16,
-        fontWeight: 'bold',
-        padding:'2%',
-        textAlign: 'center',
-        color:'#fff'
+        fontFamily: FONTS.semiBold,
+        color: COLORS.primary,
+        flex: 1,
     },
-    input: {
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 5,
-        padding: 5,
-        width: 80,
+    menuButton: {
+        padding: 4,
+    },
+    tableHeader: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        alignItems: 'center',
+    },
+    columnHeader: {
+        fontSize: 10,
+        fontFamily: FONTS.bold,
+        color: COLORS.textSecondary,
         textAlign: 'center',
-        color:'#fff',
-        fontWeight: 'bold',
-        backgroundColor: '#1c1c1c',
+        letterSpacing: 0.5,
+    },
+    colSet: { width: 30, alignItems: 'center' },
+    colPrev: { flex: 1, textAlign: 'center' },
+    colKg: { width: 60, marginHorizontal: 4 },
+    colReps: { width: 60, marginHorizontal: 4 },
+    colCheck: { width: 30, alignItems: 'center' },
+
+    setsContainer: {
 
     },
-    addSetButton: {
+    swipeableContainer: {
+        backgroundColor: COLORS.danger,
+    },
+    setRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 5
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        backgroundColor: COLORS.surface,
     },
-    deleteButtonContainer: {
-        flexDirection: 'row', // Keeps the content horizontally aligned
-        justifyContent: 'center', // Centers the button horizontally
-        alignItems: 'center', // Centers the button vertically
-        marginBottom: 10,
-        paddingLeft: 8,
+    setRowCompleted: {
+        backgroundColor: 'rgba(0, 184, 148, 0.05)',
     },
-    
-    deleteButton: {
-        alignItems: 'center', // Centers content horizontally inside button
-        justifyContent: 'center', // Centers content vertically inside button
-        backgroundColor: '#1c1d1f',
-        borderRadius: 25,
-        paddingVertical: 10,
-        paddingHorizontal: 12, // Increased horizontal padding to make the button wider
-        margin: 0, // Remove horizontal margin to ensure even centering
+    setNumberBadge: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    
-    deleteButtonText: {
-        color: '#fff',
-        fontWeight: 'bold',
+    setNumberText: {
+        fontSize: 12,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+    },
+    prevText: {
+        fontSize: 12,
+        fontFamily: FONTS.regular,
+        color: COLORS.textSecondary,
+    },
+    input: {
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 8,
+        paddingVertical: 6,
         textAlign: 'center',
-        width: '100%',
+        color: COLORS.text,
+        fontFamily: FONTS.semiBold,
+        fontSize: 14,
+    },
+    checkButton: {
+        width: 28,
+        height: 28,
+        borderRadius: 6,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    checkButtonCompleted: {
+        backgroundColor: COLORS.success,
+    },
+    deleteAction: {
+        backgroundColor: COLORS.danger,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 60,
+        height: '100%',
+    },
+    addSetButton: {
+        paddingVertical: 12,
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.05)',
+    },
+    addSetText: {
+        fontSize: 12,
+        fontFamily: FONTS.bold,
+        color: COLORS.primary,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
     },
 });
 
-export default ExerciseEditable;
+export default ExerciseEditable

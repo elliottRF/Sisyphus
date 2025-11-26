@@ -1,8 +1,7 @@
-import { View, Text, ScrollView, StyleSheet, TextInput, Keyboard, FlatList, TouchableOpacity} from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TextInput, Keyboard, FlatList, TouchableOpacity } from 'react-native'
 import React, { useState, useEffect, useRef } from 'react';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Body from "react-native-body-highlighter";
 import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR } from '../components/db';
 import ActionSheet from "react-native-actions-sheet";
 
@@ -10,6 +9,8 @@ import NewExercise from "../components/NewExercise"
 
 import ExerciseHistory from "../components/exerciseHistory"
 import Feather from '@expo/vector-icons/Feather';
+import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const Profile = () => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -23,13 +24,13 @@ const Profile = () => {
 
     useEffect(() => {
         fetchExercises()
-        .then(data => setExercises(data))
-        .catch(err => console.error(err));
+            .then(data => setExercises(data))
+            .catch(err => console.error(err));
     }, []);
 
 
 
-    
+
 
     // New function to handle exercise creation action sheet
     const openCreateExerciseSheet = () => {
@@ -42,8 +43,8 @@ const Profile = () => {
         createExerciseActionSheetRef.current?.hide();
 
         fetchExercises()
-        .then(data => setExercises(data))
-        .catch(err => console.error(err));
+            .then(data => setExercises(data))
+            .catch(err => console.error(err));
 
     };
 
@@ -65,52 +66,70 @@ const Profile = () => {
     };
 
     const renderItem = ({ item }) => (
-        <TouchableOpacity 
-            style={styles.exerciseButton} 
+        <TouchableOpacity
+            style={styles.exerciseCard}
             onPress={() => showExerciseInfo(item)}
+            activeOpacity={0.7}
         >
-            <Text style={styles.exerciseButtonText}>{item.name}</Text>
+            <View style={styles.exerciseContent}>
+                <Text style={styles.exerciseName}>{item.name}</Text>
+                <Feather name="chevron-right" size={20} color={COLORS.textSecondary} />
+            </View>
         </TouchableOpacity>
     );
 
     return (
         <SafeAreaView style={styles.container}>
+            <View style={styles.header}>
+                <Text style={styles.title}>Exercises</Text>
+            </View>
+
             <View style={styles.searchContainer}>
-                <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search exercises..."
-                    placeholderTextColor="#666"
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    returnKeyType="done"
-                    onSubmitEditing={Keyboard.dismiss}
-                />
-                <TouchableOpacity 
-                    style={styles.threeDotButton} 
+                <View style={styles.searchBar}>
+                    <Feather name="search" size={20} color={COLORS.textSecondary} style={styles.searchIcon} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search exercises..."
+                        placeholderTextColor={COLORS.textSecondary}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
+                    />
+                </View>
+                <TouchableOpacity
+                    style={styles.addButton}
                     onPress={openCreateExerciseSheet}
                 >
-                    <Feather name="plus" size={24} color="#fff" />
+                    <LinearGradient
+                        colors={[COLORS.primary, COLORS.secondary]}
+                        style={styles.addButtonGradient}
+                    >
+                        <Feather name="plus" size={24} color="#fff" />
+                    </LinearGradient>
                 </TouchableOpacity>
             </View>
+
             <FlatList
                 data={sortedAndFilteredExercises}
                 keyExtractor={(item) => item.exerciseID.toString()}
                 renderItem={renderItem}
                 keyboardShouldPersistTaps="always"
                 contentContainerStyle={styles.list}
+                showsVerticalScrollIndicator={false}
             />
 
             {/* Existing Exercise History ActionSheet */}
-            <ActionSheet    
-                ref={actionSheetRef} 
+            <ActionSheet
+                ref={actionSheetRef}
                 containerStyle={styles.actionSheetContainer}
-            >   
+            >
                 <View style={styles.closeIconContainerUpperPosition}>
                     <TouchableOpacity onPress={handleClose} style={styles.closeIcon}>
-                        <Feather name="x" size={30} color="#fff" />
+                        <Feather name="x" size={24} color="#fff" />
                     </TouchableOpacity>
                 </View>
-                <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName}/>
+                <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName} />
             </ActionSheet>
 
             {/* New Create Exercise ActionSheet */}
@@ -120,97 +139,109 @@ const Profile = () => {
             >
                 <View style={styles.closeIconContainerUpperPosition}>
                     <TouchableOpacity onPress={handleCloseCreateExerciseSheet} style={styles.closeIcon}>
-                        <Feather name="x" size={30} color="#fff" />
+                        <Feather name="x" size={24} color="#fff" />
                     </TouchableOpacity>
                 </View>
 
-                <NewExercise close={handleCloseCreateExerciseSheet}/>
+                <NewExercise close={handleCloseCreateExerciseSheet} />
             </ActionSheet>
         </SafeAreaView>
     )
 }
 
 const styles = StyleSheet.create({
-    list: {
-        paddingBottom: 80,
-    },
     container: {
         flex: 1,
-        backgroundColor: "#121212",
+        backgroundColor: COLORS.background,
     },
-    closeIconContainer: {
-        position: 'absolute',
-        bottom: 10,
-        right: 10,
-        zIndex: 1,
+    header: {
+        paddingHorizontal: 20,
+        paddingTop: 10,
+        paddingBottom: 10,
+    },
+    title: {
+        fontSize: 28,
+        fontFamily: FONTS.bold,
+        color: COLORS.text,
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        marginBottom: 20,
+    },
+    searchBar: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.surface,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        height: 50,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        marginRight: 12,
+    },
+    searchIcon: {
+        marginRight: 10,
+    },
+    searchInput: {
+        flex: 1,
+        color: COLORS.text,
+        fontFamily: FONTS.medium,
+        fontSize: 16,
+        height: '100%',
+    },
+    addButton: {
+        ...SHADOWS.medium,
+    },
+    addButtonGradient: {
+        width: 50,
+        height: 50,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    list: {
+        paddingHorizontal: 20,
+        paddingBottom: 100,
+    },
+    exerciseCard: {
+        backgroundColor: COLORS.surface,
+        borderRadius: 16,
+        marginBottom: 12,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        ...SHADOWS.small,
+    },
+    exerciseContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    exerciseName: {
+        color: COLORS.text,
+        fontSize: 16,
+        fontFamily: FONTS.semiBold,
+    },
+    actionSheetContainer: {
+        height: '90%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        backgroundColor: COLORS.background,
     },
     closeIconContainerUpperPosition: {
         position: 'absolute',
-        top:10,
-        right: 10,
+        top: 16,
+        right: 16,
         zIndex: 1,
     },
-
-
-
     closeIcon: {
-        backgroundColor: 'rgba(85, 85, 85, 0.5)',
-        padding: 10,
+        backgroundColor: COLORS.surface,
+        padding: 8,
         borderRadius: 20,
     },
-    actionSheetContainer: {
-        height: '100%',
-        overflow: 'hidden',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        backgroundColor: '#121212' 
-    },
-    searchContainer: {
-        flexDirection: 'row', // Add this to align items horizontally
-        alignItems: 'center', // Center items vertically
-        padding: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#333',
-    },
-    searchInput: {
-        flex: 1, // Take up remaining space
-        height: 40,
-        backgroundColor: '#242424',
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        color: '#fff',
-        fontSize: 16,
-        marginRight: 10, // Add some spacing between input and three dots
-    },
-    threeDotButton: {
-        padding: 10,
-    },
-    exerciseButton: {
-        padding: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#333',
-    },
-    exerciseButtonText: {
-        color: '#fff',
-        fontSize: 16,
-    },
-    createExerciseContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingVertical: 20,
-    },
-    createExerciseButton: {
-        backgroundColor: '#333',
-        paddingVertical: 15,
-        paddingHorizontal: 30,
-        borderRadius: 10,
-    },
-    createExerciseButtonText: {
-        color: '#fff',
-        fontSize: 18,
-        textAlign: 'center',
-    },
 });
-  
+
 export default Profile
