@@ -10,7 +10,7 @@ if (Platform.OS === 'android') {
     }
 }
 
-const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, drag }) => {
+const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, onReorder, drag, isActive }) => {
 
     const [sets, setSets] = useState(exercise.sets);
 
@@ -162,9 +162,9 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity
-                        onLongPress={drag}
-                        delayLongPress={100}
                         style={styles.dragHandle}
+                        onLongPress={onReorder}
+                        delayLongPress={200}
                         activeOpacity={0.7}
                     >
                         <MaterialIcons name="drag-handle" size={24} color={COLORS.textSecondary} />

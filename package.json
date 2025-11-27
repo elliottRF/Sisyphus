@@ -42,6 +42,7 @@
     "react-native": "0.81.5",
     "react-native-actions-sheet": "^0.9.7",
     "react-native-body-highlighter": "^3.1.0",
+    "react-native-draggable-flatlist": "^4.0.3",
     "react-native-dropdown-select-list": "^2.0.5",
     "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "~2.28.0",
@@ -51,6 +52,7 @@
     "react-native-screens": "~4.16.0",
     "react-native-sqlite-storage": "^6.0.1",
     "react-native-web": "^0.21.0",
+    "react-native-worklets": "0.5.1",
     "rxdb": "^15.38.1",
     "rxjs": "^7.8.1"
   },
@@ -64,6 +66,5 @@
     "react-test-renderer": "19.1.0",
     "typescript": "~5.9.2"
   },
-  "private": true,
-  "packageManager": "yarn@4.5.1+sha512.341db9396b6e289fecc30cd7ab3af65060e05ebff4b3b47547b278b9e67b08f485ecd8c79006b405446262142c7a38154445ef7f17c1d5d1de7d90bf9ce7054d"
+  "private": true
 }

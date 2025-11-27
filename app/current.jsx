@@ -14,6 +14,8 @@ import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculat
 
 
 import ExerciseEditable from '../components/exerciseEditable'
+import SortableExerciseList from '../components/SortableExerciseList';
+import SimpleExerciseRow from '../components/SimpleExerciseRow';
 
 import FilteredExerciseList from '../components/FilteredExerciseList';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
@@ -25,6 +27,7 @@ const Current = () => {
 
     const [exercises, setExercises] = useState([]);
     const [startTime, setStartTime] = useState(null);
+    const [isReordering, setIsReordering] = useState(false);
 
 
     NavigationBar.setBackgroundColorAsync(COLORS.background);
@@ -181,7 +184,11 @@ const Current = () => {
                 if (storedWorkout) {
 
                     const { workout, title } = JSON.parse(storedWorkout);
-                    setCurrentWorkout(workout);
+                    const workoutWithIds = workout.map(item => ({
+                        ...item,
+                        id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 9)
+                    }));
+                    setCurrentWorkout(workoutWithIds);
                     if (title) setWorkoutTitle(title);
 
                 }
@@ -208,9 +215,12 @@ const Current = () => {
     const inputExercise = (item) => {
         actionSheetRef.current?.hide();
 
+        const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+
         setCurrentWorkout((prevWorkouts) => [
             ...prevWorkouts,
             {
+                id: uniqueId,
                 exercises: [
                     {
                         exerciseID: item.exerciseID,
@@ -224,6 +234,42 @@ const Current = () => {
                 ]
             }
         ]);
+    };
+
+    const renderItem = ({ item, drag, isActive }) => {
+        if (isReordering || isActive) {
+            return (
+                <SimpleExerciseRow
+                    item={item}
+                    drag={drag}
+                    isActive={isActive}
+                    exercises={exercises}
+                />
+            );
+        }
+
+        return (
+            <View>
+                {item.exercises.map((exercise, exerciseIndex) => {
+                    const exerciseDetails = exercises.find(
+                        (e) => e.exerciseID === exercise.exerciseID
+                    );
+
+                    return (
+                        <ExerciseEditable
+                            exerciseID={exercise.exerciseID}
+                            key={exerciseIndex}
+                            exercise={exercise}
+                            exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
+                            updateCurrentWorkout={setCurrentWorkout}
+                            onEnterReorderMode={() => setIsReordering(true)}
+                            drag={drag}
+                            isActive={isActive}
+                        />
+                    );
+                })}
+            </View>
+        );
     };
 
 
@@ -264,60 +310,53 @@ const Current = () => {
                                     placeholderTextColor={COLORS.textSecondary}
                                     keyboardType="text"
                                 />
-                                {startTime && <Timer startTime={startTime} />}
+                                {isReordering ? (
+                                    <TouchableOpacity
+                                        onPress={() => setIsReordering(false)}
+                                        style={styles.finishButton}
+                                    >
+                                        <Text style={styles.finishButtonText}>Done</Text>
+                                    </TouchableOpacity>
+                                ) : (
+                                    startTime && <Timer startTime={startTime} />
+                                )}
                             </View>
                             <View style={styles.headerDivider} />
                         </View>
 
-                        <ScrollView
-                            style={styles.scrollContent}
-                            showsVerticalScrollIndicator={false}
-                        >
-                            {currentWorkout.map((exerciseGroup, groupIndex) => (
-                                <View key={groupIndex}>
-                                    {exerciseGroup.exercises.map((exercise, exerciseIndex) => {
-                                        const exerciseDetails = exercises.find(
-                                            (e) => e.exerciseID === exercise.exerciseID
-                                        );
+                        <SortableExerciseList
+                            data={currentWorkout}
+                            onReorder={setCurrentWorkout}
+                            contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
+                            renderItem={renderItem}
+                        />
 
-                                        return (
-                                            <ExerciseEditable
-                                                exerciseID={exercise.exerciseID}
-                                                key={exerciseIndex}
-                                                exercise={exercise}
-                                                exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
-                                                updateCurrentWorkout={setCurrentWorkout}
-                                            />
-                                        );
-                                    })}
-                                </View>
-                            ))}
-
-                            <TouchableOpacity
-                                style={styles.addExerciseButton}
-                                onPress={plusButtonShowExerciseList}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={styles.addExerciseText}>Add Exercise</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                onPress={endWorkout}
-                                activeOpacity={0.8}
-                                style={styles.finishButtonContainer}
-                            >
-                                <LinearGradient
-                                    colors={[COLORS.success, '#00cec9']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.finishButton}
+                        {!isReordering && (
+                            <View style={styles.footer}>
+                                <TouchableOpacity
+                                    style={styles.addExerciseButton}
+                                    onPress={plusButtonShowExerciseList}
+                                    activeOpacity={0.7}
                                 >
-                                    <Text style={styles.finishButtonText}>Finish Workout</Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
+                                    <Text style={styles.addExerciseText}>Add Exercise</Text>
+                                </TouchableOpacity>
 
-                            <View style={{ height: 100 }} />
-                        </ScrollView>
+                                <TouchableOpacity
+                                    onPress={endWorkout}
+                                    activeOpacity={0.8}
+                                    style={styles.finishButtonContainer}
+                                >
+                                    <LinearGradient
+                                        colors={[COLORS.success, '#00cec9']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={styles.finishButton}
+                                    >
+                                        <Text style={styles.finishButtonText}>Finish Workout</Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 )}
                 <FilteredExerciseList
@@ -438,6 +477,9 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.bold,
         letterSpacing: 0.5,
     },
+    footer: {
+        padding: 16,
+    }
 });
 
 export default Current;
