@@ -1,110 +1,134 @@
-import React from 'react';
-import { View, Text, Modal, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
-import { MaterialIcons, Feather } from '@expo/vector-icons';
-import { COLORS, FONTS, SHADOWS } from '../constants/theme';
-import SortableExerciseList from './SortableExerciseList';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, StatusBar } from 'react-native';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { MaterialIcons } from '@expo/vector-icons';
+import { COLORS, FONTS } from '../constants/theme';
 
-const ReorderModal = ({ visible, onClose, data, onReorder, exercises }) => {
+const ReorderModal = ({ visible, data, onClose, onReorder, exercises }) => {
+    const [localData, setLocalData] = useState(data);
 
-    const renderItem = ({ item, dragHandlers, isOverlay }) => {
-        const exerciseDetails = exercises.find(e => e.exerciseID === item.exercises[0].exerciseID);
-        const name = exerciseDetails ? exerciseDetails.name : 'Unknown Exercise';
+    // Update local data when prop changes
+    React.useEffect(() => {
+        setLocalData(data);
+    }, [data]);
+
+    const handleDone = () => {
+        onReorder(localData);
+        onClose();
+    };
+
+    const renderItem = ({ item, drag, isActive }) => {
+        // Find exercise name
+        const exerciseDetails = exercises.find(e => e.exerciseID === item.exercises[0]?.exerciseID);
+        const exerciseName = exerciseDetails ? exerciseDetails.name : 'Unknown Exercise';
 
         return (
-            <View style={[
-                styles.itemContainer,
-                isOverlay && styles.itemOverlay
-            ]}>
-                <View
-                    style={styles.dragHandle}
-                    {...(dragHandlers || {})}
+            <ScaleDecorator>
+                <TouchableOpacity
+                    onLongPress={drag}
+                    disabled={isActive}
+                    style={[
+                        styles.exerciseRow,
+                        isActive && styles.exerciseRowActive
+                    ]}
                 >
                     <MaterialIcons name="drag-handle" size={24} color={COLORS.textSecondary} />
-                </View>
-                <Text style={styles.itemText}>{name}</Text>
-            </View>
+                    <Text style={styles.exerciseText}>{exerciseName}</Text>
+                </TouchableOpacity>
+            </ScaleDecorator>
         );
     };
 
     return (
         <Modal
             visible={visible}
-            animationType="slide"
-            presentationStyle="pageSheet"
+            animationType="fade"
+            transparent={true}
             onRequestClose={onClose}
         >
-            <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>Reorder Exercises</Text>
-                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                        <Text style={styles.closeText}>Done</Text>
-                    </TouchableOpacity>
-                </View>
+            <GestureHandlerRootView style={styles.modalContainer}>
+                <StatusBar barStyle="light-content" />
+                <View style={styles.overlay}>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={onClose}>
+                            <Text style={styles.cancelText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.title}>Reorder Exercises</Text>
+                        <TouchableOpacity onPress={handleDone}>
+                            <Text style={styles.doneText}>Done</Text>
+                        </TouchableOpacity>
+                    </View>
 
-                <SortableExerciseList
-                    data={data}
-                    onReorder={onReorder}
-                    renderItem={renderItem}
-                    contentContainerStyle={styles.listContent}
-                />
-            </SafeAreaView>
+                    {/* Exercise List */}
+                    <DraggableFlatList
+                        data={localData}
+                        onDragEnd={({ data }) => setLocalData(data)}
+                        keyExtractor={(item) => item.id}
+                        renderItem={renderItem}
+                        contentContainerStyle={styles.listContent}
+                    />
+                </View>
+            </GestureHandlerRootView>
         </Modal>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
+    modalContainer: {
         flex: 1,
-        backgroundColor: COLORS.background,
+    },
+    overlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.95)',
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 16,
+        paddingHorizontal: 20,
+        paddingTop: 60,
+        paddingBottom: 20,
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     },
     title: {
         fontSize: 18,
         fontFamily: FONTS.bold,
         color: COLORS.text,
     },
-    closeButton: {
-        padding: 8,
+    cancelText: {
+        fontSize: 16,
+        fontFamily: FONTS.regular,
+        color: COLORS.textSecondary,
     },
-    closeText: {
+    doneText: {
         fontSize: 16,
         fontFamily: FONTS.semiBold,
         color: COLORS.primary,
     },
     listContent: {
-        padding: 16,
+        padding: 20,
     },
-    itemContainer: {
+    exerciseRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
         padding: 16,
-        backgroundColor: COLORS.surface,
-        marginBottom: 12,
         borderRadius: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.05)',
+        marginBottom: 12,
     },
-    itemOverlay: {
-        backgroundColor: COLORS.surface,
-        borderColor: COLORS.primary,
-        ...SHADOWS.medium,
+    exerciseRowActive: {
+        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        transform: [{ scale: 1.05 }],
     },
-    dragHandle: {
-        padding: 8,
-        marginRight: 12,
-        marginLeft: -8,
-    },
-    itemText: {
+    exerciseText: {
         fontSize: 16,
         fontFamily: FONTS.medium,
         color: COLORS.text,
+        marginLeft: 12,
+        flex: 1,
     },
 });
 

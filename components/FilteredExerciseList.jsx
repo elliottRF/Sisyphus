@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, TextInput, FlatList, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
+import { FlatList } from 'react-native-gesture-handler';
 import ActionSheet from "react-native-actions-sheet";
 import { fetchExercises } from '../components/db';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
@@ -28,6 +29,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
                         exerciseID: item.exerciseID,
                         sets: [
                             {
+                                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                                 weight: null,
                                 reps: null
                             }
@@ -40,11 +42,14 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
 
     const renderItem = ({ item }) => (
         <TouchableOpacity
-            style={styles.exerciseButton}
+            style={styles.exerciseCard}
             onPress={() => inputExercise(item)}
             activeOpacity={0.7}
         >
-            <Text style={styles.exerciseButtonText}>{item.name}</Text>
+            <View style={styles.exerciseContent}>
+                <Text style={styles.exerciseName}>{item.name}</Text>
+                <Feather name="plus" size={20} color={COLORS.primary} />
+            </View>
         </TouchableOpacity>
     );
 
@@ -78,6 +83,8 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                     style={styles.list}
+                    nestedScrollEnabled={true}
+                    bounces={false}
                 />
             </View>
         </ActionSheet>
@@ -126,22 +133,31 @@ const styles = StyleSheet.create({
     },
     list: {
         flex: 1,
+        paddingHorizontal: 20,
+        paddingBottom: 100,
     },
     listContent: {
         paddingBottom: 40,
     },
-    exerciseButton: {
-        paddingVertical: 16,
-        paddingHorizontal: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+    exerciseCard: {
         backgroundColor: COLORS.surface,
+        borderRadius: 16,
+        marginBottom: 12,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        ...SHADOWS.small,
     },
-    exerciseButtonText: {
+    exerciseContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    exerciseName: {
         color: COLORS.text,
         fontSize: 16,
-        fontFamily: FONTS.medium,
-    }
+        fontFamily: FONTS.semiBold,
+    },
 });
 
 export default FilteredExerciseList;

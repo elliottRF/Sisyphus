@@ -18,7 +18,6 @@ const muscleMapping = {
     "Hamstring": "hamstring",
     "Hamstrings": "hamstring",
     "Upper-Back": "upper-back",
-    "Upper Back": "upper-back",
     "Lower-Back": "lower-back",
     "Shoulders": "deltoids",
     "Gluteal": "gluteal",
@@ -26,7 +25,6 @@ const muscleMapping = {
     "Forearms": "forearm",
     "Traps": "trapezius",
     "Calves": "calves",
-    "Back": "upper-back", // Defaulting generic back to upper-back
 };
 
 const Home = () => {

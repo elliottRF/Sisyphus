@@ -1,19 +1,25 @@
-import { View, Text, ScrollView, StyleSheet, TextInput, Button, FlatList, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, FlatList, Dimensions } from 'react-native'
 import React, { useState, useEffect } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator } from 'react-native';
-import { fetchWorkoutHistory, fetchWorkoutHistoryBySession, calculateSessionVolume, fetchExercises, fetchExerciseHistory } from './db';
+import { fetchExerciseHistory, fetchExercises } from './db';
 import { useFocusEffect } from 'expo-router';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
-import { Feather } from '@expo/vector-icons';
-
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import Body from "react-native-body-highlighter";
 
-const exerciseHistory = props => {
+const { width } = Dimensions.get('window');
+
+const ExerciseHistory = (props) => {
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
     const [formattedTargets, setFormattedTargets] = useState([]);
+    const [stats, setStats] = useState({
+        totalSets: 0,
+        personalBest: 0,
+        totalVolume: 0
+    });
 
     useEffect(() => {
         if (exercisesList) {
@@ -23,57 +29,23 @@ const exerciseHistory = props => {
     }, [exercisesList]);
 
     const getExerciseMuscles = (exerciseID, exerciseLog) => {
-        // Find the exercise with the matching exerciseID
         const exercise = exerciseLog.find(ex => ex.exerciseID === exerciseID);
-
-        // If exercise not found, return empty arrays
         if (!exercise) return { targetMuscles: [], accessoryMuscles: [] };
-
-        // Split the muscles strings into arrays, handling potential empty strings
         const targetMuscles = exercise.targetMuscle ? exercise.targetMuscle.split(',') : [];
         const accessoryMuscles = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',') : [];
-
-        // Return an object with two arrays of muscles
         return { targetMuscles, accessoryMuscles };
     };
 
     const handleMuscleStrings = (targetSelected, accessorySelected) => {
-        // Process target muscles (intensity 1)
-        const sluggedTargets = targetSelected.map(target => {
-            const name = typeof target === 'object' && target !== null
-                ? target.name
-                : target;
-
-            const slug = typeof name === 'string'
-                ? name.toLowerCase()
-                : '';
-
-            return {
-                slug,
-                intensity: 1
-            };
-        });
-
-        // Process accessory muscles (intensity 2)
-        const sluggedAccessories = accessorySelected.map(accessory => {
-            const name = typeof accessory === 'object' && accessory !== null
-                ? accessory.name
-                : accessory;
-
-            const slug = typeof name === 'string'
-                ? name.toLowerCase()
-                : '';
-
-            return {
-                slug,
-                intensity: 2
-            };
-        });
-
-        // Combine both arrays
-        const combinedTargets = [...sluggedTargets, ...sluggedAccessories];
-
-        setFormattedTargets(combinedTargets);
+        const sluggedTargets = targetSelected.map(target => ({
+            slug: typeof target === 'string' ? target.toLowerCase() : '',
+            intensity: 1
+        }));
+        const sluggedAccessories = accessorySelected.map(accessory => ({
+            slug: typeof accessory === 'string' ? accessory.toLowerCase() : '',
+            intensity: 2
+        }));
+        setFormattedTargets([...sluggedTargets, ...sluggedAccessories]);
     };
 
     useEffect(() => {
@@ -93,11 +65,28 @@ const exerciseHistory = props => {
             const history = await fetchExerciseHistory(props.exerciseID);
             const groupedHistory = groupBySession(history);
             setWorkoutHistory(groupedHistory);
+            calculateStats(history);
         } catch (error) {
             console.error("Error loading workout history:", error);
         } finally {
             setLoading(false);
         }
+    };
+
+    const calculateStats = (history) => {
+        let maxWeight = 0;
+        let volume = 0;
+
+        history.forEach(entry => {
+            if (entry.weight > maxWeight) maxWeight = entry.weight;
+            volume += (entry.weight * entry.reps);
+        });
+
+        setStats({
+            totalSets: history.length,
+            personalBest: maxWeight,
+            totalVolume: volume
+        });
     };
 
     const groupBySession = (history) => {
@@ -111,18 +100,6 @@ const exerciseHistory = props => {
         return Object.entries(grouped).sort((a, b) => b[0] - a[0]);
     };
 
-    const groupExercisesByName = (exercises) => {
-        const grouped = {};
-        exercises.forEach(exercise => {
-            const key = exercise.exerciseID;
-            if (!grouped[key]) {
-                grouped[key] = [];
-            }
-            grouped[key].push(exercise);
-        });
-        return Object.values(grouped);
-    };
-
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('en-US', {
             month: 'short',
@@ -131,15 +108,9 @@ const exerciseHistory = props => {
         });
     };
 
-    useEffect(() => {
-        if (workoutHistory.length > 0) {
-            console.log("Workout history data:", workoutHistory);
-        }
-    }, [workoutHistory]);
-
     if (loading) {
         return (
-            <View style={styles.container}>
+            <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
             </View>
         );
@@ -153,66 +124,97 @@ const exerciseHistory = props => {
                 contentContainerStyle={styles.listContentContainer}
                 keyExtractor={([session]) => session}
                 ListHeaderComponent={
-                    <View style={styles.headerContainer}>
-                        <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
+                    <View>
+                        <LinearGradient
+                            colors={[COLORS.surface, COLORS.background]}
+                            style={styles.headerGradient}
+                        >
+                            <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
+
+                            <View style={styles.statsRow}>
+                                <View style={styles.statItem}>
+                                    <Text style={styles.statLabel}>Personal Best</Text>
+                                    <Text style={styles.statValue}>{stats.personalBest}kg</Text>
+                                </View>
+                                <View style={styles.statDivider} />
+                                <View style={styles.statItem}>
+                                    <Text style={styles.statLabel}>Total Sets</Text>
+                                    <Text style={styles.statValue}>{stats.totalSets}</Text>
+                                </View>
+                                <View style={styles.statDivider} />
+                                <View style={styles.statItem}>
+                                    <Text style={styles.statLabel}>Volume</Text>
+                                    <Text style={styles.statValue}>{(stats.totalVolume / 1000).toFixed(1)}k</Text>
+                                </View>
+                            </View>
+                        </LinearGradient>
+
                         <View style={styles.bodyContainer}>
                             <Body
                                 data={formattedTargets}
                                 gender="male"
                                 side="front"
-                                scale={1.1}
+                                scale={1.0}
                                 border={COLORS.border}
                             />
                             <Body
                                 data={formattedTargets}
                                 gender="male"
                                 side="back"
-                                scale={1.1}
+                                scale={1.0}
                                 border={COLORS.border}
                             />
                         </View>
+
+                        <Text style={styles.sectionTitle}>History</Text>
                     </View>
                 }
                 renderItem={({ item: [session, exercises] }) => (
-                    <View style={styles.sessionContainer}>
+                    <View style={styles.sessionCard}>
                         <View style={styles.sessionHeader}>
-                            <Text style={styles.sessionTitle}>
-                                Workout {session} - {formatDate(exercises[0].time)}
-                            </Text>
+                            <View style={styles.sessionDateContainer}>
+                                <Feather name="calendar" size={14} color={COLORS.primary} />
+                                <Text style={styles.sessionDate}>
+                                    {formatDate(exercises[0].time)}
+                                </Text>
+                            </View>
+                            <View style={styles.sessionBadge}>
+                                <Text style={styles.sessionBadgeText}>Session {session}</Text>
+                            </View>
                         </View>
 
                         <View style={styles.exercisesList}>
-                            {groupExercisesByName(exercises).map((exerciseGroup, index) => {
-                                const exerciseDetails = exercisesList.find(
-                                    ex => ex.exerciseID === exerciseGroup[0].exerciseID
-                                );
-
-                                return (
-                                    <View key={index} style={styles.exercise}>
-                                        {exerciseGroup.map((set, setIndex) => (
-                                            <View key={setIndex} style={styles.setRow}>
-                                                <Text style={[
-                                                    styles.setInfo,
-                                                    set.pr === 1 && styles.prText
-                                                ]}>
-                                                    Set {set.setNum}: {set.weight}kg × {set.reps}
-                                                </Text>
-                                                {set.pr === 1 && (
-                                                    <View style={styles.prBadge}>
-                                                        <Text style={styles.prBadgeText}>PR</Text>
-                                                    </View>
-                                                )}
-                                            </View>
-                                        ))}
+                            {exercises.map((set, setIndex) => (
+                                <View key={setIndex} style={styles.setRow}>
+                                    <View style={styles.setNumberContainer}>
+                                        <Text style={styles.setNumber}>{set.setNum}</Text>
                                     </View>
-                                );
-                            })}
+                                    <View style={styles.setDetails}>
+                                        <Text style={styles.setWeight}>{set.weight} <Text style={styles.unit}>kg</Text></Text>
+                                        <Text style={styles.setX}>×</Text>
+                                        <Text style={styles.setReps}>{set.reps} <Text style={styles.unit}>reps</Text></Text>
+                                    </View>
+                                    {set.pr === 1 && (
+                                        <LinearGradient
+                                            colors={[COLORS.primary, COLORS.secondary]}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
+                                            style={styles.prBadge}
+                                        >
+                                            <MaterialCommunityIcons name="trophy" size={12} color="#fff" />
+                                            <Text style={styles.prText}>PR</Text>
+                                        </LinearGradient>
+                                    )}
+                                </View>
+                            ))}
                         </View>
                     </View>
                 )}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>No workout history available</Text>
+                        <Feather name="activity" size={48} color={COLORS.textSecondary} style={{ opacity: 0.5 }} />
+                        <Text style={styles.emptyText}>No workout history yet</Text>
+                        <Text style={styles.emptySubtext}>Complete a workout to see your progress</Text>
                     </View>
                 }
                 showsVerticalScrollIndicator={false}
@@ -226,32 +228,80 @@ const styles = StyleSheet.create({
         height: '100%',
         backgroundColor: COLORS.background,
     },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: COLORS.background,
+    },
     list: {
         flex: 1,
     },
     listContentContainer: {
-        paddingBottom: 40,
+        paddingBottom: 120,
     },
-    headerContainer: {
-        alignItems: 'center',
-        paddingVertical: 20,
-        backgroundColor: COLORS.background,
+    headerGradient: {
+        paddingTop: 20,
+        paddingBottom: 24,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
     },
     exerciseTitle: {
-        fontSize: 24,
+        fontSize: 28,
         fontFamily: FONTS.bold,
         color: COLORS.text,
-        marginBottom: 20,
         textAlign: 'center',
+        marginBottom: 24,
+        paddingHorizontal: 20,
+    },
+    statsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-evenly',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+    },
+    statItem: {
+        alignItems: 'center',
+    },
+    statLabel: {
+        fontSize: 12,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+        marginBottom: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    statValue: {
+        fontSize: 20,
+        fontFamily: FONTS.bold,
+        color: COLORS.primary,
+    },
+    statDivider: {
+        width: 1,
+        height: 30,
+        backgroundColor: COLORS.border,
     },
     bodyContainer: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
-        width: '100%',
-        height: 300,
-        marginBottom: 20,
+        justifyContent: 'center', // Change to center to horizontally center the two Body components
+        alignItems: 'center',    // Vertically center them if they had different heights, good practice
+        width: '100%',           // Take full width
+        height: 350,             // Fixed height for the container
+        marginTop: 24,
+        marginBottom: 20,        // Slightly reduce margin from previous suggestion, find a sweet spot
+        gap: 20,                 // Add a gap between the front and back body figures
     },
-    sessionContainer: {
+    sectionTitle: {
+        fontSize: 18,
+        fontFamily: FONTS.bold,
+        color: COLORS.text,
+        marginLeft: 20,
+        marginTop: 16, // Added or adjusted to ensure space from bodyContainer
+        marginBottom: 16,
+    },
+    sessionCard: {
         marginHorizontal: 16,
         marginBottom: 16,
         backgroundColor: COLORS.surface,
@@ -262,44 +312,92 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     sessionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         padding: 16,
-        backgroundColor: COLORS.surface,
+        backgroundColor: 'rgba(255,255,255,0.02)',
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+        borderBottomColor: 'rgba(255,255,255,0.05)',
     },
-    sessionTitle: {
-        fontSize: 16,
-        fontFamily: FONTS.bold,
+    sessionDateContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    sessionDate: {
+        fontSize: 14,
+        fontFamily: FONTS.semiBold,
         color: COLORS.text,
+    },
+    sessionBadge: {
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    sessionBadgeText: {
+        fontSize: 10,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
     },
     exercisesList: {
         padding: 16,
     },
-    exercise: {
-        // marginBottom: 8,
-    },
     setRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 12,
     },
-    setInfo: {
-        color: COLORS.textSecondary,
-        fontFamily: FONTS.medium,
-        fontSize: 14,
+    setNumberContainer: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
     },
-    prText: {
-        color: COLORS.primary,
+    setNumber: {
+        fontSize: 12,
         fontFamily: FONTS.bold,
+        color: COLORS.textSecondary,
+    },
+    setDetails: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 4,
+    },
+    setWeight: {
+        fontSize: 16,
+        fontFamily: FONTS.bold,
+        color: COLORS.text,
+    },
+    setX: {
+        fontSize: 14,
+        color: COLORS.textSecondary,
+        marginHorizontal: 4,
+    },
+    setReps: {
+        fontSize: 16,
+        fontFamily: FONTS.bold,
+        color: COLORS.text,
+    },
+    unit: {
+        fontSize: 12,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
     },
     prBadge: {
-        backgroundColor: COLORS.primary,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-        marginLeft: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
     },
-    prBadgeText: {
+    prText: {
         color: '#fff',
         fontSize: 10,
         fontFamily: FONTS.bold,
@@ -307,12 +405,20 @@ const styles = StyleSheet.create({
     emptyContainer: {
         padding: 40,
         alignItems: 'center',
+        marginTop: 40,
     },
     emptyText: {
+        color: COLORS.text,
+        fontFamily: FONTS.bold,
+        fontSize: 18,
+        marginTop: 16,
+        marginBottom: 8,
+    },
+    emptySubtext: {
         color: COLORS.textSecondary,
-        fontFamily: FONTS.medium,
-        fontSize: 16,
+        fontFamily: FONTS.regular,
+        fontSize: 14,
     }
 });
 
-export default exerciseHistory;
+export default ExerciseHistory;

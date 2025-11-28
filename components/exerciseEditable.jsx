@@ -1,8 +1,23 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native'
-import React, { useState, useRef } from 'react'
+import { View, Text, StyleSheet, TouchableOpacity, Platform, UIManager, Dimensions, LayoutAnimation, TextInput, Pressable, Keyboard } from 'react-native'
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    withSpring,
+    runOnJS,
+    SlideOutLeft,
+    LinearTransition,
+    ZoomIn,
+    ZoomOut
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import React, { useState, useRef, useEffect } from 'react'
 import { COLORS, FONTS, SHADOWS } from '../constants/theme'
 import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { Swipeable } from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SWIPE_THRESHOLD = -100;
 
 if (Platform.OS === 'android') {
     if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -10,9 +25,117 @@ if (Platform.OS === 'android') {
     }
 }
 
-const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, onReorder, drag, isActive }) => {
+const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLength, style, placeholderTextColor }) => {
+    const [isFocused, setIsFocused] = useState(false);
+    const inputRef = useRef(null);
 
-    const [sets, setSets] = useState(exercise.sets);
+    useEffect(() => {
+        const keyboardDidHideListener = Keyboard.addListener(
+            'keyboardDidHide',
+            () => {
+                if (isFocused) {
+                    inputRef.current?.blur();
+                }
+            }
+        );
+
+        return () => {
+            keyboardDidHideListener.remove();
+        };
+    }, [isFocused]);
+
+    return (
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+            <TextInput
+                ref={inputRef}
+                style={[style, { opacity: isFocused ? 1 : 1 }]} // Keep visible
+                value={value}
+                onChangeText={onChangeText}
+                placeholder={placeholder}
+                placeholderTextColor={placeholderTextColor}
+                keyboardType={keyboardType}
+                maxLength={maxLength}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+            />
+            {!isFocused && (
+                <Pressable
+                    style={StyleSheet.absoluteFill}
+                    onPress={() => inputRef.current?.focus()}
+                />
+            )}
+        </View>
+    );
+};
+
+const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) => {
+    const translateX = useSharedValue(0);
+    const itemHeight = useSharedValue(60); // Approximate height, will be adjusted by layout if needed but mostly for exit
+
+    const pan = Gesture.Pan()
+        .activeOffsetX([-10, 10]) // Allow vertical scroll without triggering swipe immediately
+        .failOffsetY([-5, 5])     // Fail if vertical movement is detected
+        .simultaneousWithExternalGesture(simultaneousHandlers)
+        .onUpdate((event) => {
+            // Only allow swiping to the left
+            translateX.value = Math.min(event.translationX, 0);
+        })
+        .onEnd(() => {
+            if (translateX.value < SWIPE_THRESHOLD) {
+                // Swipe success - animate off screen then delete
+                translateX.value = withTiming(-SCREEN_WIDTH, { duration: 300 }, (finished) => {
+                    if (finished) {
+                        runOnJS(onDelete)();
+                    }
+                });
+            } else {
+                // Swipe cancel - spring back
+                translateX.value = withSpring(0);
+            }
+        });
+
+    const rStyle = useAnimatedStyle(() => {
+        return {
+            transform: [{ translateX: translateX.value }],
+        };
+    });
+
+    const rIconStyle = useAnimatedStyle(() => {
+        const opacity = withTiming(translateX.value < -20 ? 1 : 0);
+        return { opacity };
+    });
+
+    const rBackgroundStyle = useAnimatedStyle(() => {
+        return {
+            opacity: translateX.value < -5 ? 1 : 0,
+        };
+    });
+
+    return (
+        <Animated.View
+            layout={LinearTransition.springify().damping(14).stiffness(100)}
+            entering={ZoomIn.duration(300)}
+            exiting={ZoomOut.duration(300)}
+            style={styles.swipeableContainer}
+        >
+            {/* Background (Bin Icon) */}
+            <Animated.View style={[styles.deleteBackground, rBackgroundStyle]}>
+                <Animated.View style={[styles.deleteIconContainer, rIconStyle]}>
+                    <Feather name="trash-2" size={20} color={COLORS.text} />
+                </Animated.View>
+            </Animated.View>
+
+            {/* Foreground (Set Row) */}
+            <GestureDetector gesture={pan}>
+                <Animated.View style={[styles.rowForeground, rStyle]}>
+                    {children}
+                </Animated.View>
+            </GestureDetector>
+        </Animated.View>
+    );
+};
+
+const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, drag, isActive, onOpenDetails, simultaneousHandlers }) => {
 
     const handleWeightChange = (text, setIndex) => {
         updateCurrentWorkout(prevWorkout =>
@@ -99,6 +222,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                     sets: [
                                         ...ex.sets,
                                         {
+                                            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                                             weight: null,
                                             reps: null,
                                             completed: false
@@ -114,7 +238,6 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     };
 
     const deleteSet = (setIndex) => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         updateCurrentWorkout(prevWorkout =>
             prevWorkout.map(workout =>
                 workout.exercises.includes(exercise)
@@ -135,7 +258,6 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     };
 
     const deleteExercise = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         updateCurrentWorkout(prevWorkout =>
             prevWorkout.map(workout => ({
                 ...workout,
@@ -144,32 +266,32 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
         );
     };
 
-
-    const renderRightActions = (progress, dragX, index) => {
-        return (
-            <TouchableOpacity
-                style={styles.deleteAction}
-                onPress={() => deleteSet(index)}
-            >
-                <Feather name="trash-2" size={20} color={COLORS.text} />
-            </TouchableOpacity>
-        );
-    };
-
     return (
-        <View style={styles.container}>
+        <View style={[
+            styles.container,
+            isActive && {
+                borderColor: COLORS.primary,
+                borderWidth: 1,
+                ...SHADOWS.medium,
+            }
+        ]}>
             {/* Header */}
-            <View style={styles.header}>
+            <LinearGradient
+                colors={[COLORS.surface, COLORS.surface]}
+                style={styles.header}
+            >
                 <View style={styles.headerLeft}>
                     <TouchableOpacity
                         style={styles.dragHandle}
-                        onLongPress={onReorder}
+                        onLongPress={drag}
                         delayLongPress={200}
                         activeOpacity={0.7}
                     >
                         <MaterialIcons name="drag-handle" size={24} color={COLORS.textSecondary} />
                     </TouchableOpacity>
-                    <Text style={styles.exerciseName}>{exerciseName}</Text>
+                    <TouchableOpacity onPress={onOpenDetails} style={{ flex: 1 }}>
+                        <Text style={styles.exerciseName}>{exerciseName}</Text>
+                    </TouchableOpacity>
                 </View>
                 <TouchableOpacity
                     onPress={deleteExercise}
@@ -177,7 +299,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                 >
                     <Feather name="x" size={20} color={COLORS.textSecondary} />
                 </TouchableOpacity>
-            </View>
+            </LinearGradient>
 
             {/* Table Header */}
             <View style={styles.tableHeader}>
@@ -191,10 +313,11 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
             {/* Sets */}
             <View style={styles.setsContainer}>
                 {exercise.sets.map((set, index) => (
-                    <Swipeable
-                        key={index}
-                        renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, index)}
-                        containerStyle={styles.swipeableContainer}
+                    <SwipeableSetRow
+                        key={set.id || index}
+                        onDelete={() => deleteSet(index)}
+                        index={index}
+                        simultaneousHandlers={simultaneousHandlers}
                     >
                         <View style={[
                             styles.setRow,
@@ -209,7 +332,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                             <Text style={[styles.prevText, styles.colPrev]}>-</Text>
 
                             <View style={styles.colKg}>
-                                <TextInput
+                                <ScrollableInput
                                     style={styles.input}
                                     value={set.weight?.toString()}
                                     onChangeText={(text) => handleWeightChange(text, index)}
@@ -221,7 +344,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                             </View>
 
                             <View style={styles.colReps}>
-                                <TextInput
+                                <ScrollableInput
                                     style={styles.input}
                                     value={set.reps?.toString()}
                                     onChangeText={(text) => handleRepsChange(text, index)}
@@ -248,7 +371,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                 </TouchableOpacity>
                             </View>
                         </View>
-                    </Swipeable>
+                    </SwipeableSetRow>
                 ))}
             </View>
 
@@ -268,16 +391,17 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.surface,
         borderRadius: 16,
         marginBottom: 16,
-        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: COLORS.border,
         ...SHADOWS.small,
+        overflow: 'hidden',
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: 'rgba(255,255,255,0.02)',
     },
     headerLeft: {
         flexDirection: 'row',
@@ -301,8 +425,11 @@ const styles = StyleSheet.create({
     tableHeader: {
         flexDirection: 'row',
         paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingVertical: 12,
         alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.2)',
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
     },
     columnHeader: {
         fontSize: 10,
@@ -318,20 +445,35 @@ const styles = StyleSheet.create({
     colCheck: { width: 30, alignItems: 'center' },
 
     setsContainer: {
-
+        backgroundColor: 'rgba(0,0,0,0.2)',
     },
     swipeableContainer: {
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    deleteBackground: {
+        ...StyleSheet.absoluteFillObject,
         backgroundColor: COLORS.danger,
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        paddingRight: 20,
+        zIndex: 0,
+    },
+    deleteIconContainer: {
+    },
+    rowForeground: {
+        backgroundColor: 'transparent',
+        zIndex: 1,
     },
     setRow: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingVertical: 8,
-        backgroundColor: COLORS.surface,
     },
     setRowCompleted: {
-        backgroundColor: 'rgba(0, 184, 148, 0.05)',
+        opacity: 0.5,
     },
     setNumberBadge: {
         width: 24,
@@ -354,11 +496,11 @@ const styles = StyleSheet.create({
     input: {
         backgroundColor: 'rgba(255,255,255,0.05)',
         borderRadius: 8,
-        paddingVertical: 6,
+        paddingVertical: 8,
         textAlign: 'center',
         color: COLORS.text,
         fontFamily: FONTS.semiBold,
-        fontSize: 14,
+        fontSize: 16,
     },
     checkButton: {
         width: 28,
@@ -371,18 +513,12 @@ const styles = StyleSheet.create({
     checkButtonCompleted: {
         backgroundColor: COLORS.success,
     },
-    deleteAction: {
-        backgroundColor: COLORS.danger,
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: 60,
-        height: '100%',
-    },
     addSetButton: {
-        paddingVertical: 12,
+        paddingVertical: 16,
         alignItems: 'center',
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.05)',
+        borderTopColor: COLORS.border,
+        backgroundColor: 'rgba(255,255,255,0.02)',
     },
     addSetText: {
         fontSize: 12,

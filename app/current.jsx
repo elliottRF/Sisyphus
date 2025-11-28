@@ -1,5 +1,6 @@
 // Force reload
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView } from 'react-native'
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -15,7 +16,9 @@ import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculat
 
 import ExerciseEditable from '../components/exerciseEditable'
 import SortableExerciseList from '../components/SortableExerciseList';
-import SimpleExerciseRow from '../components/SimpleExerciseRow';
+import ActionSheet from "react-native-actions-sheet";
+import ExerciseHistory from "../components/exerciseHistory"
+
 
 import FilteredExerciseList from '../components/FilteredExerciseList';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
@@ -27,7 +30,6 @@ const Current = () => {
 
     const [exercises, setExercises] = useState([]);
     const [startTime, setStartTime] = useState(null);
-    const [isReordering, setIsReordering] = useState(false);
 
 
     NavigationBar.setBackgroundColorAsync(COLORS.background);
@@ -74,23 +76,55 @@ const Current = () => {
                 }))
             }));
 
-            // Prepare workout entries for database insertion
             const workoutEntries = [];
             let globalExerciseNum = 1;
+            // --- STEP 1: Determine the maximum 1RM for each exercise in this workout ---
+            // This map will store: { exerciseID: maxOneRM_in_this_workout }
+            const maxOneRmsInWorkout = new Map();
 
             for (const exerciseGroup of filteredWorkout) {
                 for (const exercise of exerciseGroup.exercises) {
-                    let setNum = 1;
-
+                    let maxOneRM = 0;
                     for (const set of exercise.sets) {
-                        // Calculate One Rep Max
+                        // Calculate One Rep Max for the set
                         const calculatedOneRM = calculateOneRepMax(
                             parseFloat(set.weight),
                             parseInt(set.reps)
                         );
 
-                        // Check if it's a PR
-                        const isPR = await calculateIfPR(exercise.exerciseID, calculatedOneRM);
+                        // Update the maximum 1RM found for this exercise in this session
+                        if (calculatedOneRM > maxOneRM) {
+                            maxOneRM = calculatedOneRM;
+                        }
+                    }
+                    maxOneRmsInWorkout.set(exercise.exerciseID, maxOneRM);
+                }
+            }
+
+            // --------------------------------------------------------------------------
+
+            // --- STEP 2: Iterate again, calculate PR status, and prepare entries ---
+            for (const exerciseGroup of filteredWorkout) {
+                for (const exercise of exerciseGroup.exercises) {
+                    let setNum = 1;
+
+                    // Retrieve the maximum 1RM achieved for this exercise in the current workout
+                    const maxOneRMForExercise = maxOneRmsInWorkout.get(exercise.exerciseID);
+
+                    // Only check the PR status *once* for the best set of this exercise in the session
+                    // We do this check *before* the set loop for efficiency.
+                    const isOverallPR = await calculateIfPR(exercise.exerciseID, maxOneRMForExercise);
+
+                    for (const set of exercise.sets) {
+                        // Calculate One Rep Max for the set (must be done again as it's not stored)
+                        const calculatedOneRM = calculateOneRepMax(
+                            parseFloat(set.weight),
+                            parseInt(set.reps)
+                        );
+
+                        // Determine if this specific set is the *single* best set of the exercise 
+                        // in this workout AND if that best set is a new personal record overall.
+                        const isPR = (calculatedOneRM === maxOneRMForExercise && isOverallPR) ? 1 : 0;
 
                         // Prepare entry for database
                         workoutEntries.push({
@@ -103,7 +137,7 @@ const Current = () => {
                             oneRM: calculatedOneRM,
                             time: new Date().toISOString(), // Current timestamp
                             name: workoutTitle,
-                            pr: isPR
+                            pr: isPR // 1 only for the single best set that beats the previous max
                         });
 
                         setNum++;
@@ -112,6 +146,7 @@ const Current = () => {
                     globalExerciseNum++;
                 }
             }
+
             await insertWorkoutHistory(workoutEntries, workoutTitle);
 
             // Clear AsyncStorage and state
@@ -143,9 +178,24 @@ const Current = () => {
 
 
     const actionSheetRef = useRef(null);
+    const exerciseInfoActionSheetRef = useRef(null);
 
     const [currentWorkout, setCurrentWorkout] = useState([]);
     const [workoutTitle, setWorkoutTitle] = useState("New Workout");
+    const [selectedExerciseId, setSelectedExerciseId] = useState(null);
+    const [currentExerciseName, setCurrentExerciseName] = useState(null);
+
+    const showExerciseInfo = (exerciseDetails) => {
+        if (exerciseDetails) {
+            setSelectedExerciseId(exerciseDetails.exerciseID);
+            setCurrentExerciseName(exerciseDetails.name);
+            exerciseInfoActionSheetRef.current?.show();
+        }
+    };
+
+    const handleCloseExerciseInfo = () => {
+        exerciseInfoActionSheetRef.current?.hide();
+    };
 
 
 
@@ -186,7 +236,14 @@ const Current = () => {
                     const { workout, title } = JSON.parse(storedWorkout);
                     const workoutWithIds = workout.map(item => ({
                         ...item,
-                        id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 9)
+                        id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                        exercises: item.exercises.map(ex => ({
+                            ...ex,
+                            sets: ex.sets.map(set => ({
+                                ...set,
+                                id: set.id || Date.now().toString() + Math.random().toString(36).substr(2, 9)
+                            }))
+                        }))
                     }));
                     setCurrentWorkout(workoutWithIds);
                     if (title) setWorkoutTitle(title);
@@ -226,6 +283,7 @@ const Current = () => {
                         exerciseID: item.exerciseID,
                         sets: [
                             {
+                                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                                 weight: null,
                                 reps: null
                             }
@@ -236,20 +294,9 @@ const Current = () => {
         ]);
     };
 
-    const renderItem = ({ item, drag, isActive }) => {
-        if (isReordering || isActive) {
-            return (
-                <SimpleExerciseRow
-                    item={item}
-                    drag={drag}
-                    isActive={isActive}
-                    exercises={exercises}
-                />
-            );
-        }
-
+    const renderItem = useCallback(({ item, drag, isActive, index, simultaneousHandlers }) => {
         return (
-            <View>
+            <View key={item.id}>
                 {item.exercises.map((exercise, exerciseIndex) => {
                     const exerciseDetails = exercises.find(
                         (e) => e.exerciseID === exercise.exerciseID
@@ -262,15 +309,16 @@ const Current = () => {
                             exercise={exercise}
                             exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
                             updateCurrentWorkout={setCurrentWorkout}
-                            onEnterReorderMode={() => setIsReordering(true)}
                             drag={drag}
                             isActive={isActive}
+                            onOpenDetails={() => showExerciseInfo(exerciseDetails)}
+                            simultaneousHandlers={simultaneousHandlers}
                         />
                     );
                 })}
             </View>
         );
-    };
+    }, [setCurrentWorkout, exercises]);
 
 
     return (
@@ -310,16 +358,7 @@ const Current = () => {
                                     placeholderTextColor={COLORS.textSecondary}
                                     keyboardType="text"
                                 />
-                                {isReordering ? (
-                                    <TouchableOpacity
-                                        onPress={() => setIsReordering(false)}
-                                        style={styles.finishButton}
-                                    >
-                                        <Text style={styles.finishButtonText}>Done</Text>
-                                    </TouchableOpacity>
-                                ) : (
-                                    startTime && <Timer startTime={startTime} />
-                                )}
+                                {startTime && <Timer startTime={startTime} />}
                             </View>
                             <View style={styles.headerDivider} />
                         </View>
@@ -329,34 +368,33 @@ const Current = () => {
                             onReorder={setCurrentWorkout}
                             contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
                             renderItem={renderItem}
-                        />
-
-                        {!isReordering && (
-                            <View style={styles.footer}>
-                                <TouchableOpacity
-                                    style={styles.addExerciseButton}
-                                    onPress={plusButtonShowExerciseList}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={styles.addExerciseText}>Add Exercise</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    onPress={endWorkout}
-                                    activeOpacity={0.8}
-                                    style={styles.finishButtonContainer}
-                                >
-                                    <LinearGradient
-                                        colors={[COLORS.success, '#00cec9']}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 1, y: 1 }}
-                                        style={styles.finishButton}
+                            ListFooterComponent={
+                                <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
+                                    <TouchableOpacity
+                                        style={styles.addExerciseButton}
+                                        onPress={plusButtonShowExerciseList}
+                                        activeOpacity={0.7}
                                     >
-                                        <Text style={styles.finishButtonText}>Finish Workout</Text>
-                                    </LinearGradient>
-                                </TouchableOpacity>
-                            </View>
-                        )}
+                                        <Text style={styles.addExerciseText}>Add Exercise</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={endWorkout}
+                                        activeOpacity={0.8}
+                                        style={styles.finishButtonContainer}
+                                    >
+                                        <LinearGradient
+                                            colors={[COLORS.success, '#00cec9']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
+                                            style={styles.finishButton}
+                                        >
+                                            <Text style={styles.finishButtonText}>Finish Workout</Text>
+                                        </LinearGradient>
+                                    </TouchableOpacity>
+                                </Animated.View>
+                            }
+                        />
                     </View>
                 )}
                 <FilteredExerciseList
@@ -364,6 +402,32 @@ const Current = () => {
                     actionSheetRef={actionSheetRef}
                     setCurrentWorkout={setCurrentWorkout}
                 />
+
+                <ActionSheet
+                    ref={exerciseInfoActionSheetRef}
+                    containerStyle={{
+                        height: '90%',
+                        borderTopLeftRadius: 24,
+                        borderTopRightRadius: 24,
+                        backgroundColor: COLORS.background,
+                    }}
+                >
+                    <View style={{
+                        position: 'absolute',
+                        top: 16,
+                        right: 16,
+                        zIndex: 1,
+                    }}>
+                        <TouchableOpacity onPress={handleCloseExerciseInfo} style={{
+                            backgroundColor: COLORS.surface,
+                            padding: 8,
+                            borderRadius: 20,
+                        }}>
+                            <Feather name="x" size={24} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
+                    <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName} />
+                </ActionSheet>
             </SafeAreaView>
         </GestureHandlerRootView>
     );

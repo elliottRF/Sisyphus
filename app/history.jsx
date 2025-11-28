@@ -1,12 +1,11 @@
-import { View, Text, ScrollView, StyleSheet, TextInput, Button, FlatList, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native'
 import React, { useState, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator } from 'react-native';
-import { fetchWorkoutHistory, fetchWorkoutHistoryBySession, calculateSessionVolume, fetchExercises } from '../components/db';
+import { fetchWorkoutHistory, fetchExercises } from '../components/db';
 import { useFocusEffect } from 'expo-router';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import AntDesign from '@expo/vector-icons/AntDesign';
+import { Feather, MaterialCommunityIcons, AntDesign } from '@expo/vector-icons';
 
 const History = () => {
     const [workoutHistory, setWorkoutHistory] = useState([]);
@@ -110,17 +109,25 @@ const History = () => {
                                 onPress={() => toggleSession(session)}
                             >
                                 <LinearGradient
-                                    colors={[COLORS.surface, COLORS.surface]} // Keep it subtle or use a slight gradient if desired
+                                    colors={[COLORS.surface, COLORS.surface]}
                                     style={styles.cardHeader}
                                 >
                                     <View style={styles.headerContent}>
                                         <View>
-                                            <Text style={styles.sessionTitle}>
-                                                {exercises[0].name}
-                                            </Text>
-                                            <Text style={styles.sessionDate}>
-                                                {formatDate(exercises[0].time)}
-                                            </Text>
+                                            <View style={styles.sessionHeaderTop}>
+                                                <Text style={styles.sessionTitle}>
+                                                    {exercises[0].name}
+                                                </Text>
+                                                <View style={styles.sessionBadge}>
+                                                    <Text style={styles.sessionBadgeText}>Session {session}</Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.sessionDateContainer}>
+                                                <Feather name="calendar" size={14} color={COLORS.primary} />
+                                                <Text style={styles.sessionDate}>
+                                                    {formatDate(exercises[0].time)}
+                                                </Text>
+                                            </View>
                                         </View>
                                         <AntDesign name={isExpanded ? "up" : "down"} size={20} color={COLORS.textSecondary} />
                                     </View>
@@ -141,12 +148,25 @@ const History = () => {
                                                 </Text>
                                                 {exerciseGroup.map((set, setIndex) => (
                                                     <View key={setIndex} style={styles.setRow}>
-                                                        <Text style={[styles.setInfo, set.pr === 1 && styles.prText]}>
-                                                            Set {set.setNum}
-                                                        </Text>
-                                                        <Text style={[styles.setInfo, set.pr === 1 && styles.prText]}>
-                                                            {set.weight}kg × {set.reps}
-                                                        </Text>
+                                                        <View style={styles.setNumberContainer}>
+                                                            <Text style={styles.setNumber}>{set.setNum}</Text>
+                                                        </View>
+                                                        <View style={styles.setDetails}>
+                                                            <Text style={styles.setWeight}>{set.weight} <Text style={styles.unit}>kg</Text></Text>
+                                                            <Text style={styles.setX}>×</Text>
+                                                            <Text style={styles.setReps}>{set.reps} <Text style={styles.unit}>reps</Text></Text>
+                                                        </View>
+                                                        {set.pr === 1 && (
+                                                            <LinearGradient
+                                                                colors={[COLORS.primary, COLORS.secondary]}
+                                                                start={{ x: 0, y: 0 }}
+                                                                end={{ x: 1, y: 1 }}
+                                                                style={styles.prBadge}
+                                                            >
+                                                                <MaterialCommunityIcons name="trophy" size={12} color="#fff" />
+                                                                <Text style={styles.prText}>PR</Text>
+                                                            </LinearGradient>
+                                                        )}
                                                     </View>
                                                 ))}
                                             </View>
@@ -192,17 +212,39 @@ const styles = StyleSheet.create({
     },
     cardHeader: {
         padding: 16,
+        backgroundColor: 'rgba(255,255,255,0.02)',
     },
     headerContent: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
+    sessionHeaderTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+        gap: 12,
+    },
     sessionTitle: {
         fontSize: 18,
         fontFamily: FONTS.semiBold,
         color: COLORS.text,
-        marginBottom: 4,
+    },
+    sessionBadge: {
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    sessionBadgeText: {
+        fontSize: 10,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+    },
+    sessionDateContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     sessionDate: {
         fontSize: 14,
@@ -213,30 +255,73 @@ const styles = StyleSheet.create({
         padding: 16,
         borderTopWidth: 1,
         borderTopColor: COLORS.border,
-        backgroundColor: '#181818', // Slightly darker than surface
+        backgroundColor: 'rgba(0,0,0,0.2)',
     },
     exercise: {
-        marginBottom: 16,
+        marginBottom: 20,
     },
     exerciseName: {
         fontSize: 16,
         fontFamily: FONTS.semiBold,
         color: COLORS.primary,
-        marginBottom: 8,
+        marginBottom: 12,
     },
     setRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 4,
-        paddingLeft: 10,
+        alignItems: 'center',
+        marginBottom: 8,
     },
-    setInfo: {
-        fontSize: 14,
-        fontFamily: FONTS.regular,
+    setNumberContainer: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    setNumber: {
+        fontSize: 12,
+        fontFamily: FONTS.bold,
         color: COLORS.textSecondary,
     },
+    setDetails: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 4,
+    },
+    setWeight: {
+        fontSize: 16,
+        fontFamily: FONTS.bold,
+        color: COLORS.text,
+    },
+    setX: {
+        fontSize: 14,
+        color: COLORS.textSecondary,
+        marginHorizontal: 4,
+    },
+    setReps: {
+        fontSize: 16,
+        fontFamily: FONTS.bold,
+        color: COLORS.text,
+    },
+    unit: {
+        fontSize: 12,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+    },
+    prBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
+    },
     prText: {
-        color: COLORS.success,
+        color: '#fff',
+        fontSize: 10,
         fontFamily: FONTS.bold,
     },
 });
