@@ -147,7 +147,13 @@ const Current = () => {
                 }
             }
 
-            await insertWorkoutHistory(workoutEntries, workoutTitle);
+            // Calculate duration in minutes
+            const endTime = Date.now();
+            const startTimeMs = startTime ? new Date(startTime).getTime() : endTime;
+            const durationMs = endTime - startTimeMs;
+            const durationMinutes = Math.floor(durationMs / 60000);
+
+            await insertWorkoutHistory(workoutEntries, workoutTitle, durationMinutes);
 
             // Clear AsyncStorage and state
             await AsyncStorage.removeItem('@currentWorkout');

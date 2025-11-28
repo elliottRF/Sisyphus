@@ -2,16 +2,16 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator }
 import React, { useState, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchWorkoutHistory, fetchExercises } from '../components/db';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, MaterialCommunityIcons, AntDesign } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 const History = () => {
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [expandedSessions, setExpandedSessions] = useState(new Set());
     const [exercisesList, setExercises] = useState([]);
+    const router = useRouter();
 
     useEffect(() => {
         fetchExercises()
@@ -64,24 +64,21 @@ const History = () => {
         return order.map(key => grouped[key]);
     };
 
-    const toggleSession = (sessionNumber) => {
-        setExpandedSessions(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(sessionNumber)) {
-                newSet.delete(sessionNumber);
-            } else {
-                newSet.add(sessionNumber);
-            }
-            return newSet;
-        });
-    };
-
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
             year: 'numeric'
         });
+    };
+
+    const formatDuration = (minutes) => {
+        if (minutes === null || minutes === undefined) return 'N/A';
+        if (minutes === 0) return '< 1m';
+        const hrs = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        if (hrs > 0) return `${hrs}h ${mins}m`;
+        return `${mins}m`;
     };
 
     if (loading) {
@@ -101,80 +98,56 @@ const History = () => {
                 contentContainerStyle={styles.listContentContainer}
                 keyExtractor={([session]) => session}
                 renderItem={({ item: [session, exercises] }) => {
-                    const isExpanded = expandedSessions.has(session);
+                    const groupedExercises = groupExercisesByName(exercises);
+                    const duration = exercises[0].duration;
+
                     return (
-                        <View style={styles.cardContainer}>
-                            <TouchableOpacity
-                                activeOpacity={0.9}
-                                onPress={() => toggleSession(session)}
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => router.push(`/workout/${session}`)}
+                            style={styles.cardContainer}
+                        >
+                            <LinearGradient
+                                colors={[COLORS.surface, COLORS.surface]}
+                                style={styles.cardContent}
                             >
-                                <LinearGradient
-                                    colors={[COLORS.surface, COLORS.surface]}
-                                    style={styles.cardHeader}
-                                >
-                                    <View style={styles.headerContent}>
-                                        <View>
-                                            <View style={styles.sessionHeaderTop}>
-                                                <Text style={styles.sessionTitle}>
-                                                    {exercises[0].name}
-                                                </Text>
-                                                <View style={styles.sessionBadge}>
-                                                    <Text style={styles.sessionBadgeText}>Session {session}</Text>
-                                                </View>
+                                <View style={styles.cardHeader}>
+                                    <View>
+                                        <Text style={styles.workoutName}>{exercises[0].name}</Text>
+                                        <View style={styles.metaContainer}>
+                                            <View style={styles.metaItem}>
+                                                <Feather name="calendar" size={12} color={COLORS.textSecondary} />
+                                                <Text style={styles.metaText}>{formatDate(exercises[0].time)}</Text>
                                             </View>
-                                            <View style={styles.sessionDateContainer}>
-                                                <Feather name="calendar" size={14} color={COLORS.primary} />
-                                                <Text style={styles.sessionDate}>
-                                                    {formatDate(exercises[0].time)}
-                                                </Text>
+                                            <View style={styles.metaDivider} />
+                                            <View style={styles.metaItem}>
+                                                <Feather name="clock" size={12} color={COLORS.textSecondary} />
+                                                <Text style={styles.metaText}>{formatDuration(duration)}</Text>
                                             </View>
                                         </View>
-                                        <AntDesign name={isExpanded ? "up" : "down"} size={20} color={COLORS.textSecondary} />
                                     </View>
-                                </LinearGradient>
-                            </TouchableOpacity>
+                                    <View style={styles.sessionBadge}>
+                                        <Text style={styles.sessionBadgeText}>#{session}</Text>
+                                    </View>
+                                </View>
 
-                            {isExpanded && (
-                                <View style={styles.exercisesList}>
-                                    {groupExercisesByName(exercises).map((exerciseGroup, index) => {
-                                        const exerciseDetails = exercisesList.find(
-                                            ex => ex.exerciseID === exerciseGroup[0].exerciseID
-                                        );
+                                <View style={styles.divider} />
 
+                                <View style={styles.summaryList}>
+                                    {groupedExercises.slice(0, 4).map((group, idx) => {
+                                        const exerciseName = exercisesList.find(e => e.exerciseID === group[0].exerciseID)?.name || 'Unknown Exercise';
                                         return (
-                                            <View key={index} style={styles.exercise}>
-                                                <Text style={styles.exerciseName}>
-                                                    {exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseGroup[0].exerciseID}`}
-                                                </Text>
-                                                {exerciseGroup.map((set, setIndex) => (
-                                                    <View key={setIndex} style={styles.setRow}>
-                                                        <View style={styles.setNumberContainer}>
-                                                            <Text style={styles.setNumber}>{set.setNum}</Text>
-                                                        </View>
-                                                        <View style={styles.setDetails}>
-                                                            <Text style={styles.setWeight}>{set.weight} <Text style={styles.unit}>kg</Text></Text>
-                                                            <Text style={styles.setX}>×</Text>
-                                                            <Text style={styles.setReps}>{set.reps} <Text style={styles.unit}>reps</Text></Text>
-                                                        </View>
-                                                        {set.pr === 1 && (
-                                                            <LinearGradient
-                                                                colors={[COLORS.primary, COLORS.secondary]}
-                                                                start={{ x: 0, y: 0 }}
-                                                                end={{ x: 1, y: 1 }}
-                                                                style={styles.prBadge}
-                                                            >
-                                                                <MaterialCommunityIcons name="trophy" size={12} color="#fff" />
-                                                                <Text style={styles.prText}>PR</Text>
-                                                            </LinearGradient>
-                                                        )}
-                                                    </View>
-                                                ))}
-                                            </View>
+                                            <Text key={idx} style={styles.summaryText} numberOfLines={1}>
+                                                <Text style={styles.summaryCount}>{group.length} x</Text> {exerciseName}
+                                            </Text>
                                         );
                                     })}
+                                    {groupedExercises.length > 4 && (
+                                        <Text style={styles.moreText}>+ {groupedExercises.length - 4} more exercises</Text>
+                                    )}
                                 </View>
-                            )}
-                        </View>
+                            </LinearGradient>
+                        </TouchableOpacity>
                     );
                 }}
             />
@@ -210,25 +183,40 @@ const styles = StyleSheet.create({
         borderColor: COLORS.border,
         ...SHADOWS.small,
     },
-    cardHeader: {
+    cardContent: {
         padding: 16,
-        backgroundColor: 'rgba(255,255,255,0.02)',
     },
-    headerContent: {
+    cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
+        marginBottom: 12,
     },
-    sessionHeaderTop: {
+    workoutName: {
+        fontSize: 18,
+        fontFamily: FONTS.bold,
+        color: COLORS.text,
+        marginBottom: 6,
+    },
+    metaContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
-        gap: 12,
+        gap: 8,
     },
-    sessionTitle: {
-        fontSize: 18,
-        fontFamily: FONTS.semiBold,
-        color: COLORS.text,
+    metaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    metaText: {
+        fontSize: 12,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+    },
+    metaDivider: {
+        width: 1,
+        height: 12,
+        backgroundColor: COLORS.border,
     },
     sessionBadge: {
         backgroundColor: 'rgba(255,255,255,0.05)',
@@ -237,92 +225,34 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     sessionBadgeText: {
-        fontSize: 10,
-        fontFamily: FONTS.medium,
+        fontSize: 12,
+        fontFamily: FONTS.bold,
         color: COLORS.textSecondary,
     },
-    sessionDateContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    sessionDate: {
-        fontSize: 14,
-        fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
-    },
-    exercisesList: {
-        padding: 16,
-        borderTopWidth: 1,
-        borderTopColor: COLORS.border,
-        backgroundColor: 'rgba(0,0,0,0.2)',
-    },
-    exercise: {
-        marginBottom: 20,
-    },
-    exerciseName: {
-        fontSize: 16,
-        fontFamily: FONTS.semiBold,
-        color: COLORS.primary,
+    divider: {
+        height: 1,
+        backgroundColor: COLORS.border,
         marginBottom: 12,
+        opacity: 0.5,
     },
-    setRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    setNumberContainer: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-    },
-    setNumber: {
-        fontSize: 12,
-        fontFamily: FONTS.bold,
-        color: COLORS.textSecondary,
-    },
-    setDetails: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'baseline',
+    summaryList: {
         gap: 4,
     },
-    setWeight: {
-        fontSize: 16,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-    },
-    setX: {
+    summaryText: {
         fontSize: 14,
+        fontFamily: FONTS.regular,
         color: COLORS.textSecondary,
-        marginHorizontal: 4,
     },
-    setReps: {
-        fontSize: 16,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
+    summaryCount: {
+        color: COLORS.primary,
+        fontFamily: FONTS.semiBold,
     },
-    unit: {
+    moreText: {
         fontSize: 12,
         fontFamily: FONTS.medium,
         color: COLORS.textSecondary,
-    },
-    prBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-        gap: 4,
-    },
-    prText: {
-        color: '#fff',
-        fontSize: 10,
-        fontFamily: FONTS.bold,
+        marginTop: 4,
+        fontStyle: 'italic',
     },
 });
 

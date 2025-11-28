@@ -9,6 +9,14 @@ import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 
 const TabBar = ({ state, descriptors, navigation }) => {
 
+    const focusedRoute = state.routes[state.index];
+    const focusedDescriptor = descriptors[focusedRoute.key];
+    const focusedOptions = focusedDescriptor.options;
+
+    if (focusedOptions.tabBarStyle?.display === 'none') {
+        return null;
+    }
+
     const icons = {
         index: (props) => <FontAwesome name="home" size={24} {...props} />,
         current: (props) => <Entypo name="circle-with-plus" size={24} {...props} />,
@@ -29,6 +37,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
                                 : route.name;
 
                     if (['_sitemap', '+not-found'].includes(route.name)) return null;
+                    if (!icons[route.name]) return null;
 
                     const isFocused = state.index === index;
 

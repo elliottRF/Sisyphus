@@ -34,6 +34,7 @@ const _layout = () => {
     return (
         <View style={{ flex: 1, backgroundColor: COLORS.background }} onLayout={onLayoutRootView}>
             <Tabs
+                backBehavior="history"
                 tabBar={props => <TabBar {...props} />}
                 screenOptions={{
                     headerShown: false,
@@ -65,6 +66,15 @@ const _layout = () => {
                     name="profile"
                     options={{
                         title: "Exercises",
+                    }}
+                />
+                <Tabs.Screen
+                    name="workout/[session]"
+                    options={{
+                        href: null,
+                        tabBarStyle: {
+                            display: 'none',
+                        },
                     }}
                 />
             </Tabs>

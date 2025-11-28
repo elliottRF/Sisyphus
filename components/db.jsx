@@ -36,6 +36,7 @@ export const setupDatabase = async () => {
         time time,
         name TEXT,
         pr INTEGER,
+        duration INTEGER,
         FOREIGN KEY (exerciseID) REFERENCES exercises(exerciseID)
       );
     `);
@@ -54,6 +55,14 @@ export const setupDatabase = async () => {
         );
       }
     }
+
+    // Migration: Add duration column if it doesn't exist
+    try {
+      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN duration INTEGER;');
+    } catch (e) {
+      // Column likely already exists, ignore error
+    }
+
     console.log('Database setup completed successfully');
   } catch (error) {
     console.error('Database setup error:', error);
@@ -99,7 +108,7 @@ export const getLatestWorkoutSession = async () => {
 };
 
 // Insert workout history entries
-export const insertWorkoutHistory = async (workoutEntries, workoutTitle) => {
+export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duration) => {
   const database = await getDb();
   // Use a transaction for bulk insert if possible, or just sequential awaits
   // expo-sqlite new API has withTransactionAsync
@@ -107,8 +116,8 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle) => {
     for (const entry of workoutEntries) {
       await database.runAsync(
         `INSERT INTO workoutHistory 
-        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           entry.workoutSession,
           entry.exerciseNum,
@@ -119,7 +128,8 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle) => {
           entry.oneRM,
           entry.time,
           workoutTitle,
-          entry.pr
+          entry.pr,
+          duration
         ]
       );
     }
