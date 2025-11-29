@@ -115,6 +115,16 @@ const WorkoutDetail = () => {
                             ex => ex.exerciseID === exerciseGroup[0].exerciseID
                         );
 
+                        // Calculate display numbers
+                        let workingSetCount = 0;
+                        const setsWithDisplayNumbers = exerciseGroup.map(set => {
+                            if (set.setType === 'N' || !set.setType) {
+                                workingSetCount++;
+                                return { ...set, displayNumber: workingSetCount };
+                            }
+                            return { ...set, displayNumber: set.setType };
+                        });
+
                         return (
                             <View key={index} style={styles.exerciseCard}>
                                 <LinearGradient
@@ -126,11 +136,28 @@ const WorkoutDetail = () => {
                                     </Text>
                                 </LinearGradient>
 
+                                {exerciseGroup.find(e => e.notes)?.notes ? (
+                                    <View style={styles.noteContainer}>
+                                        <MaterialCommunityIcons name="sticky-note-2" size={14} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
+                                        <Text style={styles.noteText}>{exerciseGroup.find(e => e.notes).notes}</Text>
+                                    </View>
+                                ) : null}
+
                                 <View style={styles.setsContainer}>
-                                    {exerciseGroup.map((set, setIndex) => (
+                                    {setsWithDisplayNumbers.map((set, setIndex) => (
                                         <View key={setIndex} style={styles.setRow}>
-                                            <View style={styles.setNumberContainer}>
-                                                <Text style={styles.setNumber}>{set.setNum}</Text>
+                                            <View style={[
+                                                styles.setNumberContainer,
+                                                set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.2)' },
+                                                set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.2)' }
+                                            ]}>
+                                                <Text style={[
+                                                    styles.setNumber,
+                                                    set.setType === 'W' && { color: COLORS.warning },
+                                                    set.setType === 'D' && { color: COLORS.secondary }
+                                                ]}>
+                                                    {set.displayNumber}
+                                                </Text>
                                             </View>
                                             <View style={styles.setDetails}>
                                                 <Text style={styles.setWeight}>{set.weight} <Text style={styles.unit}>kg</Text></Text>
@@ -299,6 +326,20 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 10,
         fontFamily: FONTS.bold,
+    },
+    noteContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 4,
+        gap: 8,
+    },
+    noteText: {
+        flex: 1,
+        fontSize: 14,
+        fontFamily: FONTS.regular,
+        color: COLORS.textSecondary,
+        lineHeight: 20,
     },
 });
 

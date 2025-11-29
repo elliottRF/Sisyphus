@@ -70,7 +70,6 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
 
 const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) => {
     const translateX = useSharedValue(0);
-    const itemHeight = useSharedValue(60); // Approximate height, will be adjusted by layout if needed but mostly for exit
 
     const pan = Gesture.Pan()
         .activeOffsetX([-10, 10]) // Allow vertical scroll without triggering swipe immediately
@@ -101,29 +100,36 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) =>
     });
 
     const rIconStyle = useAnimatedStyle(() => {
+        // Icon fades in and scales up slightly
         const opacity = withTiming(translateX.value < -20 ? 1 : 0);
-        return { opacity };
+        const scale = withSpring(translateX.value < -40 ? 1 : 0.5);
+        return {
+            opacity,
+            transform: [{ scale }]
+        };
     });
 
-    const rBackgroundStyle = useAnimatedStyle(() => {
+    const rRedBoxStyle = useAnimatedStyle(() => {
         return {
-            opacity: translateX.value < -5 ? 1 : 0,
+            width: -translateX.value,
         };
     });
 
     return (
         <Animated.View
-            layout={LinearTransition.springify().damping(14).stiffness(100)}
+            layout={LinearTransition.duration(250)}
             entering={ZoomIn.duration(300)}
             exiting={ZoomOut.duration(300)}
             style={styles.swipeableContainer}
         >
-            {/* Background (Bin Icon) */}
-            <Animated.View style={[styles.deleteBackground, rBackgroundStyle]}>
-                <Animated.View style={[styles.deleteIconContainer, rIconStyle]}>
-                    <Feather name="trash-2" size={20} color={COLORS.text} />
+            {/* Background (Reveal) */}
+            <View style={styles.deleteBackground}>
+                <Animated.View style={[styles.deleteActionRegion, rRedBoxStyle]}>
+                    <Animated.View style={[styles.deleteIconContainer, rIconStyle]}>
+                        <Feather name="trash-2" size={20} color={COLORS.text} />
+                    </Animated.View>
                 </Animated.View>
-            </Animated.View>
+            </View>
 
             {/* Foreground (Set Row) */}
             <GestureDetector gesture={pan}>
@@ -135,16 +141,17 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) =>
     );
 };
 
-const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, drag, isActive, onOpenDetails, simultaneousHandlers }) => {
+const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, drag, isActive, onOpenDetails, simultaneousHandlers }) => {
+    const [isNoteVisible, setIsNoteVisible] = useState(false);
 
     const handleWeightChange = (text, setIndex) => {
         updateCurrentWorkout(prevWorkout =>
             prevWorkout.map(workout =>
-                workout.exercises.includes(exercise)
+                workout.id === workoutID
                     ? {
                         ...workout,
                         exercises: workout.exercises.map(ex =>
-                            ex === exercise
+                            ex.exerciseID === exerciseID
                                 ? {
                                     ...ex,
                                     sets: ex.sets.map((set, index) =>
@@ -164,11 +171,11 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     const handleRepsChange = (text, setIndex) => {
         updateCurrentWorkout(prevWorkout =>
             prevWorkout.map(workout =>
-                workout.exercises.includes(exercise)
+                workout.id === workoutID
                     ? {
                         ...workout,
                         exercises: workout.exercises.map(ex =>
-                            ex === exercise
+                            ex.exerciseID === exerciseID
                                 ? {
                                     ...ex,
                                     sets: ex.sets.map((set, index) =>
@@ -188,11 +195,11 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     const toggleSetComplete = (setIndex) => {
         updateCurrentWorkout(prevWorkout =>
             prevWorkout.map(workout =>
-                workout.exercises.includes(exercise)
+                workout.id === workoutID
                     ? {
                         ...workout,
                         exercises: workout.exercises.map(ex =>
-                            ex === exercise
+                            ex.exerciseID === exerciseID
                                 ? {
                                     ...ex,
                                     sets: ex.sets.map((set, index) =>
@@ -209,14 +216,61 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
         );
     };
 
-    const addNewSet = () => {
+    const toggleSetType = (setIndex) => {
         updateCurrentWorkout(prevWorkout =>
             prevWorkout.map(workout =>
-                workout.exercises.includes(exercise)
+                workout.id === workoutID
                     ? {
                         ...workout,
                         exercises: workout.exercises.map(ex =>
-                            ex === exercise
+                            ex.exerciseID === exerciseID
+                                ? {
+                                    ...ex,
+                                    sets: ex.sets.map((set, index) => {
+                                        if (index === setIndex) {
+                                            const currentType = set.setType || 'N';
+                                            let nextType = 'N';
+                                            if (currentType === 'N') nextType = 'W';
+                                            else if (currentType === 'W') nextType = 'D';
+                                            else nextType = 'N';
+                                            return { ...set, setType: nextType };
+                                        }
+                                        return set;
+                                    })
+                                }
+                                : ex
+                        )
+                    }
+                    : workout
+            )
+        );
+    };
+
+    const handleNoteChange = (text) => {
+        updateCurrentWorkout(prevWorkout =>
+            prevWorkout.map(workout =>
+                workout.id === workoutID
+                    ? {
+                        ...workout,
+                        exercises: workout.exercises.map(ex =>
+                            ex.exerciseID === exerciseID
+                                ? { ...ex, notes: text }
+                                : ex
+                        )
+                    }
+                    : workout
+            )
+        );
+    };
+
+    const addNewSet = () => {
+        updateCurrentWorkout(prevWorkout =>
+            prevWorkout.map(workout =>
+                workout.id === workoutID
+                    ? {
+                        ...workout,
+                        exercises: workout.exercises.map(ex =>
+                            ex.exerciseID === exerciseID
                                 ? {
                                     ...ex,
                                     sets: [
@@ -225,7 +279,8 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                                             weight: null,
                                             reps: null,
-                                            completed: false
+                                            completed: false,
+                                            setType: 'N'
                                         }
                                     ]
                                 }
@@ -240,11 +295,11 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     const deleteSet = (setIndex) => {
         updateCurrentWorkout(prevWorkout =>
             prevWorkout.map(workout =>
-                workout.exercises.includes(exercise)
+                workout.id === workoutID
                     ? {
                         ...workout,
                         exercises: workout.exercises.map(ex =>
-                            ex === exercise
+                            ex.exerciseID === exerciseID
                                 ? {
                                     ...ex,
                                     sets: ex.sets.filter((_, index) => index !== setIndex)
@@ -261,7 +316,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
         updateCurrentWorkout(prevWorkout =>
             prevWorkout.map(workout => ({
                 ...workout,
-                exercises: workout.exercises.filter(ex => ex !== exercise)
+                exercises: workout.exercises.filter(ex => ex.exerciseID !== exerciseID)
             })).filter(workout => workout.exercises.length > 0)
         );
     };
@@ -293,13 +348,40 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                         <Text style={styles.exerciseName}>{exerciseName}</Text>
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                    onPress={deleteExercise}
-                    style={styles.menuButton}
-                >
-                    <Feather name="x" size={20} color={COLORS.textSecondary} />
-                </TouchableOpacity>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                        onPress={() => setIsNoteVisible(!isNoteVisible)}
+                        style={[styles.menuButton, (exercise.notes && exercise.notes.length > 0) && { opacity: 1 }]}
+                    >
+                        <MaterialIcons
+                            name="edit-note"
+                            size={24}
+                            color={exercise.notes && exercise.notes.length > 0 ? COLORS.primary : COLORS.textSecondary}
+                        />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={deleteExercise}
+                        style={styles.menuButton}
+                    >
+                        <Feather name="x" size={20} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                </View>
             </LinearGradient>
+
+            {/* Note Input */}
+            {isNoteVisible && (
+                <View style={styles.noteContainer}>
+                    <TextInput
+                        style={styles.noteInput}
+                        value={exercise.notes}
+                        onChangeText={handleNoteChange}
+                        placeholder="Add notes..."
+                        placeholderTextColor={COLORS.textSecondary}
+                        multiline
+                    />
+                </View>
+            )}
 
             {/* Table Header */}
             <View style={styles.tableHeader}>
@@ -312,67 +394,93 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
 
             {/* Sets */}
             <View style={styles.setsContainer}>
-                {exercise.sets.map((set, index) => (
-                    <SwipeableSetRow
-                        key={set.id || index}
-                        onDelete={() => deleteSet(index)}
-                        index={index}
-                        simultaneousHandlers={simultaneousHandlers}
-                    >
-                        <View style={[
-                            styles.setRow,
-                            set.completed && styles.setRowCompleted
-                        ]}>
-                            <View style={styles.colSet}>
-                                <View style={styles.setNumberBadge}>
-                                    <Text style={styles.setNumberText}>{index + 1}</Text>
+                {exercise.sets.reduce((acc, set, index) => {
+                    // Calculate display number
+                    let displayNumber = index + 1;
+                    if (set.setType === 'W') displayNumber = 'W';
+                    else if (set.setType === 'D') displayNumber = 'D';
+                    else {
+                        // Count how many previous sets were 'N' (or undefined/null which defaults to N)
+                        const normalSetCount = exercise.sets.slice(0, index).filter(s => !s.setType || s.setType === 'N').length;
+                        displayNumber = normalSetCount + 1;
+                    }
+
+                    acc.push(
+                        <SwipeableSetRow
+                            key={set.id || index}
+                            onDelete={() => deleteSet(index)}
+                            index={index}
+                            simultaneousHandlers={simultaneousHandlers}
+                        >
+                            <View style={[
+                                styles.setRow,
+                                set.completed && styles.setRowCompleted
+                            ]}>
+                                <View style={styles.colSet}>
+                                    <TouchableOpacity
+                                        onPress={() => toggleSetType(index)}
+                                        style={[
+                                            styles.setNumberBadge,
+                                            set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.2)' }, // Warning/Yellow
+                                            set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.2)' }  // Secondary/Blue
+                                        ]}
+                                    >
+                                        <Text style={[
+                                            styles.setNumberText,
+                                            set.setType === 'W' && { color: COLORS.warning },
+                                            set.setType === 'D' && { color: COLORS.secondary }
+                                        ]}>
+                                            {displayNumber}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <Text style={[styles.prevText, styles.colPrev]}>-</Text>
+
+                                <View style={styles.colKg}>
+                                    <ScrollableInput
+                                        style={styles.input}
+                                        value={set.weight?.toString()}
+                                        onChangeText={(text) => handleWeightChange(text, index)}
+                                        placeholder="0"
+                                        placeholderTextColor={COLORS.textSecondary}
+                                        keyboardType="numeric"
+                                        maxLength={5}
+                                    />
+                                </View>
+
+                                <View style={styles.colReps}>
+                                    <ScrollableInput
+                                        style={styles.input}
+                                        value={set.reps?.toString()}
+                                        onChangeText={(text) => handleRepsChange(text, index)}
+                                        placeholder="0"
+                                        placeholderTextColor={COLORS.textSecondary}
+                                        keyboardType="numeric"
+                                        maxLength={3}
+                                    />
+                                </View>
+
+                                <View style={styles.colCheck}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.checkButton,
+                                            set.completed && styles.checkButtonCompleted
+                                        ]}
+                                        onPress={() => toggleSetComplete(index)}
+                                    >
+                                        <Feather
+                                            name="check"
+                                            size={16}
+                                            color={set.completed ? COLORS.background : 'transparent'}
+                                        />
+                                    </TouchableOpacity>
                                 </View>
                             </View>
-
-                            <Text style={[styles.prevText, styles.colPrev]}>-</Text>
-
-                            <View style={styles.colKg}>
-                                <ScrollableInput
-                                    style={styles.input}
-                                    value={set.weight?.toString()}
-                                    onChangeText={(text) => handleWeightChange(text, index)}
-                                    placeholder="0"
-                                    placeholderTextColor={COLORS.textSecondary}
-                                    keyboardType="numeric"
-                                    maxLength={5}
-                                />
-                            </View>
-
-                            <View style={styles.colReps}>
-                                <ScrollableInput
-                                    style={styles.input}
-                                    value={set.reps?.toString()}
-                                    onChangeText={(text) => handleRepsChange(text, index)}
-                                    placeholder="0"
-                                    placeholderTextColor={COLORS.textSecondary}
-                                    keyboardType="numeric"
-                                    maxLength={3}
-                                />
-                            </View>
-
-                            <View style={styles.colCheck}>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.checkButton,
-                                        set.completed && styles.checkButtonCompleted
-                                    ]}
-                                    onPress={() => toggleSetComplete(index)}
-                                >
-                                    <Feather
-                                        name="check"
-                                        size={16}
-                                        color={set.completed ? COLORS.background : 'transparent'}
-                                    />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </SwipeableSetRow>
-                ))}
+                        </SwipeableSetRow>
+                    );
+                    return acc;
+                }, [])}
             </View>
 
             {/* Footer */}
@@ -418,9 +526,27 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.semiBold,
         color: COLORS.primary,
         flex: 1,
+        marginTop: 4,
     },
     menuButton: {
         padding: 4,
+    },
+    noteContainer: {
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+        backgroundColor: 'rgba(255,255,255,0.02)',
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+    },
+    noteInput: {
+        color: COLORS.text,
+        fontFamily: FONTS.regular,
+        fontSize: 14,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 8,
+        padding: 12,
+        minHeight: 60,
+        textAlignVertical: 'top',
     },
     tableHeader: {
         flexDirection: 'row',
@@ -453,14 +579,24 @@ const styles = StyleSheet.create({
     },
     deleteBackground: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: COLORS.danger,
+        backgroundColor: COLORS.surface, // Match container color
         flexDirection: 'row',
         justifyContent: 'flex-end',
         alignItems: 'center',
-        paddingRight: 20,
         zIndex: 0,
     },
+    deleteActionRegion: {
+        backgroundColor: COLORS.danger,
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 0, // Initial width
+        overflow: 'hidden',
+    },
     deleteIconContainer: {
+        // Center the icon in the visible red region if possible, or just keep it there
+        width: 60, // Fixed width for icon container so it doesn't squish
+        alignItems: 'center',
     },
     rowForeground: {
         backgroundColor: 'transparent',

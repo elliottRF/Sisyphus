@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import exerciseData from '../assets/exercises.json';
-
+import Papa from 'papaparse';
 let db;
 
 const getDb = async () => {
@@ -63,6 +63,14 @@ export const setupDatabase = async () => {
       // Column likely already exists, ignore error
     }
 
+    // Migration: Add setType and notes columns
+    try {
+      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN setType TEXT;');
+    } catch (e) { }
+    try {
+      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN notes TEXT;');
+    } catch (e) { }
+
     // Create pinnedExercises table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS pinnedExercises (
@@ -124,8 +132,8 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
     for (const entry of workoutEntries) {
       await database.runAsync(
         `INSERT INTO workoutHistory 
-        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           entry.workoutSession,
           entry.exerciseNum,
@@ -137,7 +145,9 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
           entry.time,
           workoutTitle,
           entry.pr,
-          duration
+          duration,
+          entry.setType || 'N', // Default to Normal
+          entry.notes || ''
         ]
       );
     }
@@ -225,11 +235,24 @@ export const unpinExercise = async (exerciseID) => {
 // Get all pinned exercises
 export const getPinnedExercises = async () => {
   const database = await getDb();
-  return await database.getAllAsync(
-    `SELECT pe.exerciseID, e.name 
-     FROM pinnedExercises pe
-     JOIN exercises e ON pe.exerciseID = e.exerciseID;`
-  );
+  try {
+    // First ensure the table exists
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS pinnedExercises (
+        exerciseID INTEGER PRIMARY KEY,
+        FOREIGN KEY (exerciseID) REFERENCES exercises(exerciseID)
+      );
+    `);
+
+    return await database.getAllAsync(
+      `SELECT pe.exerciseID, e.name 
+       FROM pinnedExercises pe
+       JOIN exercises e ON pe.exerciseID = e.exerciseID;`
+    );
+  } catch (error) {
+    console.error('Error in getPinnedExercises:', error);
+    return [];
+  }
 };
 
 // Fetch 1RM progress for a specific exercise
@@ -246,6 +269,25 @@ export const fetchExerciseProgress = async (exerciseID) => {
 
 // Fetch muscle usage from the last N days
 export const fetchRecentMuscleUsage = async (days) => {
+  const database = await getDb();
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+
+  return await database.getAllAsync(
+    `SELECT 
+      e.targetMuscle,
+      e.accessoryMuscles,
+      COUNT(DISTINCT wh.setNum) as sets
+     FROM workoutHistory wh
+     JOIN exercises e ON wh.exerciseID = e.exerciseID
+     WHERE wh.time >= ?
+     GROUP BY wh.exerciseID, e.targetMuscle, e.accessoryMuscles;`,
+    [cutoffDate.toISOString()]
+  );
+};
+// Import Strong CSV data with PR calculation and progress tracking
+export const importStrongData = async (csvContent, progressCallback = null) => {
+  const database = await getDb();
 
   return new Promise((resolve, reject) => {
     Papa.parse(csvContent, {
@@ -254,99 +296,193 @@ export const fetchRecentMuscleUsage = async (days) => {
       complete: async (results) => {
         try {
           const rows = results.data;
+          const totalRows = rows.length;
+
+          // Report parsing complete
+          if (progressCallback) {
+            progressCallback({ stage: 'parsing', current: totalRows, total: totalRows });
+          }
+
+          // Pre-process: Group rows by workoutSession and build set data
+          const workoutMap = new Map(); // Map<workoutSession, Map<exerciseName, Array<setData>>>
+          const notesMap = new Map(); // Map<workoutSession, Map<exerciseName, noteString>>
+
+          // First pass: validate and group data
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+
+            // Validate Row
+            if (!row['Date'] || !row['Exercise Name']) continue;
+
+            const date = new Date(row['Date']).toISOString();
+            const exerciseName = row['Exercise Name'].trim();
+            const workoutSession = new Date(row['Date']).getTime();
+
+            // Handle Notes Row
+            if (row['Set Order'] === 'Note') {
+              if (!notesMap.has(workoutSession)) {
+                notesMap.set(workoutSession, new Map());
+              }
+              const sessionNotes = notesMap.get(workoutSession);
+              // If there's already a note, append it? Or overwrite? Strong usually has one note per exercise per session.
+              sessionNotes.set(exerciseName, row['Notes'] || '');
+              continue;
+            }
+
+            // Parse Data
+            const weight = parseFloat(row['Weight (kg)']) || 0;
+            const reps = parseInt(row['Reps'], 10) || 0;
+            const durationSeconds = parseInt(row['Duration (sec)'], 10) || 0;
+            const durationMinutes = Math.floor(durationSeconds / 60);
+            const workoutTitle = row['Workout Name'] || 'Strong Import';
+
+            let setNum = parseInt(row['Set Order'], 10);
+            let setType = 'N'; // Normal
+
+            // Handle Set Type (W, D)
+            if (row['Set Order'] === 'W' || (row['Set Order'] && row['Set Order'].toString().toUpperCase().includes('W'))) {
+              setType = 'W';
+              setNum = 0; // Or keep it 0 for sorting? We'll assign sequential numbers later if needed, but for now let's trust the order in CSV or just assign 0.
+            } else if (row['Set Order'] === 'D' || (row['Set Order'] && row['Set Order'].toString().toUpperCase().includes('D'))) {
+              setType = 'D';
+              setNum = 0;
+            }
+
+            if (isNaN(setNum)) setNum = 1;
+
+            // Calculate 1RM
+            const oneRM = weight * (1 + reps / 30);
+
+            // Store set data
+            const setData = {
+              exerciseName,
+              weight,
+              reps,
+              oneRM,
+              setNum,
+              date,
+              workoutTitle,
+              durationMinutes,
+              setType
+            };
+
+            // Group by workout session
+            if (!workoutMap.has(workoutSession)) {
+              workoutMap.set(workoutSession, new Map());
+            }
+
+            const exerciseMap = workoutMap.get(workoutSession);
+            if (!exerciseMap.has(exerciseName)) {
+              exerciseMap.set(exerciseName, []);
+            }
+
+            exerciseMap.get(exerciseName).push(setData);
+          }
+
+          // Sort workout sessions chronologically (oldest first)
+          const sortedSessions = Array.from(workoutMap.keys()).sort((a, b) => a - b);
+
+          if (progressCallback) {
+            progressCallback({ stage: 'preparing', current: 0, total: sortedSessions.length });
+          }
+
+          // Track best 1RM per exercise across all imports
+          const exerciseBestOneRM = new Map(); // Map<exerciseID, bestOneRM>
           let importedCount = 0;
 
           await database.withTransactionAsync(async () => {
-            for (const row of rows) {
-              // 1. Validate Row
-              if (!row['Date'] || !row['Exercise Name']) continue;
-              if (row['Set Order'] === 'Note') continue; // Ignore notes
+            // Process workouts chronologically
+            for (let sessionIdx = 0; sessionIdx < sortedSessions.length; sessionIdx++) {
+              const workoutSession = sortedSessions[sessionIdx];
+              const exerciseMap = workoutMap.get(workoutSession);
+              const sessionNotes = notesMap.get(workoutSession);
 
-              // 2. Parse Data
-              const date = new Date(row['Date']).toISOString();
-              const exerciseName = row['Exercise Name'].trim();
-              const weight = parseFloat(row['Weight (kg)']) || 0;
-              const reps = parseInt(row['Reps'], 10) || 0;
-              const durationSeconds = parseInt(row['Duration (sec)'], 10) || 0;
-              const durationMinutes = Math.floor(durationSeconds / 60);
-              const workoutTitle = row['Workout Name'] || 'Strong Import';
-
-              // Handle "Set Order" (ignore 'D' for drop sets, just treat as normal set)
-              // We need to calculate setNum based on previous entries or just increment
-              // For simplicity in this import, we might just use the row index or a simple counter per exercise/session
-              // But 'Set Order' in CSV usually resets per exercise. 
-              // Let's trust the CSV's order or just auto-increment if it's 'D'
-              let setNum = parseInt(row['Set Order'], 10);
-              if (isNaN(setNum)) setNum = 1; // Default to 1 if 'D' or other non-number
-
-              // 3. Get or Create Exercise
-              let exerciseID;
-              const existingExercise = await database.getFirstAsync(
-                'SELECT exerciseID FROM exercises WHERE name = ?',
-                [exerciseName]
-              );
-
-              if (existingExercise) {
-                exerciseID = existingExercise.exerciseID;
-              } else {
-                // Create new exercise with default muscle "Other"
-                const result = await database.runAsync(
-                  'INSERT INTO exercises (name, targetMuscle, accessoryMuscles) VALUES (?, ?, ?)',
-                  [exerciseName, 'Other', '']
+              // For each exercise in this workout
+              for (const [exerciseName, sets] of exerciseMap.entries()) {
+                // Get or create exercise
+                let exerciseID;
+                const existingExercise = await database.getFirstAsync(
+                  'SELECT exerciseID FROM exercises WHERE name = ?',
+                  [exerciseName]
                 );
-                exerciseID = result.lastInsertRowId;
+
+                if (existingExercise) {
+                  exerciseID = existingExercise.exerciseID;
+                } else {
+                  const result = await database.runAsync(
+                    'INSERT INTO exercises (name, targetMuscle, accessoryMuscles) VALUES (?, ?, ?)',
+                    [exerciseName, 'Other', '']
+                  );
+                  exerciseID = result.lastInsertRowId;
+                }
+
+                // Get Note for this exercise
+                const note = sessionNotes ? sessionNotes.get(exerciseName) : '';
+
+                // Find the set with max 1RM in this workout for this exercise
+                let maxOneRMInWorkout = 0;
+                let bestSetIndex = 0;
+                sets.forEach((set, idx) => {
+                  if (set.oneRM > maxOneRMInWorkout) {
+                    maxOneRMInWorkout = set.oneRM;
+                    bestSetIndex = idx;
+                  }
+                });
+
+                // Check if this is a PR (beats historical best for this exercise)
+                const historicalBest = exerciseBestOneRM.get(exerciseID) || 0;
+                const isPR = maxOneRMInWorkout > historicalBest;
+
+                // Update historical best if this is a PR
+                if (isPR) {
+                  exerciseBestOneRM.set(exerciseID, maxOneRMInWorkout);
+                }
+
+                // Insert all sets, marking only the best one as PR if applicable
+                for (let i = 0; i < sets.length; i++) {
+                  const set = sets[i];
+                  const isThisSetPR = (isPR && i === bestSetIndex) ? 1 : 0;
+
+                  await database.runAsync(
+                    `INSERT INTO workoutHistory 
+                    (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                    [
+                      workoutSession,
+                      1,
+                      set.setNum,
+                      exerciseID,
+                      set.weight,
+                      set.reps,
+                      set.oneRM,
+                      set.date,
+                      set.workoutTitle,
+                      isThisSetPR,
+                      set.durationMinutes,
+                      set.setType,
+                      note // Save note to every set for now
+                    ]
+                  );
+
+                  importedCount++;
+                }
               }
 
-              // 4. Insert Workout History
-              // We need a workoutSession ID. 
-              // Strategy: Use the timestamp as a unique session identifier or group by Date + Workout Name
-              // For now, let's just use a hash or simple logic. 
-              // Actually, we can just query for an existing session on this date/title or create one.
-              // But our workoutHistory table uses `workoutSession` integer. 
-              // Let's find the max session and increment for each UNIQUE date/title combo in the CSV?
-              // Optimization: Just insert raw data. `workoutSession` is somewhat arbitrary for history display 
-              // unless we want to group them perfectly.
-              // Let's try to group by Date.
-
-              // Simple approach: Generate a session ID based on time (epoch / 100000 or something) 
-              // OR just find if we already inserted this "session" in this transaction.
-              // A better way for bulk import:
-              // We'll just insert. The `history.jsx` groups by `workoutSession`.
-              // We need to ensure `workoutSession` is consistent for all rows of the same workout.
-              // The CSV has "Workout #" but that might duplicate across exports.
-              // Let's use the Date to determine session.
-
-              const sessionKey = `${date}_${workoutTitle}`;
-              // We need a map of sessionKey -> sessionID. But we are inside a loop.
-              // Let's just use a large random number or timestamp for sessionID to avoid collision with existing 1, 2, 3...
-              // Or better: Fetch max session ID once at start, then increment for each new date encountered.
-
-              // For this implementation, let's just use the timestamp of the workout as the session ID (divided by 1000 to fit integer if needed, or just use it).
-              // SQLite INTEGER is 64-bit signed, so Date.now() fits fine.
-              const workoutSession = new Date(row['Date']).getTime();
-
-              await database.runAsync(
-                `INSERT INTO workoutHistory 
-                (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-                [
-                  workoutSession,
-                  1, // exerciseNum - hard to calculate perfectly from CSV without pre-processing. 1 is fine for history list.
-                  setNum,
-                  exerciseID,
-                  weight,
-                  reps,
-                  weight * (1 + reps / 30), // Estimate 1RM
-                  date,
-                  workoutTitle,
-                  0, // pr - we can calculate later or ignore
-                  durationMinutes
-                ]
-              );
-
-              importedCount++;
+              // Report progress every 10 workouts or at the end
+              if (progressCallback && (sessionIdx % 10 === 0 || sessionIdx === sortedSessions.length - 1)) {
+                progressCallback({
+                  stage: 'importing',
+                  current: sessionIdx + 1,
+                  total: sortedSessions.length,
+                  setsImported: importedCount
+                });
+              }
             }
           });
+
+          if (progressCallback) {
+            progressCallback({ stage: 'complete', current: importedCount, total: importedCount });
+          }
 
           resolve(importedCount);
         } catch (error) {

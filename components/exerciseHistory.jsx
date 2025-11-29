@@ -4,7 +4,7 @@ import { ActivityIndicator } from 'react-native';
 import { fetchExerciseHistory, fetchExercises } from './db';
 import { useFocusEffect } from 'expo-router';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Body from "react-native-body-highlighter";
 
@@ -63,6 +63,7 @@ const ExerciseHistory = (props) => {
     const loadWorkoutHistory = async () => {
         try {
             const history = await fetchExerciseHistory(props.exerciseID);
+            console.log("Fetched History Sample:", history.slice(0, 3)); // Log first 3 entries
             const groupedHistory = groupBySession(history);
             setWorkoutHistory(groupedHistory);
             calculateStats(history);
@@ -169,47 +170,69 @@ const ExerciseHistory = (props) => {
                         <Text style={styles.sectionTitle}>History</Text>
                     </View>
                 }
-                renderItem={({ item: [session, exercises] }) => (
-                    <View style={styles.sessionCard}>
-                        <View style={styles.sessionHeader}>
-                            <View style={styles.sessionDateContainer}>
-                                <Feather name="calendar" size={14} color={COLORS.primary} />
-                                <Text style={styles.sessionDate}>
-                                    {formatDate(exercises[0].time)}
-                                </Text>
-                            </View>
-                            <View style={styles.sessionBadge}>
-                                <Text style={styles.sessionBadgeText}>Session {session}</Text>
-                            </View>
-                        </View>
+                renderItem={({ item: [session, exercises] }) => {
+                    const sessionNote = exercises.find(e => e.notes)?.notes;
 
-                        <View style={styles.exercisesList}>
-                            {exercises.map((set, setIndex) => (
-                                <View key={setIndex} style={styles.setRow}>
-                                    <View style={styles.setNumberContainer}>
-                                        <Text style={styles.setNumber}>{set.setNum}</Text>
-                                    </View>
-                                    <View style={styles.setDetails}>
-                                        <Text style={styles.setWeight}>{set.weight} <Text style={styles.unit}>kg</Text></Text>
-                                        <Text style={styles.setX}>×</Text>
-                                        <Text style={styles.setReps}>{set.reps} <Text style={styles.unit}>reps</Text></Text>
-                                    </View>
-                                    {set.pr === 1 && (
-                                        <LinearGradient
-                                            colors={[COLORS.primary, COLORS.secondary]}
-                                            start={{ x: 0, y: 0 }}
-                                            end={{ x: 1, y: 1 }}
-                                            style={styles.prBadge}
-                                        >
-                                            <MaterialCommunityIcons name="trophy" size={12} color="#fff" />
-                                            <Text style={styles.prText}>PR</Text>
-                                        </LinearGradient>
-                                    )}
+                    return (
+                        <View style={styles.sessionCard}>
+                            <View style={styles.sessionHeader}>
+                                <View style={styles.sessionDateContainer}>
+                                    <Feather name="calendar" size={14} color={COLORS.primary} />
+                                    <Text style={styles.sessionDate}>
+                                        {formatDate(exercises[0].time)}
+                                    </Text>
                                 </View>
-                            ))}
+                                <View style={styles.sessionBadge}>
+                                    <Text style={styles.sessionBadgeText}>Session {session}</Text>
+                                </View>
+                            </View>
+
+                            {/* Session Note */}
+                            {sessionNote && (
+                                <View style={styles.noteContainer}>
+                                    <MaterialIcons name="sticky-note-2" size={14} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
+                                    <Text style={styles.noteText}>{sessionNote}</Text>
+                                </View>
+                            )}
+
+                            <View style={styles.exercisesList}>
+                                {exercises.map((set, setIndex) => (
+                                    <View key={setIndex} style={styles.setRow}>
+                                        <View style={[
+                                            styles.setNumberContainer,
+                                            set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.2)' },
+                                            set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.2)' }
+                                        ]}>
+                                            <Text style={[
+                                                styles.setNumber,
+                                                set.setType === 'W' && { color: COLORS.warning },
+                                                set.setType === 'D' && { color: COLORS.secondary }
+                                            ]}>
+                                                {set.setType === 'W' ? 'W' : set.setType === 'D' ? 'D' : set.setNum}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.setDetails}>
+                                            <Text style={styles.setWeight}>{set.weight} <Text style={styles.unit}>kg</Text></Text>
+                                            <Text style={styles.setX}>×</Text>
+                                            <Text style={styles.setReps}>{set.reps} <Text style={styles.unit}>reps</Text></Text>
+                                        </View>
+                                        {set.pr === 1 && (
+                                            <LinearGradient
+                                                colors={[COLORS.primary, COLORS.secondary]}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 1 }}
+                                                style={styles.prBadge}
+                                            >
+                                                <MaterialCommunityIcons name="trophy" size={12} color="#fff" />
+                                                <Text style={styles.prText}>PR</Text>
+                                            </LinearGradient>
+                                        )}
+                                    </View>
+                                ))}
+                            </View>
                         </View>
-                    </View>
-                )}
+                    )
+                }}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                         <Feather name="activity" size={48} color={COLORS.textSecondary} style={{ opacity: 0.5 }} />
@@ -340,6 +363,20 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontFamily: FONTS.medium,
         color: COLORS.textSecondary,
+    },
+    noteContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 4,
+        gap: 8,
+    },
+    noteText: {
+        flex: 1,
+        fontSize: 14,
+        fontFamily: FONTS.regular,
+        color: COLORS.textSecondary,
+        lineHeight: 20,
     },
     exercisesList: {
         padding: 16,

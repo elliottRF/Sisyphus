@@ -5,12 +5,13 @@ import { useRouter } from 'expo-router';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { importStrongData } from '../components/db';
 
 const Settings = () => {
     const router = useRouter();
     const [importing, setImporting] = useState(false);
+    const [importProgress, setImportProgress] = useState('');
 
     const handleImportStrong = async () => {
         try {
@@ -22,10 +23,22 @@ const Settings = () => {
             if (result.canceled) return;
 
             setImporting(true);
+            setImportProgress('Reading file...');
             const fileUri = result.assets[0].uri;
             const fileContent = await FileSystem.readAsStringAsync(fileUri);
 
-            const count = await importStrongData(fileContent);
+            const count = await importStrongData(fileContent, (progress) => {
+                // Update progress based on stage
+                if (progress.stage === 'parsing') {
+                    setImportProgress(`Parsing ${progress.total} rows...`);
+                } else if (progress.stage === 'preparing') {
+                    setImportProgress('Preparing workouts...');
+                } else if (progress.stage === 'importing') {
+                    setImportProgress(`Importing workout ${progress.current} of ${progress.total} (${progress.setsImported} sets)`);
+                } else if (progress.stage === 'complete') {
+                    setImportProgress('Finalizing...');
+                }
+            });
 
             Alert.alert(
                 "Import Successful",
@@ -38,6 +51,7 @@ const Settings = () => {
             Alert.alert("Import Failed", "An error occurred while importing your data. Please check the CSV format.");
         } finally {
             setImporting(false);
+            setImportProgress('');
         }
     };
 
@@ -76,6 +90,9 @@ const Settings = () => {
                             </>
                         )}
                     </TouchableOpacity>
+                    {importing && importProgress && (
+                        <Text style={styles.progressText}>{importProgress}</Text>
+                    )}
                 </View>
             </View>
         </SafeAreaView>
@@ -153,6 +170,13 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontFamily: FONTS.semiBold,
         color: COLORS.text, // Assuming text on primary is readable, or use white
+    },
+    progressText: {
+        fontSize: 14,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+        marginTop: 12,
+        textAlign: 'center',
     },
 });
 

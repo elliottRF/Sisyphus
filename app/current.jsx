@@ -11,7 +11,7 @@ import { AntDesign, Feather, Ionicons } from '@expo/vector-icons';
 
 import * as NavigationBar from 'expo-navigation-bar';
 
-import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR } from '../components/db';
+import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase } from '../components/db';
 
 
 import ExerciseEditable from '../components/exerciseEditable'
@@ -53,9 +53,18 @@ const Current = () => {
         return Math.round(oneRepMax * 100) / 100; // Truncates to 2 decimal places
     };
 
+    const actionSheetRef = useRef(null);
+    const exerciseInfoActionSheetRef = useRef(null);
 
+    const [currentWorkout, setCurrentWorkout] = useState([]);
+    const [workoutTitle, setWorkoutTitle] = useState("New Workout");
+    const [selectedExerciseId, setSelectedExerciseId] = useState(null);
+    const [currentExerciseName, setCurrentExerciseName] = useState(null);
 
-    const endWorkout = async () => {
+    console.log("Render Current. Workout length:", currentWorkout.length);
+
+    const endWorkout = useCallback(async () => {
+        console.log("endWorkout called. State length:", currentWorkout.length);
         try {
             const latestSessionQuery = await getLatestWorkoutSession();
             const nextSessionNumber = latestSessionQuery + 1;
@@ -137,7 +146,9 @@ const Current = () => {
                             oneRM: calculatedOneRM,
                             time: new Date().toISOString(), // Current timestamp
                             name: workoutTitle,
-                            pr: isPR // 1 only for the single best set that beats the previous max
+                            pr: isPR, // 1 only for the single best set that beats the previous max
+                            setType: set.setType || 'N',
+                            notes: exercise.notes || ''
                         });
 
                         setNum++;
@@ -166,30 +177,15 @@ const Current = () => {
         catch (error) {
             console.error("Error saving workout:", error);
         }
-    };
-
-
-
-
+    }, [currentWorkout, startTime, workoutTitle]);
 
     const plusButtonShowExerciseList = () => {
-
-
         fetchExercises()
             .then(data => setExercises(data))
             .catch(err => console.error(err));
 
         actionSheetRef.current?.show();
     };
-
-
-    const actionSheetRef = useRef(null);
-    const exerciseInfoActionSheetRef = useRef(null);
-
-    const [currentWorkout, setCurrentWorkout] = useState([]);
-    const [workoutTitle, setWorkoutTitle] = useState("New Workout");
-    const [selectedExerciseId, setSelectedExerciseId] = useState(null);
-    const [currentExerciseName, setCurrentExerciseName] = useState(null);
 
     const showExerciseInfo = (exerciseDetails) => {
         if (exerciseDetails) {
@@ -203,10 +199,7 @@ const Current = () => {
         exerciseInfoActionSheetRef.current?.hide();
     };
 
-
-
     const saveWorkoutToAsyncStorage = async (workout) => {
-
         const dataToSave = {
             workout,
             workoutTitle,
@@ -233,12 +226,11 @@ const Current = () => {
                 .then(data => setExercises(data))
                 .catch(err => console.error(err));
 
-
+            setupDatabase().catch(err => console.error("DB Setup Error:", err));
 
             try {
                 const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
                 if (storedWorkout) {
-
                     const { workout, title } = JSON.parse(storedWorkout);
                     const workoutWithIds = workout.map(item => ({
                         ...item,
@@ -253,7 +245,6 @@ const Current = () => {
                     }));
                     setCurrentWorkout(workoutWithIds);
                     if (title) setWorkoutTitle(title);
-
                 }
                 const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
                 if (storedStartTime) {
@@ -273,8 +264,6 @@ const Current = () => {
         }
     }, [currentWorkout]);
 
-
-
     const inputExercise = (item) => {
         actionSheetRef.current?.hide();
 
@@ -291,9 +280,11 @@ const Current = () => {
                             {
                                 id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                                 weight: null,
-                                reps: null
+                                reps: null,
+                                setType: 'N' // Normal
                             }
-                        ]
+                        ],
+                        notes: '' // Initialize notes
                     }
                 ]
             }
@@ -311,6 +302,7 @@ const Current = () => {
                     return (
                         <ExerciseEditable
                             exerciseID={exercise.exerciseID}
+                            workoutID={item.id}
                             key={exerciseIndex}
                             exercise={exercise}
                             exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
@@ -371,6 +363,7 @@ const Current = () => {
 
                         <SortableExerciseList
                             data={currentWorkout}
+                            extraData={currentWorkout}
                             onReorder={setCurrentWorkout}
                             contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
                             renderItem={renderItem}
