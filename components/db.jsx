@@ -63,6 +63,14 @@ export const setupDatabase = async () => {
       // Column likely already exists, ignore error
     }
 
+    // Create pinnedExercises table
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS pinnedExercises (
+        exerciseID INTEGER PRIMARY KEY,
+        FOREIGN KEY (exerciseID) REFERENCES exercises(exerciseID)
+      );
+    `);
+
     console.log('Database setup completed successfully');
   } catch (error) {
     console.error('Database setup error:', error);
@@ -196,19 +204,158 @@ export const calculateIfPR = async (exerciseID, oneRM) => {
   return oneRM > maxOneRM ? 1 : 0;
 };
 
+// Pin an exercise
+export const pinExercise = async (exerciseID) => {
+  const database = await getDb();
+  await database.runAsync(
+    `INSERT OR IGNORE INTO pinnedExercises (exerciseID) VALUES (?);`,
+    [exerciseID]
+  );
+};
+
+// Unpin an exercise
+export const unpinExercise = async (exerciseID) => {
+  const database = await getDb();
+  await database.runAsync(
+    `DELETE FROM pinnedExercises WHERE exerciseID = ?;`,
+    [exerciseID]
+  );
+};
+
+// Get all pinned exercises
+export const getPinnedExercises = async () => {
+  const database = await getDb();
+  return await database.getAllAsync(
+    `SELECT pe.exerciseID, e.name 
+     FROM pinnedExercises pe
+     JOIN exercises e ON pe.exerciseID = e.exerciseID;`
+  );
+};
+
+// Fetch 1RM progress for a specific exercise
+export const fetchExerciseProgress = async (exerciseID) => {
+  const database = await getDb();
+  return await database.getAllAsync(
+    `SELECT time, oneRM 
+     FROM workoutHistory 
+     WHERE exerciseID = ? 
+     ORDER BY time ASC;`,
+    [exerciseID]
+  );
+};
+
 // Fetch muscle usage from the last N days
 export const fetchRecentMuscleUsage = async (days) => {
-  const database = await getDb();
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  const dateString = date.toISOString();
 
-  return await database.getAllAsync(
-    `SELECT e.targetMuscle, e.accessoryMuscles, COUNT(*) as sets
-     FROM workoutHistory wh
-     JOIN exercises e ON wh.exerciseID = e.exerciseID
-     WHERE wh.time >= ?
-     GROUP BY wh.exerciseID;`,
-    [dateString]
-  );
+  return new Promise((resolve, reject) => {
+    Papa.parse(csvContent, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          const rows = results.data;
+          let importedCount = 0;
+
+          await database.withTransactionAsync(async () => {
+            for (const row of rows) {
+              // 1. Validate Row
+              if (!row['Date'] || !row['Exercise Name']) continue;
+              if (row['Set Order'] === 'Note') continue; // Ignore notes
+
+              // 2. Parse Data
+              const date = new Date(row['Date']).toISOString();
+              const exerciseName = row['Exercise Name'].trim();
+              const weight = parseFloat(row['Weight (kg)']) || 0;
+              const reps = parseInt(row['Reps'], 10) || 0;
+              const durationSeconds = parseInt(row['Duration (sec)'], 10) || 0;
+              const durationMinutes = Math.floor(durationSeconds / 60);
+              const workoutTitle = row['Workout Name'] || 'Strong Import';
+
+              // Handle "Set Order" (ignore 'D' for drop sets, just treat as normal set)
+              // We need to calculate setNum based on previous entries or just increment
+              // For simplicity in this import, we might just use the row index or a simple counter per exercise/session
+              // But 'Set Order' in CSV usually resets per exercise. 
+              // Let's trust the CSV's order or just auto-increment if it's 'D'
+              let setNum = parseInt(row['Set Order'], 10);
+              if (isNaN(setNum)) setNum = 1; // Default to 1 if 'D' or other non-number
+
+              // 3. Get or Create Exercise
+              let exerciseID;
+              const existingExercise = await database.getFirstAsync(
+                'SELECT exerciseID FROM exercises WHERE name = ?',
+                [exerciseName]
+              );
+
+              if (existingExercise) {
+                exerciseID = existingExercise.exerciseID;
+              } else {
+                // Create new exercise with default muscle "Other"
+                const result = await database.runAsync(
+                  'INSERT INTO exercises (name, targetMuscle, accessoryMuscles) VALUES (?, ?, ?)',
+                  [exerciseName, 'Other', '']
+                );
+                exerciseID = result.lastInsertRowId;
+              }
+
+              // 4. Insert Workout History
+              // We need a workoutSession ID. 
+              // Strategy: Use the timestamp as a unique session identifier or group by Date + Workout Name
+              // For now, let's just use a hash or simple logic. 
+              // Actually, we can just query for an existing session on this date/title or create one.
+              // But our workoutHistory table uses `workoutSession` integer. 
+              // Let's find the max session and increment for each UNIQUE date/title combo in the CSV?
+              // Optimization: Just insert raw data. `workoutSession` is somewhat arbitrary for history display 
+              // unless we want to group them perfectly.
+              // Let's try to group by Date.
+
+              // Simple approach: Generate a session ID based on time (epoch / 100000 or something) 
+              // OR just find if we already inserted this "session" in this transaction.
+              // A better way for bulk import:
+              // We'll just insert. The `history.jsx` groups by `workoutSession`.
+              // We need to ensure `workoutSession` is consistent for all rows of the same workout.
+              // The CSV has "Workout #" but that might duplicate across exports.
+              // Let's use the Date to determine session.
+
+              const sessionKey = `${date}_${workoutTitle}`;
+              // We need a map of sessionKey -> sessionID. But we are inside a loop.
+              // Let's just use a large random number or timestamp for sessionID to avoid collision with existing 1, 2, 3...
+              // Or better: Fetch max session ID once at start, then increment for each new date encountered.
+
+              // For this implementation, let's just use the timestamp of the workout as the session ID (divided by 1000 to fit integer if needed, or just use it).
+              // SQLite INTEGER is 64-bit signed, so Date.now() fits fine.
+              const workoutSession = new Date(row['Date']).getTime();
+
+              await database.runAsync(
+                `INSERT INTO workoutHistory 
+                (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                [
+                  workoutSession,
+                  1, // exerciseNum - hard to calculate perfectly from CSV without pre-processing. 1 is fine for history list.
+                  setNum,
+                  exerciseID,
+                  weight,
+                  reps,
+                  weight * (1 + reps / 30), // Estimate 1RM
+                  date,
+                  workoutTitle,
+                  0, // pr - we can calculate later or ignore
+                  durationMinutes
+                ]
+              );
+
+              importedCount++;
+            }
+          });
+
+          resolve(importedCount);
+        } catch (error) {
+          reject(error);
+        }
+      },
+      error: (error) => {
+        reject(error);
+      }
+    });
+  });
 };
