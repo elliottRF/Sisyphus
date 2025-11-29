@@ -63,7 +63,7 @@ const ExerciseHistory = (props) => {
     const loadWorkoutHistory = async () => {
         try {
             const history = await fetchExerciseHistory(props.exerciseID);
-            console.log("Fetched History Sample:", history.slice(0, 3)); // Log first 3 entries
+            console.log("Fetched History Sample:", history.slice(0, 3));
             const groupedHistory = groupBySession(history);
             setWorkoutHistory(groupedHistory);
             calculateStats(history);
@@ -79,7 +79,10 @@ const ExerciseHistory = (props) => {
         let volume = 0;
 
         history.forEach(entry => {
-            if (entry.weight > maxWeight) maxWeight = entry.weight;
+            // Only count sets with at least 1 rep for personal best
+            if (entry.reps > 0 && entry.weight > maxWeight) {
+                maxWeight = entry.weight;
+            }
             volume += (entry.weight * entry.reps);
         });
 
@@ -308,20 +311,20 @@ const styles = StyleSheet.create({
     },
     bodyContainer: {
         flexDirection: 'row',
-        justifyContent: 'center', // Change to center to horizontally center the two Body components
-        alignItems: 'center',    // Vertically center them if they had different heights, good practice
-        width: '100%',           // Take full width
-        height: 350,             // Fixed height for the container
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
+        height: 350,
         marginTop: 24,
-        marginBottom: 20,        // Slightly reduce margin from previous suggestion, find a sweet spot
-        gap: 20,                 // Add a gap between the front and back body figures
+        marginBottom: 20,
+        gap: 20,
     },
     sectionTitle: {
         fontSize: 18,
         fontFamily: FONTS.bold,
         color: COLORS.text,
         marginLeft: 20,
-        marginTop: 16, // Added or adjusted to ensure space from bodyContainer
+        marginTop: 16,
         marginBottom: 16,
     },
     sessionCard: {

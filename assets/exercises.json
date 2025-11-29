@@ -1,7 +1,7 @@
 [
   {
     "exerciseID": 1,
-    "name": "Barbell Bench Press (Flat)",
+    "name": "Bench Press (Barbell)",
     "targetMuscle": "Chest",
     "accessoryMuscles": "Triceps,Deltoids"
   },
