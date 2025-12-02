@@ -101,6 +101,10 @@ const History = () => {
                     const groupedExercises = groupExercisesByName(exercises);
                     const duration = exercises[0].duration;
 
+                    const totalPRs = exercises.reduce((acc, ex) => {
+                        return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
+                    }, 0);
+
                     return (
                         <TouchableOpacity
                             activeOpacity={0.7}
@@ -126,8 +130,16 @@ const History = () => {
                                             </View>
                                         </View>
                                     </View>
-                                    <View style={styles.sessionBadge}>
-                                        <Text style={styles.sessionBadgeText}>#{session}</Text>
+                                    <View style={styles.badgeContainer}>
+                                        {totalPRs > 0 && (
+                                            <View style={styles.prSummaryBadge}>
+                                                <MaterialCommunityIcons name="trophy" size={14} color={COLORS.primary} />
+                                                <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
+                                            </View>
+                                        )}
+                                        <View style={styles.sessionBadge}>
+                                            <Text style={styles.sessionBadgeText}>#{session}</Text>
+                                        </View>
                                     </View>
                                 </View>
 
@@ -146,22 +158,6 @@ const History = () => {
                                         <Text style={styles.moreText}>+ {groupedExercises.length - 4} more exercises</Text>
                                     )}
                                 </View>
-
-                                {(() => {
-                                    const totalPRs = exercises.reduce((acc, ex) => {
-                                        return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
-                                    }, 0);
-
-                                    if (totalPRs > 0) {
-                                        return (
-                                            <View style={styles.prSummaryBadge}>
-                                                <MaterialCommunityIcons name="trophy" size={14} color={COLORS.primary} />
-                                                <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
-                                            </View>
-                                        );
-                                    }
-                                    return null;
-                                })()}
                             </LinearGradient>
                         </TouchableOpacity>
                     );
@@ -172,10 +168,12 @@ const History = () => {
 };
 
 const styles = StyleSheet.create({
+    badgeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
     prSummaryBadge: {
-        position: 'absolute',
-        top: 16,
-        right: 16,
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255, 215, 0, 0.1)',

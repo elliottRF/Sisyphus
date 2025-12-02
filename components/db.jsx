@@ -435,6 +435,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           const exerciseBestOneRM = new Map(); // Map<exerciseID, bestOneRM>
           const exerciseBestVolume = new Map(); // Map<exerciseID, bestVolume>
           const exerciseBestWeight = new Map(); // Map<exerciseID, bestWeight>
+          const exerciseBestRepsAtMaxWeight = new Map(); // Map<exerciseID, bestRepsAtMaxWeight>
           let importedCount = 0;
 
           await database.withTransactionAsync(async () => {
@@ -470,11 +471,13 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                 const historicalBestOneRM = exerciseBestOneRM.get(exerciseID) || 0;
                 const historicalBestVolume = exerciseBestVolume.get(exerciseID) || 0;
                 const historicalBestWeight = exerciseBestWeight.get(exerciseID) || 0;
+                const historicalBestRepsAtMaxWeight = exerciseBestRepsAtMaxWeight.get(exerciseID) || 0;
 
                 // Find maxes in this workout
                 let maxOneRMInWorkout = 0;
                 let maxVolumeInWorkout = 0;
                 let maxWeightInWorkout = 0;
+                let maxRepsAtMaxWeight = 0;
                 let bestSetIndexOneRM = -1;
                 let bestSetIndexVolume = -1;
                 let bestSetIndexWeight = -1;
@@ -491,21 +494,33 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                     maxVolumeInWorkout = volume;
                     bestSetIndexVolume = idx;
                   }
-                  // Weight (Ignore 0 reps)
-                  if (set.reps > 0 && set.weight > maxWeightInWorkout) {
-                    maxWeightInWorkout = set.weight;
-                    bestSetIndexWeight = idx;
+                  // Weight: find max weight, then max reps at that weight
+                  if (set.reps > 0) {
+                    if (set.weight > maxWeightInWorkout) {
+                      maxWeightInWorkout = set.weight;
+                      maxRepsAtMaxWeight = set.reps;
+                      bestSetIndexWeight = idx;
+                    } else if (set.weight === maxWeightInWorkout && set.reps > maxRepsAtMaxWeight) {
+                      maxRepsAtMaxWeight = set.reps;
+                      bestSetIndexWeight = idx;
+                    }
                   }
                 });
 
                 const is1rmPR = maxOneRMInWorkout > historicalBestOneRM;
                 const isVolumePR = maxVolumeInWorkout > historicalBestVolume;
-                const isWeightPR = maxWeightInWorkout > historicalBestWeight;
+                // Weight PR: either new max weight OR matching weight with more reps
+                const isWeightPR =
+                  maxWeightInWorkout > historicalBestWeight ||
+                  (maxWeightInWorkout === historicalBestWeight && maxRepsAtMaxWeight > historicalBestRepsAtMaxWeight);
 
                 // Update historical bests if PRs
                 if (is1rmPR) exerciseBestOneRM.set(exerciseID, maxOneRMInWorkout);
                 if (isVolumePR) exerciseBestVolume.set(exerciseID, maxVolumeInWorkout);
-                if (isWeightPR) exerciseBestWeight.set(exerciseID, maxWeightInWorkout);
+                if (isWeightPR) {
+                  exerciseBestWeight.set(exerciseID, maxWeightInWorkout);
+                  exerciseBestRepsAtMaxWeight.set(exerciseID, maxRepsAtMaxWeight);
+                }
 
                 // Insert all sets
                 for (let i = 0; i < sets.length; i++) {
