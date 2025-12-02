@@ -348,11 +348,11 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             progressCallback({ stage: 'parsing', current: totalRows, total: totalRows });
           }
 
-          // Pre-process: Group rows by workoutSession and build set data
-          const workoutMap = new Map(); // Map<workoutSession, Map<exerciseName, Array<setData>>>
-          const notesMap = new Map(); // Map<workoutSession, Map<exerciseName, noteString>>
+          // Pre-process: Group rows by date (timestamp key for grouping, will be replaced with sequential numbers)
+          const workoutMap = new Map(); // Map<timestamp, Map<exerciseName, Array<setData>>>
+          const notesMap = new Map(); // Map<timestamp, Map<exerciseName, noteString>>
 
-          // First pass: validate and group data
+          // First pass: validate and group data by date
           for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
 
@@ -361,14 +361,15 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
             const date = new Date(row['Date']).toISOString();
             const exerciseName = row['Exercise Name'].trim();
-            const workoutSession = new Date(row['Date']).getTime();
+            // Use timestamp as temporary key for grouping workouts by date
+            const dateKey = new Date(row['Date']).getTime();
 
             // Handle Notes Row
             if (row['Set Order'] === 'Note') {
-              if (!notesMap.has(workoutSession)) {
-                notesMap.set(workoutSession, new Map());
+              if (!notesMap.has(dateKey)) {
+                notesMap.set(dateKey, new Map());
               }
-              const sessionNotes = notesMap.get(workoutSession);
+              const sessionNotes = notesMap.get(dateKey);
               // If there's already a note, append it? Or overwrite? Strong usually has one note per exercise per session.
               sessionNotes.set(exerciseName, row['Notes'] || '');
               continue;
@@ -411,12 +412,12 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               setType
             };
 
-            // Group by workout session
-            if (!workoutMap.has(workoutSession)) {
-              workoutMap.set(workoutSession, new Map());
+            // Group by date key (temporary timestamp grouping)
+            if (!workoutMap.has(dateKey)) {
+              workoutMap.set(dateKey, new Map());
             }
 
-            const exerciseMap = workoutMap.get(workoutSession);
+            const exerciseMap = workoutMap.get(dateKey);
             if (!exerciseMap.has(exerciseName)) {
               exerciseMap.set(exerciseName, []);
             }
@@ -425,11 +426,17 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           }
 
           // Sort workout sessions chronologically (oldest first)
-          const sortedSessions = Array.from(workoutMap.keys()).sort((a, b) => a - b);
+          const sortedDateKeys = Array.from(workoutMap.keys()).sort((a, b) => a - b);
 
           if (progressCallback) {
-            progressCallback({ stage: 'preparing', current: 0, total: sortedSessions.length });
+            progressCallback({ stage: 'preparing', current: 0, total: sortedDateKeys.length });
           }
+
+          // Get the current max session number to continue from
+          const currentMaxSession = await database.getFirstAsync(
+            'SELECT MAX(workoutSession) as maxSession FROM workoutHistory'
+          );
+          let nextSessionNumber = (currentMaxSession?.maxSession || 0) + 1;
 
           // Track best 1RM per exercise across all imports
           const exerciseBestOneRM = new Map(); // Map<exerciseID, bestOneRM>
@@ -439,11 +446,14 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           let importedCount = 0;
 
           await database.withTransactionAsync(async () => {
-            // Process workouts chronologically
-            for (let sessionIdx = 0; sessionIdx < sortedSessions.length; sessionIdx++) {
-              const workoutSession = sortedSessions[sessionIdx];
-              const exerciseMap = workoutMap.get(workoutSession);
-              const sessionNotes = notesMap.get(workoutSession);
+            // Process workouts chronologically, assigning sequential session numbers
+            for (let sessionIdx = 0; sessionIdx < sortedDateKeys.length; sessionIdx++) {
+              const dateKey = sortedDateKeys[sessionIdx];
+              const workoutSession = nextSessionNumber; // Use sequential session number
+              nextSessionNumber++; // Increment for next session
+
+              const exerciseMap = workoutMap.get(dateKey);
+              const sessionNotes = notesMap.get(dateKey);
 
               // For each exercise in this workout
               for (const [exerciseName, sets] of exerciseMap.entries()) {
@@ -563,11 +573,11 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               }
 
               // Report progress every 10 workouts or at the end
-              if (progressCallback && (sessionIdx % 10 === 0 || sessionIdx === sortedSessions.length - 1)) {
+              if (progressCallback && (sessionIdx % 10 === 0 || sessionIdx === sortedDateKeys.length - 1)) {
                 progressCallback({
                   stage: 'importing',
                   current: sessionIdx + 1,
-                  total: sortedSessions.length,
+                  total: sortedDateKeys.length,
                   setsImported: importedCount
                 });
               }
