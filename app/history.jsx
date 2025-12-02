@@ -146,6 +146,22 @@ const History = () => {
                                         <Text style={styles.moreText}>+ {groupedExercises.length - 4} more exercises</Text>
                                     )}
                                 </View>
+
+                                {(() => {
+                                    const totalPRs = exercises.reduce((acc, ex) => {
+                                        return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
+                                    }, 0);
+
+                                    if (totalPRs > 0) {
+                                        return (
+                                            <View style={styles.prSummaryBadge}>
+                                                <MaterialCommunityIcons name="trophy" size={14} color={COLORS.primary} />
+                                                <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
+                                            </View>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                             </LinearGradient>
                         </TouchableOpacity>
                     );
@@ -156,6 +172,25 @@ const History = () => {
 };
 
 const styles = StyleSheet.create({
+    prSummaryBadge: {
+        position: 'absolute',
+        top: 16,
+        right: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 215, 0, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 215, 0, 0.3)',
+    },
+    prSummaryText: {
+        fontSize: 12,
+        fontFamily: FONTS.bold,
+        color: COLORS.primary,
+    },
     container: {
         flex: 1,
         backgroundColor: COLORS.background,

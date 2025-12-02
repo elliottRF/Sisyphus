@@ -66,9 +66,28 @@ export const setupDatabase = async () => {
     // Migration: Add setType and notes columns
     try {
       await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN setType TEXT;');
-    } catch (e) { }
+    } catch (e) {
+      if (!e.message.includes('duplicate column name')) {
+        console.log('Migration error (setType):', e);
+      }
+    }
     try {
       await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN notes TEXT;');
+    } catch (e) {
+      if (!e.message.includes('duplicate column name')) {
+        console.log('Migration error (notes):', e);
+      }
+    }
+
+    // Migration: Add new PR columns
+    try {
+      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN is1rmPR INTEGER DEFAULT 0;');
+    } catch (e) { }
+    try {
+      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN isVolumePR INTEGER DEFAULT 0;');
+    } catch (e) { }
+    try {
+      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN isWeightPR INTEGER DEFAULT 0;');
     } catch (e) { }
 
     // Create pinnedExercises table
@@ -132,8 +151,8 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
     for (const entry of workoutEntries) {
       await database.runAsync(
         `INSERT INTO workoutHistory 
-        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           entry.workoutSession,
           entry.exerciseNum,
@@ -144,10 +163,13 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
           entry.oneRM,
           entry.time,
           workoutTitle,
-          entry.pr,
+          entry.pr, // Keeping this for backward compatibility or as a general "is any PR" flag? Plan says to use specific flags. Let's keep it as is1rmPR for now or just map it.
           duration,
           entry.setType || 'N', // Default to Normal
-          entry.notes || ''
+          entry.notes || '',
+          entry.is1rmPR || 0,
+          entry.isVolumePR || 0,
+          entry.isWeightPR || 0
         ]
       );
     }
@@ -199,18 +221,41 @@ export const fetchExerciseHistory = async (exerciseID) => {
   );
 };
 
-// Check if PR
-export const calculateIfPR = async (exerciseID, oneRM) => {
+// Get current PRs for an exercise
+export const getExercisePRs = async (exerciseID) => {
   const database = await getDb();
+
+  // Get max values
   const result = await database.getFirstAsync(
     `SELECT 
-      MAX(oneRM) as maxOneRM
+      MAX(oneRM) as maxOneRM,
+      MAX(weight * reps) as maxVolume,
+      MAX(weight) as maxWeight
      FROM workoutHistory
-     WHERE exerciseID = ?;`,
+     WHERE exerciseID = ? AND reps > 0;`,
     [exerciseID]
   );
 
-  const maxOneRM = result?.maxOneRM || 0;
+  // Get the max reps at the max weight
+  const maxWeight = result?.maxWeight || 0;
+  const repsAtMaxWeight = maxWeight > 0 ? await database.getFirstAsync(
+    `SELECT MAX(reps) as maxReps
+     FROM workoutHistory
+     WHERE exerciseID = ? AND weight = ?;`,
+    [exerciseID, maxWeight]
+  ) : null;
+
+  return {
+    maxOneRM: result?.maxOneRM || 0,
+    maxVolume: result?.maxVolume || 0,
+    maxWeight: maxWeight,
+    maxRepsAtMaxWeight: repsAtMaxWeight?.maxReps || 0
+  };
+};
+
+// Check if PR (Deprecated in favor of manual check with getExercisePRs, but keeping for compatibility if needed)
+export const calculateIfPR = async (exerciseID, oneRM) => {
+  const { maxOneRM } = await getExercisePRs(exerciseID);
   return oneRM > maxOneRM ? 1 : 0;
 };
 
@@ -388,6 +433,8 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
           // Track best 1RM per exercise across all imports
           const exerciseBestOneRM = new Map(); // Map<exerciseID, bestOneRM>
+          const exerciseBestVolume = new Map(); // Map<exerciseID, bestVolume>
+          const exerciseBestWeight = new Map(); // Map<exerciseID, bestWeight>
           let importedCount = 0;
 
           await database.withTransactionAsync(async () => {
@@ -419,34 +466,63 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                 // Get Note for this exercise
                 const note = sessionNotes ? sessionNotes.get(exerciseName) : '';
 
-                // Find the set with max 1RM in this workout for this exercise
+                // Check if this is a PR (beats historical best for this exercise)
+                const historicalBestOneRM = exerciseBestOneRM.get(exerciseID) || 0;
+                const historicalBestVolume = exerciseBestVolume.get(exerciseID) || 0;
+                const historicalBestWeight = exerciseBestWeight.get(exerciseID) || 0;
+
+                // Find maxes in this workout
                 let maxOneRMInWorkout = 0;
-                let bestSetIndex = 0;
+                let maxVolumeInWorkout = 0;
+                let maxWeightInWorkout = 0;
+                let bestSetIndexOneRM = -1;
+                let bestSetIndexVolume = -1;
+                let bestSetIndexWeight = -1;
+
                 sets.forEach((set, idx) => {
+                  // 1RM
                   if (set.oneRM > maxOneRMInWorkout) {
                     maxOneRMInWorkout = set.oneRM;
-                    bestSetIndex = idx;
+                    bestSetIndexOneRM = idx;
+                  }
+                  // Volume (Weight * Reps)
+                  const volume = set.weight * set.reps;
+                  if (volume > maxVolumeInWorkout) {
+                    maxVolumeInWorkout = volume;
+                    bestSetIndexVolume = idx;
+                  }
+                  // Weight (Ignore 0 reps)
+                  if (set.reps > 0 && set.weight > maxWeightInWorkout) {
+                    maxWeightInWorkout = set.weight;
+                    bestSetIndexWeight = idx;
                   }
                 });
 
-                // Check if this is a PR (beats historical best for this exercise)
-                const historicalBest = exerciseBestOneRM.get(exerciseID) || 0;
-                const isPR = maxOneRMInWorkout > historicalBest;
+                const is1rmPR = maxOneRMInWorkout > historicalBestOneRM;
+                const isVolumePR = maxVolumeInWorkout > historicalBestVolume;
+                const isWeightPR = maxWeightInWorkout > historicalBestWeight;
 
-                // Update historical best if this is a PR
-                if (isPR) {
-                  exerciseBestOneRM.set(exerciseID, maxOneRMInWorkout);
-                }
+                // Update historical bests if PRs
+                if (is1rmPR) exerciseBestOneRM.set(exerciseID, maxOneRMInWorkout);
+                if (isVolumePR) exerciseBestVolume.set(exerciseID, maxVolumeInWorkout);
+                if (isWeightPR) exerciseBestWeight.set(exerciseID, maxWeightInWorkout);
 
-                // Insert all sets, marking only the best one as PR if applicable
+                // Insert all sets
                 for (let i = 0; i < sets.length; i++) {
                   const set = sets[i];
-                  const isThisSetPR = (isPR && i === bestSetIndex) ? 1 : 0;
+                  const isThisSet1rmPR = (is1rmPR && i === bestSetIndexOneRM) ? 1 : 0;
+                  const isThisSetVolumePR = (isVolumePR && i === bestSetIndexVolume) ? 1 : 0;
+                  const isThisSetWeightPR = (isWeightPR && i === bestSetIndexWeight) ? 1 : 0;
+
+                  // Legacy PR flag (if it's any kind of PR, or just 1RM? Let's stick to 1RM for legacy or maybe OR them)
+                  // For now, let's say legacy PR = 1RM PR to avoid confusion, or maybe if any PR is hit?
+                  // The prompt says "it already does the 1RM", so let's keep `pr` as 1RM PR for backward compat.
+                  const isLegacyPR = isThisSet1rmPR;
 
                   await database.runAsync(
                     `INSERT INTO workoutHistory 
-                    (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                    (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
                     [
                       workoutSession,
                       1,
@@ -457,10 +533,13 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                       set.oneRM,
                       set.date,
                       set.workoutTitle,
-                      isThisSetPR,
+                      isLegacyPR,
                       set.durationMinutes,
                       set.setType,
-                      note // Save note to every set for now
+                      note,
+                      isThisSet1rmPR,
+                      isThisSetVolumePR,
+                      isThisSetWeightPR
                     ]
                   );
 

@@ -11,7 +11,7 @@ import { AntDesign, Feather, Ionicons } from '@expo/vector-icons';
 
 import * as NavigationBar from 'expo-navigation-bar';
 
-import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase } from '../components/db';
+import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs } from '../components/db';
 
 
 import ExerciseEditable from '../components/exerciseEditable'
@@ -87,26 +87,38 @@ const Current = () => {
 
             const workoutEntries = [];
             let globalExerciseNum = 1;
-            // --- STEP 1: Determine the maximum 1RM for each exercise in this workout ---
-            // This map will store: { exerciseID: maxOneRM_in_this_workout }
+            // --- STEP 1: Determine the maximums for each exercise in this workout ---
+            // Maps to store: { exerciseID: maxVal_in_this_workout }
             const maxOneRmsInWorkout = new Map();
+            const maxVolumesInWorkout = new Map();
+            const maxWeightsInWorkout = new Map();
 
             for (const exerciseGroup of filteredWorkout) {
                 for (const exercise of exerciseGroup.exercises) {
                     let maxOneRM = 0;
+                    let maxVolume = 0;
+                    let maxWeight = 0;
+
                     for (const set of exercise.sets) {
-                        // Calculate One Rep Max for the set
+                        // Calculate One Rep Max
                         const calculatedOneRM = calculateOneRepMax(
                             parseFloat(set.weight),
                             parseInt(set.reps)
                         );
+                        if (calculatedOneRM > maxOneRM) maxOneRM = calculatedOneRM;
 
-                        // Update the maximum 1RM found for this exercise in this session
-                        if (calculatedOneRM > maxOneRM) {
-                            maxOneRM = calculatedOneRM;
+                        // Calculate Volume
+                        const volume = parseFloat(set.weight) * parseInt(set.reps);
+                        if (volume > maxVolume) maxVolume = volume;
+
+                        // Calculate Weight (ignore 0 reps)
+                        if (parseInt(set.reps) > 0 && parseFloat(set.weight) > maxWeight) {
+                            maxWeight = parseFloat(set.weight);
                         }
                     }
                     maxOneRmsInWorkout.set(exercise.exerciseID, maxOneRM);
+                    maxVolumesInWorkout.set(exercise.exerciseID, maxVolume);
+                    maxWeightsInWorkout.set(exercise.exerciseID, maxWeight);
                 }
             }
 
@@ -117,23 +129,66 @@ const Current = () => {
                 for (const exercise of exerciseGroup.exercises) {
                     let setNum = 1;
 
-                    // Retrieve the maximum 1RM achieved for this exercise in the current workout
+                    // Retrieve the maximums achieved for this exercise in the current workout
                     const maxOneRMForExercise = maxOneRmsInWorkout.get(exercise.exerciseID);
+                    const maxVolumeForExercise = maxVolumesInWorkout.get(exercise.exerciseID);
+                    const maxWeightForExercise = maxWeightsInWorkout.get(exercise.exerciseID);
 
-                    // Only check the PR status *once* for the best set of this exercise in the session
-                    // We do this check *before* the set loop for efficiency.
-                    const isOverallPR = await calculateIfPR(exercise.exerciseID, maxOneRMForExercise);
+                    // Check PR status against DB history
+                    // We need to fetch current bests from DB first.
+                    // Since we can't easily do this inside the loop efficiently without refactoring to fetch all at once,
+                    // we'll fetch per exercise. It's async, so we need to await.
+                    // Ideally we'd fetch all relevant exercises' PRs in one go, but for now let's use the helper.
+                    // We need to import getExercisePRs from db.js (make sure to update imports!)
+
+                    // Note: calculateIfPR is deprecated in our plan, we should use getExercisePRs.
+                    // But we need to import it. I'll assume I can add it to imports later or it's available.
+                    // Wait, I need to update imports in this file too.
+
+                    // Let's assume we use a new helper or existing one.
+                    // I'll use a direct DB call or the new helper if I can add it to imports.
+                    // Since I can't see imports here easily without scrolling up, I'll assume I need to add `getExercisePRs` to imports.
+
+                    // Actually, let's use the existing `calculateIfPR` for 1RM if needed, but we need the others.
+                    // I'll assume I'll update the imports in a separate step or use the `db` module if imported as `*`.
+                    // It's imported as named exports. I will need to update imports.
+
+                    // For now, let's write the logic assuming `getExercisePRs` is available.
+
+                    // Fetch historical bests
+                    // We need to do this carefully. `getExercisePRs` returns { maxOneRM, maxVolume, maxWeight }
+                    // We need to import it.
+
+                    // Let's use a placeholder for now and I'll update imports in next step.
+                    // Or I can try to use `calculateIfPR` if I modify it? No, `getExercisePRs` is better.
+
+                    // Wait, I can't use `getExercisePRs` if it's not imported.
+                    // I will add it to the imports in the next step.
+
+                    // Let's assume `getExercisePRs` is imported.
+                    const historicalPRs = await getExercisePRs(exercise.exerciseID);
+
+                    const isOverall1rmPR = maxOneRMForExercise > historicalPRs.maxOneRM;
+                    const isOverallVolumePR = maxVolumeForExercise > historicalPRs.maxVolume;
+                    const isOverallWeightPR = maxWeightForExercise > historicalPRs.maxWeight;
 
                     for (const set of exercise.sets) {
-                        // Calculate One Rep Max for the set (must be done again as it's not stored)
+                        // Calculate metrics for the set
                         const calculatedOneRM = calculateOneRepMax(
                             parseFloat(set.weight),
                             parseInt(set.reps)
                         );
+                        const volume = parseFloat(set.weight) * parseInt(set.reps);
+                        const weight = parseFloat(set.weight);
+                        const reps = parseInt(set.reps);
 
-                        // Determine if this specific set is the *single* best set of the exercise 
-                        // in this workout AND if that best set is a new personal record overall.
-                        const isPR = (calculatedOneRM === maxOneRMForExercise && isOverallPR) ? 1 : 0;
+                        // Determine if this specific set is the PR-setting set
+                        const is1rmPR = (calculatedOneRM === maxOneRMForExercise && isOverall1rmPR) ? 1 : 0;
+                        const isVolumePR = (volume === maxVolumeForExercise && isOverallVolumePR) ? 1 : 0;
+                        const isWeightPR = (reps > 0 && weight === maxWeightForExercise && isOverallWeightPR) ? 1 : 0;
+
+                        // Legacy PR flag (1RM)
+                        const isPR = is1rmPR;
 
                         // Prepare entry for database
                         workoutEntries.push({
@@ -144,11 +199,14 @@ const Current = () => {
                             weight: set.weight,
                             reps: set.reps,
                             oneRM: calculatedOneRM,
-                            time: new Date().toISOString(), // Current timestamp
+                            time: new Date().toISOString(),
                             name: workoutTitle,
-                            pr: isPR, // 1 only for the single best set that beats the previous max
+                            pr: isPR,
                             setType: set.setType || 'N',
-                            notes: exercise.notes || ''
+                            notes: exercise.notes || '',
+                            is1rmPR: is1rmPR,
+                            isVolumePR: isVolumePR,
+                            isWeightPR: isWeightPR
                         });
 
                         setNum++;

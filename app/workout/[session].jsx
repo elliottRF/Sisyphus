@@ -164,7 +164,41 @@ const WorkoutDetail = () => {
                                                 <Text style={styles.setX}>×</Text>
                                                 <Text style={styles.setReps}>{set.reps} <Text style={styles.unit}>reps</Text></Text>
                                             </View>
-                                            {set.pr === 1 && (
+                                            {set.is1rmPR === 1 && (
+                                                <LinearGradient
+                                                    colors={[COLORS.primary, COLORS.secondary]}
+                                                    start={{ x: 0, y: 0 }}
+                                                    end={{ x: 1, y: 1 }}
+                                                    style={styles.prBadge}
+                                                >
+                                                    <MaterialCommunityIcons name="trophy" size={12} color="#fff" />
+                                                    <Text style={styles.prText}>1RM</Text>
+                                                </LinearGradient>
+                                            )}
+                                            {set.isVolumePR === 1 && (
+                                                <LinearGradient
+                                                    colors={['#4834d4', '#686de0']}
+                                                    start={{ x: 0, y: 0 }}
+                                                    end={{ x: 1, y: 1 }}
+                                                    style={styles.prBadge}
+                                                >
+                                                    <MaterialCommunityIcons name="chart-bar" size={12} color="#fff" />
+                                                    <Text style={styles.prText}>VOL</Text>
+                                                </LinearGradient>
+                                            )}
+                                            {set.isWeightPR === 1 && (
+                                                <LinearGradient
+                                                    colors={['#6ab04c', '#badc58']}
+                                                    start={{ x: 0, y: 0 }}
+                                                    end={{ x: 1, y: 1 }}
+                                                    style={styles.prBadge}
+                                                >
+                                                    <MaterialCommunityIcons name="weight-kilogram" size={12} color="#fff" />
+                                                    <Text style={styles.prText}>KG</Text>
+                                                </LinearGradient>
+                                            )}
+                                            {/* Legacy PR support or fallback */}
+                                            {set.pr === 1 && !set.is1rmPR && !set.isVolumePR && !set.isWeightPR && (
                                                 <LinearGradient
                                                     colors={[COLORS.primary, COLORS.secondary]}
                                                     start={{ x: 0, y: 0 }}
