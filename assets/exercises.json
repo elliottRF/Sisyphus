@@ -7,416 +7,524 @@
   },
   {
     "exerciseID": 2,
-    "name": "Incline Dumbbell Press",
+    "name": "Incline Curl (Dumbbell)",
+    "targetMuscle": "Biceps",
+    "accessoryMuscles": "Forearm"
+  },
+  {
+    "exerciseID": 3,
+    "name": "Incline Bench Press (Dumbbell)",
     "targetMuscle": "Chest",
     "accessoryMuscles": "Deltoids,Triceps"
   },
   {
-    "exerciseID": 3,
-    "name": "Dumbbell Fly",
-    "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids"
-  },
-  {
     "exerciseID": 4,
-    "name": "Push-ups (Standard)",
-    "targetMuscle": "Chest",
-    "accessoryMuscles": "Triceps,Deltoids,Abs"
+    "name": "Leg Extension (Machine)",
+    "targetMuscle": "Quadriceps",
+    "accessoryMuscles": ""
   },
   {
     "exerciseID": 5,
-    "name": "Cable Crossover",
-    "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids"
+    "name": "Triceps Pushdown (Cable - V Bar)",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": ""
   },
   {
     "exerciseID": 6,
-    "name": "Barbell Overhead Press (Standing)",
-    "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps,Trapezius,Abs"
-  },
-  {
-    "exerciseID": 7,
-    "name": "Dumbbell Lateral Raise",
-    "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Trapezius"
-  },
-  {
-    "exerciseID": 8,
-    "name": "Dumbbell Front Raise",
-    "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Trapezius"
-  },
-  {
-    "exerciseID": 9,
-    "name": "Face Pulls (Cable)",
-    "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Upper-back,Trapezius"
-  },
-  {
-    "exerciseID": 10,
-    "name": "Arnold Press",
-    "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps,Upper-back"
-  },
-  {
-    "exerciseID": 11,
-    "name": "Pull-ups (Wide-Grip)",
-    "targetMuscle": "Upper-back",
-    "accessoryMuscles": "Biceps,Forearm,Abs"
-  },
-  {
-    "exerciseID": 12,
     "name": "Lat Pulldown (Cable)",
     "targetMuscle": "Upper-back",
     "accessoryMuscles": "Biceps,Forearm"
   },
   {
-    "exerciseID": 13,
-    "name": "Bent-Over Rows (Barbell)",
-    "targetMuscle": "Upper-back",
-    "accessoryMuscles": "Biceps,Forearm,Trapezius"
+    "exerciseID": 7,
+    "name": "Lateral Raise (Dumbbell)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": "Trapezius"
   },
   {
-    "exerciseID": 14,
+    "exerciseID": 8,
+    "name": "Incline Bench Press (Smith Machine)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": "Deltoids,Triceps"
+  },
+  {
+    "exerciseID": 9,
     "name": "Seated Row (Cable)",
     "targetMuscle": "Upper-back",
     "accessoryMuscles": "Biceps,Forearm"
   },
   {
-    "exerciseID": 15,
-    "name": "Deadlift (Conventional)",
-    "targetMuscle": "Lower-back",
-    "accessoryMuscles": "Gluteal,Hamstring,Trapezius,Forearm,Quadriceps"
+    "exerciseID": 10,
+    "name": "Romanian Deadlift (Barbell)",
+    "targetMuscle": "Hamstring",
+    "accessoryMuscles": "Gluteal,Lower-back"
   },
   {
-    "exerciseID": 16,
-    "name": "Hyperextensions (45-Degree)",
-    "targetMuscle": "Lower-back",
-    "accessoryMuscles": "Gluteal,Hamstring"
+    "exerciseID": 11,
+    "name": "Neutral Grip Lat Pulldown",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Forearm"
   },
   {
-    "exerciseID": 17,
-    "name": "Good Mornings",
-    "targetMuscle": "Lower-back",
-    "accessoryMuscles": "Hamstring,Gluteal"
-  },
-  {
-    "exerciseID": 18,
-    "name": "Barbell Shrugs",
-    "targetMuscle": "Trapezius",
-    "accessoryMuscles": "Neck,Forearm"
-  },
-  {
-    "exerciseID": 19,
-    "name": "Farmers Walk",
-    "targetMuscle": "Trapezius",
-    "accessoryMuscles": "Forearm,Neck,Abs"
-  },
-  {
-    "exerciseID": 20,
-    "name": "Barbell Curl",
-    "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
-  },
-  {
-    "exerciseID": 21,
+    "exerciseID": 12,
     "name": "Hammer Curl (Dumbbell)",
     "targetMuscle": "Biceps",
     "accessoryMuscles": "Forearm"
   },
   {
-    "exerciseID": 22,
-    "name": "Preacher Curl (Machine)",
+    "exerciseID": 13,
+    "name": "Triceps Extension",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": ""
+  },
+  {
+    "exerciseID": 14,
+    "name": "Hammer Curl (Cable)",
     "targetMuscle": "Biceps",
     "accessoryMuscles": "Forearm"
   },
   {
-    "exerciseID": 23,
-    "name": "Triceps Pushdown (Cable)",
+    "exerciseID": 15,
+    "name": "Triceps Pushdown (Cable - Straight Bar)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": ""
   },
   {
-    "exerciseID": 24,
-    "name": "Overhead Triceps Extension (Dumbbell)",
-    "targetMuscle": "Triceps",
+    "exerciseID": 16,
+    "name": "Bent Over Row (Smith Machine)",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Lower-back"
+  },
+  {
+    "exerciseID": 17,
+    "name": "Incline Chest Press (Machine)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": "Deltoids,Triceps"
+  },
+  {
+    "exerciseID": 18,
+    "name": "Lateral Raise (Cable)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": "Trapezius"
+  },
+  {
+    "exerciseID": 19,
+    "name": "Pull Up (Assisted)",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Abs"
+  },
+  {
+    "exerciseID": 20,
+    "name": "Chest Fly",
+    "targetMuscle": "Chest",
     "accessoryMuscles": "Deltoids"
   },
   {
-    "exerciseID": 25,
-    "name": "Skull Crushers (Barbell)",
+    "exerciseID": 21,
+    "name": "Squat (Barbell)",
+    "targetMuscle": "Quadriceps",
+    "accessoryMuscles": "Gluteal,Hamstring,Lower-back"
+  },
+  {
+    "exerciseID": 22,
+    "name": "Skullcrusher (Dumbbell)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": ""
+  },
+  {
+    "exerciseID": 23,
+    "name": "Hip Abductor (Machine)",
+    "targetMuscle": "Gluteal",
+    "accessoryMuscles": ""
+  },
+  {
+    "exerciseID": 24,
+    "name": "Seated Overhead Press (Dumbbell)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": "Triceps,Trapezius"
+  },
+  {
+    "exerciseID": 25,
+    "name": "Iso-Lateral Row (Machine)",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Forearm"
   },
   {
     "exerciseID": 26,
-    "name": "Close-Grip Bench Press",
-    "targetMuscle": "Triceps",
-    "accessoryMuscles": "Chest,Deltoids"
+    "name": "Chest Fly (Machine)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": ""
   },
   {
     "exerciseID": 27,
-    "name": "Wrist Curl (Barbell)",
-    "targetMuscle": "Forearm",
-    "accessoryMuscles": "Biceps"
+    "name": "Decline Crunch",
+    "targetMuscle": "Abs",
+    "accessoryMuscles": "Obliques"
   },
   {
     "exerciseID": 28,
-    "name": "Reverse Wrist Curl",
-    "targetMuscle": "Forearm",
-    "accessoryMuscles": "Biceps"
+    "name": "Preacher Curl (Barbell)",
+    "targetMuscle": "Biceps",
+    "accessoryMuscles": "Forearm"
   },
   {
     "exerciseID": 29,
-    "name": "Hanging Leg Raise",
-    "targetMuscle": "Abs",
-    "accessoryMuscles": "Obliques,Forearm"
+    "name": "Shoulder Press (Plate Loaded)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": "Triceps,Trapezius"
   },
   {
     "exerciseID": 30,
-    "name": "Crunches",
-    "targetMuscle": "Abs",
-    "accessoryMuscles": "Obliques"
+    "name": "Seated Lateral Raise (Dumbbell)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": ""
   },
   {
     "exerciseID": 31,
-    "name": "Plank (Standard)",
-    "targetMuscle": "Abs",
-    "accessoryMuscles": "Obliques,Lower-back,Neck"
+    "name": "Chest Press (Machine)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": "Deltoids,Triceps"
   },
   {
     "exerciseID": 32,
-    "name": "Machine Ab Crunch",
-    "targetMuscle": "Abs",
-    "accessoryMuscles": "Obliques"
+    "name": "Supinating Incline Curl (Dumbbell)",
+    "targetMuscle": "Biceps",
+    "accessoryMuscles": "Forearm"
   },
   {
     "exerciseID": 33,
-    "name": "Russian Twists (Weighted)",
-    "targetMuscle": "Obliques",
-    "accessoryMuscles": "Abs,Lower-back"
+    "name": "Lateral Raise (Machine)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": ""
   },
   {
     "exerciseID": 34,
-    "name": "Side Plank",
-    "targetMuscle": "Obliques",
-    "accessoryMuscles": "Abs,Deltoids"
-  },
-  {
-    "exerciseID": 35,
-    "name": "Cable Woodchoppers (High-to-Low)",
-    "targetMuscle": "Obliques",
-    "accessoryMuscles": "Abs,Deltoids"
-  },
-  {
-    "exerciseID": 36,
-    "name": "Barbell Squat (High-Bar)",
-    "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Hamstring,Lower-back,Abs"
-  },
-  {
-    "exerciseID": 37,
-    "name": "Leg Press",
-    "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Hamstring"
-  },
-  {
-    "exerciseID": 38,
-    "name": "Leg Extension (Machine)",
-    "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Tibialis"
-  },
-  {
-    "exerciseID": 39,
-    "name": "Split Squat (Dumbbell)",
-    "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Hamstring,Calves"
-  },
-  {
-    "exerciseID": 40,
-    "name": "Pistol Squat (Bodyweight)",
-    "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Hamstring,Tibialis"
-  },
-  {
-    "exerciseID": 41,
-    "name": "Romanian Deadlift (Dumbbell)",
-    "targetMuscle": "Hamstring",
-    "accessoryMuscles": "Gluteal,Lower-back"
-  },
-  {
-    "exerciseID": 42,
     "name": "Seated Leg Curl (Machine)",
     "targetMuscle": "Hamstring",
     "accessoryMuscles": "Calves"
   },
   {
-    "exerciseID": 43,
-    "name": "Glute Ham Raise",
-    "targetMuscle": "Hamstring",
-    "accessoryMuscles": "Gluteal,Lower-back"
+    "exerciseID": 35,
+    "name": "Strict Military Press (Barbell)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": "Triceps,Abs"
   },
   {
-    "exerciseID": 44,
-    "name": "Kettlebell Swing",
-    "targetMuscle": "Gluteal",
-    "accessoryMuscles": "Hamstring,Lower-back,Deltoids"
-  },
-  {
-    "exerciseID": 45,
-    "name": "Hip Thrust (Barbell)",
-    "targetMuscle": "Gluteal",
-    "accessoryMuscles": "Hamstring,Quadriceps"
-  },
-  {
-    "exerciseID": 46,
-    "name": "Glute Bridge",
-    "targetMuscle": "Gluteal",
-    "accessoryMuscles": "Hamstring,Lower-back"
-  },
-  {
-    "exerciseID": 47,
-    "name": "Cable Glute Kickbacks",
-    "targetMuscle": "Gluteal",
-    "accessoryMuscles": "Hamstring"
-  },
-  {
-    "exerciseID": 48,
-    "name": "Standing Calf Raise (Machine)",
-    "targetMuscle": "Calves",
-    "accessoryMuscles": "Tibialis"
-  },
-  {
-    "exerciseID": 49,
-    "name": "Seated Calf Raise (Machine)",
-    "targetMuscle": "Calves",
-    "accessoryMuscles": "Tibialis"
-  },
-  {
-    "exerciseID": 50,
-    "name": "Donkey Calf Raise",
-    "targetMuscle": "Calves",
-    "accessoryMuscles": "Hamstring"
-  },
-  {
-    "exerciseID": 51,
-    "name": "Machine Adductor",
-    "targetMuscle": "Adductors",
-    "accessoryMuscles": "Gluteal"
-  },
-  {
-    "exerciseID": 52,
-    "name": "Sumo Squat (Dumbbell)",
-    "targetMuscle": "Adductors",
-    "accessoryMuscles": "Gluteal,Quadriceps,Hamstring"
-  },
-  {
-    "exerciseID": 53,
-    "name": "Cable Adduction",
-    "targetMuscle": "Adductors",
-    "accessoryMuscles": "Quadriceps"
-  },
-  {
-    "exerciseID": 54,
-    "name": "Seated Calf Stretch/Raise",
-    "targetMuscle": "Tibialis",
-    "accessoryMuscles": "Calves"
-  },
-  {
-    "exerciseID": 55,
-    "name": "Tibialis Anterior Raise (Weighted)",
-    "targetMuscle": "Tibialis",
-    "accessoryMuscles": "Quadriceps"
-  },
-  {
-    "exerciseID": 56,
-    "name": "Neck Flexion (Bodyweight)",
-    "targetMuscle": "Neck",
-    "accessoryMuscles": "Trapezius"
-  },
-  {
-    "exerciseID": 57,
-    "name": "Neck Extension (Manual Resistance)",
-    "targetMuscle": "Neck",
-    "accessoryMuscles": "Trapezius"
-  },
-  {
-    "exerciseID": 58,
-    "name": "Floor Press (Dumbbell)",
-    "targetMuscle": "Chest",
-    "accessoryMuscles": "Triceps"
-  },
-  {
-    "exerciseID": 59,
-    "name": "Reverse Grip Barbell Row",
-    "targetMuscle": "Upper-back",
-    "accessoryMuscles": "Biceps,Trapezius"
-  },
-  {
-    "exerciseID": 60,
-    "name": "Goblet Squat (Kettlebell)",
-    "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Abs"
-  },
-  {
-    "exerciseID": 61,
-    "name": "Single-Leg Romanian Deadlift (Dumbbell)",
-    "targetMuscle": "Hamstring",
-    "accessoryMuscles": "Gluteal,Lower-back,Abs"
-  },
-  {
-    "exerciseID": 62,
-    "name": "Hip Abduction (Machine)",
-    "targetMuscle": "Gluteal",
-    "accessoryMuscles": "Adductors"
-  },
-  {
-    "exerciseID": 63,
-    "name": "Sissy Squat (Machine)",
-    "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Tibialis"
-  },
-  {
-    "exerciseID": 64,
-    "name": "Zottman Curl",
+    "exerciseID": 36,
+    "name": "Standing Bicep Curl (Ez Bar)",
     "targetMuscle": "Biceps",
     "accessoryMuscles": "Forearm"
   },
   {
-    "exerciseID": 65,
-    "name": "V-Ups",
-    "targetMuscle": "Abs",
-    "accessoryMuscles": "Obliques"
+    "exerciseID": 37,
+    "name": "Bicep Curl (Cable)",
+    "targetMuscle": "Biceps",
+    "accessoryMuscles": "Forearm"
   },
   {
-    "exerciseID": 66,
-    "name": "Calf Press (Leg Press Machine)",
-    "targetMuscle": "Calves",
-    "accessoryMuscles": "Tibialis"
+    "exerciseID": 38,
+    "name": "Bent Over Row (Barbell)",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Lower-back"
   },
   {
-    "exerciseID": 67,
-    "name": "Rack Pull",
-    "targetMuscle": "Trapezius",
-    "accessoryMuscles": "Lower-back,Forearm"
+    "exerciseID": 39,
+    "name": "Pull Up",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Abs"
   },
   {
-    "exerciseID": 68,
-    "name": "Towel Wrist Twist",
+    "exerciseID": 40,
+    "name": "Seated Leg Press (Machine)",
+    "targetMuscle": "Quadriceps",
+    "accessoryMuscles": "Gluteal,Hamstring"
+  },
+  {
+    "exerciseID": 41,
+    "name": "Close Grip Bench Press (Smith Machine)",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": "Chest,Deltoids"
+  },
+  {
+    "exerciseID": 42,
+    "name": "Incline Bench Press (Barbell)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": "Deltoids,Triceps"
+  },
+  {
+    "exerciseID": 43,
+    "name": "Wide Grip Seated Row (Cable)",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Trapezius"
+  },
+  {
+    "exerciseID": 44,
+    "name": "Bayesian Curl (Cable)",
+    "targetMuscle": "Biceps",
+    "accessoryMuscles": "Forearm"
+  },
+  {
+    "exerciseID": 45,
+    "name": "Incline Chest Fly (Dumbbell)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": "Deltoids"
+  },
+  {
+    "exerciseID": 46,
+    "name": "Lying Leg Curl (Machine)",
+    "targetMuscle": "Hamstring",
+    "accessoryMuscles": "Calves"
+  },
+  {
+    "exerciseID": 47,
+    "name": "Neutral Grip Pull Up (Assisted)",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Abs"
+  },
+  {
+    "exerciseID": 48,
+    "name": "JM Press (Smith Machine)",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": "Chest,Deltoids"
+  },
+  {
+    "exerciseID": 49,
+    "name": "Rear Delt Lateral Raise (Dumbbell)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": "Trapezius"
+  },
+  {
+    "exerciseID": 50,
+    "name": "Reverse Curl (Cable)",
     "targetMuscle": "Forearm",
     "accessoryMuscles": "Biceps"
   },
   {
-    "exerciseID": 69,
-    "name": "Reverse Pec Deck Fly",
+    "exerciseID": 51,
+    "name": "Flat Leg Raise",
+    "targetMuscle": "Abs",
+    "accessoryMuscles": "Obliques"
+  },
+  {
+    "exerciseID": 52,
+    "name": "Bench Press (Smith Machine)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": "Triceps,Deltoids"
+  },
+  {
+    "exerciseID": 53,
+    "name": "Cable Curl (Ez Bar)",
+    "targetMuscle": "Biceps",
+    "accessoryMuscles": "Forearm"
+  },
+  {
+    "exerciseID": 54,
+    "name": "Bicep Curl (Barbell)",
+    "targetMuscle": "Biceps",
+    "accessoryMuscles": "Forearm"
+  },
+  {
+    "exerciseID": 55,
+    "name": "Seated Calf Raise (Plate Loaded)",
+    "targetMuscle": "Calves",
+    "accessoryMuscles": ""
+  },
+  {
+    "exerciseID": 56,
+    "name": "Overhead Tricep Extension (Cable)",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": ""
+  },
+  {
+    "exerciseID": 57,
+    "name": "Hip Adductor (Machine)",
+    "targetMuscle": "Adductors",
+    "accessoryMuscles": "Gluteal"
+  },
+  {
+    "exerciseID": 58,
+    "name": "Skullcrusher (Barbell)",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": ""
+  },
+  {
+    "exerciseID": 59,
+    "name": "Neutral Grip Pull Up",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Abs"
+  },
+  {
+    "exerciseID": 60,
+    "name": "Seated Dip",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": "Chest,Deltoids"
+  },
+  {
+    "exerciseID": 61,
+    "name": "Lat Pulldown (Plate Loaded)",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Forearm"
+  },
+  {
+    "exerciseID": 62,
+    "name": "Bicep Curl (Machine)",
+    "targetMuscle": "Biceps",
+    "accessoryMuscles": "Forearm"
+  },
+  {
+    "exerciseID": 63,
+    "name": "Decline Bench Press (Barbell)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": "Triceps,Deltoids"
+  },
+  {
+    "exerciseID": 64,
+    "name": "Face Pull (Cable)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Upper-back,Trapezius"
+    "accessoryMuscles": "Trapezius,Upper-back"
+  },
+  {
+    "exerciseID": 65,
+    "name": "T Bar Row",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Lower-back"
+  },
+  {
+    "exerciseID": 66,
+    "name": "Triceps Extension (Cable)",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": ""
+  },
+  {
+    "exerciseID": 67,
+    "name": "Deadlift (Barbell)",
+    "targetMuscle": "Lower-back",
+    "accessoryMuscles": "Hamstring,Gluteal,Quadriceps,Trapezius"
+  },
+  {
+    "exerciseID": 68,
+    "name": "Triceps Dip (Assisted)",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": "Chest,Deltoids"
+  },
+  {
+    "exerciseID": 69,
+    "name": "Bench Press (Dumbbell)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": "Triceps,Deltoids"
   },
   {
     "exerciseID": 70,
-    "name": "Decline Bench Press",
+    "name": "Chest Fly (Dumbbell)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": "Deltoids"
+  },
+  {
+    "exerciseID": 71,
+    "name": "Close Grip Bench Press (Barbell)",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": "Chest,Deltoids"
+  },
+  {
+    "exerciseID": 72,
+    "name": "Standing Calf Raise (Smith Machine)",
+    "targetMuscle": "Calves",
+    "accessoryMuscles": ""
+  },
+  {
+    "exerciseID": 73,
+    "name": "Chin Up",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Abs"
+  },
+  {
+    "exerciseID": 74,
+    "name": "Hanging Leg Raise",
+    "targetMuscle": "Abs",
+    "accessoryMuscles": "Obliques"
+  },
+  {
+    "exerciseID": 75,
+    "name": "Seated Wide-Grip Row (Cable)",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Trapezius"
+  },
+  {
+    "exerciseID": 76,
+    "name": "Shoulder Press (Machine)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": "Triceps"
+  },
+  {
+    "exerciseID": 77,
+    "name": "Lat Pulldown (Single Arm)",
+    "targetMuscle": "Upper-back",
+    "accessoryMuscles": "Biceps,Abs"
+  },
+  {
+    "exerciseID": 78,
+    "name": "Leg Press",
+    "targetMuscle": "Quadriceps",
+    "accessoryMuscles": "Gluteal,Hamstring"
+  },
+  {
+    "exerciseID": 79,
+    "name": "Sit Up",
+    "targetMuscle": "Abs",
+    "accessoryMuscles": "Obliques"
+  },
+  {
+    "exerciseID": 80,
+    "name": "Triceps Dip",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": "Chest,Deltoids"
+  },
+  {
+    "exerciseID": 81,
+    "name": "Calf Press on Seated Leg Press",
+    "targetMuscle": "Calves",
+    "accessoryMuscles": ""
+  },
+  {
+    "exerciseID": 82,
+    "name": "Crunch (Machine)",
+    "targetMuscle": "Abs",
+    "accessoryMuscles": "Obliques"
+  },
+  {
+    "exerciseID": 83,
+    "name": "Goblet Squat (Kettlebell)",
+    "targetMuscle": "Quadriceps",
+    "accessoryMuscles": "Gluteal,Lower-back"
+  },
+  {
+    "exerciseID": 84,
+    "name": "Hanging Knee Raise",
+    "targetMuscle": "Abs",
+    "accessoryMuscles": "Obliques"
+  },
+  {
+    "exerciseID": 85,
+    "name": "Iso-Lateral Chest Press (Machine)",
     "targetMuscle": "Chest",
     "accessoryMuscles": "Triceps,Deltoids"
+  },
+  {
+    "exerciseID": 86,
+    "name": "Pec Deck (Machine)",
+    "targetMuscle": "Chest",
+    "accessoryMuscles": ""
+  },
+  {
+    "exerciseID": 87,
+    "name": "Bicep Curl (Dumbbell)",
+    "targetMuscle": "Biceps",
+    "accessoryMuscles": "Forearm"
+  },
+  {
+    "exerciseID": 88,
+    "name": "Preacher Curl (Dumbbell)",
+    "targetMuscle": "Biceps",
+    "accessoryMuscles": "Forearm"
   }
 ]

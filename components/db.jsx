@@ -277,10 +277,10 @@ export const fetchRecentMuscleUsage = async (days) => {
     `SELECT 
       e.targetMuscle,
       e.accessoryMuscles,
-      COUNT(DISTINCT wh.setNum) as sets
+      COUNT(*) as sets
      FROM workoutHistory wh
      JOIN exercises e ON wh.exerciseID = e.exerciseID
-     WHERE wh.time >= ?
+     WHERE wh.time >= ? AND (wh.setType IS NULL OR wh.setType != 'W')
      GROUP BY wh.exerciseID, e.targetMuscle, e.accessoryMuscles;`,
     [cutoffDate.toISOString()]
   );

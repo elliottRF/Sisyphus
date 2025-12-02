@@ -76,13 +76,15 @@ const Home = () => {
             // Convert stats to body highlighter data
             const newBodyData = Object.keys(muscleStats).map(slug => {
                 const { primarySets, accessorySets } = muscleStats[slug];
+
+                // Calculate weighted score: Primary = 1, Accessory = 0.5
+                const weightedScore = primarySets + (accessorySets * 0.5);
+
                 let intensity = 0;
 
-                if (primarySets >= 3) {
+                if (weightedScore >= 3) {
                     intensity = 2; // Deep Blue
-                } else if (accessorySets >= 6) {
-                    intensity = 2; // Deep Blue
-                } else if (primarySets > 0 || accessorySets > 0) {
+                } else if (weightedScore > 0) {
                     intensity = 1; // Light Blue
                 }
 
