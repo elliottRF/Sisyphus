@@ -1,11 +1,13 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/db';
 import { COLORS, FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import ActionSheet from "react-native-actions-sheet";
+import ExerciseHistory from '../../components/exerciseHistory';
 
 const WorkoutDetail = () => {
     const { session } = useLocalSearchParams();
@@ -13,6 +15,11 @@ const WorkoutDetail = () => {
     const [workoutDetails, setWorkoutDetails] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
+
+    // ActionSheet state
+    const actionSheetRef = useRef(null);
+    const [selectedExerciseId, setSelectedExerciseId] = useState(null);
+    const [currentExerciseName, setCurrentExerciseName] = useState(null);
 
     useEffect(() => {
         const loadData = async () => {
@@ -51,11 +58,29 @@ const WorkoutDetail = () => {
     const formatDate = (dateString) => {
         if (!dateString) return '';
         return new Date(dateString).toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
+            weekday: 'short',
+            month: 'short',
             day: 'numeric',
-            year: 'numeric'
         });
+    };
+
+    const formatDuration = (minutes) => {
+        if (minutes === null || minutes === undefined) return 'N/A';
+        if (minutes === 0) return '< 1m';
+        const hrs = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        if (hrs > 0) return `${hrs}h ${mins}m`;
+        return `${mins}m`;
+    };
+
+    const showExerciseInfo = (exerciseId, exerciseName) => {
+        setSelectedExerciseId(exerciseId);
+        setCurrentExerciseName(exerciseName);
+        actionSheetRef.current?.show();
+    };
+
+    const handleCloseActionSheet = () => {
+        actionSheetRef.current?.hide();
     };
 
     if (loading) {
@@ -70,7 +95,7 @@ const WorkoutDetail = () => {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.navigate('history')} style={styles.backButton}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.text} />
                     </TouchableOpacity>
                     <Text style={styles.title}>Workout Not Found</Text>
@@ -81,30 +106,57 @@ const WorkoutDetail = () => {
 
     const workoutName = workoutDetails[0].name;
     const workoutDate = workoutDetails[0].time;
+    const workoutDuration = workoutDetails[0].duration;
     const groupedExercises = groupExercisesByName(workoutDetails);
+
+    // Calculate total PRs
+    const totalPRs = workoutDetails.reduce((acc, ex) => {
+        return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
+    }, 0);
 
     return (
         <SafeAreaView style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
 
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.navigate('history')} style={styles.backButton}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Session {session}</Text>
+                <Text style={styles.headerTitle}>Session #{session}</Text>
                 <View style={{ width: 24 }} />
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
+                {/* Dense Header Card */}
                 <View style={styles.summaryCard}>
                     <LinearGradient
                         colors={[COLORS.surface, COLORS.surface]}
-                        style={styles.summaryGradient}
+                        style={styles.summaryContent}
                     >
-                        <Text style={styles.workoutName}>{workoutName}</Text>
-                        <View style={styles.dateContainer}>
-                            <Feather name="calendar" size={16} color={COLORS.primary} />
-                            <Text style={styles.dateText}>{formatDate(workoutDate)}</Text>
+                        <View style={styles.summaryMain}>
+                            <Text style={styles.workoutName}>{workoutName}</Text>
+                            <View style={styles.statsRow}>
+                                <View style={styles.statItem}>
+                                    <Feather name="calendar" size={14} color={COLORS.textSecondary} />
+                                    <Text style={styles.statText}>{formatDate(workoutDate)}</Text>
+                                </View>
+                                <View style={styles.statDivider} />
+                                <View style={styles.statItem}>
+                                    <Feather name="clock" size={14} color={COLORS.textSecondary} />
+                                    <Text style={styles.statText}>{formatDuration(workoutDuration)}</Text>
+                                </View>
+                                {totalPRs > 0 && (
+                                    <>
+                                        <View style={styles.statDivider} />
+                                        <View style={styles.statItem}>
+                                            <MaterialCommunityIcons name="trophy" size={14} color={COLORS.primary} />
+                                            <Text style={[styles.statText, { color: COLORS.primary, fontFamily: FONTS.bold }]}>
+                                                {totalPRs} PRs
+                                            </Text>
+                                        </View>
+                                    </>
+                                )}
+                            </View>
                         </View>
                     </LinearGradient>
                 </View>
@@ -114,6 +166,7 @@ const WorkoutDetail = () => {
                         const exerciseDetails = exercisesList.find(
                             ex => ex.exerciseID === exerciseGroup[0].exerciseID
                         );
+                        const exerciseName = exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseGroup[0].exerciseID}`;
 
                         // Calculate display numbers
                         let workingSetCount = 0;
@@ -125,99 +178,113 @@ const WorkoutDetail = () => {
                             return { ...set, displayNumber: set.setType };
                         });
 
+                        const exerciseNote = exerciseGroup.find(e => e.notes)?.notes;
+
                         return (
                             <View key={index} style={styles.exerciseCard}>
-                                <LinearGradient
-                                    colors={['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']}
+                                <TouchableOpacity
+                                    activeOpacity={0.7}
+                                    onPress={() => showExerciseInfo(exerciseGroup[0].exerciseID, exerciseName)}
                                     style={styles.exerciseHeader}
                                 >
                                     <Text style={styles.exerciseName}>
-                                        {exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseGroup[0].exerciseID}`}
+                                        {exerciseName}
                                     </Text>
-                                </LinearGradient>
+                                    <Feather name="chevron-right" size={16} color={COLORS.textSecondary} />
+                                </TouchableOpacity>
 
-                                {exerciseGroup.find(e => e.notes)?.notes ? (
+                                {exerciseNote && (
                                     <View style={styles.noteContainer}>
-                                        <MaterialCommunityIcons name="sticky-note-2" size={14} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
-                                        <Text style={styles.noteText}>{exerciseGroup.find(e => e.notes).notes}</Text>
+                                        <MaterialCommunityIcons name="text" size={14} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
+                                        <Text style={styles.noteText}>{exerciseNote}</Text>
                                     </View>
-                                ) : null}
+                                )}
 
                                 <View style={styles.setsContainer}>
-                                    {setsWithDisplayNumbers.map((set, setIndex) => (
-                                        <View key={setIndex} style={styles.setRow}>
-                                            <View style={[
-                                                styles.setNumberContainer,
-                                                set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.2)' },
-                                                set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.2)' }
+                                    <View style={styles.setsHeaderRow}>
+                                        <Text style={[styles.colHeader, { width: 30, textAlign: 'center' }]}>Set</Text>
+                                        <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>kg</Text>
+                                        <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>Reps</Text>
+                                        <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>1RM</Text>
+                                        <View style={{ width: 40 }} />
+                                    </View>
+                                    {setsWithDisplayNumbers.map((set, setIndex) => {
+                                        const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+                                        return (
+                                            <View key={setIndex} style={[
+                                                styles.setRow,
+                                                setIndex % 2 === 1 && { backgroundColor: 'rgba(255,255,255,0.02)' },
+                                                isPR && { backgroundColor: 'rgba(64, 186, 173, 0.15)' }
                                             ]}>
-                                                <Text style={[
-                                                    styles.setNumber,
-                                                    set.setType === 'W' && { color: COLORS.warning },
-                                                    set.setType === 'D' && { color: COLORS.secondary }
+                                                <View style={[
+                                                    styles.setBadge,
+                                                    set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.15)' },
+                                                    set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.15)' }
                                                 ]}>
-                                                    {set.displayNumber}
-                                                </Text>
+                                                    <Text style={[
+                                                        styles.setNumber,
+                                                        set.setType === 'W' && { color: COLORS.warning },
+                                                        set.setType === 'D' && { color: COLORS.secondary }
+                                                    ]}>
+                                                        {set.displayNumber}
+                                                    </Text>
+                                                </View>
+
+                                                <Text style={styles.setWeight}>{set.weight}</Text>
+                                                <Text style={styles.setReps}>{set.reps}</Text>
+                                                <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
+
+                                                <View style={styles.prContainer}>
+                                                    {set.is1rmPR === 1 && <PRBadge type="1RM" />}
+                                                    {set.isVolumePR === 1 && <PRBadge type="VOL" />}
+                                                    {set.isWeightPR === 1 && <PRBadge type="KG" />}
+                                                </View>
                                             </View>
-                                            <View style={styles.setDetails}>
-                                                <Text style={styles.setWeight}>{set.weight} <Text style={styles.unit}>kg</Text></Text>
-                                                <Text style={styles.setX}>×</Text>
-                                                <Text style={styles.setReps}>{set.reps} <Text style={styles.unit}>reps</Text></Text>
-                                            </View>
-                                            {set.is1rmPR === 1 && (
-                                                <LinearGradient
-                                                    colors={[COLORS.primary, COLORS.secondary]}
-                                                    start={{ x: 0, y: 0 }}
-                                                    end={{ x: 1, y: 1 }}
-                                                    style={styles.prBadge}
-                                                >
-                                                    <MaterialCommunityIcons name="trophy" size={12} color="#fff" />
-                                                    <Text style={styles.prText}>1RM</Text>
-                                                </LinearGradient>
-                                            )}
-                                            {set.isVolumePR === 1 && (
-                                                <LinearGradient
-                                                    colors={['#4834d4', '#686de0']}
-                                                    start={{ x: 0, y: 0 }}
-                                                    end={{ x: 1, y: 1 }}
-                                                    style={styles.prBadge}
-                                                >
-                                                    <MaterialCommunityIcons name="chart-bar" size={12} color="#fff" />
-                                                    <Text style={styles.prText}>VOL</Text>
-                                                </LinearGradient>
-                                            )}
-                                            {set.isWeightPR === 1 && (
-                                                <LinearGradient
-                                                    colors={['#6ab04c', '#badc58']}
-                                                    start={{ x: 0, y: 0 }}
-                                                    end={{ x: 1, y: 1 }}
-                                                    style={styles.prBadge}
-                                                >
-                                                    <MaterialCommunityIcons name="weight-kilogram" size={12} color="#fff" />
-                                                    <Text style={styles.prText}>KG</Text>
-                                                </LinearGradient>
-                                            )}
-                                            {/* Legacy PR support or fallback */}
-                                            {set.pr === 1 && !set.is1rmPR && !set.isVolumePR && !set.isWeightPR && (
-                                                <LinearGradient
-                                                    colors={[COLORS.primary, COLORS.secondary]}
-                                                    start={{ x: 0, y: 0 }}
-                                                    end={{ x: 1, y: 1 }}
-                                                    style={styles.prBadge}
-                                                >
-                                                    <MaterialCommunityIcons name="trophy" size={12} color="#fff" />
-                                                    <Text style={styles.prText}>PR</Text>
-                                                </LinearGradient>
-                                            )}
-                                        </View>
-                                    ))}
+                                        );
+                                    })}
                                 </View>
                             </View>
                         );
                     })}
                 </View>
             </ScrollView>
+
+            <ActionSheet
+                ref={actionSheetRef}
+                containerStyle={styles.actionSheetContainer}
+            >
+                <View style={styles.closeIconContainer}>
+                    <TouchableOpacity onPress={handleCloseActionSheet} style={styles.closeIcon}>
+                        <Feather name="x" size={24} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+                <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName} />
+            </ActionSheet>
         </SafeAreaView>
+    );
+};
+
+const PRBadge = ({ type }) => {
+    let colors = [COLORS.primary, COLORS.secondary];
+    let icon = "trophy";
+
+    if (type === 'VOL') {
+        colors = ['#4834d4', '#686de0'];
+        icon = "chart-bar";
+    } else if (type === 'KG') {
+        colors = ['#6ab04c', '#badc58'];
+        icon = "weight-kilogram";
+    }
+
+    return (
+        <LinearGradient
+            colors={colors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.miniPrBadge}
+        >
+            <Text style={styles.miniPrText}>{type}</Text>
+        </LinearGradient>
     );
 };
 
@@ -230,136 +297,88 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
+        backgroundColor: COLORS.background,
     },
     backButton: {
         padding: 4,
     },
     headerTitle: {
-        fontSize: 18,
+        fontSize: 16,
         fontFamily: FONTS.bold,
         color: COLORS.text,
     },
     scrollContent: {
-        padding: 20,
+        padding: 16,
         paddingBottom: 40,
     },
     summaryCard: {
-        borderRadius: 16,
+        borderRadius: 12,
         overflow: 'hidden',
-        marginBottom: 24,
+        marginBottom: 16,
         borderWidth: 1,
         borderColor: COLORS.border,
-        ...SHADOWS.medium,
+        backgroundColor: COLORS.surface,
+        ...SHADOWS.small,
     },
-    summaryGradient: {
-        padding: 20,
-        alignItems: 'center',
+    summaryContent: {
+        padding: 16,
     },
     workoutName: {
-        fontSize: 24,
+        fontSize: 20,
         fontFamily: FONTS.bold,
         color: COLORS.text,
         marginBottom: 8,
-        textAlign: 'center',
     },
-    dateContainer: {
+    statsRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexWrap: 'wrap',
         gap: 8,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
     },
-    dateText: {
-        fontSize: 14,
+    statItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    statText: {
+        fontSize: 13,
         fontFamily: FONTS.medium,
         color: COLORS.textSecondary,
     },
+    statDivider: {
+        width: 1,
+        height: 12,
+        backgroundColor: COLORS.border,
+    },
     exercisesList: {
-        gap: 16,
+        gap: 12,
     },
     exerciseCard: {
         backgroundColor: COLORS.surface,
-        borderRadius: 16,
+        borderRadius: 12,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: COLORS.border,
     },
     exerciseHeader: {
-        padding: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: 'rgba(255,255,255,0.02)',
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     exerciseName: {
-        fontSize: 18,
+        fontSize: 16,
         fontFamily: FONTS.semiBold,
         color: COLORS.primary,
-    },
-    setsContainer: {
-        padding: 16,
-    },
-    setRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    setNumberContainer: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-    },
-    setNumber: {
-        fontSize: 12,
-        fontFamily: FONTS.bold,
-        color: COLORS.textSecondary,
-    },
-    setDetails: {
         flex: 1,
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        gap: 4,
-    },
-    setWeight: {
-        fontSize: 18,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-    },
-    setX: {
-        fontSize: 14,
-        color: COLORS.textSecondary,
-        marginHorizontal: 4,
-    },
-    setReps: {
-        fontSize: 18,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-    },
-    unit: {
-        fontSize: 12,
-        fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
-    },
-    prBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-        gap: 4,
-    },
-    prText: {
-        color: '#fff',
-        fontSize: 10,
-        fontFamily: FONTS.bold,
     },
     noteContainer: {
         flexDirection: 'row',
@@ -370,10 +389,99 @@ const styles = StyleSheet.create({
     },
     noteText: {
         flex: 1,
-        fontSize: 14,
-        fontFamily: FONTS.regular,
+        fontSize: 13,
         color: COLORS.textSecondary,
-        lineHeight: 20,
+        fontFamily: FONTS.regular,
+        fontStyle: 'italic',
+        lineHeight: 18,
+    },
+    setsContainer: {
+        paddingVertical: 4,
+    },
+    setsHeaderRow: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.05)',
+    },
+    colHeader: {
+        fontSize: 11,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+        textTransform: 'uppercase',
+    },
+    setRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+    },
+    setBadge: {
+        width: 30,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 4,
+        paddingVertical: 2,
+    },
+    setNumber: {
+        fontSize: 13,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+    },
+    setWeight: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 15,
+        fontFamily: FONTS.semiBold,
+        color: COLORS.text,
+    },
+    setReps: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 15,
+        fontFamily: FONTS.semiBold,
+        color: COLORS.text,
+    },
+    setOneRM: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 14,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+    },
+    prContainer: {
+        width: 40,
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 4,
+    },
+    miniPrBadge: {
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    miniPrText: {
+        fontSize: 9,
+        fontFamily: FONTS.bold,
+        color: '#fff',
+    },
+    actionSheetContainer: {
+        height: '90%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        backgroundColor: COLORS.background,
+    },
+    closeIconContainer: {
+        position: 'absolute',
+        top: 16,
+        right: 16,
+        zIndex: 1,
+    },
+    closeIcon: {
+        backgroundColor: COLORS.surface,
+        padding: 8,
+        borderRadius: 20,
     },
 });
 

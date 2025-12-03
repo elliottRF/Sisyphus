@@ -57,13 +57,12 @@ const ExerciseHistory = (props) => {
     useFocusEffect(
         React.useCallback(() => {
             loadWorkoutHistory();
-        }, [])
+        }, [props.exerciseID])
     );
 
     const loadWorkoutHistory = async () => {
         try {
             const history = await fetchExerciseHistory(props.exerciseID);
-            console.log("Fetched History Sample:", history.slice(0, 3));
             const groupedHistory = groupBySession(history);
             setWorkoutHistory(groupedHistory);
             calculateStats(history);
@@ -106,6 +105,7 @@ const ExerciseHistory = (props) => {
 
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('en-US', {
+            weekday: 'short',
             month: 'short',
             day: 'numeric',
             year: 'numeric'
@@ -126,7 +126,7 @@ const ExerciseHistory = (props) => {
                 data={workoutHistory}
                 style={styles.list}
                 contentContainerStyle={styles.listContentContainer}
-                keyExtractor={([session]) => session}
+                keyExtractor={([session]) => session.toString()}
                 ListHeaderComponent={
                     <View>
                         <LinearGradient
@@ -175,63 +175,84 @@ const ExerciseHistory = (props) => {
                 }
                 renderItem={({ item: [session, exercises] }) => {
                     const sessionNote = exercises.find(e => e.notes)?.notes;
+                    const workoutName = exercises[0].name || "Workout";
+
+                    // Calculate display numbers
+                    let workingSetCount = 0;
+                    const setsWithDisplayNumbers = exercises.map(set => {
+                        if (set.setType === 'N' || !set.setType) {
+                            workingSetCount++;
+                            return { ...set, displayNumber: workingSetCount };
+                        }
+                        return { ...set, displayNumber: set.setType };
+                    });
 
                     return (
                         <View style={styles.sessionCard}>
                             <View style={styles.sessionHeader}>
-                                <View style={styles.sessionDateContainer}>
-                                    <Feather name="calendar" size={14} color={COLORS.primary} />
-                                    <Text style={styles.sessionDate}>
-                                        {formatDate(exercises[0].time)}
-                                    </Text>
-                                </View>
-                                <View style={styles.sessionBadge}>
-                                    <Text style={styles.sessionBadgeText}>Session {session}</Text>
+                                <View>
+                                    <Text style={styles.sessionTitle}>{workoutName}</Text>
+                                    <View style={styles.sessionDateContainer}>
+                                        <Feather name="calendar" size={12} color={COLORS.textSecondary} />
+                                        <Text style={styles.sessionDate}>
+                                            {formatDate(exercises[0].time)}
+                                        </Text>
+                                        <View style={styles.dot} />
+                                        <Text style={styles.sessionDate}>Session {session}</Text>
+                                    </View>
                                 </View>
                             </View>
 
                             {/* Session Note */}
                             {sessionNote && (
                                 <View style={styles.noteContainer}>
-                                    <MaterialIcons name="sticky-note-2" size={14} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
+                                    <MaterialCommunityIcons name="text" size={14} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
                                     <Text style={styles.noteText}>{sessionNote}</Text>
                                 </View>
                             )}
 
-                            <View style={styles.exercisesList}>
-                                {exercises.map((set, setIndex) => (
-                                    <View key={setIndex} style={styles.setRow}>
-                                        <View style={[
-                                            styles.setNumberContainer,
-                                            set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.2)' },
-                                            set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.2)' }
+                            <View style={styles.setsContainer}>
+                                <View style={styles.setsHeaderRow}>
+                                    <Text style={[styles.colHeader, { width: 30, textAlign: 'center' }]}>Set</Text>
+                                    <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>kg</Text>
+                                    <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>Reps</Text>
+                                    <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>1RM</Text>
+                                    <View style={{ width: 40 }} />
+                                </View>
+                                {setsWithDisplayNumbers.map((set, setIndex) => {
+                                    const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+                                    return (
+                                        <View key={setIndex} style={[
+                                            styles.setRow,
+                                            setIndex % 2 === 1 && { backgroundColor: 'rgba(255,255,255,0.02)' },
+                                            isPR && { backgroundColor: 'rgba(64, 186, 173, 0.15)' }
                                         ]}>
-                                            <Text style={[
-                                                styles.setNumber,
-                                                set.setType === 'W' && { color: COLORS.warning },
-                                                set.setType === 'D' && { color: COLORS.secondary }
+                                            <View style={[
+                                                styles.setBadge,
+                                                set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.15)' },
+                                                set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.15)' }
                                             ]}>
-                                                {set.setType === 'W' ? 'W' : set.setType === 'D' ? 'D' : set.setNum}
-                                            </Text>
+                                                <Text style={[
+                                                    styles.setNumber,
+                                                    set.setType === 'W' && { color: COLORS.warning },
+                                                    set.setType === 'D' && { color: COLORS.secondary }
+                                                ]}>
+                                                    {set.displayNumber}
+                                                </Text>
+                                            </View>
+
+                                            <Text style={styles.setWeight}>{set.weight}</Text>
+                                            <Text style={styles.setReps}>{set.reps}</Text>
+                                            <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
+
+                                            <View style={styles.prContainer}>
+                                                {set.is1rmPR === 1 && <PRBadge type="1RM" />}
+                                                {set.isVolumePR === 1 && <PRBadge type="VOL" />}
+                                                {set.isWeightPR === 1 && <PRBadge type="KG" />}
+                                            </View>
                                         </View>
-                                        <View style={styles.setDetails}>
-                                            <Text style={styles.setWeight}>{set.weight} <Text style={styles.unit}>kg</Text></Text>
-                                            <Text style={styles.setX}>×</Text>
-                                            <Text style={styles.setReps}>{set.reps} <Text style={styles.unit}>reps</Text></Text>
-                                        </View>
-                                        {set.pr === 1 && (
-                                            <LinearGradient
-                                                colors={[COLORS.primary, COLORS.secondary]}
-                                                start={{ x: 0, y: 0 }}
-                                                end={{ x: 1, y: 1 }}
-                                                style={styles.prBadge}
-                                            >
-                                                <MaterialCommunityIcons name="trophy" size={12} color="#fff" />
-                                                <Text style={styles.prText}>PR</Text>
-                                            </LinearGradient>
-                                        )}
-                                    </View>
-                                ))}
+                                    );
+                                })}
                             </View>
                         </View>
                     )
@@ -246,6 +267,30 @@ const ExerciseHistory = (props) => {
                 showsVerticalScrollIndicator={false}
             />
         </View>
+    );
+};
+
+const PRBadge = ({ type }) => {
+    let colors = [COLORS.primary, COLORS.secondary];
+    let icon = "trophy";
+
+    if (type === 'VOL') {
+        colors = ['#4834d4', '#686de0'];
+        icon = "chart-bar";
+    } else if (type === 'KG') {
+        colors = ['#6ab04c', '#badc58'];
+        icon = "weight-kilogram";
+    }
+
+    return (
+        <LinearGradient
+            colors={colors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.miniPrBadge}
+        >
+            <Text style={styles.miniPrText}>{type}</Text>
+        </LinearGradient>
     );
 };
 
@@ -275,7 +320,7 @@ const styles = StyleSheet.create({
         borderBottomColor: COLORS.border,
     },
     exerciseTitle: {
-        fontSize: 28,
+        fontSize: 24,
         fontFamily: FONTS.bold,
         color: COLORS.text,
         textAlign: 'center',
@@ -331,41 +376,41 @@ const styles = StyleSheet.create({
         marginHorizontal: 16,
         marginBottom: 16,
         backgroundColor: COLORS.surface,
-        borderRadius: 16,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: COLORS.border,
         ...SHADOWS.small,
         overflow: 'hidden',
     },
     sessionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         backgroundColor: 'rgba(255,255,255,0.02)',
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.05)',
+        borderBottomColor: COLORS.border,
+    },
+    sessionTitle: {
+        fontSize: 16,
+        fontFamily: FONTS.semiBold,
+        color: COLORS.text,
+        marginBottom: 4,
     },
     sessionDateContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
     },
     sessionDate: {
-        fontSize: 14,
-        fontFamily: FONTS.semiBold,
-        color: COLORS.text,
-    },
-    sessionBadge: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    sessionBadgeText: {
-        fontSize: 10,
+        fontSize: 13,
         fontFamily: FONTS.medium,
         color: COLORS.textSecondary,
+    },
+    dot: {
+        width: 3,
+        height: 3,
+        borderRadius: 1.5,
+        backgroundColor: COLORS.textSecondary,
+        opacity: 0.5,
     },
     noteContainer: {
         flexDirection: 'row',
@@ -376,71 +421,82 @@ const styles = StyleSheet.create({
     },
     noteText: {
         flex: 1,
-        fontSize: 14,
-        fontFamily: FONTS.regular,
+        fontSize: 13,
         color: COLORS.textSecondary,
-        lineHeight: 20,
+        fontFamily: FONTS.regular,
+        fontStyle: 'italic',
+        lineHeight: 18,
     },
-    exercisesList: {
-        padding: 16,
+    setsContainer: {
+        paddingVertical: 4,
+    },
+    setsHeaderRow: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.05)',
+    },
+    colHeader: {
+        fontSize: 11,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+        textTransform: 'uppercase',
     },
     setRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
+        paddingVertical: 6,
+        paddingHorizontal: 16,
     },
-    setNumberContainer: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+    setBadge: {
+        width: 30,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 12,
+        borderRadius: 4,
+        paddingVertical: 2,
     },
     setNumber: {
-        fontSize: 12,
-        fontFamily: FONTS.bold,
-        color: COLORS.textSecondary,
-    },
-    setDetails: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        gap: 4,
-    },
-    setWeight: {
-        fontSize: 16,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-    },
-    setX: {
-        fontSize: 14,
-        color: COLORS.textSecondary,
-        marginHorizontal: 4,
-    },
-    setReps: {
-        fontSize: 16,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-    },
-    unit: {
-        fontSize: 12,
+        fontSize: 13,
         fontFamily: FONTS.medium,
         color: COLORS.textSecondary,
     },
-    prBadge: {
+    setWeight: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 15,
+        fontFamily: FONTS.semiBold,
+        color: COLORS.text,
+    },
+    setReps: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 15,
+        fontFamily: FONTS.semiBold,
+        color: COLORS.text,
+    },
+    setOneRM: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 14,
+        fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+    },
+    prContainer: {
+        width: 40,
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
+        justifyContent: 'flex-end',
         gap: 4,
     },
-    prText: {
-        color: '#fff',
-        fontSize: 10,
+    miniPrBadge: {
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    miniPrText: {
+        fontSize: 9,
         fontFamily: FONTS.bold,
+        color: '#fff',
     },
     emptyContainer: {
         padding: 40,
