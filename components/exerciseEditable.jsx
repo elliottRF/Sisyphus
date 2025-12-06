@@ -15,6 +15,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { COLORS, FONTS, SHADOWS } from '../constants/theme'
 import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { fetchLastWorkoutSets } from './db';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
@@ -25,7 +26,7 @@ if (Platform.OS === 'android') {
     }
 }
 
-const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLength, style, placeholderTextColor }) => {
+const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLength, style, placeholderTextColor, editable = true }) => {
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef(null);
 
@@ -48,17 +49,18 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
         <View style={{ flex: 1, justifyContent: 'center' }}>
             <TextInput
                 ref={inputRef}
-                style={[style, { opacity: isFocused ? 1 : 1 }]} // Keep visible
+                style={[style, { opacity: editable ? (isFocused ? 1 : 1) : 0.5 }]}
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
                 placeholderTextColor={placeholderTextColor}
                 keyboardType={keyboardType}
                 maxLength={maxLength}
+                editable={editable}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
             />
-            {!isFocused && (
+            {!isFocused && editable && (
                 <Pressable
                     style={StyleSheet.absoluteFill}
                     onPress={() => inputRef.current?.focus()}
@@ -143,6 +145,19 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) =>
 
 const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, drag, isActive, onOpenDetails, simultaneousHandlers }) => {
     const [isNoteVisible, setIsNoteVisible] = useState(false);
+    const [previousSets, setPreviousSets] = useState([]);
+
+    useEffect(() => {
+        const loadPreviousData = async () => {
+            try {
+                const prevSets = await fetchLastWorkoutSets(exerciseID);
+                setPreviousSets(prevSets);
+            } catch (error) {
+                console.error("Error loading previous sets:", error);
+            }
+        };
+        loadPreviousData();
+    }, [exerciseID]);
 
     const handleWeightChange = (text, setIndex) => {
         updateCurrentWorkout(prevWorkout =>
@@ -193,6 +208,12 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     };
 
     const toggleSetComplete = (setIndex) => {
+        // Dismiss keyboard if marking as complete
+        const set = exercise.sets[setIndex];
+        if (!set.completed) {
+            Keyboard.dismiss();
+        }
+
         updateCurrentWorkout(prevWorkout =>
             prevWorkout.map(workout =>
                 workout.id === workoutID
@@ -321,6 +342,9 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
         );
     };
 
+    // Logic to map previous sets to current sets, skipping warmups in current workout
+    let previousSetIndex = 0;
+
     return (
         <View style={[
             styles.container,
@@ -405,6 +429,17 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                         displayNumber = normalSetCount + 1;
                     }
 
+                    // Determine previous set data
+                    let prevSetText = '-';
+                    if (set.setType !== 'W') {
+                        // Only assign a previous set if the current set is NOT a warmup
+                        const prevSet = previousSets[previousSetIndex];
+                        if (prevSet) {
+                            prevSetText = `${prevSet.weight}kg × ${prevSet.reps}`;
+                            previousSetIndex++; // Move to next previous set
+                        }
+                    }
+
                     acc.push(
                         <SwipeableSetRow
                             key={set.id || index}
@@ -435,7 +470,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                     </TouchableOpacity>
                                 </View>
 
-                                <Text style={[styles.prevText, styles.colPrev]}>-</Text>
+                                <Text style={[styles.prevText, styles.colPrev]}>{prevSetText}</Text>
 
                                 <View style={styles.colKg}>
                                     <ScrollableInput
@@ -446,6 +481,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                         placeholderTextColor={COLORS.textSecondary}
                                         keyboardType="numeric"
                                         maxLength={5}
+                                        editable={!set.completed}
                                     />
                                 </View>
 
@@ -458,6 +494,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                         placeholderTextColor={COLORS.textSecondary}
                                         keyboardType="numeric"
                                         maxLength={3}
+                                        editable={!set.completed}
                                     />
                                 </View>
 
@@ -545,7 +582,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.05)',
         borderRadius: 8,
         padding: 12,
-        minHeight: 60,
+        minHeight: 40, // Reduced height
         textAlignVertical: 'top',
     },
     tableHeader: {

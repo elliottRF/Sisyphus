@@ -4,9 +4,11 @@ import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import DraggableFlatList, { ScaleDecorator, ShadowDecorator, OpacityDecorator } from 'react-native-draggable-flatlist';
+import * as Haptics from 'expo-haptics';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AntDesign, Feather, Ionicons } from '@expo/vector-icons';
+import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 
 import * as NavigationBar from 'expo-navigation-bar';
@@ -15,7 +17,7 @@ import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculat
 
 
 import ExerciseEditable from '../components/exerciseEditable'
-import SortableExerciseList from '../components/SortableExerciseList';
+
 import ActionSheet from "react-native-actions-sheet";
 import ExerciseHistory from "../components/exerciseHistory"
 
@@ -24,12 +26,16 @@ import FilteredExerciseList from '../components/FilteredExerciseList';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import Timer from '../components/Timer';
+import RestTimer from '../components/RestTimer';
 
 
 const Current = () => {
 
     const [exercises, setExercises] = useState([]);
     const [startTime, setStartTime] = useState(null);
+
+    // Ref for DraggableFlatList to coordinate gestures (e.g. swipes)
+    const listRef = useRef(null);
 
 
     NavigationBar.setBackgroundColorAsync(COLORS.background);
@@ -80,7 +86,7 @@ const Current = () => {
                 exercises: exerciseGroup.exercises.map(exercise => ({
                     ...exercise,
                     sets: exercise.sets.filter(set =>
-                        set.weight !== null && set.reps !== null
+                        set.weight !== null && set.reps !== null && set.completed
                     )
                 }))
             }));
@@ -332,30 +338,40 @@ const Current = () => {
         ]);
     };
 
-    const renderItem = useCallback(({ item, drag, isActive, index, simultaneousHandlers }) => {
+    const renderItem = useCallback(({ item, drag, isActive, index }) => {
         return (
-            <View key={item.id}>
-                {item.exercises.map((exercise, exerciseIndex) => {
-                    const exerciseDetails = exercises.find(
-                        (e) => e.exerciseID === exercise.exerciseID
-                    );
+            <ScaleDecorator>
+                <TouchableOpacity
+                    onLongPress={drag}
+                    activeOpacity={1}
+                    style={[
+                        isActive && { zIndex: 999 }
+                    ]}
+                >
+                    <View key={item.id}>
+                        {item.exercises.map((exercise, exerciseIndex) => {
+                            const exerciseDetails = exercises.find(
+                                (e) => e.exerciseID === exercise.exerciseID
+                            );
 
-                    return (
-                        <ExerciseEditable
-                            exerciseID={exercise.exerciseID}
-                            workoutID={item.id}
-                            key={exerciseIndex}
-                            exercise={exercise}
-                            exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
-                            updateCurrentWorkout={setCurrentWorkout}
-                            drag={drag}
-                            isActive={isActive}
-                            onOpenDetails={() => showExerciseInfo(exerciseDetails)}
-                            simultaneousHandlers={simultaneousHandlers}
-                        />
-                    );
-                })}
-            </View>
+                            return (
+                                <ExerciseEditable
+                                    exerciseID={exercise.exerciseID}
+                                    workoutID={item.id}
+                                    key={exerciseIndex}
+                                    exercise={exercise}
+                                    exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
+                                    updateCurrentWorkout={setCurrentWorkout}
+                                    drag={drag}
+                                    isActive={isActive}
+                                    onOpenDetails={() => showExerciseInfo(exerciseDetails)}
+                                    simultaneousHandlers={listRef} // Pass ref to coordinate with swipeable rows
+                                />
+                            );
+                        })}
+                    </View>
+                </TouchableOpacity>
+            </ScaleDecorator>
         );
     }, [setCurrentWorkout, exercises]);
 
@@ -397,17 +413,32 @@ const Current = () => {
                                     placeholderTextColor={COLORS.textSecondary}
                                     keyboardType="text"
                                 />
-                                {startTime && <Timer startTime={startTime} />}
+                                {startTime && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        <Timer startTime={startTime} />
+                                        <RestTimer />
+                                    </View>
+                                )}
                             </View>
                             <View style={styles.headerDivider} />
                         </View>
 
-                        <SortableExerciseList
+                        <DraggableFlatList
+                            ref={listRef}
                             data={currentWorkout}
-                            extraData={currentWorkout}
-                            onReorder={setCurrentWorkout}
-                            contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
+                            onDragEnd={({ data }) => {
+                                setCurrentWorkout(data);
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            }}
+                            onDragBegin={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                            keyExtractor={(item) => item.id}
                             renderItem={renderItem}
+                            contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
+                            activationDistance={20}
+                            // Smooth layout transitions when adding/removing items (not during drag)
+                            itemLayoutAnimation={LinearTransition.springify().damping(14).stiffness(100)}
+                            keyboardShouldPersistTaps="handled"
+                            keyboardDismissMode="on-drag"
                             ListFooterComponent={
                                 <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
                                     <TouchableOpacity
@@ -583,6 +614,14 @@ const styles = StyleSheet.create({
     },
     footer: {
         padding: 16,
+    },
+    restTimerButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(64, 186, 173, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
     }
 });
 

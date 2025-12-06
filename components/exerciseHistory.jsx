@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, FlatList, Dimensions } from 'react-native'
-import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, Dimensions } from 'react-native'
+import React, { useState, useEffect, useRef } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { fetchExerciseHistory, fetchExercises } from './db';
 import { useFocusEffect } from 'expo-router';
@@ -7,6 +7,7 @@ import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Body from "react-native-body-highlighter";
+import ActionSheet from "react-native-actions-sheet";
 
 const { width } = Dimensions.get('window');
 
@@ -20,6 +21,21 @@ const ExerciseHistory = (props) => {
         personalBest: 0,
         totalVolume: 0
     });
+
+
+    const actionSheetRef = useRef(null);
+
+    const showEditSheet = () => {
+
+
+        actionSheetRef.current?.show();
+    };
+    const handleCloseEditSheet = () => {
+        actionSheetRef.current?.hide();
+    };
+
+
+
 
     useEffect(() => {
         if (exercisesList) {
@@ -120,6 +136,7 @@ const ExerciseHistory = (props) => {
         );
     }
 
+
     return (
         <View style={styles.container}>
             <FlatList
@@ -134,6 +151,49 @@ const ExerciseHistory = (props) => {
                             style={styles.headerGradient}
                         >
                             <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
+
+
+
+                            <TouchableOpacity
+                                onPress={() => showEditSheet()}
+                                style={styles.menuButton}
+                            >
+                                <MaterialIcons
+                                    name="edit-note"
+                                    size={24}
+                                    color={COLORS.primary}
+                                />
+                            </TouchableOpacity>
+
+
+                            <ActionSheet
+                                ref={actionSheetRef}
+                                containerStyle={{
+                                    height: '90%',
+                                    borderTopLeftRadius: 24,
+                                    borderTopRightRadius: 24,
+                                    backgroundColor: COLORS.background,
+                                }}
+                            >
+                                <View style={{
+                                    position: 'absolute',
+                                    top: 16,
+                                    right: 16,
+                                    zIndex: 1,
+                                }}>
+                                    <TouchableOpacity onPress={handleCloseEditSheet} style={{
+                                        backgroundColor: COLORS.surface,
+                                        padding: 8,
+                                        borderRadius: 20,
+                                    }}>
+                                        <Feather name="x" size={24} color="#fff" />
+                                    </TouchableOpacity>
+                                </View>
+                            </ActionSheet>
+
+
+
+
 
                             <View style={styles.statsRow}>
                                 <View style={styles.statItem}>

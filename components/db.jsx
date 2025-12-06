@@ -221,6 +221,28 @@ export const fetchExerciseHistory = async (exerciseID) => {
   );
 };
 
+// Fetch the last workout sets for a specific exercise
+export const fetchLastWorkoutSets = async (exerciseID) => {
+  const database = await getDb();
+  // Find the latest session number for this exercise
+  const lastSessionResult = await database.getFirstAsync(
+    `SELECT MAX(workoutSession) as lastSession 
+     FROM workoutHistory 
+     WHERE exerciseID = ?;`,
+    [exerciseID]
+  );
+
+  if (!lastSessionResult?.lastSession) return [];
+
+  // Fetch the sets for that session
+  return await database.getAllAsync(
+    `SELECT * FROM workoutHistory 
+     WHERE exerciseID = ? AND workoutSession = ? AND (setType IS NULL OR setType != 'W')
+     ORDER BY setNum ASC;`,
+    [exerciseID, lastSessionResult.lastSession]
+  );
+};
+
 // Get current PRs for an exercise
 export const getExercisePRs = async (exerciseID) => {
   const database = await getDb();
