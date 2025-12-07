@@ -5,16 +5,13 @@ import Animated, {
     withTiming,
     withSpring,
     runOnJS,
-    SlideOutLeft,
     LinearTransition,
-    ZoomIn,
-    ZoomOut
+    // Removed ZoomIn/ZoomOut to fix the "gray box" glitch
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import React, { useState, useRef, useEffect } from 'react'
 import { COLORS, FONTS, SHADOWS } from '../constants/theme'
-import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { fetchLastWorkoutSets } from './db';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -26,30 +23,26 @@ if (Platform.OS === 'android') {
     }
 }
 
+// Compact Scrollable Input
 const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLength, style, placeholderTextColor, editable = true }) => {
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef(null);
 
     useEffect(() => {
-        const keyboardDidHideListener = Keyboard.addListener(
-            'keyboardDidHide',
-            () => {
-                if (isFocused) {
-                    inputRef.current?.blur();
-                }
-            }
-        );
-
-        return () => {
-            keyboardDidHideListener.remove();
-        };
+        const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+            if (isFocused) inputRef.current?.blur();
+        });
+        return () => keyboardDidHideListener.remove();
     }, [isFocused]);
 
     return (
-        <View style={{ flex: 1, justifyContent: 'center' }}>
+        <Pressable
+            style={[style, isFocused && styles.inputFocused, !editable && styles.inputDisabled]}
+            onPress={() => editable && inputRef.current?.focus()}
+        >
             <TextInput
                 ref={inputRef}
-                style={[style, { opacity: editable ? (isFocused ? 1 : 1) : 0.5 }]}
+                style={[styles.textInputInternal, { color: editable ? COLORS.text : COLORS.textSecondary }]}
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
@@ -59,14 +52,9 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
                 editable={editable}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
+                selectTextOnFocus
             />
-            {!isFocused && editable && (
-                <Pressable
-                    style={StyleSheet.absoluteFill}
-                    onPress={() => inputRef.current?.focus()}
-                />
-            )}
-        </View>
+        </Pressable>
     );
 };
 
@@ -74,66 +62,49 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) =>
     const translateX = useSharedValue(0);
 
     const pan = Gesture.Pan()
-        .activeOffsetX([-10, 10]) // Allow vertical scroll without triggering swipe immediately
-        .failOffsetY([-5, 5])     // Fail if vertical movement is detected
+        .activeOffsetX([-10, 10])
+        .failOffsetY([-5, 5])
         .simultaneousWithExternalGesture(simultaneousHandlers)
         .onUpdate((event) => {
-            // Only allow swiping to the left
             translateX.value = Math.min(event.translationX, 0);
         })
         .onEnd(() => {
             if (translateX.value < SWIPE_THRESHOLD) {
-                // Swipe success - animate off screen then delete
                 translateX.value = withTiming(-SCREEN_WIDTH, { duration: 300 }, (finished) => {
-                    if (finished) {
-                        runOnJS(onDelete)();
-                    }
+                    if (finished) runOnJS(onDelete)();
                 });
             } else {
-                // Swipe cancel - spring back
                 translateX.value = withSpring(0);
             }
         });
 
-    const rStyle = useAnimatedStyle(() => {
-        return {
-            transform: [{ translateX: translateX.value }],
-        };
-    });
+    const rStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: translateX.value }],
+    }));
 
     const rIconStyle = useAnimatedStyle(() => {
-        // Icon fades in and scales up slightly
         const opacity = withTiming(translateX.value < -20 ? 1 : 0);
         const scale = withSpring(translateX.value < -40 ? 1 : 0.5);
-        return {
-            opacity,
-            transform: [{ scale }]
-        };
+        return { opacity, transform: [{ scale }] };
     });
 
-    const rRedBoxStyle = useAnimatedStyle(() => {
-        return {
-            width: -translateX.value,
-        };
-    });
+    const rRedBoxStyle = useAnimatedStyle(() => ({
+        width: -translateX.value,
+    }));
 
     return (
         <Animated.View
-            layout={LinearTransition.duration(250)}
-            entering={ZoomIn.duration(300)}
-            exiting={ZoomOut.duration(300)}
+            // Removed entering/exiting animations here as they trigger during drag
+            layout={LinearTransition.duration(200)}
             style={styles.swipeableContainer}
         >
-            {/* Background (Reveal) */}
             <View style={styles.deleteBackground}>
                 <Animated.View style={[styles.deleteActionRegion, rRedBoxStyle]}>
                     <Animated.View style={[styles.deleteIconContainer, rIconStyle]}>
-                        <Feather name="trash-2" size={20} color={COLORS.text} />
+                        <Feather name="trash-2" size={18} color={COLORS.text} />
                     </Animated.View>
                 </Animated.View>
             </View>
-
-            {/* Foreground (Set Row) */}
             <GestureDetector gesture={pan}>
                 <Animated.View style={[styles.rowForeground, rStyle]}>
                     {children}
@@ -160,238 +131,66 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     }, [exerciseID]);
 
     const handleWeightChange = (text, setIndex) => {
-        updateCurrentWorkout(prevWorkout =>
-            prevWorkout.map(workout =>
-                workout.id === workoutID
-                    ? {
-                        ...workout,
-                        exercises: workout.exercises.map(ex =>
-                            ex.exerciseID === exerciseID
-                                ? {
-                                    ...ex,
-                                    sets: ex.sets.map((set, index) =>
-                                        index === setIndex
-                                            ? { ...set, weight: text }
-                                            : set
-                                    )
-                                }
-                                : ex
-                        )
-                    }
-                    : workout
-            )
-        );
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, weight: text } : s) } : e) } : w));
     };
-
     const handleRepsChange = (text, setIndex) => {
-        updateCurrentWorkout(prevWorkout =>
-            prevWorkout.map(workout =>
-                workout.id === workoutID
-                    ? {
-                        ...workout,
-                        exercises: workout.exercises.map(ex =>
-                            ex.exerciseID === exerciseID
-                                ? {
-                                    ...ex,
-                                    sets: ex.sets.map((set, index) =>
-                                        index === setIndex
-                                            ? { ...set, reps: text }
-                                            : set
-                                    )
-                                }
-                                : ex
-                        )
-                    }
-                    : workout
-            )
-        );
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, reps: text } : s) } : e) } : w));
     };
-
     const toggleSetComplete = (setIndex) => {
-        // Dismiss keyboard if marking as complete
         const set = exercise.sets[setIndex];
-        if (!set.completed) {
-            Keyboard.dismiss();
-        }
-
-        updateCurrentWorkout(prevWorkout =>
-            prevWorkout.map(workout =>
-                workout.id === workoutID
-                    ? {
-                        ...workout,
-                        exercises: workout.exercises.map(ex =>
-                            ex.exerciseID === exerciseID
-                                ? {
-                                    ...ex,
-                                    sets: ex.sets.map((set, index) =>
-                                        index === setIndex
-                                            ? { ...set, completed: !set.completed }
-                                            : set
-                                    )
-                                }
-                                : ex
-                        )
-                    }
-                    : workout
-            )
-        );
+        if (!set.completed) Keyboard.dismiss();
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
     };
-
     const toggleSetType = (setIndex) => {
-        updateCurrentWorkout(prevWorkout =>
-            prevWorkout.map(workout =>
-                workout.id === workoutID
-                    ? {
-                        ...workout,
-                        exercises: workout.exercises.map(ex =>
-                            ex.exerciseID === exerciseID
-                                ? {
-                                    ...ex,
-                                    sets: ex.sets.map((set, index) => {
-                                        if (index === setIndex) {
-                                            const currentType = set.setType || 'N';
-                                            let nextType = 'N';
-                                            if (currentType === 'N') nextType = 'W';
-                                            else if (currentType === 'W') nextType = 'D';
-                                            else nextType = 'N';
-                                            return { ...set, setType: nextType };
-                                        }
-                                        return set;
-                                    })
-                                }
-                                : ex
-                        )
-                    }
-                    : workout
-            )
-        );
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: e.sets.map((s, i) => { if (i === setIndex) { const t = s.setType || 'N'; const n = t === 'N' ? 'W' : t === 'W' ? 'D' : 'N'; return { ...s, setType: n }; } return s; }) } : e) } : w));
     };
-
     const handleNoteChange = (text) => {
-        updateCurrentWorkout(prevWorkout =>
-            prevWorkout.map(workout =>
-                workout.id === workoutID
-                    ? {
-                        ...workout,
-                        exercises: workout.exercises.map(ex =>
-                            ex.exerciseID === exerciseID
-                                ? { ...ex, notes: text }
-                                : ex
-                        )
-                    }
-                    : workout
-            )
-        );
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, notes: text } : e) } : w));
     };
-
     const addNewSet = () => {
-        updateCurrentWorkout(prevWorkout =>
-            prevWorkout.map(workout =>
-                workout.id === workoutID
-                    ? {
-                        ...workout,
-                        exercises: workout.exercises.map(ex =>
-                            ex.exerciseID === exerciseID
-                                ? {
-                                    ...ex,
-                                    sets: [
-                                        ...ex.sets,
-                                        {
-                                            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                                            weight: null,
-                                            reps: null,
-                                            completed: false,
-                                            setType: 'N'
-                                        }
-                                    ]
-                                }
-                                : ex
-                        )
-                    }
-                    : workout
-            )
-        );
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: [...e.sets, { id: Date.now().toString() + Math.random().toString(36).substr(2, 9), weight: null, reps: null, completed: false, setType: 'N' }] } : e) } : w));
     };
-
     const deleteSet = (setIndex) => {
-        updateCurrentWorkout(prevWorkout =>
-            prevWorkout.map(workout =>
-                workout.id === workoutID
-                    ? {
-                        ...workout,
-                        exercises: workout.exercises.map(ex =>
-                            ex.exerciseID === exerciseID
-                                ? {
-                                    ...ex,
-                                    sets: ex.sets.filter((_, index) => index !== setIndex)
-                                }
-                                : ex
-                        )
-                    }
-                    : workout
-            )
-        );
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: e.sets.filter((_, i) => i !== setIndex) } : e) } : w));
     };
-
     const deleteExercise = () => {
-        updateCurrentWorkout(prevWorkout =>
-            prevWorkout.map(workout => ({
-                ...workout,
-                exercises: workout.exercises.filter(ex => ex.exerciseID !== exerciseID)
-            })).filter(workout => workout.exercises.length > 0)
-        );
+        updateCurrentWorkout(prev => prev.map(w => ({ ...w, exercises: w.exercises.filter(ex => ex.exerciseID !== exerciseID) })).filter(w => w.exercises.length > 0));
     };
 
-    // Logic to map previous sets to current sets, skipping warmups in current workout
     let previousSetIndex = 0;
 
     return (
         <View style={[
             styles.container,
-            isActive && {
-                borderColor: COLORS.primary,
-                borderWidth: 1,
-                ...SHADOWS.medium,
-            }
+            isActive && styles.containerActive
         ]}>
             {/* Header */}
-            <LinearGradient
-                colors={[COLORS.surface, COLORS.surface]}
-                style={styles.header}
-            >
+            <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <TouchableOpacity
-                        style={styles.dragHandle}
-                        onLongPress={drag}
-                        delayLongPress={200}
-                        activeOpacity={0.7}
-                    >
-                        <MaterialIcons name="drag-handle" size={24} color={COLORS.textSecondary} />
+                    <TouchableOpacity style={styles.dragHandle} onLongPress={drag} delayLongPress={100} activeOpacity={0.7}>
+                        <MaterialIcons name="drag-indicator" size={20} color={COLORS.textSecondary} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={onOpenDetails} style={{ flex: 1 }}>
-                        <Text style={styles.exerciseName}>{exerciseName}</Text>
+                        <Text style={styles.exerciseName} numberOfLines={1}>{exerciseName}</Text>
                     </TouchableOpacity>
                 </View>
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.headerActions}>
                     <TouchableOpacity
                         onPress={() => setIsNoteVisible(!isNoteVisible)}
-                        style={[styles.menuButton, (exercise.notes && exercise.notes.length > 0) && { opacity: 1 }]}
+                        style={styles.iconButton}
                     >
                         <MaterialIcons
-                            name="edit-note"
-                            size={24}
+                            name="sticky-note-2"
+                            size={18}
                             color={exercise.notes && exercise.notes.length > 0 ? COLORS.primary : COLORS.textSecondary}
                         />
                     </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={deleteExercise}
-                        style={styles.menuButton}
-                    >
-                        <Feather name="x" size={20} color={COLORS.textSecondary} />
+                    <TouchableOpacity onPress={deleteExercise} style={styles.iconButton}>
+                        <Feather name="more-horizontal" size={18} color={COLORS.textSecondary} />
                     </TouchableOpacity>
                 </View>
-            </LinearGradient>
+            </View>
 
             {/* Note Input */}
             {isNoteVisible && (
@@ -413,30 +212,26 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                 <Text style={[styles.columnHeader, styles.colPrev]}>PREVIOUS</Text>
                 <Text style={[styles.columnHeader, styles.colKg]}>KG</Text>
                 <Text style={[styles.columnHeader, styles.colReps]}>REPS</Text>
-                <View style={styles.colCheck} />
+                <View style={styles.colCheck}><Feather name="check" size={12} color={COLORS.textSecondary} /></View>
             </View>
 
             {/* Sets */}
             <View style={styles.setsContainer}>
                 {exercise.sets.reduce((acc, set, index) => {
-                    // Calculate display number
                     let displayNumber = index + 1;
                     if (set.setType === 'W') displayNumber = 'W';
                     else if (set.setType === 'D') displayNumber = 'D';
                     else {
-                        // Count how many previous sets were 'N' (or undefined/null which defaults to N)
                         const normalSetCount = exercise.sets.slice(0, index).filter(s => !s.setType || s.setType === 'N').length;
                         displayNumber = normalSetCount + 1;
                     }
 
-                    // Determine previous set data
                     let prevSetText = '-';
                     if (set.setType !== 'W') {
-                        // Only assign a previous set if the current set is NOT a warmup
                         const prevSet = previousSets[previousSetIndex];
                         if (prevSet) {
-                            prevSetText = `${prevSet.weight}kg × ${prevSet.reps}`;
-                            previousSetIndex++; // Move to next previous set
+                            prevSetText = `${prevSet.weight} × ${prevSet.reps}`;
+                            previousSetIndex++;
                         }
                     }
 
@@ -447,70 +242,60 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                             index={index}
                             simultaneousHandlers={simultaneousHandlers}
                         >
-                            <View style={[
-                                styles.setRow,
-                                set.completed && styles.setRowCompleted
-                            ]}>
+                            <View style={[styles.setRow, set.completed && styles.setRowCompleted]}>
                                 <View style={styles.colSet}>
                                     <TouchableOpacity
                                         onPress={() => toggleSetType(index)}
                                         style={[
                                             styles.setNumberBadge,
-                                            set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.2)' }, // Warning/Yellow
-                                            set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.2)' }  // Secondary/Blue
+                                            set.setType === 'W' && styles.badgeWarmup,
+                                            set.setType === 'D' && styles.badgeDrop
                                         ]}
                                     >
                                         <Text style={[
                                             styles.setNumberText,
-                                            set.setType === 'W' && { color: COLORS.warning },
-                                            set.setType === 'D' && { color: COLORS.secondary }
+                                            set.setType === 'W' && styles.textWarmup,
+                                            set.setType === 'D' && styles.textDrop
                                         ]}>
                                             {displayNumber}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
 
-                                <Text style={[styles.prevText, styles.colPrev]}>{prevSetText}</Text>
+                                <Text style={[styles.prevText, styles.colPrev]} numberOfLines={1}>{prevSetText}</Text>
 
                                 <View style={styles.colKg}>
                                     <ScrollableInput
-                                        style={styles.input}
+                                        style={styles.inputContainer}
                                         value={set.weight?.toString()}
                                         onChangeText={(text) => handleWeightChange(text, index)}
-                                        placeholder="0"
+                                        placeholder="-"
                                         placeholderTextColor={COLORS.textSecondary}
                                         keyboardType="numeric"
-                                        maxLength={5}
+                                        maxLength={6}
                                         editable={!set.completed}
                                     />
                                 </View>
 
                                 <View style={styles.colReps}>
                                     <ScrollableInput
-                                        style={styles.input}
+                                        style={styles.inputContainer}
                                         value={set.reps?.toString()}
                                         onChangeText={(text) => handleRepsChange(text, index)}
-                                        placeholder="0"
+                                        placeholder="-"
                                         placeholderTextColor={COLORS.textSecondary}
                                         keyboardType="numeric"
-                                        maxLength={3}
+                                        maxLength={4}
                                         editable={!set.completed}
                                     />
                                 </View>
 
                                 <View style={styles.colCheck}>
                                     <TouchableOpacity
-                                        style={[
-                                            styles.checkButton,
-                                            set.completed && styles.checkButtonCompleted
-                                        ]}
+                                        style={[styles.checkButton, set.completed && styles.checkButtonCompleted]}
                                         onPress={() => toggleSetComplete(index)}
                                     >
-                                        <Feather
-                                            name="check"
-                                            size={16}
-                                            color={set.completed ? COLORS.background : 'transparent'}
-                                        />
+                                        <Feather name="check" size={14} color={set.completed ? COLORS.white : 'transparent'} />
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -521,11 +306,8 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
             </View>
 
             {/* Footer */}
-            <TouchableOpacity
-                style={styles.addSetButton}
-                onPress={addNewSet}
-            >
-                <Text style={styles.addSetText}>+ Add Set</Text>
+            <TouchableOpacity style={styles.addSetButton} onPress={addNewSet} activeOpacity={0.6}>
+                <Text style={styles.addSetText}>+ ADD SET</Text>
             </TouchableOpacity>
         </View>
     )
@@ -534,19 +316,33 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
 const styles = StyleSheet.create({
     container: {
         backgroundColor: COLORS.surface,
-        borderRadius: 16,
-        marginBottom: 16,
+        borderRadius: 12,
+        marginBottom: 12,
+
+        // --- FIX: Reserve border space constantly ---
         borderWidth: 1,
-        borderColor: COLORS.border,
-        ...SHADOWS.small,
-        overflow: 'hidden',
+        borderColor: 'transparent', // Or borderColor: COLORS.surface
+        // --------------------------------------------
+    },
+    containerActive: {
+        borderColor: COLORS.primary,
+        // borderWidth: 1, // <--- Remove this, it's now inherited from container
+        backgroundColor: COLORS.surface,
+        elevation: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 16,
-        backgroundColor: 'rgba(255,255,255,0.02)',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        backgroundColor: COLORS.surface,
+        borderTopLeftRadius: 12,
+        borderTopRightRadius: 12,
     },
     headerLeft: {
         flexDirection: 'row',
@@ -554,45 +350,41 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     dragHandle: {
-        padding: 4,
-        marginRight: 8,
-        marginLeft: -4,
+        paddingRight: 8,
+        paddingVertical: 4,
     },
     exerciseName: {
-        fontSize: 16,
-        fontFamily: FONTS.semiBold,
+        fontSize: 15,
+        fontFamily: FONTS.bold,
         color: COLORS.primary,
-        flex: 1,
-        marginTop: 4,
     },
-    menuButton: {
-        padding: 4,
+    headerActions: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    iconButton: {
+        padding: 2,
     },
     noteContainer: {
-        paddingHorizontal: 16,
-        paddingBottom: 12,
-        backgroundColor: 'rgba(255,255,255,0.02)',
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+        paddingHorizontal: 12,
+        paddingBottom: 8,
+        backgroundColor: COLORS.surface,
     },
     noteInput: {
         color: COLORS.text,
         fontFamily: FONTS.regular,
-        fontSize: 14,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 8,
-        padding: 12,
-        minHeight: 40, // Reduced height
-        textAlignVertical: 'top',
+        fontSize: 13,
+        backgroundColor: 'rgba(255,255,255,0.03)',
+        borderRadius: 4,
+        padding: 8,
+        minHeight: 32,
     },
     tableHeader: {
         flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.2)',
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+        backgroundColor: 'rgba(255,255,255,0.02)',
     },
     columnHeader: {
         fontSize: 10,
@@ -601,104 +393,125 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         letterSpacing: 0.5,
     },
-    colSet: { width: 30, alignItems: 'center' },
+    colSet: { width: 30, alignItems: 'center', justifyContent: 'center' },
     colPrev: { flex: 1, textAlign: 'center' },
-    colKg: { width: 60, marginHorizontal: 4 },
-    colReps: { width: 60, marginHorizontal: 4 },
+    colKg: { width: 65, marginHorizontal: 2 },
+    colReps: { width: 65, marginHorizontal: 2 },
     colCheck: { width: 30, alignItems: 'center' },
 
     setsContainer: {
-        backgroundColor: 'rgba(0,0,0,0.2)',
+        backgroundColor: COLORS.surface, // Ensure opacity is 1
     },
     swipeableContainer: {
-        position: 'relative',
         overflow: 'hidden',
+        backgroundColor: COLORS.surface,
     },
     deleteBackground: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: COLORS.surface, // Match container color
+        backgroundColor: COLORS.danger,
         flexDirection: 'row',
         justifyContent: 'flex-end',
         alignItems: 'center',
-        zIndex: 0,
+        paddingRight: 16,
     },
     deleteActionRegion: {
-        backgroundColor: COLORS.danger,
-        height: '100%',
-        justifyContent: 'center',
         alignItems: 'center',
-        width: 0, // Initial width
-        overflow: 'hidden',
+        justifyContent: 'center'
     },
-    deleteIconContainer: {
-        // Center the icon in the visible red region if possible, or just keep it there
-        width: 60, // Fixed width for icon container so it doesn't squish
-        alignItems: 'center',
-    },
+
     rowForeground: {
-        backgroundColor: 'transparent',
-        zIndex: 1,
+        backgroundColor: COLORS.surface, // Crucial: Must be opaque
     },
     setRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.03)',
     },
     setRowCompleted: {
-        opacity: 0.5,
+        backgroundColor: 'rgba(0,255,0,0.02)',
     },
+
     setNumberBadge: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        width: 20,
+        height: 20,
+        borderRadius: 4,
+        backgroundColor: 'transparent',
         alignItems: 'center',
         justifyContent: 'center',
     },
     setNumberText: {
-        fontSize: 12,
-        fontFamily: FONTS.medium,
+        fontSize: 13,
+        fontFamily: FONTS.bold,
         color: COLORS.textSecondary,
     },
+    badgeWarmup: { backgroundColor: 'rgba(253, 203, 110, 0.2)' },
+    textWarmup: { color: '#fdcb6e' },
+    badgeDrop: { backgroundColor: 'rgba(116, 185, 255, 0.2)' },
+    textDrop: { color: '#74b9ff' },
+
     prevText: {
         fontSize: 12,
         fontFamily: FONTS.regular,
         color: COLORS.textSecondary,
-    },
-    input: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 8,
-        paddingVertical: 8,
         textAlign: 'center',
-        color: COLORS.text,
-        fontFamily: FONTS.semiBold,
-        fontSize: 16,
+        opacity: 0.7,
     },
+
+    inputContainer: {
+        backgroundColor: 'rgba(0,0,0,0.2)',
+        borderRadius: 4,
+        height: 32,
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)',
+    },
+    inputFocused: {
+        borderColor: COLORS.primary,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    inputDisabled: {
+        opacity: 0.5,
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+    },
+    textInputInternal: {
+        textAlign: 'center',
+        fontFamily: FONTS.bold,
+        fontSize: 16,
+        padding: 0,
+        includeFontPadding: false,
+    },
+
     checkButton: {
-        width: 28,
-        height: 28,
-        borderRadius: 6,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        width: 24,
+        height: 24,
+        borderRadius: 4,
+        backgroundColor: 'rgba(255,255,255,0.05)',
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
     },
     checkButtonCompleted: {
         backgroundColor: COLORS.success,
+        borderColor: COLORS.success,
     },
+
     addSetButton: {
-        paddingVertical: 16,
+        paddingVertical: 10,
         alignItems: 'center',
-        borderTopWidth: 1,
-        borderTopColor: COLORS.border,
         backgroundColor: 'rgba(255,255,255,0.02)',
+        borderBottomLeftRadius: 12,
+        borderBottomRightRadius: 12,
     },
     addSetText: {
-        fontSize: 12,
+        fontSize: 11,
         fontFamily: FONTS.bold,
         color: COLORS.primary,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
+        letterSpacing: 0.5,
     },
 });
 

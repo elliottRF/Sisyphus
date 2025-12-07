@@ -53,6 +53,10 @@ const Current = () => {
 
     };
 
+    const clearWorkout = () => {
+        setCurrentWorkout([]);
+        setStartTime(null);
+    };
 
     const calculateOneRepMax = (weight, reps) => {
         let oneRepMax;
@@ -355,38 +359,36 @@ const Current = () => {
 
     const renderItem = useCallback(({ item, drag, isActive, index }) => {
         return (
-            <ScaleDecorator>
-                <TouchableOpacity
-                    onLongPress={drag}
-                    activeOpacity={1}
-                    style={[
-                        isActive && { zIndex: 999 }
-                    ]}
-                >
-                    <View key={item.id}>
-                        {item.exercises.map((exercise, exerciseIndex) => {
-                            const exerciseDetails = exercises.find(
-                                (e) => e.exerciseID === exercise.exerciseID
-                            );
+            <TouchableOpacity
+                onLongPress={drag}
+                activeOpacity={1}
+                style={[
+                    isActive && { zIndex: 999 }
+                ]}
+            >
+                <View key={item.id}>
+                    {item.exercises.map((exercise, exerciseIndex) => {
+                        const exerciseDetails = exercises.find(
+                            (e) => e.exerciseID === exercise.exerciseID
+                        );
 
-                            return (
-                                <ExerciseEditable
-                                    exerciseID={exercise.exerciseID}
-                                    workoutID={item.id}
-                                    key={exerciseIndex}
-                                    exercise={exercise}
-                                    exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
-                                    updateCurrentWorkout={setCurrentWorkout}
-                                    drag={drag}
-                                    isActive={isActive}
-                                    onOpenDetails={() => showExerciseInfo(exerciseDetails)}
-                                    simultaneousHandlers={listRef} // Pass ref to coordinate with swipeable rows
-                                />
-                            );
-                        })}
-                    </View>
-                </TouchableOpacity>
-            </ScaleDecorator>
+                        return (
+                            <ExerciseEditable
+                                exerciseID={exercise.exerciseID}
+                                workoutID={item.id}
+                                key={exerciseIndex}
+                                exercise={exercise}
+                                exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
+                                updateCurrentWorkout={setCurrentWorkout}
+                                drag={drag}
+                                isActive={isActive}
+                                onOpenDetails={() => showExerciseInfo(exerciseDetails)}
+                                simultaneousHandlers={listRef} // Pass ref to coordinate with swipeable rows
+                            />
+                        );
+                    })}
+                </View>
+            </TouchableOpacity>
         );
     }, [setCurrentWorkout, exercises]);
 
@@ -448,7 +450,7 @@ const Current = () => {
                             onDragBegin={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
                             keyExtractor={(item) => item.id}
                             renderItem={renderItem}
-                            contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
+                            contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                             activationDistance={20}
                             // Smooth layout transitions when adding/removing items (not during drag)
                             itemLayoutAnimation={LinearTransition.springify().damping(14).stiffness(100)}
@@ -466,17 +468,31 @@ const Current = () => {
 
                                     <TouchableOpacity
                                         onPress={endWorkout}
-                                        activeOpacity={0.8}
-                                        style={styles.finishButtonContainer}
+                                        activeOpacity={0.7}
+                                        style={styles.actionButton}
                                     >
-                                        <LinearGradient
-                                            colors={[COLORS.success, '#00cec9']}
-                                            start={{ x: 0, y: 0 }}
-                                            end={{ x: 1, y: 1 }}
-                                            style={styles.finishButton}
-                                        >
-                                            <Text style={styles.finishButtonText}>Finish Workout</Text>
-                                        </LinearGradient>
+                                        <Text style={[styles.actionText, { color: COLORS.success }]}>
+                                            Finish Workout
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={() =>
+                                            Alert.alert(
+                                                "Clear Workout?",
+                                                "This will remove all data.",
+                                                [
+                                                    { text: "Cancel", style: "cancel" },
+                                                    { text: "OK", onPress: clearWorkout }
+                                                ]
+                                            )
+                                        }
+                                        activeOpacity={0.7}
+                                        style={styles.actionButton}
+                                    >
+                                        <Text style={[styles.actionText, { color: COLORS.danger }]}>
+                                            Clear Workout
+                                        </Text>
                                     </TouchableOpacity>
                                 </Animated.View>
                             }
@@ -599,20 +615,24 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontFamily: FONTS.semiBold,
     },
-    finishButtonContainer: {
+    buttonContainer: {
         ...SHADOWS.medium,
+        paddingBottom: 12,
     },
-    finishButton: {
-        paddingVertical: 16,
+    actionButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 18,
         borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.05)', // subtle glow on dark bg
         alignItems: 'center',
         justifyContent: 'center',
+        marginBottom: 12,
     },
-    finishButtonText: {
-        color: COLORS.text,
-        fontSize: 18,
+
+    actionText: {
+        fontSize: 17,
         fontFamily: FONTS.bold,
-        letterSpacing: 0.5,
+        letterSpacing: 0.4,
     },
     footer: {
         padding: 16,
