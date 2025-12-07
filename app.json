@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "sisyphus",
+    "name": "Sisyphus",
     "slug": "sisyphus",
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1b1c1c"
     },
     "ios": {
       "supportsTablet": true
@@ -19,8 +19,8 @@
     "android": {
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive.png",
+        "backgroundColor": "#1b1c1c"
       },
       "package": "com.elliottr.sisyphus",
       "compileSdkVersion": 34,
