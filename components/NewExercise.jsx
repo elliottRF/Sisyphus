@@ -1,8 +1,8 @@
 import { View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity } from 'react-native'
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Body from "react-native-body-highlighter";
 import { MultipleSelectList } from 'react-native-dropdown-select-list'
-import { insertExercise } from '../components/db';
+import { insertExercise, updateExercise, fetchExercises } from '../components/db';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -11,6 +11,49 @@ const NewExercise = props => {
     const [targetSelected, setTargetSelected] = useState([]);
     const [accessorySelected, setAccessorySelected] = useState([]);
     const [formattedTargets, setFormattedTargets] = useState([]);
+    const [isEditMode, setIsEditMode] = useState(false);
+
+    // Load exercise data if exerciseID is provided
+    useEffect(() => {
+        const loadExercise = async () => {
+            if (props.exerciseID) {
+                setIsEditMode(true);
+                const exercises = await fetchExercises();
+                const exercise = exercises.find(ex => ex.exerciseID === props.exerciseID);
+
+                if (exercise) {
+                    setExerciseName(exercise.name);
+
+                    // Parse target muscles
+                    const targets = exercise.targetMuscle
+                        ? exercise.targetMuscle.split(',').map(m => m.trim())
+                        : [];
+                    setTargetSelected(targets);
+
+                    // Parse accessory muscles
+                    const accessories = exercise.accessoryMuscles
+                        ? exercise.accessoryMuscles.split(',').map(m => m.trim())
+                        : [];
+                    setAccessorySelected(accessories);
+
+                    // Format targets for body visualization
+                    const sluggedTargets = targets.map(target => ({
+                        slug: typeof target === 'string' ? target.toLowerCase() : '',
+                        intensity: 1
+                    }));
+
+                    const sluggedAccessories = accessories.map(accessory => ({
+                        slug: typeof accessory === 'string' ? accessory.toLowerCase() : '',
+                        intensity: 2
+                    }));
+
+                    setFormattedTargets([...sluggedTargets, ...sluggedAccessories]);
+                }
+            }
+        };
+
+        loadExercise();
+    }, [props.exerciseID]);
 
     const handleOpened1 = () => {
         // Process target muscles (intensity 1)
@@ -57,14 +100,32 @@ const NewExercise = props => {
             throw new Error("Input must be an array");
         }
 
+        // Preserve exact format from dropdown (e.g., "Chest", "Upper-Back")
+        // Do NOT lowercase or remove spaces/hyphens
         return list
-            .map(item => String(item).toLowerCase().replace(/\s+/g, "")) // Convert to string, lowercase, remove spaces
+            .map(item => String(item).trim()) // Only trim whitespace
+            .filter(item => item.length > 0) // Remove empty strings
             .join(","); // Join with commas
     }
 
     const createExercise = async () => {
         if (!exerciseName.trim()) return;
-        await insertExercise(exerciseName, formatListToString(targetSelected), formatListToString(accessorySelected));
+
+        if (isEditMode && props.exerciseID) {
+            await updateExercise(
+                props.exerciseID,
+                exerciseName,
+                formatListToString(targetSelected),
+                formatListToString(accessorySelected)
+            );
+        } else {
+            await insertExercise(
+                exerciseName,
+                formatListToString(targetSelected),
+                formatListToString(accessorySelected)
+            );
+        }
+
         props.close();
     }
 
@@ -142,6 +203,7 @@ const NewExercise = props => {
                         setSelected={(val) => setTargetSelected(val)}
                         data={targetMuscle}
                         save="value"
+                        defaultOption={targetSelected}
                         label="Target Muscles"
                         placeholder="Target Muscles"
                         maxHeight={200}
@@ -163,6 +225,7 @@ const NewExercise = props => {
                         setSelected={(val) => setAccessorySelected(val)}
                         data={accessoryMuscles}
                         save="value"
+                        defaultOption={accessorySelected}
                         label="Accessory Muscles"
                         placeholder="Accessory Muscles"
                         maxHeight={200}
@@ -186,7 +249,9 @@ const NewExercise = props => {
                         end={{ x: 1, y: 1 }}
                         style={styles.createButton}
                     >
-                        <Text style={styles.createButtonText}>Create Exercise</Text>
+                        <Text style={styles.createButtonText}>
+                            {isEditMode ? 'Update Exercise' : 'Create Exercise'}
+                        </Text>
                     </LinearGradient>
                 </TouchableOpacity>
 

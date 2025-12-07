@@ -206,7 +206,7 @@ const WorkoutDetail = () => {
                                         <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>kg</Text>
                                         <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>Reps</Text>
                                         <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>1RM</Text>
-                                        <View style={{ width: 40 }} />
+                                        <View style={{ width: 60 }} />
                                     </View>
                                     {setsWithDisplayNumbers.map((set, setIndex) => {
                                         const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
@@ -252,12 +252,8 @@ const WorkoutDetail = () => {
             <ActionSheet
                 ref={actionSheetRef}
                 containerStyle={styles.actionSheetContainer}
+                gestureEnabled={false}
             >
-                <View style={styles.closeIconContainer}>
-                    <TouchableOpacity onPress={handleCloseActionSheet} style={styles.closeIcon}>
-                        <Feather name="x" size={24} color="#fff" />
-                    </TouchableOpacity>
-                </View>
                 <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName} />
             </ActionSheet>
         </SafeAreaView>
@@ -365,7 +361,7 @@ const styles = StyleSheet.create({
         borderColor: COLORS.border,
     },
     exerciseHeader: {
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
         paddingVertical: 12,
         backgroundColor: 'rgba(255,255,255,0.02)',
         borderBottomWidth: 1,
@@ -382,7 +378,7 @@ const styles = StyleSheet.create({
     },
     noteContainer: {
         flexDirection: 'row',
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
         paddingTop: 12,
         paddingBottom: 4,
         gap: 8,
@@ -400,7 +396,7 @@ const styles = StyleSheet.create({
     },
     setsHeaderRow: {
         flexDirection: 'row',
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
         paddingVertical: 8,
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(255,255,255,0.05)',
@@ -415,7 +411,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 6,
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
     },
     setBadge: {
         width: 30,
@@ -451,7 +447,7 @@ const styles = StyleSheet.create({
         color: COLORS.textSecondary,
     },
     prContainer: {
-        width: 40,
+        width: 60,
         flexDirection: 'row',
         justifyContent: 'flex-end',
         gap: 4,

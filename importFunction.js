@@ -41,7 +41,14 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                         if (isNaN(setNum)) setNum = 1;
 
                         // Calculate 1RM
-                        const oneRM = weight * (1 + reps / 30);
+                        let oneRM;
+                        if (reps === 0) {
+                            oneRM = 0;
+                        } else if (reps === 1) {
+                            oneRM = weight;
+                        } else {
+                            oneRM = weight * (1 + reps / 30);
+                        }
 
                         // Store set data
                         const setData = {

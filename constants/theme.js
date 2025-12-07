@@ -10,7 +10,7 @@ export const COLORS = {
     danger: '#d63031',
     warning: '#fdcb6e',
 };
-
+//old primary color: #0984e3
 export const FONTS = {
     regular: 'Inter_400Regular',
     medium: 'Inter_500Medium',

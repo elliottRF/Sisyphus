@@ -1,6 +1,7 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Keyboard } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Keyboard, ActivityIndicator } from 'react-native'
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ActionSheet from "react-native-actions-sheet";
 import { FlatList } from 'react-native-gesture-handler';
 
@@ -24,11 +25,16 @@ const muscleMapping = {
     "Upper-Back": "upper-back",
     "Lower-Back": "lower-back",
     "Shoulders": "deltoids",
+    "Deltoids": "deltoids",
     "Gluteal": "gluteal",
     "Glutes": "gluteal",
     "Forearms": "forearm",
+    "Forearm": "forearm",
     "Traps": "trapezius",
+    "Trapezius": "trapezius",
     "Calves": "calves",
+    "Abs": "abs",
+    "Adductors": "adductors",
 };
 
 const Home = () => {
@@ -36,36 +42,75 @@ const Home = () => {
     const [pinnedExercises, setPinnedExercises] = useState([]);
     const [allExercises, setAllExercises] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const actionSheetRef = useRef(null);
     const router = useRouter();
 
-    useFocusEffect(
-        useCallback(() => {
-            loadMuscleData();
-            loadPinnedExercises();
-        }, [])
-    );
+    // Load data only on mount
+    useEffect(() => {
+        loadMuscleData();
+        loadPinnedExercises();
+    }, []);
+
+    // Listen for workout completion events
+    useEffect(() => {
+        const checkForWorkoutCompletion = async () => {
+            try {
+                const workoutCompleted = await AsyncStorage.getItem('@workoutCompleted');
+                if (workoutCompleted === 'true') {
+                    console.log('Workout completed, refreshing home screen data...');
+                    await loadMuscleData();
+                    await loadPinnedExercises();
+                    // Clear the flag
+                    await AsyncStorage.removeItem('@workoutCompleted');
+                }
+            } catch (error) {
+                console.error('Error checking workout completion:', error);
+            }
+        };
+
+        // Check immediately
+        checkForWorkoutCompletion();
+
+        // Set up interval to check periodically (every 2 seconds)
+        const interval = setInterval(checkForWorkoutCompletion, 2000);
+
+        return () => clearInterval(interval);
+    }, []);
 
     const loadMuscleData = async () => {
         try {
             const usageData = await fetchRecentMuscleUsage(3);
+            console.log('=== Muscle Usage Data ===');
+            console.log('Raw data:', JSON.stringify(usageData, null, 2));
 
             const muscleStats = {};
 
             usageData.forEach(exercise => {
                 const sets = parseInt(exercise.sets, 10) || 0;
 
-                // Process Target Muscle (Primary)
-                const target = muscleMapping[exercise.targetMuscle] || exercise.targetMuscle.toLowerCase();
-                if (!muscleStats[target]) muscleStats[target] = { primarySets: 0, accessorySets: 0 };
-                muscleStats[target].primarySets += sets;
+                // Process Target Muscles (Primary) - now supports multiple
+                if (exercise.targetMuscle) {
+                    const targetMuscles = exercise.targetMuscle.split(',').map(m => m.trim());
+                    targetMuscles.forEach(targetMuscle => {
+                        if (targetMuscle) {
+                            console.log(`Processing target muscle: "${targetMuscle}"`);
+                            const target = muscleMapping[targetMuscle] || targetMuscle.toLowerCase();
+                            console.log(`Mapped to slug: "${target}"`);
+                            if (!muscleStats[target]) muscleStats[target] = { primarySets: 0, accessorySets: 0 };
+                            muscleStats[target].primarySets += sets;
+                        }
+                    });
+                }
 
                 // Process Accessory Muscles
                 if (exercise.accessoryMuscles) {
                     const accessories = exercise.accessoryMuscles.split(',').map(m => m.trim());
                     accessories.forEach(acc => {
                         if (acc) {
+                            console.log(`Processing accessory muscle: "${acc}"`);
                             const accTarget = muscleMapping[acc] || acc.toLowerCase();
+                            console.log(`Mapped to slug: "${accTarget}"`);
                             if (!muscleStats[accTarget]) muscleStats[accTarget] = { primarySets: 0, accessorySets: 0 };
                             muscleStats[accTarget].accessorySets += sets;
                         }
@@ -107,6 +152,20 @@ const Home = () => {
             setPinnedExercises(pinned);
         } catch (error) {
             console.error("Error loading pinned exercises:", error);
+        }
+    };
+
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        try {
+            await Promise.all([
+                loadMuscleData(),
+                loadPinnedExercises()
+            ]);
+        } catch (error) {
+            console.error("Error refreshing data:", error);
+        } finally {
+            setIsRefreshing(false);
         }
     };
 
@@ -153,9 +212,22 @@ const Home = () => {
                         <Text style={styles.greeting}>Recovery Status</Text>
                         <Text style={styles.subGreeting}>Last 3 Days Activity</Text>
                     </View>
-                    <TouchableOpacity onPress={() => router.push('/settings')} style={styles.settingsButton}>
-                        <Feather name="settings" size={24} color={COLORS.text} />
-                    </TouchableOpacity>
+                    <View style={styles.headerButtons}>
+                        <TouchableOpacity
+                            onPress={handleRefresh}
+                            style={styles.refreshButton}
+                            disabled={isRefreshing}
+                        >
+                            {isRefreshing ? (
+                                <ActivityIndicator size="small" color={COLORS.primary} />
+                            ) : (
+                                <Feather name="refresh-cw" size={24} color={COLORS.text} />
+                            )}
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => router.push('/settings')} style={styles.settingsButton}>
+                            <Feather name="settings" size={24} color={COLORS.text} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <ScrollView
@@ -200,6 +272,7 @@ const Home = () => {
                         exerciseID={exercise.exerciseID}
                         exerciseName={exercise.name}
                         onRemove={loadPinnedExercises}
+                        refreshTrigger={isRefreshing}
                     />
                 ))}
 
@@ -285,6 +358,22 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+    },
+    headerButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    refreshButton: {
+        padding: 8,
+        backgroundColor: COLORS.surface,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        minWidth: 40,
+        minHeight: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...SHADOWS.small,
     },
     settingsButton: {
         padding: 8,

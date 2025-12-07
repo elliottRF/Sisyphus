@@ -11,6 +11,7 @@ import ExerciseHistory from "../components/exerciseHistory"
 import Feather from '@expo/vector-icons/Feather';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from 'expo-router';
 
 const Profile = () => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -22,11 +23,13 @@ const Profile = () => {
     const createExerciseActionSheetRef = useRef(null);
     const actionSheetRef = useRef(null);
 
-    useEffect(() => {
-        fetchExercises()
-            .then(data => setExercises(data))
-            .catch(err => console.error(err));
-    }, []);
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchExercises()
+                .then(data => setExercises(data))
+                .catch(err => console.error(err));
+        }, [])
+    );
 
 
 
@@ -121,12 +124,8 @@ const Profile = () => {
             <ActionSheet
                 ref={actionSheetRef}
                 containerStyle={styles.actionSheetContainer}
+                gestureEnabled={false}
             >
-                <View style={styles.closeIconContainerUpperPosition}>
-                    <TouchableOpacity onPress={handleClose} style={styles.closeIcon}>
-                        <Feather name="x" size={24} color="#fff" />
-                    </TouchableOpacity>
-                </View>
                 <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName} />
             </ActionSheet>
 

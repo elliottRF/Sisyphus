@@ -13,14 +13,11 @@ const History = () => {
     const [exercisesList, setExercises] = useState([]);
     const router = useRouter();
 
-    useEffect(() => {
-        fetchExercises()
-            .then(data => setExercises(data))
-            .catch(err => console.error(err));
-    }, []);
-
     useFocusEffect(
         React.useCallback(() => {
+            fetchExercises()
+                .then(data => setExercises(data))
+                .catch(err => console.error(err));
             loadWorkoutHistory();
         }, [])
     );
@@ -133,7 +130,7 @@ const History = () => {
                                     <View style={styles.badgeContainer}>
                                         {totalPRs > 0 && (
                                             <View style={styles.prSummaryBadge}>
-                                                <MaterialCommunityIcons name="trophy" size={14} color={COLORS.primary} />
+                                                <MaterialCommunityIcons name="trophy" size={14} color={'rgba(45, 196, 182)'} />
                                                 <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
                                             </View>
                                         )}
@@ -176,18 +173,18 @@ const styles = StyleSheet.create({
     prSummaryBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 215, 0, 0.1)',
+        backgroundColor: 'rgba(44, 86, 85, 0.4)',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
         gap: 4,
         borderWidth: 1,
-        borderColor: 'rgba(255, 215, 0, 0.3)',
+        borderColor: 'rgba(45, 196, 182, 0.3)',
     },
     prSummaryText: {
         fontSize: 12,
         fontFamily: FONTS.bold,
-        color: COLORS.primary,
+        color: 'rgba(45, 196, 182)',
     },
     container: {
         flex: 1,

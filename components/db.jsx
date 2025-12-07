@@ -129,6 +129,25 @@ export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscl
   }
 };
 
+// Update existing exercise
+export const updateExercise = async (exerciseID, exerciseName, targetMuscles, accessoryMuscles) => {
+  const database = await getDb();
+  try {
+    await database.runAsync(
+      `UPDATE exercises 
+       SET name = ?, targetMuscle = ?, accessoryMuscles = ? 
+       WHERE exerciseID = ?;`,
+      [exerciseName, targetMuscles, accessoryMuscles, exerciseID]
+    );
+    return "Exercise updated successfully!";
+  } catch (error) {
+    if (error.message && error.message.includes("UNIQUE constraint failed")) {
+      throw new Error("Exercise name must be unique.");
+    }
+    throw error;
+  }
+};
+
 // Fetch all workouts from the database
 export const fetchWorkoutHistory = async () => {
   const database = await getDb();
@@ -419,7 +438,14 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             if (isNaN(setNum)) setNum = 1;
 
             // Calculate 1RM
-            const oneRM = weight * (1 + reps / 30);
+            let oneRM;
+            if (reps === 0) {
+              oneRM = 0;
+            } else if (reps === 1) {
+              oneRM = weight;
+            } else {
+              oneRM = weight * (1 + reps / 30);
+            }
 
             // Store set data
             const setData = {

@@ -1,4 +1,3 @@
-// Force reload
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -27,6 +26,7 @@ import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import Timer from '../components/Timer';
 import RestTimer from '../components/RestTimer';
+import { useFocusEffect } from 'expo-router';
 
 
 const Current = () => {
@@ -55,7 +55,14 @@ const Current = () => {
 
 
     const calculateOneRepMax = (weight, reps) => {
-        const oneRepMax = weight * (1 + reps / 30);
+        let oneRepMax;
+        if (reps === 0) {
+            oneRepMax = 0;
+        } else if (reps === 1) {
+            oneRepMax = weight;
+        } else {
+            oneRepMax = weight * (1 + reps / 30);
+        }
         return Math.round(oneRepMax * 100) / 100; // Truncates to 2 decimal places
     };
 
@@ -305,6 +312,14 @@ const Current = () => {
         loadWorkout();
     }, []);
 
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchExercises()
+                .then(data => setExercises(data))
+                .catch(err => console.error(err));
+        }, [])
+    );
+
     useEffect(() => {
         if (currentWorkout.length > 0) {
             saveWorkoutToAsyncStorage(currentWorkout);
@@ -482,21 +497,8 @@ const Current = () => {
                         borderTopRightRadius: 24,
                         backgroundColor: COLORS.background,
                     }}
+                    gestureEnabled={false}
                 >
-                    <View style={{
-                        position: 'absolute',
-                        top: 16,
-                        right: 16,
-                        zIndex: 1,
-                    }}>
-                        <TouchableOpacity onPress={handleCloseExerciseInfo} style={{
-                            backgroundColor: COLORS.surface,
-                            padding: 8,
-                            borderRadius: 20,
-                        }}>
-                            <Feather name="x" size={24} color="#fff" />
-                        </TouchableOpacity>
-                    </View>
                     <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName} />
                 </ActionSheet>
             </SafeAreaView>

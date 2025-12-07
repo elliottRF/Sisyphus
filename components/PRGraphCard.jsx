@@ -51,7 +51,7 @@ const TimeRangeSelector = ({ selectedRange, onSelect }) => {
     );
 };
 
-const PRGraphCard = ({ exerciseID, exerciseName, onRemove }) => {
+const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => {
     const [allData, setAllData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showTruePRs, setShowTruePRs] = useState(false);
@@ -63,6 +63,13 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove }) => {
             loadData();
         }, [exerciseID])
     );
+
+    // Reload data when refresh is triggered
+    useEffect(() => {
+        if (refreshTrigger !== undefined) {
+            loadData();
+        }
+    }, [refreshTrigger]);
 
     const loadData = async () => {
         try {
@@ -180,21 +187,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove }) => {
             }
         }
 
-        // 4. Extend to Today
-        if (aggregatedPoints.length > 0) {
-            const lastPt = aggregatedPoints[aggregatedPoints.length - 1];
-            const today = new Date();
-            const lastPtDate = new Date(lastPt.date);
-            const todayKey = today.toISOString().split('T')[0];
-            const lastKey = lastPtDate.toISOString().split('T')[0];
 
-            if (lastKey !== todayKey) {
-                aggregatedPoints.push({
-                    date: today,
-                    value: lastPt.value
-                });
-            }
-        }
 
         aggregatedPoints.sort((a, b) => a.date - b.date);
 
@@ -321,7 +314,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove }) => {
         <View style={styles.container}>
             <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.content}>
                 <View style={styles.header}>
-                    <View>
+                    <View style={{ flex: 1, marginRight: 8 }}>
                         <Text style={styles.title}>{exerciseName}</Text>
                         <Text style={styles.subtitle}>
                             {showTruePRs ? "True 1RM Progress" : "1RM History"}
