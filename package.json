@@ -46,7 +46,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
-    "react-native-actions-sheet": "^0.9.7",
+    "react-native-actions-sheet": "^10.1.0",
     "react-native-body-highlighter": "^3.1.0",
     "react-native-draggable-flatlist": "^4.0.3",
     "react-native-dropdown-select-list": "^2.0.5",

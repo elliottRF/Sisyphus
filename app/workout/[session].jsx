@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import ActionSheet from "react-native-actions-sheet";
 import ExerciseHistory from '../../components/exerciseHistory';
-
+import { Dimensions } from 'react-native';   // ← make sure this import exists at the top!
 const WorkoutDetail = () => {
     const { session } = useLocalSearchParams();
     const router = useRouter();
@@ -251,10 +251,17 @@ const WorkoutDetail = () => {
 
             <ActionSheet
                 ref={actionSheetRef}
-                containerStyle={styles.actionSheetContainer}
-                gestureEnabled={false}
+                enableGestureBack={true}
+                closeOnPressBack={true}
+                androidCloseOnBackPress={true}
+                containerStyle={{ height: '94%' }}
+                snapPoints={[94]}
+                initialSnapIndex={0}
             >
-                <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName} />
+                <ExerciseHistory
+                    exerciseID={selectedExerciseId}
+                    exerciseName={currentExerciseName}
+                />
             </ActionSheet>
         </SafeAreaView>
     );

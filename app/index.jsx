@@ -290,9 +290,12 @@ const Home = () => {
 
             <ActionSheet
                 ref={actionSheetRef}
-                containerStyle={styles.actionSheetContainer}
-                indicatorStyle={{ backgroundColor: COLORS.textSecondary }}
-                gestureEnabled={true}
+                enableGestureBack={true}
+                closeOnPressBack={true}
+                androidCloseOnBackPress={true}
+                containerStyle={{ height: '94%' }}
+                snapPoints={[94]}
+                initialSnapIndex={0}
             >
                 <View style={styles.contentContainer}>
                     <View style={styles.searchContainer}>

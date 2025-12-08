@@ -9,7 +9,7 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-
+import { Dimensions } from 'react-native';   // ← make sure this import exists at the top!
 import * as NavigationBar from 'expo-navigation-bar';
 
 import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs } from '../components/db';
@@ -511,15 +511,17 @@ const Current = () => {
 
                 <ActionSheet
                     ref={exerciseInfoActionSheetRef}
-                    containerStyle={{
-                        height: '90%',
-                        borderTopLeftRadius: 24,
-                        borderTopRightRadius: 24,
-                        backgroundColor: COLORS.background,
-                    }}
-                    gestureEnabled={false}
+                    enableGestureBack={true}
+                    closeOnPressBack={true}
+                    androidCloseOnBackPress={true}
+                    containerStyle={{ height: '94%' }}
+                    snapPoints={[94]}
+                    initialSnapIndex={0}
                 >
-                    <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName} />
+                    <ExerciseHistory
+                        exerciseID={selectedExerciseId}
+                        exerciseName={currentExerciseName}
+                    />
                 </ActionSheet>
             </SafeAreaView>
         </GestureHandlerRootView>
