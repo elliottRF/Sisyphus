@@ -14,7 +14,12 @@
       "backgroundColor": "#1b1c1c"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      }
     },
     "android": {
       "softwareKeyboardLayoutMode": "pan",
@@ -25,7 +30,13 @@
       "package": "com.elliottr.sisyphus",
       "compileSdkVersion": 34,
       "targetSdkVersion": 34,
-      "minSdkVersion": 21
+      "minSdkVersion": 21,
+      "permissions": [
+        "FOREGROUND_SERVICE",
+        "WAKE_LOCK",
+        "VIBRATE",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -35,7 +46,17 @@
     "plugins": [
       "expo-router",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#40BAAD",
+          "sounds": [
+            "./assets/notifications/ding.wav"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

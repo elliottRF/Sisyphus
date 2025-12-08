@@ -28,6 +28,8 @@ import Timer from '../components/Timer';
 import RestTimer from '../components/RestTimer';
 import { useFocusEffect } from 'expo-router';
 
+import TestSoundButton from '../components/TestSoundButton';
+import TestNotificationButton from '../components/TestNotificationButton';
 
 const Current = () => {
 
@@ -422,6 +424,8 @@ const Current = () => {
                         {/* Header */}
                         <View style={styles.headerContainer}>
                             <View style={styles.headerTopRow}>
+                                <TestSoundButton />
+                                <TestNotificationButton />
                                 <TextInput
                                     style={styles.workoutTitleInput}
                                     onChangeText={setWorkoutTitle}
