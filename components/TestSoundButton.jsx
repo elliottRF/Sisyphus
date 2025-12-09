@@ -17,7 +17,7 @@ const TestSoundButton = () => {
 
             // Load and play the sound
             const { sound } = await Audio.Sound.createAsync(
-                require('../assets/notifications/ding.wav'),
+                require('../assets/notifications/dingnoti.wav'),
                 { volume: 1.0 }
             );
             console.log('✓ Sound loaded');

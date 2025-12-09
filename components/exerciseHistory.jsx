@@ -273,7 +273,7 @@ const ExerciseHistory = (props) => {
                                     <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>kg</Text>
                                     <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>Reps</Text>
                                     <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>1RM</Text>
-                                    <View style={{ width: 40 }} />
+                                    <View style={{ width: 60 }} />
                                 </View>
                                 {setsWithDisplayNumbers.map((set, setIndex) => {
                                     const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
         color: COLORS.textSecondary,
     },
     prContainer: {
-        width: 40,
+        width: 60,
         flexDirection: 'row',
         justifyContent: 'flex-end',
         gap: 4,

@@ -424,8 +424,6 @@ const Current = () => {
                         {/* Header */}
                         <View style={styles.headerContainer}>
                             <View style={styles.headerTopRow}>
-                                <TestSoundButton />
-                                <TestNotificationButton />
                                 <TextInput
                                     style={styles.workoutTitleInput}
                                     onChangeText={setWorkoutTitle}
@@ -442,6 +440,7 @@ const Current = () => {
                                 )}
                             </View>
                             <View style={styles.headerDivider} />
+
                         </View>
 
                         <DraggableFlatList

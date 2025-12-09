@@ -53,7 +53,7 @@
           "icon": "./assets/icon.png",
           "color": "#40BAAD",
           "sounds": [
-            "./assets/notifications/ding.wav"
+            "./assets/notifications/dingnoti.wav"
           ]
         }
       ]

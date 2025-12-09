@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { LineGraph, SelectionDot } from 'react-native-graph';
+import { LineGraph } from 'react-native-graph';
 import { COLORS, FONTS, SHADOWS } from '../constants/theme';
 import { fetchExerciseProgress, unpinExercise } from './db';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -59,14 +59,11 @@ const TimeRangeSelector = ({ selectedRange, onSelect }) => {
 const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => {
     const [allData, setAllData] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showTruePRs, setShowTruePRs] = useState(false);
+    const [graphMode, setGraphMode] = useState('history'); // 'history' | 'truePR' | 'maxWeight'
     const [timeRange, setTimeRange] = useState('ALL');
     const [selectedPoint, setSelectedPoint] = useState(null);
 
-    // This ref prevents race condition when hiding tooltip
-    const hideTimeoutRef = useRef(null);
     const isTouching = useRef(false);
-
 
     useFocusEffect(
         useCallback(() => {
@@ -90,20 +87,36 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                 return;
             }
 
-            const dailyMax = {};
+            const dailyData = {};
             history.forEach(entry => {
                 const date = new Date(entry.time);
-                const dateKey = date.toISOString().split('T')[0];
+                if (isNaN(date.getTime())) return;
 
-                if (!dailyMax[dateKey] || entry.oneRM > dailyMax[dateKey].value) {
-                    dailyMax[dateKey] = {
-                        value: Math.round(entry.oneRM),
+                const dateKey = date.toISOString().split('T')[0];
+                const oneRM = Number(entry.oneRM) || 0;
+                const weight = Number(entry.weight) || 0;
+
+                if (!dailyData[dateKey]) {
+                    dailyData[dateKey] = {
                         date: entry.time,
+                        max1RM: 0,
+                        maxWeight: 0
                     };
+                }
+
+                if (oneRM > dailyData[dateKey].max1RM) {
+                    dailyData[dateKey].max1RM = Math.round(oneRM);
+                }
+
+                if (weight > dailyData[dateKey].maxWeight) {
+                    dailyData[dateKey].maxWeight = Math.round(weight);
                 }
             });
 
-            let sortedData = Object.values(dailyMax).sort((a, b) => new Date(a.date) - new Date(b.date));
+            const sortedData = Object.values(dailyData)
+                .filter(d => d.max1RM > 0 || d.maxWeight > 0)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+
             setAllData(sortedData);
         } catch (error) {
             console.error("Error loading graph data:", error);
@@ -125,98 +138,102 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
     const { points, minDate, maxDate, yRange } = useMemo(() => {
         if (allData.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
 
-        let filtered = [...allData];
+        let filtered = allData.map(item => ({
+            date: new Date(item.date),
+            max1RM: Number(item.max1RM) || 0,
+            maxWeight: Number(item.maxWeight) || 0
+        })).filter(item => !isNaN(item.date.getTime()) && (item.max1RM > 0 || item.maxWeight > 0));
 
-        // Time Range Filter
-        const now = new Date();
-        let startDate = new Date(0);
-
-        if (timeRange === '3M') {
-            startDate = new Date();
-            startDate.setMonth(now.getMonth() - 3);
-        } else if (timeRange === '1Y') {
-            startDate = new Date();
-            startDate.setFullYear(now.getFullYear() - 1);
-        }
-
-        filtered = filtered.filter(d => new Date(d.date) >= startDate);
         if (filtered.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
 
-        // True PR Filter
-        if (showTruePRs) {
-            let max = 0;
-            filtered = filtered.filter(point => {
-                if (point.value >= max) {
-                    max = point.value;
+        const now = new Date();
+        let startDate = new Date(0);
+        if (timeRange === '3M') {
+            startDate = new Date(); startDate.setMonth(now.getMonth() - 3);
+        } else if (timeRange === '1Y') {
+            startDate = new Date(); startDate.setFullYear(now.getFullYear() - 1);
+        }
+        filtered = filtered.filter(p => p.date >= startDate);
+
+        if (filtered.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
+
+        let processed = [];
+
+        let useValue = (p) => graphMode === 'maxWeight' ? p.maxWeight : p.max1RM;
+
+        let tempProcessed = filtered.map(p => ({ date: p.date, value: useValue(p) })).filter(p => p.value > 0);
+
+        if (graphMode === 'truePR' || graphMode === 'maxWeight') {
+            let maxVal = 0;
+            processed = tempProcessed.filter(p => {
+                if (p.value >= maxVal) {
+                    maxVal = p.value;
                     return true;
                 }
                 return false;
             });
+        } else {
+            processed = tempProcessed;
         }
 
-        // Weekly/Monthly Aggregation
-        const firstDate = new Date(filtered[0].date);
-        const lastDate = new Date(filtered[filtered.length - 1].date);
-        const totalDurationMs = lastDate - firstDate;
-        const years = totalDurationMs / (1000 * 60 * 60 * 24 * 365);
-        const useMonthly = years > 3;
-        const intervalMs = useMonthly ? (1000 * 60 * 60 * 24 * 30) : (1000 * 60 * 60 * 24 * 7);
+        processed = processed
+            .filter(p => p && p.date && !isNaN(p.date.getTime()) && typeof p.value === 'number' && !isNaN(p.value) && isFinite(p.value))
+            .sort((a, b) => a.date - b.date);
 
-        const aggregatedPoints = [];
-        let iteratorDate = new Date(firstDate);
-        let lastValue = filtered[0].value;
+        if (processed.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
 
-        if (filtered.length < 5) {
-            filtered.forEach(p => aggregatedPoints.push({ date: new Date(p.date), value: p.value }));
-        } else {
+        if (processed.length >= 5) {
+            const firstDate = processed[0].date;
+            const lastDate = processed[processed.length - 1].date;
+            const totalDurationMs = lastDate - firstDate;
+            const years = totalDurationMs / (1000 * 60 * 60 * 24 * 365);
+            const intervalMs = years > 3 ? (1000 * 60 * 60 * 24 * 30) : (1000 * 60 * 60 * 24 * 7);
+
+            const aggregated = [];
+            let iteratorDate = new Date(firstDate);
+            let lastValue = processed[0].value;
+
             while (iteratorDate <= lastDate) {
                 const bucketEnd = new Date(iteratorDate.getTime() + intervalMs);
-                const pointsInBucket = filtered.filter(d => {
-                    const dDate = new Date(d.date);
-                    return dDate >= iteratorDate && dDate < bucketEnd;
-                });
+                const inBucket = processed.filter(p => p.date >= iteratorDate && p.date < bucketEnd);
 
-                if (pointsInBucket.length > 0) {
-                    const maxPoint = pointsInBucket.reduce((p, c) => (p.value > c.value) ? p : c);
-                    aggregatedPoints.push({ date: new Date(maxPoint.date), value: maxPoint.value });
-                    lastValue = maxPoint.value;
+                if (inBucket.length > 0) {
+                    const max = inBucket.reduce((a, b) => (a.value > b.value ? a : b));
+                    aggregated.push({ date: max.date, value: max.value });
+                    lastValue = max.value;
                 } else {
-                    aggregatedPoints.push({ date: new Date(iteratorDate), value: lastValue });
+                    aggregated.push({ date: new Date(iteratorDate), value: lastValue });
                 }
                 iteratorDate = bucketEnd;
             }
+            processed = aggregated;
         }
 
-        aggregatedPoints.sort((a, b) => a.date - b.date);
+        const values = processed.map(p => p.value).filter(v => !isNaN(v) && isFinite(v));
+        if (values.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
 
-        // Y-Axis Range with padding
-        const values = aggregatedPoints.map(p => p.value);
         const minVal = Math.min(...values);
         const maxVal = Math.max(...values);
-        const range = maxVal - minVal;
-        const padding = range === 0 ? 10 : range * 0.2;
-
-        let yMin = Math.max(0, minVal - padding);
-        let yMax = maxVal + padding;
-        if (yMin === yMax) yMax = yMin + 10;
+        const rangeVal = maxVal - minVal || 10;
+        const padding = rangeVal * 0.2;
+        const yMin = Math.max(0, minVal - padding);
+        const yMax = maxVal + padding;
 
         return {
-            points: aggregatedPoints,
-            minDate: aggregatedPoints[0]?.date || new Date(),
-            maxDate: aggregatedPoints[aggregatedPoints.length - 1]?.date || new Date(),
+            points: processed,
+            minDate: processed[0].date,
+            maxDate: processed[processed.length - 1].date,
             yRange: [yMin, yMax]
         };
-    }, [allData, timeRange, showTruePRs]);
+    }, [allData, timeRange, graphMode]);
 
-    // ── TREND CALCULATION ─────────────────────────────────────
     const trendData = useMemo(() => {
-        if (points.length < 2) return { value: 0, direction: 'flat' };
+        if (points.length < 2) return { direction: 'flat', label: '±0', period: '30d' };
 
         const now = new Date();
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(now.getDate() - 30);
 
-        // Find the closest point ≤ 30 days ago
         let pastPoint = null;
         for (let i = points.length - 1; i >= 0; i--) {
             if (points[i].date <= thirtyDaysAgo) {
@@ -224,36 +241,23 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                 break;
             }
         }
-
-        // If no point 30 days ago, use the first recorded point
-        if (!pastPoint && points.length > 0) {
-            pastPoint = points[0];
-        }
-
-        if (!pastPoint) return { value: 0, direction: 'flat' };
+        if (!pastPoint) pastPoint = points[0];
 
         const current = points[points.length - 1].value;
         const past = pastPoint.value;
         const diff = current - past;
 
-        let direction = 'flat';
-        if (diff > 0) direction = 'up';
-        else if (diff < 0) direction = 'down';
+        const isShortHistory = points[0].date > thirtyDaysAgo;
 
         return {
-            value: Math.abs(diff),
-            rawDiff: diff,
-            direction,
-            label: diff === 0 ? '±0' : `${diff > 0 ? '+' : ''}${diff}`
+            direction: diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat',
+            label: diff === 0 ? '±0' : `${diff > 0 ? '+' : ''}${Math.round(diff)}`,
+            period: isShortHistory ? 'since start' : '30d'
         };
     }, [points]);
 
-
-
-
     const axisLabels = useMemo(() => {
         if (!points.length) return [];
-
         const labels = [];
         const totalTime = maxDate.getTime() - minDate.getTime();
         if (totalTime <= 0) return [];
@@ -265,22 +269,20 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
             }
         };
 
+        let d = new Date(minDate);
         if (timeRange === '3M') {
-            let d = new Date(minDate);
             d.setDate(1);
             while (d <= maxDate) {
                 addLabel(new Date(d), d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
                 d.setMonth(d.getMonth() + 1);
             }
         } else if (timeRange === '1Y') {
-            let d = new Date(minDate);
             d.setDate(1);
             while (d <= maxDate) {
                 addLabel(new Date(d), d.toLocaleDateString('en-US', { month: 'short' }));
                 d.setMonth(d.getMonth() + 1);
             }
         } else {
-            let d = new Date(minDate);
             d.setMonth(0, 1);
             while (d <= maxDate) {
                 addLabel(new Date(d), d.getFullYear().toString());
@@ -297,10 +299,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
     }, [points, minDate, maxDate, timeRange]);
 
     const onPointSelected = useCallback((point) => {
-        // Only update if user is actively touching the graph
-        if (isTouching.current) {
-            setSelectedPoint(point);
-        }
+        if (isTouching.current) setSelectedPoint(point);
     }, []);
 
     const onGestureStart = useCallback(() => {
@@ -309,17 +308,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
 
     const onGestureEnd = useCallback(() => {
         isTouching.current = false;
-        // Immediately clear selection when finger lifts
         setSelectedPoint(null);
-    }, []);
-
-    // Cleanup timeout on unmount
-    useEffect(() => {
-        return () => {
-            if (hideTimeoutRef.current) {
-                clearTimeout(hideTimeoutRef.current);
-            }
-        };
     }, []);
 
     if (loading) {
@@ -347,7 +336,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
         );
     }
 
-    const currentPR = points[points.length - 1]?.value || 0;
+    const currentValue = points[points.length - 1]?.value || 0;
 
     return (
         <View style={styles.container}>
@@ -356,12 +345,11 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                     <View style={{ flex: 1, marginRight: 8 }}>
                         <Text style={styles.title}>{exerciseName}</Text>
                         <Text style={styles.subtitle}>
-                            {showTruePRs ? "True PR Progress" : "1RM History"}
+                            {graphMode === 'truePR' ? 'True PRs Only' :
+                                graphMode === 'maxWeight' ? 'Max Weight PRs' :
+                                    '1RM History'}
                         </Text>
 
-
-
-                        {/* TREND ARROW */}
                         {points.length >= 2 && (
                             <View style={[styles.trendBadge, {
                                 backgroundColor:
@@ -369,49 +357,26 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                                         trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.15)' :
                                             'rgba(100, 100, 100, 0.1)'
                             }]}>
-                                <Text style={[
-                                    styles.trendArrow,
-                                    {
-                                        color:
-                                            trendData.direction === 'up' ? '#22c55e' :
-                                                trendData.direction === 'down' ? '#ef4444' :
-                                                    COLORS.textSecondary
-                                    }
-                                ]}>
-                                    {trendData.direction === 'up' ? '↑' :
-                                        trendData.direction === 'down' ? '↓' : '→'}
+                                <Text style={[styles.trendArrow, {
+                                    color: trendData.direction === 'up' ? '#22c55e' :
+                                        trendData.direction === 'down' ? '#ef4444' :
+                                            COLORS.textSecondary
+                                }]}>
+                                    {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
                                 </Text>
-                                <Text style={[
-                                    styles.trendText,
-                                    {
-                                        color:
-                                            trendData.direction === 'up' ? '#22c55e' :
-                                                trendData.direction === 'down' ? '#ef4444' :
-                                                    COLORS.textSecondary,
-                                        fontFamily: FONTS.bold
-                                    }
-                                ]}>
+                                <Text style={[styles.trendText, {
+                                    color: trendData.direction === 'up' ? '#22c55e' :
+                                        trendData.direction === 'down' ? '#ef4444' :
+                                            COLORS.textSecondary,
+                                    fontFamily: FONTS.bold
+                                }]}>
                                     {trendData.label} kg
                                 </Text>
-                                <Text style={styles.trendPeriod}>· 30d</Text>
+                                <Text style={styles.trendPeriod}>· {trendData.period}</Text>
                             </View>
                         )}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                     </View>
+
                     <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                         <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} />
                         <TouchableOpacity onPress={handleUnpin} style={styles.unpinButton}>
@@ -420,35 +385,49 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                     </View>
                 </View>
 
-                <TouchableOpacity
-                    onPress={() => setShowTruePRs(!showTruePRs)}
-                    style={[styles.modeToggle, showTruePRs && styles.modeToggleActive]}
-                >
-                    <Feather
-                        name={showTruePRs ? "trending-up" : "activity"}
-                        size={14}
-                        color={showTruePRs ? COLORS.primary : COLORS.textSecondary}
-                    />
-                    <Text style={[styles.modeText, showTruePRs && styles.modeTextActive]}>
-                        {showTruePRs ? "True PRs Only" : "All History"}
-                    </Text>
-                </TouchableOpacity>
+                <View style={styles.modeToggleContainer}>
+                    {[
+                        { key: 'history', label: '1RM', icon: 'activity' },
+                        { key: 'truePR', label: 'True PR', icon: 'trending-up' },
+                        { key: 'maxWeight', label: 'Max Wt', icon: 'package' },
+                    ].map(mode => (
+                        <TouchableOpacity
+                            key={mode.key}
+                            onPress={() => setGraphMode(mode.key)}
+                            style={[
+                                styles.modeButton,
+                                graphMode === mode.key && styles.modeButtonActive
+                            ]}
+                        >
+                            <Feather
+                                name={mode.icon}
+                                size={14}
+                                color={graphMode === mode.key ? COLORS.primary : COLORS.textSecondary}
+                            />
+                            <Text style={[
+                                styles.modeButtonText,
+                                graphMode === mode.key && styles.modeButtonTextActive
+                            ]}>
+                                {mode.label}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
 
-                {/* Tooltip */}
                 <View style={styles.tooltipContainer}>
                     {selectedPoint ? (
                         <View style={styles.activeTooltip}>
                             <Text style={styles.tooltipValue}>{selectedPoint.value} kg</Text>
                             <Text style={styles.tooltipDate}>
-                                {selectedPoint.date.toLocaleDateString('en-US', {
-                                    month: 'short', day: 'numeric', year: 'numeric'
-                                })}
+                                {selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </Text>
                         </View>
                     ) : (
                         <View style={styles.placeholderTooltip}>
-                            <Text style={styles.tooltipValue}>{currentPR} kg</Text>
-                            <Text style={styles.tooltipDate}>Current PR</Text>
+                            <Text style={styles.tooltipValue}>{currentValue} kg</Text>
+                            <Text style={styles.tooltipDate}>
+                                {graphMode === 'maxWeight' ? 'Heaviest Lift' : 'Current PR'}
+                            </Text>
                         </View>
                     )}
                 </View>
@@ -464,31 +443,25 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                         <LineGraph
                             points={points}
                             animated={true}
-                            color={COLORS.primary}
-                            gradientFillColors={[`${COLORS.primary}CC`, 'transparent']}
+                            color={graphMode === 'maxWeight' ? '#f59e0b' : COLORS.primary}
+                            gradientFillColors={[
+                                graphMode === 'maxWeight' ? '#f59e0bCC' : `${COLORS.primary}CC`,
+                                'transparent'
+                            ]}
                             enablePanGesture={true}
                             enableIndicator={true}
                             indicatorPulsating={true}
                             SelectionDot={CustomSelectionDot}
-
-                            // These three are REQUIRED for the fix
                             onPointSelected={onPointSelected}
                             onGestureStart={onGestureStart}
                             onGestureEnd={onGestureEnd}
-
                             range={{ y: { min: yRange[0], max: yRange[1] } }}
                             style={{ width: GRAPH_WIDTH, height: GRAPH_HEIGHT }}
                         />
 
                         <View style={styles.xAxisContainer}>
                             {axisLabels.map((label, index) => (
-                                <Text
-                                    key={index}
-                                    style={[
-                                        styles.xAxisLabel,
-                                        { left: label.left }
-                                    ]}
-                                >
+                                <Text key={index} style={[styles.xAxisLabel, { left: label.left }]}>
                                     {label.text}
                                 </Text>
                             ))}
@@ -606,27 +579,34 @@ const styles = StyleSheet.create({
     rangeTextActive: {
         color: COLORS.primary,
     },
-    modeToggle: {
+    modeToggleContainer: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 12,
+        padding: 4,
+        marginBottom: 12,
+        alignSelf: 'flex-start',
+        gap: 4,
+    },
+    modeButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(255,255,255,0.03)',
-        paddingVertical: 6,
-        paddingHorizontal: 10,
-        borderRadius: 20,
-        marginBottom: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 10,
         gap: 6,
     },
-    modeToggleActive: {
-        backgroundColor: 'rgba(64, 186, 173, 0.15)',
+    modeButtonActive: {
+        backgroundColor: 'rgba(255,255,255,0.15)',
     },
-    modeText: {
+    modeButtonText: {
         fontSize: 11,
         fontFamily: FONTS.medium,
         color: COLORS.textSecondary,
     },
-    modeTextActive: {
+    modeButtonTextActive: {
         color: COLORS.primary,
+        fontFamily: FONTS.bold,
     },
     tooltipContainer: {
         height: 44,
@@ -658,6 +638,7 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 12,
         gap: 4,
+        marginTop: 4,
     },
     trendArrow: {
         fontSize: 13,

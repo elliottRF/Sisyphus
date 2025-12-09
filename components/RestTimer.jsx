@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Vibration, Platform, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming, runOnJS } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, runOnJS } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import { Audio } from 'expo-av';
@@ -26,7 +26,8 @@ const RestTimer = () => {
     const appState = useRef(AppState.currentState);
     const isCompletingRef = useRef(false);
     const checkIntervalRef = useRef(null);
-    const notificationTimeoutRef = useRef(null);
+    const persistentNotificationIdRef = useRef(null);
+    const updateNotificationIntervalRef = useRef(null);
 
     // Animation values
     const scale = useSharedValue(1);
@@ -38,7 +39,6 @@ const RestTimer = () => {
     useEffect(() => {
         async function initAudio() {
             try {
-                // Set audio mode for background playback - CRITICAL for iOS
                 await Audio.setAudioModeAsync({
                     playsInSilentModeIOS: true,
                     staysActiveInBackground: true,
@@ -50,7 +50,7 @@ const RestTimer = () => {
                 // Load completion sound
                 try {
                     const { sound: dingSound } = await Audio.Sound.createAsync(
-                        require('../assets/notifications/ding.wav'),
+                        require('../assets/notifications/dingnoti.wav'),
                         {
                             shouldPlay: false,
                             volume: 1.0,
@@ -62,21 +62,14 @@ const RestTimer = () => {
                     console.error('Failed to load ding sound:', soundError);
                 }
 
-                // Create a silent/minimal background sound to keep audio session active
-                // Using ding.mp3 at zero volume as a workaround if silent.mp3 is too short
+                // Background sound for keeping audio session alive
                 try {
                     const { sound: bgSound } = await Audio.Sound.createAsync(
-                        require('../assets/notifications/ding.mp3'), // Using existing file
+                        require('../assets/notifications/ding.mp3'),
                         {
                             shouldPlay: false,
                             isLooping: true,
-                            volume: 0.0, // Completely silent
-                        },
-                        (status) => {
-                            // Monitor playback status
-                            if (status.isLoaded && !status.isPlaying && status.didJustFinish) {
-                                console.log('Background sound finished, restarting...');
-                            }
+                            volume: 0.0,
                         }
                     );
                     console.log('Background sound loaded successfully');
@@ -93,7 +86,6 @@ const RestTimer = () => {
         initAudio();
 
         return () => {
-            // Cleanup
             if (completionSound) {
                 completionSound.unloadAsync();
             }
@@ -101,6 +93,40 @@ const RestTimer = () => {
                 backgroundSound.stopAsync().then(() => backgroundSound.unloadAsync()).catch(e => console.log(e));
             }
         };
+    }, []);
+
+    // Setup notification channel
+    useEffect(() => {
+        async function setupNotifications() {
+            const { status } = await Notifications.getPermissionsAsync();
+            if (status !== 'granted') {
+                await Notifications.requestPermissionsAsync();
+            }
+
+            // Set up Android notification channel
+            if (Platform.OS === 'android') {
+                await Notifications.setNotificationChannelAsync('timer-ongoing', {
+                    name: 'Timer Running',
+                    importance: Notifications.AndroidImportance.LOW,
+                    sound: null,
+                    enableVibrate: false,
+                    showBadge: false,
+                });
+
+                await Notifications.setNotificationChannelAsync('timer-complete', {
+                    name: 'Timer Complete',
+                    importance: Notifications.AndroidImportance.HIGH,
+                    sound: 'dingnoti.wav',
+                    vibrationPattern: [0, 500, 200, 500],
+                    enableVibrate: true,
+                    showBadge: true,
+                });
+
+                console.log('Notification channels created');
+            }
+        }
+
+        setupNotifications();
     }, []);
 
     // App state handling
@@ -138,6 +164,7 @@ const RestTimer = () => {
                     await AsyncStorage.removeItem(TIMER_KEY);
                     setTimeLeft(0);
                     setIsActive(false);
+                    await dismissPersistentNotification();
                     if (backgroundSound) {
                         await backgroundSound.stopAsync().catch(e => console.log(e));
                     }
@@ -185,62 +212,71 @@ const RestTimer = () => {
         };
     }, [isActive]);
 
-    // Request notification permissions and setup channel
-    useEffect(() => {
-        async function setupNotifications() {
-            const { status } = await Notifications.requestPermissionsAsync();
-            if (status !== 'granted') {
-                console.log('Notification permissions not granted');
-            } else {
-                console.log('Notification permissions granted');
-            }
-
-            // Set up Android notification channel with sound and vibration
-            if (Platform.OS === 'android') {
-                await Notifications.setNotificationChannelAsync('timer-alerts', {
-                    name: 'Timer Alerts',
-                    importance: Notifications.AndroidImportance.MAX,
-                    vibrationPattern: [0, 500, 200, 500],
-                    sound: 'ding.wav', // Use your custom sound
-                    enableVibrate: true,
-                    enableLights: true,
-                    lightColor: '#40BAAD',
-                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    bypassDnd: true, // Allow even in Do Not Disturb mode
-                });
-                console.log('Android notification channel created with custom sound');
-            }
-        }
-        setupNotifications();
-    }, []);
-
-    const scheduleNotification = async (seconds) => {
+    const showPersistentNotification = async (seconds) => {
         try {
-            await Notifications.cancelAllScheduledNotificationsAsync();
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            const timeString = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 
-            console.log(`Scheduling notification for ${seconds} seconds from now`);
-            console.log('Current time:', new Date().toISOString());
-            console.log('Target time:', new Date(Date.now() + seconds * 1000).toISOString());
+            // Dismiss existing persistent notification
+            if (persistentNotificationIdRef.current) {
+                await Notifications.dismissNotificationAsync(persistentNotificationIdRef.current);
+            }
+
+            const notificationId = await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: 'Rest Timer',
+                    body: `${timeString} remaining`,
+                    sticky: true,
+                    autoDismiss: false,
+                    priority: Notifications.AndroidNotificationPriority.LOW,
+                },
+                trigger: null, // Immediate
+            });
+
+            persistentNotificationIdRef.current = notificationId;
+        } catch (e) {
+            console.error('Error showing persistent notification:', e);
+        }
+    };
+
+    const updatePersistentNotification = async (seconds) => {
+        await showPersistentNotification(seconds);
+    };
+
+    const dismissPersistentNotification = async () => {
+        try {
+            if (persistentNotificationIdRef.current) {
+                await Notifications.dismissNotificationAsync(persistentNotificationIdRef.current);
+                persistentNotificationIdRef.current = null;
+            }
+            if (updateNotificationIntervalRef.current) {
+                clearInterval(updateNotificationIntervalRef.current);
+                updateNotificationIntervalRef.current = null;
+            }
+        } catch (e) {
+            console.error('Error dismissing persistent notification:', e);
+        }
+    };
+
+    const scheduleCompletionNotification = async (seconds) => {
+        try {
+            const futureDate = new Date(Date.now() + seconds * 1000);
+            console.log(`Scheduling completion notification for ${seconds} seconds from now:`, futureDate);
 
             const notificationId = await Notifications.scheduleNotificationAsync({
                 content: {
                     title: "Rest Complete! 💪",
                     body: "Time to get back to work.",
-                    sound: true,
+                    sound: 'dingnoti.wav',
                     vibrate: [0, 500, 200, 500],
-                    priority: Notifications.AndroidNotificationPriority.MAX,
-                    data: { timerComplete: true },
                 },
-                trigger: seconds,
+                trigger: futureDate,
             });
 
-            console.log('Notification scheduled with ID:', notificationId);
-
-            // Verify it was scheduled
-            const allScheduled = await Notifications.getAllScheduledNotificationsAsync();
-            console.log('Scheduled notifications after scheduling:', allScheduled);
+            console.log('Completion notification scheduled with ID:', notificationId);
         } catch (e) {
-            console.error('Error scheduling notification:', e);
+            console.error('Error scheduling completion notification:', e);
         }
     };
 
@@ -253,6 +289,9 @@ const RestTimer = () => {
         setIsActive(false);
         await AsyncStorage.removeItem(TIMER_KEY);
         endTimeRef.current = null;
+
+        // Dismiss persistent notification
+        await dismissPersistentNotification();
 
         try {
             // Stop background sound first
@@ -275,36 +314,21 @@ const RestTimer = () => {
                     console.log('Playing completion sound');
                 } else {
                     console.log('Completion sound not loaded, reloading...');
-                    await completionSound.loadAsync(require('../assets/notifications/ding.wav'), {
+                    await completionSound.loadAsync(require('../assets/notifications/dingnoti.wav'), {
                         shouldPlay: true,
                         volume: 1.0,
                     });
                 }
-            } else {
-                console.log('No completion sound available');
             }
 
-            // Vibrate (works in foreground, notification handles background)
+            // Vibrate
             Vibration.vibrate([0, 500, 200, 500]);
             console.log('Vibration triggered');
-
-            // Immediate notification as backup (will only show if backgrounded)
-            await Notifications.scheduleNotificationAsync({
-                content: {
-                    title: "Rest Complete! 💪",
-                    body: "Time to get back to work.",
-                    sound: Platform.OS === 'android' ? 'default' : false,
-                    vibrate: [0, 500, 200, 500],
-                },
-                trigger: null, // Immediate
-            });
-            console.log('Immediate notification sent');
 
         } catch (e) {
             console.error("Error in timer completion", e);
         }
 
-        // Reset flag after delay
         setTimeout(() => {
             isCompletingRef.current = false;
         }, 2000);
@@ -312,7 +336,7 @@ const RestTimer = () => {
 
     const startTimer = async () => {
         console.log('=== STARTING TIMER ===');
-        const duration = 3; // 2 minutes
+        const duration = 3; // 3 seconds for testing
         const end = Date.now() + duration * 1000;
         endTimeRef.current = end;
         await AsyncStorage.setItem(TIMER_KEY, end.toString());
@@ -326,71 +350,42 @@ const RestTimer = () => {
             withTiming(1, { duration: 100 })
         );
 
-        // Check notification permissions before scheduling
-        const { status } = await Notifications.getPermissionsAsync();
-        console.log('Notification permission status:', status);
-
-        if (status !== 'granted') {
-            console.log('Requesting notification permissions...');
-            const { status: newStatus } = await Notifications.requestPermissionsAsync();
-            console.log('New permission status:', newStatus);
-        }
-
-        // Start background audio to keep session active
+        // Start background audio
         if (backgroundSound) {
             try {
                 const status = await backgroundSound.getStatusAsync();
-                console.log('Background sound status before start:', status);
-
                 if (!status.isLoaded) {
                     await backgroundSound.loadAsync(require('../assets/notifications/ding.mp3'), {
                         isLooping: true,
                         volume: 0.0,
                         shouldPlay: true,
                     });
-                    console.log('Background sound loaded and playing');
+                    console.log('Background sound started');
                 } else if (!status.isPlaying) {
                     await backgroundSound.playAsync();
-                    console.log('Background sound started playing');
-                } else {
-                    console.log('Background sound already playing');
+                    console.log('Background sound resumed');
                 }
             } catch (e) {
                 console.error("Error starting background sound", e);
             }
-        } else {
-            console.log('No background sound available');
         }
 
-        // Schedule notification for when timer completes (as backup)
-        await scheduleNotification(duration);
+        // Show persistent notification
+        await showPersistentNotification(duration);
 
-        // ALSO set a JavaScript timeout as primary notification trigger
-        // This is more reliable than scheduled notifications on some Android devices
-        if (notificationTimeoutRef.current) {
-            clearTimeout(notificationTimeoutRef.current);
-        }
-        notificationTimeoutRef.current = setTimeout(async () => {
-            console.log('Timeout fired - sending notification');
-            try {
-                await Notifications.scheduleNotificationAsync({
-                    content: {
-                        title: "Rest Complete! 💪",
-                        body: "Time to get back to work.",
-                        sound: true,
-                        vibrate: [0, 500, 200, 500],
-                        priority: Notifications.AndroidNotificationPriority.MAX,
-                    },
-                    trigger: null, // Immediate
-                });
-            } catch (e) {
-                console.error('Error sending timeout notification:', e);
+        // Update persistent notification every second
+        updateNotificationIntervalRef.current = setInterval(async () => {
+            const now = Date.now();
+            if (endTimeRef.current) {
+                const remaining = Math.ceil((endTimeRef.current - now) / 1000);
+                if (remaining > 0) {
+                    await updatePersistentNotification(remaining);
+                }
             }
-        }, duration * 1000);
+        }, 1000);
 
-        // List all scheduled notifications to verify
-        const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-        console.log('All scheduled notifications:', scheduled.length, scheduled);
+        // Schedule completion notification
+        await scheduleCompletionNotification(duration);
     };
 
     const addTime = async () => {
@@ -407,9 +402,13 @@ const RestTimer = () => {
             withTiming(0, { duration: 100 })
         );
 
-        // Reschedule notification with new time
-        await scheduleNotification(newTimeLeft);
-        console.log('Time added, notification rescheduled');
+        // Update persistent notification
+        await updatePersistentNotification(newTimeLeft);
+
+        // Reschedule completion notification
+        await Notifications.cancelAllScheduledNotificationsAsync();
+        await scheduleCompletionNotification(newTimeLeft);
+        console.log('Time added, notifications updated');
     };
 
     const subtractTime = async () => {
@@ -429,9 +428,13 @@ const RestTimer = () => {
         if (newTimeLeft === 0) {
             handleTimerComplete();
         } else {
-            // Reschedule notification with new time
-            await scheduleNotification(newTimeLeft);
-            console.log('Time subtracted, notification rescheduled');
+            // Update persistent notification
+            await updatePersistentNotification(newTimeLeft);
+
+            // Reschedule completion notification
+            await Notifications.cancelAllScheduledNotificationsAsync();
+            await scheduleCompletionNotification(newTimeLeft);
+            console.log('Time subtracted, notifications updated');
         }
     };
 
@@ -444,12 +447,16 @@ const RestTimer = () => {
     // Gestures
     const tap = Gesture.Tap()
         .onEnd(() => {
-            runOnJS(startTimer)();
+            if (!isActive && timeLeft === 0) {
+                runOnJS(startTimer)();
+            }
         });
 
     const pan = Gesture.Pan()
         .activeOffsetY([-10, 10])
         .onEnd((e) => {
+            if (!isActive) return;
+
             if (e.translationY < -20) {
                 runOnJS(addTime)();
             } else if (e.translationY > 20) {
@@ -457,7 +464,7 @@ const RestTimer = () => {
             }
         });
 
-    const composed = Gesture.Simultaneous(tap, pan);
+    const composed = Gesture.Race(tap, pan);
 
     const rStyle = useAnimatedStyle(() => {
         return {
