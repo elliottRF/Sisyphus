@@ -293,7 +293,12 @@ const Home = () => {
                 enableGestureBack={true}
                 closeOnPressBack={true}
                 androidCloseOnBackPress={true}
-                containerStyle={{ height: '94%' }}
+                containerStyle={{
+                    height: '94%',
+                    borderTopLeftRadius: 25,
+                    borderTopRightRadius: 25,
+                    backgroundColor: '#fff',
+                }}
                 snapPoints={[94]}
                 initialSnapIndex={0}
             >
