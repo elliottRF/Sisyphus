@@ -55,9 +55,11 @@ const Current = () => {
 
     };
 
-    const clearWorkout = () => {
+    const clearWorkout = async () => {
         setCurrentWorkout([]);
         setStartTime(null);
+        await AsyncStorage.removeItem('@currentWorkout');
+        await AsyncStorage.removeItem('@workoutStartTime');
     };
 
     const calculateOneRepMax = (weight, reps) => {

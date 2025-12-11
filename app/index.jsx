@@ -35,6 +35,8 @@ const muscleMapping = {
     "Calves": "calves",
     "Abs": "abs",
     "Adductors": "adductors",
+    "Neck": "neck",
+    "Obliques": "obliques",
 };
 
 const Home = () => {

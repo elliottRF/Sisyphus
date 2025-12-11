@@ -59,9 +59,11 @@ const NewExercise = (props) => {
     const toggleTargetSelection = (value) => {
         setTargetSelected((prev) => {
             const newSelected = prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value];
+            // Remove from accessory if added to target
+            setAccessorySelected((acc) => acc.filter((a) => a !== value));
             setFormattedTargets([
                 ...newSelected.map((target) => ({ slug: target.toLowerCase(), intensity: 1 })),
-                ...accessorySelected.map((accessory) => ({ slug: accessory.toLowerCase(), intensity: 2 })),
+                ...accessorySelected.filter((a) => a !== value).map((accessory) => ({ slug: accessory.toLowerCase(), intensity: 2 })),
             ]);
             return newSelected;
         });
@@ -70,8 +72,10 @@ const NewExercise = (props) => {
     const toggleAccessorySelection = (value) => {
         setAccessorySelected((prev) => {
             const newSelected = prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value];
+            // Remove from target if added to accessory
+            setTargetSelected((targ) => targ.filter((t) => t !== value));
             setFormattedTargets([
-                ...targetSelected.map((target) => ({ slug: target.toLowerCase(), intensity: 1 })),
+                ...targetSelected.filter((t) => t !== value).map((target) => ({ slug: target.toLowerCase(), intensity: 1 })),
                 ...newSelected.map((accessory) => ({ slug: accessory.toLowerCase(), intensity: 2 })),
             ]);
             return newSelected;
@@ -119,7 +123,13 @@ const NewExercise = (props) => {
         { key: '12', value: 'Gluteal' },
         { key: '13', value: 'Calves' },
         { key: '14', value: 'Adductors' },
+        { key: '15', value: 'Neck' },
+        { key: '16', value: 'Obliques' },
     ];
+
+    const getFilteredOptions = (selected) => {
+        return muscleOptions.filter((option) => !selected.includes(option.value));
+    };
 
     const handlers = useScrollHandlers();
 
@@ -191,9 +201,9 @@ const NewExercise = (props) => {
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Select Target Muscles</Text>
                         <FlatList
-                            data={muscleOptions}
+                            data={getFilteredOptions(accessorySelected)}  // ← Filter out accessory selected
                             keyExtractor={(item) => item.key}
-                            contentContainerStyle={{ paddingHorizontal: 8 }}
+                            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
                             showsVerticalScrollIndicator={true}
                             renderItem={({ item }) => (
                                 <TouchableOpacity style={styles.listItem} onPress={() => toggleTargetSelection(item.value)}>
@@ -227,15 +237,18 @@ const NewExercise = (props) => {
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Select Accessory Muscles</Text>
                         <FlatList
-                            data={muscleOptions}
+                            data={getFilteredOptions(targetSelected)}  // ← Filter out target selected
                             keyExtractor={(item) => item.key}
-                            contentContainerStyle={{ paddingHorizontal: 8 }}
+                            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
                             showsVerticalScrollIndicator={true}
                             renderItem={({ item }) => (
-                                <TouchableOpacity style={styles.listItem} onPress={() => toggleTargetSelection(item.value)}>
+                                <TouchableOpacity
+                                    style={styles.listItem}
+                                    onPress={() => toggleAccessorySelection(item.value)}
+                                >
                                     <Text style={styles.listText}>{item.value}</Text>
                                     <Feather
-                                        name={targetSelected.includes(item.value) ? 'check-square' : 'square'}
+                                        name={accessorySelected.includes(item.value) ? 'check-square' : 'square'}
                                         size={20}
                                         color={COLORS.text}
                                     />
