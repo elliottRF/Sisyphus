@@ -106,7 +106,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                                 } else {
                                     const result = await database.runAsync(
                                         'INSERT INTO exercises (name, targetMuscle, accessoryMuscles) VALUES (?, ?, ?)',
-                                        [exerciseName, 'Other', '']
+                                        [exerciseName, '', '']
                                     );
                                     exerciseID = result.lastInsertRowId;
                                 }

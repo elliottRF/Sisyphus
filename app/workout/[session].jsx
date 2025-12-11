@@ -16,11 +16,11 @@ const PRBadge = React.memo(({ type }) => {
     let colors = [COLORS.primary, COLORS.secondary];
 
     if (type === 'VOL') {
-        colors = ['#4834d4', '#686de0'];
+        colors = ['#2dc4b6', '#2dc4b6'];
     } else if (type === 'KG') {
-        colors = ['#6ab04c', '#badc58'];
+        colors = ['#2dc4b6', '#2dc4b6'];
     } else if (type === '1RM') {
-        colors = [COLORS.primary, COLORS.secondary];
+        colors = ['#2dc4b6', '#2dc4b6'];
     }
 
     return (
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     // Set Table
     setsContainer: {
         paddingVertical: 2, // Reduced padding
-        paddingHorizontal: 10,
+        paddingHorizontal: 0,
     },
     setsHeaderRow: {
         flexDirection: 'row',
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.01)',
     },
     setRowPR: {
-        backgroundColor: 'rgba(64, 186, 173, 0.15)',
+        backgroundColor: 'rgba(45, 196, 181, 0.15)',
     },
 
     // Set Number Badges (FIXED & Reduced size)
@@ -535,9 +535,9 @@ const styles = StyleSheet.create({
         borderRadius: 4,
     },
     miniPrText: {
-        fontSize: 8, // Minimum font size for readability
+        fontSize: 10, // Minimum font size for readability
         fontFamily: FONTS.bold,
-        color: '#fff',
+        color: '#f5f5f5ff',
     },
 
     // Action Sheet
