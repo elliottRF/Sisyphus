@@ -163,7 +163,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
 
         let tempProcessed = filtered.map(p => ({ date: p.date, value: useValue(p) })).filter(p => p.value > 0);
 
-        if (graphMode === 'truePR' || graphMode === 'maxWeight') {
+        if (graphMode === 'truePR') {
             let maxVal = 0;
             processed = tempProcessed.filter(p => {
                 if (p.value >= maxVal) {
@@ -171,6 +171,17 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                     return true;
                 }
                 return false;
+            });
+        } else if (graphMode === 'maxWeight') {
+            // For max weight, show PRs only when they actually occurred
+            let maxVal = 0;
+            processed = [];
+
+            tempProcessed.forEach(p => {
+                if (p.value > maxVal) {
+                    maxVal = p.value;
+                    processed.push({ date: p.date, value: maxVal });
+                }
             });
         } else {
             processed = tempProcessed;
