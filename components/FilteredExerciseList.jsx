@@ -3,10 +3,13 @@ import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard } from 'r
 import { FlatList } from 'react-native-gesture-handler';
 import ActionSheet from "react-native-actions-sheet";
 import { fetchExercises } from '../components/db';
-import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) => {
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
     const [searchQuery, setSearchQuery] = useState('');
 
     // Sort exercises alphabetically and then filter based on search
@@ -48,7 +51,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
         >
             <View style={styles.exerciseContent}>
                 <Text style={styles.exerciseName}>{item.name}</Text>
-                <Feather name="plus" size={20} color={COLORS.primary} />
+                <Feather name="plus" size={20} color={theme.primary} />
             </View>
         </TouchableOpacity>
     );
@@ -57,17 +60,17 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
         <ActionSheet
             ref={actionSheetRef}
             containerStyle={styles.actionSheetContainer}
-            indicatorStyle={{ backgroundColor: COLORS.textSecondary }}
+            indicatorStyle={styles.indicator}
             gestureEnabled={true}
         >
             <View style={styles.contentContainer}>
                 <View style={styles.searchContainer}>
                     <View style={styles.searchBar}>
-                        <Feather name="search" size={20} color={COLORS.textSecondary} style={styles.searchIcon} />
+                        <Feather name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
                         <TextInput
                             style={styles.searchInput}
                             placeholder="Search exercises..."
-                            placeholderTextColor={COLORS.textSecondary}
+                            placeholderTextColor={theme.textSecondary}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
                             returnKeyType="done"
@@ -91,73 +94,86 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
     );
 };
 
-const styles = StyleSheet.create({
-    actionSheetContainer: {
-        backgroundColor: COLORS.surface,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        height: '85%',
-    },
-    contentContainer: {
-        height: '100%',
-        backgroundColor: COLORS.background,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        overflow: 'hidden',
-    },
-    searchContainer: {
-        padding: 16,
-        backgroundColor: COLORS.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-    },
-    searchBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: COLORS.background,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        height: 44,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    searchIcon: {
-        marginRight: 10,
-    },
-    searchInput: {
-        flex: 1,
-        color: COLORS.text,
-        fontFamily: FONTS.medium,
-        fontSize: 16,
-        height: '100%',
-    },
-    list: {
-        flex: 1,
-        paddingHorizontal: 20,
-        paddingBottom: 100,
-    },
-    listContent: {
-        paddingBottom: 40,
-    },
-    exerciseCard: {
-        backgroundColor: COLORS.surface,
-        borderRadius: 16,
-        marginBottom: 12,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        ...SHADOWS.small,
-    },
-    exerciseContent: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    exerciseName: {
-        color: COLORS.text,
-        fontSize: 16,
-        fontFamily: FONTS.semiBold,
-    },
-});
+const getStyles = (theme) => {
+    // Safe Colors for Reanimated (ActionSheet)
+    const isDynamic = theme.type === 'dynamic';
+    const safeBackground = isDynamic ? '#121212' : theme.background;
+    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
+    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
+    const safeText = isDynamic ? '#FFFFFF' : theme.text;
+    const safeTextSecondary = isDynamic ? '#aaaaaa' : theme.textSecondary;
+
+    return StyleSheet.create({
+        actionSheetContainer: {
+            backgroundColor: 'transparent',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            height: '85%',
+        },
+        indicator: {
+            backgroundColor: safeTextSecondary,
+        },
+        contentContainer: {
+            height: '100%',
+            backgroundColor: theme.surface, // Use dynamic PlatformColor here
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            overflow: 'hidden',
+        },
+        searchContainer: {
+            padding: 16,
+            backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: safeBorder,
+        },
+        searchBar: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: safeBackground,
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            height: 44,
+            borderWidth: 1,
+            borderColor: safeBorder,
+        },
+        searchIcon: {
+            marginRight: 10,
+        },
+        searchInput: {
+            flex: 1,
+            color: safeText, // input text color usually safe, but good component practice
+            fontFamily: FONTS.medium,
+            fontSize: 16,
+            height: '100%',
+        },
+        list: {
+            flex: 1,
+            paddingHorizontal: 20,
+            paddingBottom: 100,
+        },
+        listContent: {
+            paddingBottom: 40,
+        },
+        exerciseCard: {
+            backgroundColor: theme.surface,
+            borderRadius: 16,
+            marginBottom: 12,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: safeBorder,
+            ...SHADOWS.small,
+        },
+        exerciseContent: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+        },
+        exerciseName: {
+            color: safeText,
+            fontSize: 16,
+            fontFamily: FONTS.semiBold,
+        },
+    });
+};
 
 export default FilteredExerciseList;

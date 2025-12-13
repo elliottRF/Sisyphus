@@ -7,6 +7,7 @@ import { setupDatabase } from '../components/db';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { COLORS } from '../constants/theme';
+import { ThemeProvider, useTheme } from '../context/ThemeContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -43,57 +44,75 @@ const _layout = () => {
     }
 
     return (
-        <GestureHandlerRootView style={{ flex: 1 }}>
-            <View style={{ flex: 1, backgroundColor: COLORS.background }} onLayout={onLayoutRootView}>
-                <Tabs
-                    backBehavior="history"
-                    tabBar={props => <TabBar {...props} />}
-                    screenOptions={{
-                        headerShown: false,
-                        tabBarStyle: {
-                            backgroundColor: COLORS.background,
-                            borderTopWidth: 0,
-                        }
-                    }}
-                >
-                    <Tabs.Screen
-                        name="index"
-                        options={{
-                            title: "Home",
-                        }}
-                    />
-                    <Tabs.Screen
-                        name="current"
-                        options={{
-                            title: "Current",
-                        }}
-                    />
-                    <Tabs.Screen
-                        name="history"
-                        options={{
-                            title: "History",
-                        }}
-                    />
-                    <Tabs.Screen
-                        name="profile"
-                        options={{
-                            title: "Exercises",
-                        }}
-                    />
-                    <Tabs.Screen
-                        name="workout/[session]"
-                        options={{
-                            href: null,
-                            tabBarStyle: {
-                                display: 'none',
-                            },
-                        }}
-                    />
-                </Tabs>
-            </View>
-        </GestureHandlerRootView>
+        <ThemeProvider>
+            <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+                <ThemeConsumer />
+            </GestureHandlerRootView>
+        </ThemeProvider>
     )
 }
+
+// Separate component to consume theme and render content with dynamic styles
+const ThemeConsumer = () => {
+    const { theme } = useTheme(); // Now we can use the hook
+
+    // We need to pass the theme down to the Tabs or use it here for the background
+    return (
+        <View style={{ flex: 1, backgroundColor: theme.background }}>
+            <Tabs
+                backBehavior="history"
+                tabBar={props => <TabBar {...props} />}
+                screenOptions={{
+                    headerShown: false,
+                    tabBarStyle: {
+                        backgroundColor: theme.background,
+                        borderTopWidth: 0,
+                    }
+                }}
+            >
+                <Tabs.Screen
+                    name="index"
+                    options={{
+                        title: "Home",
+                    }}
+                />
+                <Tabs.Screen
+                    name="current"
+                    options={{
+                        title: "Current",
+                    }}
+                />
+                <Tabs.Screen
+                    name="history"
+                    options={{
+                        title: "History",
+                    }}
+                />
+                <Tabs.Screen
+                    name="profile"
+                    options={{
+                        title: "Exercises",
+                    }}
+                />
+                <Tabs.Screen
+                    name="workout/[session]"
+                    options={{
+                        href: null,
+                        tabBarStyle: {
+                            display: 'none',
+                        },
+                    }}
+                />
+                <Tabs.Screen
+                    name="settings"
+                    options={{
+                        title: "Settings",
+                    }}
+                />
+            </Tabs>
+        </View>
+    );
+};
 
 export default _layout
 

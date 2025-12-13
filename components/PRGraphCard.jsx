@@ -2,10 +2,11 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { LineGraph } from 'react-native-graph';
-import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, SHADOWS } from '../constants/theme';
 import { fetchExerciseProgress, unpinExercise } from './db';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRAPH_HEIGHT = 220;
@@ -31,7 +32,7 @@ const CustomSelectionDot = ({ isActive, color }) => (
     }} />
 );
 
-const TimeRangeSelector = ({ selectedRange, onSelect }) => {
+const TimeRangeSelector = ({ selectedRange, onSelect, theme, styles }) => {
     const ranges = ['3M', '1Y', 'ALL'];
     return (
         <View style={styles.rangeSelector}>
@@ -56,7 +57,17 @@ const TimeRangeSelector = ({ selectedRange, onSelect }) => {
     );
 };
 
+// Reusable Gradient or Solid View Component
+const GradientOrView = ({ colors, style, theme, children }) => {
+    if (theme.type === 'dynamic') {
+        return <View style={[style, { backgroundColor: theme.surface }]}>{children}</View>;
+    }
+    return <LinearGradient colors={colors} style={style}>{children}</LinearGradient>;
+};
+
 const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => {
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
     const [allData, setAllData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [graphMode, setGraphMode] = useState('history'); // 'history' | 'truePR' | 'maxWeight'
@@ -325,7 +336,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
     if (loading) {
         return (
             <View style={styles.container}>
-                <ActivityIndicator color={COLORS.primary} style={{ marginTop: 50 }} />
+                <ActivityIndicator color={theme.primary} style={{ marginTop: 50 }} />
             </View>
         );
     }
@@ -336,7 +347,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                 <View style={styles.header}>
                     <Text style={styles.title}>{exerciseName}</Text>
                     <TouchableOpacity onPress={handleUnpin} style={styles.unpinButton}>
-                        <Feather name="x" size={16} color={COLORS.textSecondary} />
+                        <Feather name="x" size={16} color={theme.textSecondary} />
                     </TouchableOpacity>
                 </View>
                 <View style={styles.emptyState}>
@@ -349,9 +360,31 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
 
     const currentValue = points[points.length - 1]?.value || 0;
 
+    // Use solid color for graph line if system theme (gradient fill won't work perfectly)
+    // Actually LineGraph supports gradientFillColors as hex array.
+    // PlatformColor cannot be converted to Hex.
+    // If dynamic theme, we use a single solid color fallback or just clear
+    const graphColor = theme.type === 'dynamic' ? '#2DC4B6' : theme.primary; // Fallback to Teal if dynamic
+    // User requested "different but complementing". theme.secondary is usually complementary.
+    // System: Teal (#2DC4B6) -> Complementary could be Purple (#A29BFE) or Orange.
+    // We'll use Purple (#A29BFE) as fallback for secondary.
+    const maxWeightColor = theme.type === 'dynamic' ? '#A29BFE' : theme.secondary;
+
+    const gradientFill = theme.type === 'dynamic'
+        ? ['#2DC4B6CC', 'transparent'] // Fallback
+        : [`${theme.primary}CC`, 'transparent'];
+
+    const maxWeightGradient = theme.type === 'dynamic'
+        ? ['#A29BFECC', 'transparent']
+        : [`${theme.secondary}CC`, 'transparent'];
+
     return (
         <View style={styles.container}>
-            <LinearGradient colors={[COLORS.surface, COLORS.surface]} style={styles.content}>
+            <GradientOrView
+                colors={[theme.surface, theme.surface]}
+                style={styles.content}
+                theme={theme}
+            >
                 <View style={styles.header}>
                     <View style={{ flex: 1, marginRight: 8 }}>
                         <Text style={styles.title}>{exerciseName}</Text>
@@ -371,14 +404,14 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                                 <Text style={[styles.trendArrow, {
                                     color: trendData.direction === 'up' ? '#22c55e' :
                                         trendData.direction === 'down' ? '#ef4444' :
-                                            COLORS.textSecondary
+                                            theme.textSecondary
                                 }]}>
                                     {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
                                 </Text>
                                 <Text style={[styles.trendText, {
                                     color: trendData.direction === 'up' ? '#22c55e' :
                                         trendData.direction === 'down' ? '#ef4444' :
-                                            COLORS.textSecondary,
+                                            theme.textSecondary,
                                     fontFamily: FONTS.bold
                                 }]}>
                                     {trendData.label} kg
@@ -389,9 +422,9 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                     </View>
 
                     <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                        <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} />
+                        <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} theme={theme} styles={styles} />
                         <TouchableOpacity onPress={handleUnpin} style={styles.unpinButton}>
-                            <Feather name="x" size={16} color={COLORS.textSecondary} />
+                            <Feather name="x" size={16} color={theme.textSecondary} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -413,7 +446,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                             <Feather
                                 name={mode.icon}
                                 size={14}
-                                color={graphMode === mode.key ? COLORS.primary : COLORS.textSecondary}
+                                color={graphMode === mode.key ? theme.primary : theme.textSecondary}
                             />
                             <Text style={[
                                 styles.modeButtonText,
@@ -454,9 +487,9 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                         <LineGraph
                             points={points}
                             animated={true}
-                            color={graphMode === 'maxWeight' ? '#f59e0b' : COLORS.primary}
+                            color={graphMode === 'maxWeight' ? maxWeightColor : graphColor}
                             gradientFillColors={[
-                                graphMode === 'maxWeight' ? '#f59e0bCC' : `${COLORS.primary}CC`,
+                                graphMode === 'maxWeight' ? maxWeightGradient[0] : gradientFill[0],
                                 'transparent'
                             ]}
                             enablePanGesture={true}
@@ -479,19 +512,19 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                         </View>
                     </View>
                 </View>
-            </LinearGradient>
+            </GradientOrView>
         </View>
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: {
         marginBottom: 20,
         marginHorizontal: 16,
         borderRadius: 24,
-        backgroundColor: COLORS.surface,
+        backgroundColor: theme.surface,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: theme.border,
         overflow: 'hidden',
         ...SHADOWS.medium,
     },
@@ -507,13 +540,13 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 18,
         fontFamily: FONTS.bold,
-        color: COLORS.text,
+        color: theme.text,
         marginBottom: 2,
     },
     subtitle: {
         fontSize: 12,
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
     },
     unpinButton: {
         padding: 8,
@@ -532,7 +565,7 @@ const styles = StyleSheet.create({
         paddingRight: 8,
     },
     yAxisText: {
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
         fontSize: 10,
         fontFamily: FONTS.medium,
     },
@@ -548,7 +581,7 @@ const styles = StyleSheet.create({
     },
     xAxisLabel: {
         position: 'absolute',
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
         fontSize: 10,
         fontFamily: FONTS.medium,
         transform: [{ translateX: -12 }],
@@ -560,12 +593,12 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
         fontSize: 14,
     },
     emptySubText: {
         fontSize: 12,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
         marginTop: 4,
     },
     rangeSelector: {
@@ -585,10 +618,10 @@ const styles = StyleSheet.create({
     rangeText: {
         fontSize: 10,
         fontFamily: FONTS.bold,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
     },
     rangeTextActive: {
-        color: COLORS.primary,
+        color: theme.primary,
     },
     modeToggleContainer: {
         flexDirection: 'row',
@@ -613,10 +646,10 @@ const styles = StyleSheet.create({
     modeButtonText: {
         fontSize: 11,
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
     },
     modeButtonTextActive: {
-        color: COLORS.primary,
+        color: theme.primary,
         fontFamily: FONTS.bold,
     },
     tooltipContainer: {
@@ -634,12 +667,12 @@ const styles = StyleSheet.create({
     tooltipValue: {
         fontSize: 26,
         fontFamily: FONTS.bold,
-        color: COLORS.text,
+        color: theme.text,
     },
     tooltipDate: {
         fontSize: 12,
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
         marginTop: 2,
     },
     trendBadge: {
@@ -661,7 +694,7 @@ const styles = StyleSheet.create({
     },
     trendPeriod: {
         fontSize: 10,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
         opacity: 0.8,
     },
 });

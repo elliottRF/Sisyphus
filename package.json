@@ -15,6 +15,7 @@
     "preset": "jest-expo"
   },
   "dependencies": {
+    "@elliottr/android-timer": "file:android-timer",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo/react-native-action-sheet": "^4.1.0",
     "@expo/vector-icons": "^15.0.3",
@@ -50,6 +51,7 @@
     "react-native": "0.81.5",
     "react-native-actions-sheet": "^10.1.0",
     "react-native-body-highlighter": "^3.1.0",
+    "react-native-drag-sort": "^2.4.4",
     "react-native-draggable-flatlist": "^4.0.3",
     "react-native-dropdown-select-list": "^2.0.5",
     "react-native-fs": "^2.20.0",

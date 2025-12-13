@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, UIManager, Dimensions, LayoutAnimation, TextInput, Pressable, Keyboard } from 'react-native'
 import Animated, {
     useSharedValue,
@@ -9,22 +10,19 @@ import Animated, {
     // Removed ZoomIn/ZoomOut to fix the "gray box" glitch
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import React, { useState, useRef, useEffect } from 'react'
-import { COLORS, FONTS, SHADOWS } from '../constants/theme'
+
+import { FONTS, SHADOWS } from '../constants/theme'
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { fetchLastWorkoutSets } from './db';
+import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
 
-if (Platform.OS === 'android') {
-    if (UIManager.setLayoutAnimationEnabledExperimental) {
-        UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
-}
+
 
 // Compact Scrollable Input
-const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLength, style, placeholderTextColor, editable = true }) => {
+const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLength, style, placeholderTextColor, editable = true, theme, styles }) => {
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef(null);
 
@@ -42,7 +40,7 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
         >
             <TextInput
                 ref={inputRef}
-                style={[styles.textInputInternal, { color: editable ? COLORS.text : COLORS.textSecondary }]}
+                style={[styles.textInputInternal, { color: editable ? theme.text : theme.textSecondary }]}
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
@@ -58,7 +56,9 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
     );
 };
 
-const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) => {
+const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isExerciseDragging }) => {
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
     const translateX = useSharedValue(0);
 
     const pan = Gesture.Pan()
@@ -66,6 +66,7 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) =>
         .failOffsetY([-5, 5])
         .simultaneousWithExternalGesture(simultaneousHandlers)
         .onUpdate((event) => {
+            if (isExerciseDragging) return;
             translateX.value = Math.min(event.translationX, 0);
         })
         .onEnd(() => {
@@ -83,6 +84,7 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) =>
     }));
 
     const rIconStyle = useAnimatedStyle(() => {
+        // Safe for Reanimated: opacity and scale are numbers
         const opacity = withTiming(translateX.value < -20 ? 1 : 0);
         const scale = withSpring(translateX.value < -40 ? 1 : 0.5);
         return { opacity, transform: [{ scale }] };
@@ -92,19 +94,21 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) =>
         width: -translateX.value,
     }));
 
+    const rDeleteBackgroundStyle = useAnimatedStyle(() => ({
+        opacity: translateX.value < -5 ? 1 : 0, // Only show red background when swiping
+    }));
+
     return (
         <Animated.View
-            // Removed entering/exiting animations here as they trigger during drag
-            layout={LinearTransition.duration(200)}
             style={styles.swipeableContainer}
         >
-            <View style={styles.deleteBackground}>
+            <Animated.View style={[styles.deleteBackground, rDeleteBackgroundStyle]}>
                 <Animated.View style={[styles.deleteActionRegion, rRedBoxStyle]}>
                     <Animated.View style={[styles.deleteIconContainer, rIconStyle]}>
-                        <Feather name="trash-2" size={18} color={COLORS.text} />
+                        <Feather name="trash-2" size={18} color={theme.text} />
                     </Animated.View>
                 </Animated.View>
-            </View>
+            </Animated.View>
             <GestureDetector gesture={pan}>
                 <Animated.View style={[styles.rowForeground, rStyle]}>
                     {children}
@@ -115,6 +119,8 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers }) =>
 };
 
 const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, drag, isActive, onOpenDetails, simultaneousHandlers }) => {
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
     const [isNoteVisible, setIsNoteVisible] = useState(false);
     const [previousSets, setPreviousSets] = useState([]);
 
@@ -168,7 +174,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity style={styles.dragHandle} onLongPress={drag} delayLongPress={100} activeOpacity={0.7}>
-                        <MaterialIcons name="drag-indicator" size={20} color={COLORS.textSecondary} />
+                        <MaterialIcons name="drag-indicator" size={20} color={theme.textSecondary} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={onOpenDetails} style={{ flex: 1 }}>
                         <Text style={styles.exerciseName} numberOfLines={1}>{exerciseName}</Text>
@@ -183,11 +189,11 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                         <MaterialIcons
                             name="sticky-note-2"
                             size={18}
-                            color={exercise.notes && exercise.notes.length > 0 ? COLORS.primary : COLORS.textSecondary}
+                            color={exercise.notes && exercise.notes.length > 0 ? theme.primary : theme.textSecondary}
                         />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={deleteExercise} style={styles.iconButton}>
-                        <Feather name="more-horizontal" size={18} color={COLORS.textSecondary} />
+                        <Feather name="more-horizontal" size={18} color={theme.textSecondary} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -200,7 +206,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                         value={exercise.notes}
                         onChangeText={handleNoteChange}
                         placeholder="Add notes..."
-                        placeholderTextColor={COLORS.textSecondary}
+                        placeholderTextColor={theme.textSecondary}
                         multiline
                     />
                 </View>
@@ -212,7 +218,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                 <Text style={[styles.columnHeader, styles.colPrev]}>PREVIOUS</Text>
                 <Text style={[styles.columnHeader, styles.colKg]}>KG</Text>
                 <Text style={[styles.columnHeader, styles.colReps]}>REPS</Text>
-                <View style={styles.colCheck}><Feather name="check" size={12} color={COLORS.textSecondary} /></View>
+                <View style={styles.colCheck}><Feather name="check" size={12} color={theme.textSecondary} /></View>
             </View>
 
             {/* Sets */}
@@ -241,8 +247,10 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                             onDelete={() => deleteSet(index)}
                             index={index}
                             simultaneousHandlers={simultaneousHandlers}
+                            isExerciseDragging={isActive}
                         >
-                            <View style={[styles.setRow, set.completed && styles.setRowCompleted]}>
+                            <View style={styles.setRow}>
+                                {set.completed && <View style={styles.completionOverlay} />}
                                 <View style={styles.colSet}>
                                     <TouchableOpacity
                                         onPress={() => toggleSetType(index)}
@@ -270,10 +278,12 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                         value={set.weight?.toString()}
                                         onChangeText={(text) => handleWeightChange(text, index)}
                                         placeholder="-"
-                                        placeholderTextColor={COLORS.textSecondary}
+                                        placeholderTextColor={theme.textSecondary}
                                         keyboardType="numeric"
                                         maxLength={6}
                                         editable={!set.completed}
+                                        theme={theme}
+                                        styles={styles}
                                     />
                                 </View>
 
@@ -283,10 +293,12 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                         value={set.reps?.toString()}
                                         onChangeText={(text) => handleRepsChange(text, index)}
                                         placeholder="-"
-                                        placeholderTextColor={COLORS.textSecondary}
+                                        placeholderTextColor={theme.textSecondary}
                                         keyboardType="numeric"
                                         maxLength={4}
                                         editable={!set.completed}
+                                        theme={theme}
+                                        styles={styles}
                                     />
                                 </View>
 
@@ -295,7 +307,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                         style={[styles.checkButton, set.completed && styles.checkButtonCompleted]}
                                         onPress={() => toggleSetComplete(index)}
                                     >
-                                        <Feather name="check" size={14} color={set.completed ? COLORS.white : 'transparent'} />
+                                        <Feather name="check" size={14} color={set.completed ? '#fff' : 'transparent'} />
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -313,206 +325,217 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     )
 }
 
-const styles = StyleSheet.create({
-    container: {
-        backgroundColor: COLORS.surface,
-        borderRadius: 12,
-        marginBottom: 12,
+const getStyles = (theme) => {
+    // Determine safe colors for Reanimated components
+    // Reanimated 2/3 cannot animate/handle PlatformColor objects in shared values or view props easily
+    // So we fallback to a safe hex color for specific styles that affect Animated.Views.
+    const isDynamic = theme.type === 'dynamic';
+    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface; // Fallback for Animated.View
+    const safeError = isDynamic ? '#EF4444' : (theme.error || '#EF4444');
+    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary; // Fallback for Animated.View borderColor
+    const safeSuccess = isDynamic ? '#22c55e' : (theme.success || '#22c55e');
 
-        // --- FIX: Reserve border space constantly ---
-        borderWidth: 1,
-        borderColor: 'transparent', // Or borderColor: COLORS.surface
-        // --------------------------------------------
-    },
-    containerActive: {
-        borderColor: COLORS.primary,
-        // borderWidth: 1, // <--- Remove this, it's now inherited from container
-        backgroundColor: COLORS.surface,
-        elevation: 10,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        backgroundColor: COLORS.surface,
-        borderTopLeftRadius: 12,
-        borderTopRightRadius: 12,
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    dragHandle: {
-        paddingRight: 8,
-        paddingVertical: 4,
-    },
-    exerciseName: {
-        fontSize: 15,
-        fontFamily: FONTS.bold,
-        color: COLORS.primary,
-    },
-    headerActions: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    iconButton: {
-        padding: 2,
-    },
-    noteContainer: {
-        paddingHorizontal: 12,
-        paddingBottom: 8,
-        backgroundColor: COLORS.surface,
-    },
-    noteInput: {
-        color: COLORS.text,
-        fontFamily: FONTS.regular,
-        fontSize: 13,
-        backgroundColor: 'rgba(255,255,255,0.03)',
-        borderRadius: 4,
-        padding: 8,
-        minHeight: 32,
-    },
-    tableHeader: {
-        flexDirection: 'row',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.02)',
-    },
-    columnHeader: {
-        fontSize: 10,
-        fontFamily: FONTS.bold,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-        letterSpacing: 0.5,
-    },
-    colSet: { width: 30, alignItems: 'center', justifyContent: 'center' },
-    colPrev: { flex: 1, textAlign: 'center' },
-    colKg: { width: 65, marginHorizontal: 2 },
-    colReps: { width: 65, marginHorizontal: 2 },
-    colCheck: { width: 30, alignItems: 'center' },
+    return StyleSheet.create({
+        container: {
+            backgroundColor: theme.surface,
+            borderRadius: 12,
+            marginBottom: 12,
 
-    setsContainer: {
-        backgroundColor: COLORS.surface, // Ensure opacity is 1
-    },
-    swipeableContainer: {
-        overflow: 'hidden',
-        backgroundColor: COLORS.surface,
-    },
-    deleteBackground: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: COLORS.danger,
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        paddingRight: 16,
-    },
-    deleteActionRegion: {
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
+            // --- FIX: Reserve border space constantly ---
+            borderWidth: 1,
+            borderColor: 'transparent', // Or borderColor: theme.surface
+            // --------------------------------------------
+        },
+        containerActive: {
+            borderColor: safePrimary, // Safe hex for Reanimated
+            // borderWidth: 1, // <--- Remove this, it's now inherited from container
+            backgroundColor: theme.surface,
+            elevation: 10,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+        },
+        header: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: theme.surface,
+            borderTopLeftRadius: 12,
+            borderTopRightRadius: 12,
+        },
+        headerLeft: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            flex: 1,
+        },
+        dragHandle: {
+            paddingRight: 8,
+            paddingVertical: 4,
+        },
+        exerciseName: {
+            fontSize: 15,
+            fontFamily: FONTS.bold,
+            color: theme.primary,
+        },
+        headerActions: {
+            flexDirection: 'row',
+            gap: 12,
+        },
+        iconButton: {
+            padding: 2,
+        },
+        noteContainer: {
+            paddingHorizontal: 12,
+            paddingBottom: 8,
+            backgroundColor: theme.surface,
+        },
+        noteInput: {
+            color: theme.text,
+            fontFamily: FONTS.regular,
+            fontSize: 13,
+            backgroundColor: 'rgba(255,255,255,0.03)',
+            borderRadius: 4,
+            padding: 8,
+            minHeight: 32,
+        },
+        tableHeader: {
+            flexDirection: 'row',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            alignItems: 'center',
+            backgroundColor: 'rgba(255,255,255,0.02)',
+        },
+        columnHeader: {
+            fontSize: 10,
+            fontFamily: FONTS.bold,
+            color: theme.textSecondary,
+            textAlign: 'center',
+            letterSpacing: 0.5,
+        },
+        colSet: { width: 30, alignItems: 'center', justifyContent: 'center' },
+        colPrev: { flex: 1, textAlign: 'center' },
+        colKg: { width: 65, marginHorizontal: 2 },
+        colReps: { width: 65, marginHorizontal: 2 },
+        colCheck: { width: 30, alignItems: 'center' },
 
-    rowForeground: {
-        backgroundColor: COLORS.surface, // Crucial: Must be opaque
-    },
-    setRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.03)',
-    },
-    setRowCompleted: {
-        backgroundColor: 'rgba(0,255,0,0.02)',
-    },
+        setsContainer: {
+            backgroundColor: theme.surface, // Ensure opacity is 1
+        },
+        swipeableContainer: {
+            overflow: 'hidden',
+            backgroundColor: 'transparent',
+        },
+        deleteBackground: {
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: safeError, // Use safe color for View (though regular view is likely fine, Animated child might check parent)
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            paddingRight: 16,
+        },
+        deleteActionRegion: {
+            alignItems: 'center',
+            justifyContent: 'center'
+        },
 
-    setNumberBadge: {
-        width: 20,
-        height: 20,
-        borderRadius: 4,
-        backgroundColor: 'transparent',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    setNumberText: {
-        fontSize: 13,
-        fontFamily: FONTS.bold,
-        color: COLORS.textSecondary,
-    },
-    badgeWarmup: { backgroundColor: 'rgba(253, 203, 110, 0.2)' },
-    textWarmup: { color: '#fdcb6e' },
-    badgeDrop: { backgroundColor: 'rgba(116, 185, 255, 0.2)' },
-    textDrop: { color: '#74b9ff' },
+        setRow: {
+            backgroundColor: theme.surface, // Safe to use dynamic PlatformColor on standard View
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 12,
+            paddingVertical: 4,
+            borderBottomWidth: 1,
+            borderBottomColor: 'rgba(255,255,255,0.03)',
+            overflow: 'hidden', // Ensure overlay stays within bounds if rounded (not rounded here but good practice)
+        },
+        completionOverlay: {
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: 'rgba(0,255,0,0.05)',
+        },
 
-    prevText: {
-        fontSize: 12,
-        fontFamily: FONTS.regular,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-        opacity: 0.7,
-    },
+        setNumberBadge: {
+            width: 20,
+            height: 20,
+            borderRadius: 4,
+            backgroundColor: 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        setNumberText: {
+            fontSize: 13,
+            fontFamily: FONTS.bold,
+            color: theme.textSecondary,
+        },
+        badgeWarmup: { backgroundColor: 'rgba(253, 203, 110, 0.2)' },
+        textWarmup: { color: '#fdcb6e' },
+        badgeDrop: { backgroundColor: 'rgba(116, 185, 255, 0.2)' },
+        textDrop: { color: '#74b9ff' },
 
-    inputContainer: {
-        backgroundColor: 'rgba(0,0,0,0.2)',
-        borderRadius: 4,
-        height: 32,
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.05)',
-    },
-    inputFocused: {
-        borderColor: COLORS.primary,
-        backgroundColor: 'rgba(0,0,0,0.4)',
-    },
-    inputDisabled: {
-        opacity: 0.5,
-        backgroundColor: 'transparent',
-        borderWidth: 0,
-    },
-    textInputInternal: {
-        textAlign: 'center',
-        fontFamily: FONTS.bold,
-        fontSize: 16,
-        padding: 0,
-        includeFontPadding: false,
-    },
+        prevText: {
+            fontSize: 12,
+            fontFamily: FONTS.regular,
+            color: theme.textSecondary,
+            textAlign: 'center',
+            opacity: 0.7,
+        },
 
-    checkButton: {
-        width: 24,
-        height: 24,
-        borderRadius: 4,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
-    },
-    checkButtonCompleted: {
-        backgroundColor: COLORS.success,
-        borderColor: COLORS.success,
-    },
+        inputContainer: {
+            backgroundColor: 'rgba(0,0,0,0.2)',
+            borderRadius: 4,
+            height: 32,
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.05)',
+        },
+        inputFocused: {
+            borderColor: safePrimary, // Safe hex for Reanimated
+            backgroundColor: 'rgba(0,0,0,0.4)',
+        },
+        inputDisabled: {
+            opacity: 0.5,
+            backgroundColor: 'transparent',
+            borderWidth: 0,
+        },
+        textInputInternal: {
+            textAlign: 'center',
+            fontFamily: FONTS.bold,
+            fontSize: 16,
+            padding: 0,
+            includeFontPadding: false,
+        },
 
-    addSetButton: {
-        paddingVertical: 10,
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.02)',
-        borderBottomLeftRadius: 12,
-        borderBottomRightRadius: 12,
-    },
-    addSetText: {
-        fontSize: 11,
-        fontFamily: FONTS.bold,
-        color: COLORS.primary,
-        letterSpacing: 0.5,
-    },
-});
+        checkButton: {
+            width: 24,
+            height: 24,
+            borderRadius: 4,
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.1)',
+        },
+        checkButtonCompleted: {
+            backgroundColor: safeSuccess, // Safe hex for Reanimated
+            borderColor: safeSuccess, // Safe hex for Reanimated
+        },
 
-export default ExerciseEditable
+        addSetButton: {
+            paddingVertical: 10,
+            alignItems: 'center',
+            backgroundColor: 'rgba(255,255,255,0.02)',
+            borderBottomLeftRadius: 12,
+            borderBottomRightRadius: 12,
+        },
+        addSetText: {
+            fontSize: 11,
+            fontFamily: FONTS.bold,
+            color: theme.primary,
+            letterSpacing: 0.5,
+        },
+    });
+};
+
+export default React.memo(ExerciseEditable);

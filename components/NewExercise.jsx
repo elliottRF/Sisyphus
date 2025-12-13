@@ -2,14 +2,24 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, FlatList } 
 import React, { useState, useEffect } from 'react';
 import Body from 'react-native-body-highlighter';
 import { insertExercise, updateExercise, fetchExercises } from '../components/db';
-import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { ScrollView as RNScrollView } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+
+const GradientOrView = ({ colors, style, theme, children }) => {
+    if (theme.type === 'dynamic') {
+        return <View style={[style, { backgroundColor: theme.primary }]}>{children}</View>;
+    }
+    return <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={style}>{children}</LinearGradient>;
+};
 
 const NewExercise = (props) => {
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
     const [exerciseName, setExerciseName] = useState('');
     const [targetSelected, setTargetSelected] = useState([]);
     const [accessorySelected, setAccessorySelected] = useState([]);
@@ -133,6 +143,14 @@ const NewExercise = (props) => {
 
     const handlers = useScrollHandlers();
 
+    // Safe fallbacks for Body
+    const safeBorder = theme.type === 'dynamic' ? '#e5e5e5' : theme.border;
+    // Monochromatic: [Primary 50% (Accessory), Primary 100% (Target)]
+    const safeBodyColors = theme.type === 'dynamic'
+        ? ['#2DC4B680', '#2DC4B6']
+        : [`${theme.primary}80`, theme.primary];
+
+
     return (
         <View style={styles.container}>
             <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
@@ -144,8 +162,22 @@ const NewExercise = (props) => {
                     keyboardShouldPersistTaps="handled"
                 >
                     <View style={styles.bodyContainer}>
-                        <Body data={formattedTargets} gender="male" side="front" scale={1} border={COLORS.border} />
-                        <Body data={formattedTargets} gender="male" side="back" scale={1} border={COLORS.border} />
+                        <Body
+                            data={formattedTargets}
+                            gender="male"
+                            side="front"
+                            scale={1}
+                            border={safeBorder}
+                            colors={safeBodyColors}
+                        />
+                        <Body
+                            data={formattedTargets}
+                            gender="male"
+                            side="back"
+                            scale={1}
+                            border={safeBorder}
+                            colors={safeBodyColors}
+                        />
                     </View>
 
                     <TextInput
@@ -153,7 +185,7 @@ const NewExercise = (props) => {
                         onChangeText={setExerciseName}
                         value={exerciseName}
                         placeholder="Add Name"
-                        placeholderTextColor={COLORS.textSecondary}
+                        placeholderTextColor={theme.textSecondary}
                         keyboardType="default"
                     />
 
@@ -163,7 +195,7 @@ const NewExercise = (props) => {
                             <Text style={styles.dropdownInput}>
                                 {targetSelected.length > 0 ? targetSelected.join(', ') : 'Select Target Muscles'}
                             </Text>
-                            <Feather name="chevron-down" size={20} color={COLORS.textSecondary} />
+                            <Feather name="chevron-down" size={20} color={theme.textSecondary} />
                         </TouchableOpacity>
                     </View>
 
@@ -173,19 +205,18 @@ const NewExercise = (props) => {
                             <Text style={styles.dropdownInput}>
                                 {accessorySelected.length > 0 ? accessorySelected.join(', ') : 'Select Accessory Muscles'}
                             </Text>
-                            <Feather name="chevron-down" size={20} color={COLORS.textSecondary} />
+                            <Feather name="chevron-down" size={20} color={theme.textSecondary} />
                         </TouchableOpacity>
                     </View>
 
                     <TouchableOpacity onPress={createExercise} activeOpacity={0.8}>
-                        <LinearGradient
-                            colors={[COLORS.primary, COLORS.secondary]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
+                        <GradientOrView
+                            colors={[theme.primary, theme.secondary]}
+                            theme={theme}
                             style={styles.createButton}
                         >
                             <Text style={styles.createButtonText}>{isEditMode ? 'Update Exercise' : 'Create Exercise'}</Text>
-                        </LinearGradient>
+                        </GradientOrView>
                     </TouchableOpacity>
                 </RNScrollView>
             </NativeViewGestureHandler>
@@ -211,7 +242,7 @@ const NewExercise = (props) => {
                                     <Feather
                                         name={targetSelected.includes(item.value) ? 'check-square' : 'square'}
                                         size={20}
-                                        color={COLORS.text}
+                                        color={theme.text}
                                     />
                                 </TouchableOpacity>
                             )}
@@ -250,7 +281,7 @@ const NewExercise = (props) => {
                                     <Feather
                                         name={accessorySelected.includes(item.value) ? 'check-square' : 'square'}
                                         size={20}
-                                        color={COLORS.text}
+                                        color={theme.text}
                                     />
                                 </TouchableOpacity>
                             )}
@@ -268,10 +299,10 @@ const NewExercise = (props) => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background,
+        backgroundColor: theme.background,
     },
     scrollContent: {
         paddingBottom: 100,
@@ -286,8 +317,8 @@ const styles = StyleSheet.create({
         marginTop: 20,
     },
     input: {
-        backgroundColor: COLORS.surface,
-        color: COLORS.text,
+        backgroundColor: theme.surface,
+        color: theme.text,
         fontFamily: FONTS.medium,
         fontSize: 16,
         borderRadius: 12,
@@ -295,19 +326,19 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         marginBottom: 20,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: theme.border,
     },
     dropdownContainer: {
         marginBottom: 20,
     },
     label: {
-        color: COLORS.text,
+        color: theme.text,
         fontFamily: FONTS.medium,
         marginBottom: 8,
     },
     dropdownBox: {
-        backgroundColor: COLORS.surface,
-        borderColor: COLORS.border,
+        backgroundColor: theme.surface,
+        borderColor: theme.border,
         borderWidth: 1,
         borderRadius: 12,
         paddingHorizontal: 16,
@@ -317,7 +348,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     dropdownInput: {
-        color: COLORS.text,
+        color: theme.text,
         fontFamily: FONTS.medium,
         fontSize: 16,
         flex: 1,
@@ -332,8 +363,8 @@ const styles = StyleSheet.create({
         ...SHADOWS.medium,
     },
     createButtonText: {
-        color: COLORS.text,
-        fontSize: 18,
+        color: '#FFFFFF', // Button text usually white on primary
+        fontSize: 18, // Fixed size
         fontFamily: FONTS.bold,
         letterSpacing: 1,
     },
@@ -344,7 +375,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     modalContent: {
-        backgroundColor: COLORS.surface,
+        backgroundColor: theme.surface,
         borderRadius: 12,
         padding: 20,
         width: '70%',
@@ -353,7 +384,7 @@ const styles = StyleSheet.create({
     modalTitle: {
         fontFamily: FONTS.bold,
         fontSize: 18,
-        color: COLORS.text,
+        color: theme.text,
         marginBottom: 10,
     },
     listItem: {
@@ -362,16 +393,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+        borderBottomColor: theme.border,
     },
     listText: {
         fontFamily: FONTS.medium,
-        color: COLORS.text,
+        color: theme.text,
         fontSize: 16,
     },
     doneButton: {
         marginTop: 20,
-        backgroundColor: COLORS.primary,
+        backgroundColor: theme.primary,
         paddingVertical: 12,
         borderRadius: 8,
         alignItems: 'center',

@@ -1,0 +1,32 @@
+{
+  "name": "@elliottr/android-timer",
+  "version": "0.1.0",
+  "description": "My new module",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "keywords": [
+    "react-native",
+    "expo",
+    "@elliottr/android-timer",
+    "ElliottrAndroidTimer"
+  ],
+  "repository": "https://github.com/elliottRF/elliottr-android-timer",
+  "bugs": {
+    "url": "https://github.com/elliottRF/elliottr-android-timer/issues"
+  },
+  "author": "elliottRF <elliottbtw@gmail.com> (https://github.com/elliottRF)",
+  "license": "MIT",
+  "homepage": "https://github.com/elliottRF/elliottr-android-timer#readme",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "expo-module-scripts": "^5.0.8",
+    "expo": "^54.0.27",
+    "react-native": "0.81.5"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

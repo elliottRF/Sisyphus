@@ -9,11 +9,14 @@ import NewExercise from "../components/NewExercise"
 
 import ExerciseHistory from "../components/exerciseHistory"
 import Feather from '@expo/vector-icons/Feather';
-import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
+import { useTheme } from '../context/ThemeContext';
 
 const Profile = () => {
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
     const [searchQuery, setSearchQuery] = useState('');
     const [exercises, setExercises] = useState([]);
     const [selectedExerciseId, setSelectedExerciseId] = useState(null);
@@ -76,10 +79,34 @@ const Profile = () => {
         >
             <View style={styles.exerciseContent}>
                 <Text style={styles.exerciseName}>{item.name}</Text>
-                <Feather name="chevron-right" size={20} color={COLORS.textSecondary} />
+                <Feather name="chevron-right" size={20} color={theme.textSecondary} />
             </View>
         </TouchableOpacity>
     );
+
+    // Safe Colors for Reanimated / Linear Gradient fallbacks
+    const isDynamic = theme.type === 'dynamic';
+    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
+    const safeBackground = isDynamic ? '#121212' : theme.background;
+
+    // Helper for Button Gradient
+    const ButtonBackground = ({ children, style }) => {
+        if (isDynamic) {
+            return (
+                <View style={[style, { backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' }]}>
+                    {children}
+                </View>
+            );
+        }
+        return (
+            <LinearGradient
+                colors={[theme.primary, theme.secondary]}
+                style={style}
+            >
+                {children}
+            </LinearGradient>
+        );
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -87,11 +114,11 @@ const Profile = () => {
 
             <View style={styles.searchContainer}>
                 <View style={styles.searchBar}>
-                    <Feather name="search" size={20} color={COLORS.textSecondary} style={styles.searchIcon} />
+                    <Feather name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
                     <TextInput
                         style={styles.searchInput}
                         placeholder="Search exercises..."
-                        placeholderTextColor={COLORS.textSecondary}
+                        placeholderTextColor={theme.textSecondary}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         returnKeyType="done"
@@ -102,12 +129,9 @@ const Profile = () => {
                     style={styles.addButton}
                     onPress={openCreateExerciseSheet}
                 >
-                    <LinearGradient
-                        colors={[COLORS.primary, COLORS.secondary]}
-                        style={styles.addButtonGradient}
-                    >
+                    <ButtonBackground style={styles.addButtonGradient}>
                         <Feather name="plus" size={24} color="#fff" />
-                    </LinearGradient>
+                    </ButtonBackground>
                 </TouchableOpacity>
             </View>
 
@@ -123,7 +147,7 @@ const Profile = () => {
             {/* Existing Exercise History ActionSheet */}
             <ActionSheet
                 ref={actionSheetRef}
-                containerStyle={styles.actionSheetContainer}
+                containerStyle={[styles.actionSheetContainer, { backgroundColor: safeBackground }]}
                 gestureEnabled={false}
             >
                 <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName} />
@@ -132,7 +156,7 @@ const Profile = () => {
             {/* New Create Exercise ActionSheet */}
             <ActionSheet
                 ref={createExerciseActionSheetRef}
-                containerStyle={styles.actionSheetContainer}
+                containerStyle={[styles.actionSheetContainer, { backgroundColor: safeBackground }]}
             >
                 <View style={styles.closeIconContainerUpperPosition}>
                     <TouchableOpacity onPress={handleCloseCreateExerciseSheet} style={styles.closeIcon}>
@@ -146,10 +170,10 @@ const Profile = () => {
     )
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background,
+        backgroundColor: theme.background,
     },
     header: {
         paddingHorizontal: 20,
@@ -159,7 +183,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 28,
         fontFamily: FONTS.bold,
-        color: COLORS.text,
+        color: theme.text,
         padding: 20,
     },
     searchContainer: {
@@ -172,12 +196,12 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.surface,
+        backgroundColor: theme.surface,
         borderRadius: 12,
         paddingHorizontal: 12,
         height: 50,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: theme.border,
         marginRight: 12,
     },
     searchIcon: {
@@ -185,7 +209,7 @@ const styles = StyleSheet.create({
     },
     searchInput: {
         flex: 1,
-        color: COLORS.text,
+        color: theme.text,
         fontFamily: FONTS.medium,
         fontSize: 16,
         height: '100%',
@@ -205,12 +229,12 @@ const styles = StyleSheet.create({
         paddingBottom: 100,
     },
     exerciseCard: {
-        backgroundColor: COLORS.surface,
+        backgroundColor: theme.surface,
         borderRadius: 16,
         marginBottom: 12,
         padding: 20,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: theme.border,
         ...SHADOWS.small,
     },
     exerciseContent: {
@@ -219,7 +243,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     exerciseName: {
-        color: COLORS.text,
+        color: theme.text,
         fontSize: 16,
         fontFamily: FONTS.semiBold,
     },
@@ -227,7 +251,7 @@ const styles = StyleSheet.create({
         height: '90%',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        backgroundColor: COLORS.background,
+        // backgroundColor removed from here to be dynamic inline
     },
     closeIconContainerUpperPosition: {
         position: 'absolute',
@@ -236,7 +260,7 @@ const styles = StyleSheet.create({
         zIndex: 1,
     },
     closeIcon: {
-        backgroundColor: COLORS.surface,
+        backgroundColor: theme.surface,
         padding: 8,
         borderRadius: 20,
     },

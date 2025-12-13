@@ -8,10 +8,11 @@ import { FlatList } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Body from "react-native-body-highlighter";
 import { fetchRecentMuscleUsage, getPinnedExercises, pinExercise, fetchExercises } from '../components/db';
-import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import PRGraphCard from '../components/PRGraphCard';
+import { useTheme } from '../context/ThemeContext';
 
 
 const muscleMapping = {
@@ -39,7 +40,16 @@ const muscleMapping = {
     "Obliques": "obliques",
 };
 
+const GradientOrView = ({ colors, style, theme, children }) => {
+    if (theme.type === 'dynamic') {
+        return <View style={[style, { backgroundColor: theme.surface }]}>{children}</View>;
+    }
+    return <LinearGradient colors={colors} style={style}>{children}</LinearGradient>;
+};
+
 const Home = () => {
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
     const [bodyData, setBodyData] = useState([]);
     const [pinnedExercises, setPinnedExercises] = useState([]);
     const [allExercises, setAllExercises] = useState([]);
@@ -83,22 +93,17 @@ const Home = () => {
     const loadMuscleData = async () => {
         try {
             const usageData = await fetchRecentMuscleUsage(3);
-            console.log('=== Muscle Usage Data ===');
-            console.log('Raw data:', JSON.stringify(usageData, null, 2));
-
             const muscleStats = {};
 
             usageData.forEach(exercise => {
                 const sets = parseInt(exercise.sets, 10) || 0;
 
-                // Process Target Muscles (Primary) - now supports multiple
+                // Process Target Muscles (Primary)
                 if (exercise.targetMuscle) {
                     const targetMuscles = exercise.targetMuscle.split(',').map(m => m.trim());
                     targetMuscles.forEach(targetMuscle => {
                         if (targetMuscle) {
-                            console.log(`Processing target muscle: "${targetMuscle}"`);
                             const target = muscleMapping[targetMuscle] || targetMuscle.toLowerCase();
-                            console.log(`Mapped to slug: "${target}"`);
                             if (!muscleStats[target]) muscleStats[target] = { primarySets: 0, accessorySets: 0 };
                             muscleStats[target].primarySets += sets;
                         }
@@ -110,9 +115,7 @@ const Home = () => {
                     const accessories = exercise.accessoryMuscles.split(',').map(m => m.trim());
                     accessories.forEach(acc => {
                         if (acc) {
-                            console.log(`Processing accessory muscle: "${acc}"`);
                             const accTarget = muscleMapping[acc] || acc.toLowerCase();
-                            console.log(`Mapped to slug: "${accTarget}"`);
                             if (!muscleStats[accTarget]) muscleStats[accTarget] = { primarySets: 0, accessorySets: 0 };
                             muscleStats[accTarget].accessorySets += sets;
                         }
@@ -130,9 +133,9 @@ const Home = () => {
                 let intensity = 0;
 
                 if (weightedScore >= 3) {
-                    intensity = 2; // Deep Blue
+                    intensity = 2; // Deep Blue or Theme Primary
                 } else if (weightedScore > 0) {
-                    intensity = 1; // Light Blue
+                    intensity = 1; // Light Blue or Theme Secondary
                 }
 
                 if (intensity > 0) {
@@ -172,18 +175,13 @@ const Home = () => {
     };
 
     const handleAddGraph = async () => {
-        console.log("Opening Add Graph sheet...");
         if (allExercises.length === 0) {
-            console.log("Fetching exercises...");
             try {
                 const exercises = await fetchExercises();
-                console.log("Fetched exercises count:", exercises.length);
                 setAllExercises(exercises);
             } catch (error) {
                 console.error("Error fetching exercises:", error);
             }
-        } else {
-            console.log("Exercises already loaded. Count:", allExercises.length);
         }
         actionSheetRef.current?.show();
     };
@@ -203,6 +201,19 @@ const Home = () => {
         .filter(ex => ex.name.toLowerCase().includes(searchQuery.toLowerCase()))
         .sort((a, b) => a.name.localeCompare(b.name));
 
+    // Dynamic Body Colors based on theme
+    // Fallback for Dynamic Theme: Body highlighter usually expects hex strings.
+    // PlatformColor cannot be converted to Hex easily.
+    // We will use a safe fallback for System theme.
+    // Dynamic Body Colors based on theme
+    // Fallback for Dynamic Theme
+    const isDynamic = theme.type === 'dynamic';
+    // User requested "Accessory similar to main one, just lighter".
+    const bodyColors = isDynamic
+        ? ['#2DC4B680', '#2DC4B6'] // Light Teal (Accessory) and Teal (Target)
+        : [`${theme.primary}80`, theme.primary];
+    const safeBorder = isDynamic ? '#e5e5e5' : theme.border;
+
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView
@@ -221,13 +232,13 @@ const Home = () => {
                             disabled={isRefreshing}
                         >
                             {isRefreshing ? (
-                                <ActivityIndicator size="small" color={COLORS.primary} />
+                                <ActivityIndicator size="small" color={theme.primary} />
                             ) : (
-                                <Feather name="refresh-cw" size={24} color={COLORS.text} />
+                                <Feather name="refresh-cw" size={24} color={theme.text} />
                             )}
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => router.push('/settings')} style={styles.settingsButton}>
-                            <Feather name="settings" size={24} color={COLORS.text} />
+                            <Feather name="settings" size={24} color={theme.text} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -246,8 +257,9 @@ const Home = () => {
                             gender="male"
                             side="front"
                             scale={1.1}
-                            border={COLORS.border}
-                            colors={[COLORS.secondary, COLORS.primary]}
+                            border={safeBorder}
+                            colors={bodyColors}
+                            bg={theme.surface}
                         />
                     </View>
 
@@ -258,8 +270,9 @@ const Home = () => {
                             gender="male"
                             side="back"
                             scale={1.1}
-                            border={COLORS.border}
-                            colors={[COLORS.secondary, COLORS.primary]}
+                            border={safeBorder}
+                            colors={bodyColors}
+                            bg={theme.surface}
                         />
                     </View>
                 </ScrollView>
@@ -279,13 +292,14 @@ const Home = () => {
                 ))}
 
                 <TouchableOpacity onPress={handleAddGraph} style={styles.addGraphButton}>
-                    <LinearGradient
-                        colors={[COLORS.surface, COLORS.surface]}
+                    <GradientOrView
+                        colors={[theme.surface, theme.surface]}
                         style={styles.addGraphGradient}
+                        theme={theme}
                     >
-                        <Feather name="plus-circle" size={24} color={COLORS.primary} />
+                        <Feather name="plus-circle" size={24} color={theme.primary} />
                         <Text style={styles.addGraphText}>Add Progress Graph</Text>
-                    </LinearGradient>
+                    </GradientOrView>
                 </TouchableOpacity>
 
             </ScrollView>
@@ -295,23 +309,19 @@ const Home = () => {
                 enableGestureBack={true}
                 closeOnPressBack={true}
                 androidCloseOnBackPress={true}
-                containerStyle={{
-                    height: '94%',
-                    borderTopLeftRadius: 25,
-                    borderTopRightRadius: 25,
-                    backgroundColor: '#fff',
-                }}
+                containerStyle={styles.actionSheetContainer}
+                indicatorStyle={styles.indicator}
                 snapPoints={[94]}
                 initialSnapIndex={0}
             >
                 <View style={styles.contentContainer}>
                     <View style={styles.searchContainer}>
                         <View style={styles.searchBar}>
-                            <Feather name="search" size={20} color={COLORS.textSecondary} style={styles.searchIcon} />
+                            <Feather name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
                             <TextInput
                                 style={styles.searchInput}
                                 placeholder="Search exercises to pin..."
-                                placeholderTextColor={COLORS.textSecondary}
+                                placeholderTextColor={theme.textSecondary}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                                 returnKeyType="done"
@@ -330,14 +340,14 @@ const Home = () => {
                             >
                                 <View style={styles.exerciseContent}>
                                     <Text style={styles.exerciseName}>{item.name}</Text>
-                                    <Feather name="plus" size={20} color={COLORS.primary} />
+                                    <Feather name="plus" size={20} color={theme.primary} />
                                 </View>
                             </TouchableOpacity>
                         )}
                         contentContainerStyle={styles.listContent}
                         ListEmptyComponent={
                             <View style={{ padding: 20, alignItems: 'center' }}>
-                                <Text style={{ color: COLORS.textSecondary }}>
+                                <Text style={{ color: theme.textSecondary }}>
                                     {allExercises.length === 0 ? "Loading exercises..." : "No exercises found"}
                                 </Text>
                             </View>
@@ -353,181 +363,191 @@ const Home = () => {
         </SafeAreaView >
     )
 }
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: COLORS.background,
-    },
-    scrollViewContent: {
-        paddingBottom: 100,
-    },
-    header: {
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 10,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    headerButtons: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    refreshButton: {
-        padding: 8,
-        backgroundColor: COLORS.surface,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        minWidth: 40,
-        minHeight: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        ...SHADOWS.small,
-    },
-    settingsButton: {
-        padding: 8,
-        backgroundColor: COLORS.surface,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        ...SHADOWS.small,
-    },
-    greeting: {
-        fontSize: 28,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-    },
-    subGreeting: {
-        fontSize: 14,
-        fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
-        marginTop: 4,
-    },
-    bodyScrollContent: {
-        paddingHorizontal: 10,
-        marginBottom: 20,
-    },
-    cardContainer: {
-        backgroundColor: COLORS.surface,
-        borderRadius: 24,
-        padding: 20,
-        marginHorizontal: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 300,
-        height: 500,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        ...SHADOWS.medium,
-    },
-    cardTitle: {
-        fontSize: 18,
-        fontFamily: FONTS.semiBold,
-        color: COLORS.textSecondary,
-        marginBottom: 20,
-        position: 'absolute',
-        top: 20,
-        left: 20,
-    },
-    sectionHeader: {
-        paddingHorizontal: 20,
-        marginBottom: 16,
-        marginTop: 10,
-    },
-    sectionTitle: {
-        fontSize: 20,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-    },
-    addGraphButton: {
-        marginHorizontal: 20,
-        marginBottom: 20,
-        borderRadius: 16,
-        ...SHADOWS.small,
-    },
-    addGraphGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        borderStyle: 'dashed',
-        gap: 12,
-    },
-    addGraphText: {
-        fontSize: 16,
-        fontFamily: FONTS.semiBold,
-        color: COLORS.primary,
-    },
-    actionSheetContainer: {
-        backgroundColor: COLORS.surface,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        height: '85%',
-    },
-    contentContainer: {
-        height: '100%',
-        backgroundColor: COLORS.background,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        overflow: 'hidden',
-    },
-    searchContainer: {
-        padding: 16,
-        backgroundColor: COLORS.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-    },
-    searchBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: COLORS.background,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        height: 44,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    searchIcon: {
-        marginRight: 10,
-    },
-    searchInput: {
-        flex: 1,
-        color: COLORS.text,
-        fontFamily: FONTS.medium,
-        fontSize: 16,
-        height: '100%',
-    },
-    list: {
-        flex: 1,
-        paddingHorizontal: 20,
-        paddingBottom: 100,
-    },
-    listContent: {
-        paddingBottom: 40,
-        paddingTop: 20,
-    },
-    exerciseCard: {
-        backgroundColor: COLORS.surface,
-        borderRadius: 16,
-        marginBottom: 12,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        ...SHADOWS.small,
-    },
-    exerciseContent: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    exerciseName: {
-        color: COLORS.text,
-        fontSize: 16,
-        fontFamily: FONTS.semiBold,
-    },
-});
+
+const getStyles = (theme) => {
+    // Safe Colors for Reanimated (ActionSheet)
+    const isDynamic = theme.type === 'dynamic';
+    const safeIndicator = isDynamic ? '#aaaaaa' : theme.textSecondary;
+
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: theme.background,
+        },
+        scrollViewContent: {
+            paddingBottom: 100,
+        },
+        header: {
+            paddingHorizontal: 20,
+            paddingTop: 20,
+            paddingBottom: 10,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+        },
+        headerButtons: {
+            flexDirection: 'row',
+            gap: 12,
+        },
+        refreshButton: {
+            padding: 8,
+            backgroundColor: theme.surface,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: theme.border,
+            minWidth: 40,
+            minHeight: 40,
+            alignItems: 'center',
+            justifyContent: 'center',
+            ...SHADOWS.small,
+        },
+        settingsButton: {
+            padding: 8,
+            backgroundColor: theme.surface,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: theme.border,
+            ...SHADOWS.small,
+        },
+        greeting: {
+            fontSize: 28,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+        },
+        subGreeting: {
+            fontSize: 14,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            marginTop: 4,
+        },
+        bodyScrollContent: {
+            paddingHorizontal: 10,
+            marginBottom: 20,
+        },
+        cardContainer: {
+            backgroundColor: theme.surface,
+            borderRadius: 24,
+            padding: 20,
+            marginHorizontal: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 300,
+            height: 500,
+            borderWidth: 1,
+            borderColor: theme.border,
+            ...SHADOWS.medium,
+        },
+        cardTitle: {
+            fontSize: 18,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
+            marginBottom: 20,
+            position: 'absolute',
+            top: 20,
+            left: 20,
+        },
+        sectionHeader: {
+            paddingHorizontal: 20,
+            marginBottom: 16,
+            marginTop: 10,
+        },
+        sectionTitle: {
+            fontSize: 20,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+        },
+        addGraphButton: {
+            marginHorizontal: 20,
+            marginBottom: 20,
+            borderRadius: 16,
+            ...SHADOWS.small,
+        },
+        addGraphGradient: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderStyle: 'dashed',
+            gap: 12,
+        },
+        addGraphText: {
+            fontSize: 16,
+            fontFamily: FONTS.semiBold,
+            color: theme.primary,
+        },
+        actionSheetContainer: {
+            backgroundColor: 'transparent',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            height: '85%',
+        },
+        indicator: {
+            backgroundColor: safeIndicator,
+        },
+        contentContainer: {
+            height: '100%',
+            backgroundColor: theme.surface, // Use dynamic surface color here
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            overflow: 'hidden',
+        },
+        searchContainer: {
+            padding: 16,
+            backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.border,
+        },
+        searchBar: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: theme.background,
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            height: 44,
+            borderWidth: 1,
+            borderColor: theme.border,
+        },
+        searchIcon: {
+            marginRight: 10,
+        },
+        searchInput: {
+            flex: 1,
+            color: theme.text,
+            fontFamily: FONTS.medium,
+            fontSize: 16,
+            height: '100%',
+        },
+        list: {
+            flex: 1,
+            paddingHorizontal: 20,
+            paddingBottom: 100,
+        },
+        listContent: {
+            paddingBottom: 40,
+            paddingTop: 20,
+        },
+        exerciseCard: {
+            backgroundColor: theme.surface,
+            borderRadius: 16,
+            marginBottom: 12,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: theme.border,
+            ...SHADOWS.small,
+        },
+        exerciseContent: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+        },
+        exerciseName: {
+            color: theme.text,
+            fontSize: 16,
+            fontFamily: FONTS.semiBold,
+        },
+    });
+};
 export default Home

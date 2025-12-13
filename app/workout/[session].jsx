@@ -3,53 +3,76 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/db';
-import { COLORS, FONTS, SHADOWS } from '../../constants/theme';
-import { LinearGradient } from 'expo-linear-gradient';
+import { FONTS, SHADOWS } from '../../constants/theme';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import ActionSheet from "react-native-actions-sheet";
 import ExerciseHistory from '../../components/exerciseHistory';
-import { Dimensions } from 'react-native';
-
-// --- Helper Components (Optimized for space) ---
+import { useTheme } from '../../context/ThemeContext';
 
 const PRBadge = React.memo(({ type }) => {
-    let colors = [COLORS.primary, COLORS.secondary];
+    // Fixed: Use MaterialCommunityIcons for Trophy
+    const iconName = "trophy";
+    let label = "PR";
 
-    if (type === 'VOL') {
-        colors = ['#2dc4b6', '#2dc4b6'];
-    } else if (type === 'KG') {
-        colors = ['#2dc4b6', '#2dc4b6'];
-    } else if (type === '1RM') {
-        colors = ['#2dc4b6', '#2dc4b6'];
-    }
+    // Logic: Distinction in Text, Unity in Color
+    if (type === '1RM') label = "1RM";
+    if (type === 'VOL') label = "Vol.";
+    if (type === 'KG') label = "Weight";
 
+    const color = '#FFD700'; // Gold
+    const bgColor = 'rgba(255, 215, 0, 0.15)'; // Low opacity gold
+    const borderColor = 'rgba(255, 215, 0, 0.3)';
+
+    // Note: Styles for this are passed or computed? 
+    // Since getStyles is inside main component, we can't use it easily here unless we pass styles prop or use inline.
+    // I'll stick to a small static style object for the badge layout/text, but colors are inline.
     return (
-        <LinearGradient
-            colors={colors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.miniPrBadge}
-        >
-            <Text style={styles.miniPrText}>{type}</Text>
-        </LinearGradient>
+        <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 6,
+            paddingVertical: 1,
+            borderRadius: 4,
+            borderWidth: 1,
+            gap: 3,
+            marginRight: 6,
+            backgroundColor: bgColor,
+            borderColor: borderColor
+        }}>
+            <MaterialCommunityIcons name={iconName} size={10} color={color} />
+            <Text style={{ fontSize: 9, fontFamily: FONTS.bold, color: color }}>{label}</Text>
+        </View>
     );
 });
 
-const SetNumberBadge = React.memo(({ type, number }) => {
-    let style = styles.setNumberDefault;
-    let textStyle = styles.setNumberTextDefault;
+const SetNumberBadge = React.memo(({ type, number, theme }) => {
+    let containerStyle = {
+        width: 20,
+        height: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 4,
+        marginRight: 8,
+    };
+    let TextStyle = {
+        fontSize: 11,
+        fontFamily: FONTS.medium,
+    };
 
     if (type === 'W') {
-        style = styles.setNumberWarmup;
-        textStyle = styles.setNumberTextWarmup;
+        containerStyle.backgroundColor = 'rgba(253, 203, 110, 0.15)';
+        TextStyle.color = theme.warning;
     } else if (type === 'D') {
-        style = styles.setNumberDrop;
-        textStyle = styles.setNumberTextDrop;
+        containerStyle.backgroundColor = 'rgba(116, 185, 255, 0.15)';
+        TextStyle.color = theme.info;
+    } else {
+        // Default
+        TextStyle.color = theme.textSecondary;
     }
 
     return (
-        <View style={style}>
-            <Text style={textStyle}>{number}</Text>
+        <View style={containerStyle}>
+            <Text style={TextStyle}>{number}</Text>
         </View>
     );
 });
@@ -60,6 +83,9 @@ const SetNumberBadge = React.memo(({ type, number }) => {
 const WorkoutDetail = () => {
     const { session } = useLocalSearchParams();
     const router = useRouter();
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
+
     const [workoutDetails, setWorkoutDetails] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
@@ -108,9 +134,10 @@ const WorkoutDetail = () => {
     const formatDate = (dateString) => {
         if (!dateString) return '';
         return new Date(dateString).toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
+            weekday: 'long',
+            month: 'long',
             day: 'numeric',
+            year: 'numeric'
         });
     };
 
@@ -132,7 +159,7 @@ const WorkoutDetail = () => {
     if (loading) {
         return (
             <SafeAreaView style={styles.container}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
+                <ActivityIndicator size="large" color={theme.primary} />
             </SafeAreaView>
         );
     }
@@ -140,10 +167,11 @@ const WorkoutDetail = () => {
     if (!workoutDetails || workoutDetails.length === 0) {
         return (
             <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-                    </TouchableOpacity>
+                {/* Fixed: Back Button Overlay logic with dynamic theme */}
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButtonOver}>
+                    <Ionicons name="arrow-back" size={24} color={theme.text} />
+                </TouchableOpacity>
+                <View style={[styles.header, { justifyContent: 'center', marginTop: 60 }]}>
                     <Text style={styles.title}>Workout Not Found</Text>
                 </View>
             </SafeAreaView>
@@ -155,55 +183,39 @@ const WorkoutDetail = () => {
     const workoutDuration = workoutDetails[0].duration;
     const groupedExercises = groupExercisesByName(workoutDetails);
 
-    // Calculate total PRs
+    // Calculate total PRs (Matching History Logic: counting individual records, not just sets)
     const totalPRs = workoutDetails.reduce((acc, ex) => {
-        // Count PRs once per set
-        return acc + ((ex.is1rmPR === 1 || ex.isVolumePR === 1 || ex.isWeightPR === 1) ? 1 : 0);
+        return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
     }, 0);
 
     return (
         <SafeAreaView style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
 
-            {/* Header: Back Button and Session Number */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Session #{session}</Text>
-                <View style={{ width: 24 }} />
-            </View>
-
-            {/* Aggressively Reduced Padding on ScrollView */}
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                {/* Simplified Summary Card (Reduced Vertical Padding) */}
-                <View style={styles.summaryCard}>
-                    <Text style={styles.workoutName}>{workoutName}</Text>
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <Feather name="calendar" size={13} color={COLORS.textSecondary} />
-                            <Text style={styles.statText}>{formatDate(workoutDate)}</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Feather name="clock" size={13} color={COLORS.textSecondary} />
-                            <Text style={styles.statText}>{formatDuration(workoutDuration)}</Text>
+
+                {/* New Sleek Header (Replaces Summary Card) */}
+                <View style={styles.sleekHeaderContainer}>
+                    <Text style={styles.workoutDateDisplay}>{formatDate(workoutDate)}</Text>
+                    <Text style={styles.workoutNameHuge}>{workoutName}</Text>
+
+                    <View style={styles.metaDataRow}>
+                        <View style={styles.metaItem}>
+                            <Feather name="clock" size={14} color={theme.text} />
+                            <Text style={styles.metaText}>{formatDuration(workoutDuration)}</Text>
                         </View>
                         {totalPRs > 0 && (
-                            <>
-                                <View style={styles.statDivider} />
-                                <View style={styles.statItem}>
-                                    <MaterialCommunityIcons name="trophy" size={13} color={COLORS.primary} />
-                                    <Text style={[styles.statText, { color: COLORS.primary, fontFamily: FONTS.bold }]}>
-                                        {totalPRs} PR{totalPRs > 1 ? 's' : ''}
-                                    </Text>
-                                </View>
-                            </>
+                            <View style={[styles.metaItem, { borderColor: 'rgba(255, 215, 0, 0.3)', backgroundColor: 'rgba(255, 215, 0, 0.05)' }]}>
+                                <MaterialCommunityIcons name="trophy" size={14} color={'#FFD700'} />
+                                <Text style={[styles.metaText, { color: '#FFD700', fontFamily: FONTS.bold }]}>
+                                    {totalPRs} New PR{totalPRs > 1 ? 's' : ''}
+                                </Text>
+                            </View>
                         )}
                     </View>
                 </View>
 
-                {/* Exercises List (Reduced Gap) */}
+                {/* Exercises List */}
                 <View style={styles.exercisesList}>
                     {groupedExercises.map((exerciseGroup, index) => {
                         const exerciseDetails = exercisesList.find(
@@ -221,37 +233,36 @@ const WorkoutDetail = () => {
                             return { ...set, displayNumber: displayNumber };
                         });
 
-                        // Get note from any set (assuming notes are usually consistent per exercise in a session)
+                        // Get note from any set
                         const exerciseNote = exerciseGroup.find(e => e.notes)?.notes;
 
                         return (
                             <View key={index} style={styles.exerciseCard}>
-                                {/* Exercise Header (Reduced Vertical Padding) */}
+                                {/* Exercise Header */}
                                 <TouchableOpacity
                                     activeOpacity={0.8}
                                     onPress={() => showExerciseInfo(exerciseGroup[0].exerciseID, exerciseName)}
                                     style={styles.exerciseHeader}
                                 >
                                     <Text style={styles.exerciseName}>{exerciseName}</Text>
-                                    <Feather name="chevron-right" size={16} color={COLORS.primary} />
+                                    <Feather name="chevron-right" size={18} color={theme.textSecondary} />
                                 </TouchableOpacity>
 
-                                {/* Note Section (Reduced Vertical Padding and smaller text) */}
+                                {/* Note Section */}
                                 {exerciseNote && (
                                     <View style={styles.noteContainer}>
-                                        <MaterialCommunityIcons name="comment-text-outline" size={12} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
+                                        <MaterialCommunityIcons name="comment-text-outline" size={12} color={theme.textSecondary} style={{ marginTop: 2 }} />
                                         <Text style={styles.noteText}>{exerciseNote}</Text>
                                     </View>
                                 )}
 
                                 <View style={styles.setsContainer}>
-                                    {/* Sets Header Row (Minimum Padding) */}
+                                    {/* Sets Header Row */}
                                     <View style={styles.setsHeaderRow}>
                                         <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
                                         <Text style={[styles.colHeader, styles.colHeaderKg]}>KG</Text>
                                         <Text style={[styles.colHeader, styles.colHeaderReps]}>REPS</Text>
                                         <Text style={[styles.colHeader, styles.colHeader1RM]}>1RM</Text>
-                                        <View style={styles.colHeaderPRs} />
                                     </View>
 
                                     {setsWithDisplayNumbers.map((set, setIndex) => {
@@ -259,23 +270,28 @@ const WorkoutDetail = () => {
                                         const setType = set.setType || 'N';
 
                                         return (
-                                            // Set Row (Aggressively reduced Vertical Padding)
+                                            // Set Row Container
                                             <View key={setIndex} style={[
-                                                styles.setRow,
-                                                setIndex % 2 === 1 && styles.setRowOdd,
-                                                isPR && styles.setRowPR,
+                                                styles.setRowContainer,
+                                                setIndex % 2 === 1 && styles.setRowOdd
                                             ]}>
-                                                <SetNumberBadge type={setType} number={set.displayNumber} />
-                                                <Text style={styles.setWeight}>{set.weight}</Text>
-                                                <Text style={styles.setReps}>{set.reps}</Text>
-                                                <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
-
-                                                {/* PR Container (Minimized width) */}
-                                                <View style={styles.prContainer}>
-                                                    {set.is1rmPR === 1 && <PRBadge type="1RM" />}
-                                                    {set.isVolumePR === 1 && <PRBadge type="VOL" />}
-                                                    {set.isWeightPR === 1 && <PRBadge type="KG" />}
+                                                <View style={styles.setRow}>
+                                                    <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
+                                                    <Text style={styles.setWeight}>{set.weight} kg</Text>
+                                                    <Text style={styles.setReps}>{set.reps}</Text>
+                                                    <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
                                                 </View>
+
+                                                {/* PR Row */}
+                                                {isPR && (
+                                                    <View style={styles.badgeRow}>
+                                                        {/* Indent */}
+                                                        <View style={{ width: 32 }} />
+                                                        {set.is1rmPR === 1 && <PRBadge type="1RM" />}
+                                                        {set.isVolumePR === 1 && <PRBadge type="VOL" />}
+                                                        {set.isWeightPR === 1 && <PRBadge type="KG" />}
+                                                    </View>
+                                                )}
                                             </View>
                                         );
                                     })}
@@ -293,9 +309,11 @@ const WorkoutDetail = () => {
                 closeOnPressBack={true}
                 androidCloseOnBackPress={true}
                 containerStyle={styles.actionSheetContainer}
+                indicatorStyle={styles.indicator}
                 snapPoints={[94]}
                 initialSnapIndex={0}
             >
+                {/* Note: ExerciseHistory needs its own refactor for Theme support, passing theme ID or context usage inside it */}
                 <ExerciseHistory
                     exerciseID={selectedExerciseId}
                     exerciseName={currentExerciseName}
@@ -305,248 +323,192 @@ const WorkoutDetail = () => {
     );
 };
 
+// --- Styles Generator ---
+const getStyles = (theme) => {
+    // Safe Colors for Reanimated (ActionSheet)
+    const isDynamic = theme.type === 'dynamic';
+    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
+    const safeIndicator = isDynamic ? '#aaaaaa' : theme.textSecondary;
 
-// --- Refined Styles (HIGH DENSITY OPTIMIZATION) ---
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: theme.background,
+        },
+        backButtonOver: {
+            // Floating button, keeping static style logic but could theme background?
+            // Let's keep it semi-transparent black as it might be over content
+            position: 'absolute',
+            top: 10,
+            left: 16,
+            zIndex: 10,
+            padding: 8,
+            backgroundColor: 'rgba(0,0,0,0.3)',
+            borderRadius: 20,
+        },
+        scrollContent: {
+            paddingTop: 10,
+            paddingBottom: 40,
+        },
 
-// Define the base style object outside of StyleSheet.create
-const setNumberBaseStyle = {
-    width: 35, // Reduced width
-    height: 20, // Reduced height
-    alignItems: 'center',
-    justifyContent: 'center',
+        // Header
+        sleekHeaderContainer: {
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+            marginBottom: 16,
+        },
+        workoutDateDisplay: {
+            fontSize: 12,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            marginBottom: 2,
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+        },
+        workoutNameHuge: {
+            fontSize: 28,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+            lineHeight: 34,
+            marginBottom: 10,
+        },
+        metaDataRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+        },
+        metaItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            backgroundColor: theme.surface,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: theme.border,
+        },
+        metaText: {
+            fontSize: 12,
+            fontFamily: FONTS.medium,
+            color: theme.text,
+        },
+
+        // Exercise List
+        exercisesList: {
+            gap: 8,
+            paddingHorizontal: 12,
+        },
+        exerciseCard: {
+            backgroundColor: theme.surface,
+            borderRadius: 12,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: theme.border,
+        },
+        exerciseHeader: {
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: 'rgba(255,255,255,0.03)',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderBottomWidth: 1,
+            borderBottomColor: 'rgba(255,255,255,0.05)',
+        },
+        exerciseName: {
+            fontSize: 15,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+            flex: 1,
+        },
+        noteContainer: {
+            flexDirection: 'row',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            gap: 6,
+            backgroundColor: 'rgba(255, 253, 203, 0.05)',
+        },
+        noteText: {
+            flex: 1,
+            fontSize: 11,
+            color: theme.textSecondary,
+            fontFamily: FONTS.regular,
+            fontStyle: 'italic',
+            lineHeight: 16,
+        },
+
+        // Sets Table
+        setsContainer: {
+            paddingVertical: 2,
+        },
+        setsHeaderRow: {
+            flexDirection: 'row',
+            paddingVertical: 6,
+            borderBottomWidth: 1,
+            borderBottomColor: 'rgba(255,255,255,0.05)',
+            paddingHorizontal: 12,
+        },
+        colHeader: {
+            fontSize: 9,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            textTransform: 'uppercase',
+        },
+        colHeaderSet: { width: 32 },
+        colHeaderKg: { flex: 1, textAlign: 'center' },
+        colHeaderReps: { flex: 1, textAlign: 'center' },
+        colHeader1RM: { flex: 1, textAlign: 'center' },
+
+        // Set Rows
+        setRowContainer: {
+            paddingVertical: 4,
+            paddingHorizontal: 12,
+        },
+        setRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+        },
+        setRowOdd: {
+            backgroundColor: 'rgba(255,255,255,0.01)',
+        },
+        badgeRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginTop: 4,
+            flexWrap: 'wrap',
+        },
+        setWeight: {
+            flex: 1,
+            textAlign: 'center',
+            fontSize: 14,
+            fontFamily: FONTS.semiBold,
+            color: theme.text,
+        },
+        setReps: {
+            flex: 1,
+            textAlign: 'center',
+            fontSize: 14,
+            fontFamily: FONTS.semiBold,
+            color: theme.text,
+        },
+        setOneRM: {
+            flex: 1,
+            textAlign: 'center',
+            fontSize: 12,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+        },
+        actionSheetContainer: {
+            backgroundColor: safeSurface,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            height: '94%',
+        },
+        indicator: {
+            backgroundColor: safeIndicator,
+        }
+    });
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: COLORS.background,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 10, // Reduced padding
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-        backgroundColor: COLORS.surface,
-    },
-    backButton: {
-        padding: 4,
-    },
-    headerTitle: {
-        fontSize: 17, // Slightly reduced font size
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-    },
-    scrollContent: {
-        padding: 12, // Reduced padding
-        paddingBottom: 40,
-    },
-
-    // Summary Card (Reduced Vertical Padding)
-    summaryCard: {
-        backgroundColor: COLORS.surface,
-        borderRadius: 12,
-        padding: 12, // Reduced padding
-        marginBottom: 12, // Reduced margin
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        ...SHADOWS.small,
-    },
-    workoutName: {
-        fontSize: 17, // Reduced font size
-        fontFamily: FONTS.semiBold,
-        color: COLORS.text,
-        marginBottom: 8, // Reduced margin
-    },
-    statsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    statItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    statText: {
-        fontSize: 12, // Reduced font size
-        fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
-    },
-    statDivider: {
-        width: 1,
-        height: 12,
-        backgroundColor: COLORS.border,
-        opacity: 0.5,
-    },
-
-    // Exercise List
-    exercisesList: {
-        gap: 10, // Reduced gap between exercises
-    },
-    exerciseCard: {
-        backgroundColor: COLORS.surface,
-        borderRadius: 12,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    // Exercise Header (Reduced Vertical Padding)
-    exerciseHeader: {
-        paddingHorizontal: 12,
-        paddingVertical: 10, // Reduced padding
-        backgroundColor: 'rgba(255,255,255,0.03)',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    exerciseName: {
-        fontSize: 15, // Reduced font size
-        fontFamily: FONTS.semiBold,
-        color: COLORS.text,
-        flex: 1,
-    },
-
-    // Note Section (Reduced Padding and Smaller Icon/Text)
-    noteContainer: {
-        flexDirection: 'row',
-        paddingHorizontal: 12,
-        paddingTop: 8, // Reduced padding
-        paddingBottom: 4, // Reduced padding
-        gap: 6, // Reduced gap
-        backgroundColor: 'rgba(255, 253, 203, 0.05)',
-    },
-    noteText: {
-        flex: 1,
-        fontSize: 11, // Smaller font size
-        color: COLORS.textSecondary,
-        fontFamily: FONTS.regular,
-        fontStyle: 'italic',
-        lineHeight: 16, // Reduced line height
-    },
-
-    // Set Table
-    setsContainer: {
-        paddingVertical: 2, // Reduced padding
-        paddingHorizontal: 0,
-    },
-    setsHeaderRow: {
-        flexDirection: 'row',
-        paddingVertical: 6, // Reduced padding
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-    },
-    colHeader: {
-        fontSize: 10,
-        fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
-        textTransform: 'uppercase',
-        textAlign: 'center',
-    },
-    // Column widths for alignment
-    colHeaderSet: { width: 40 },
-    colHeaderKg: { flex: 1 },
-    colHeaderReps: { flex: 1 },
-    colHeader1RM: { flex: 1 },
-    colHeaderPRs: { width: 55 }, // Increased slightly for badges
-
-    // Set Row (Aggressively reduced vertical padding)
-    setRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 5, // Aggressively reduced padding
-    },
-    setRowOdd: {
-        backgroundColor: 'rgba(255,255,255,0.01)',
-    },
-    setRowPR: {
-        backgroundColor: 'rgba(45, 196, 181, 0.15)',
-    },
-
-    // Set Number Badges (FIXED & Reduced size)
-    setNumberDefault: {
-        ...setNumberBaseStyle,
-    },
-    setNumberWarmup: {
-        ...setNumberBaseStyle,
-        backgroundColor: 'rgba(253, 203, 110, 0.15)',
-        borderRadius: 4,
-        marginRight: 4,
-    },
-    setNumberDrop: {
-        ...setNumberBaseStyle,
-        backgroundColor: 'rgba(116, 185, 255, 0.15)',
-        borderRadius: 4,
-        marginRight: 4,
-    },
-    setNumberTextDefault: {
-        fontSize: 13, // Reduced font size
-        fontFamily: FONTS.regular,
-        color: COLORS.textSecondary,
-    },
-    setNumberTextWarmup: {
-        fontSize: 13,
-        fontFamily: FONTS.medium,
-        color: COLORS.warning,
-    },
-    setNumberTextDrop: {
-        fontSize: 13,
-        fontFamily: FONTS.medium,
-        color: COLORS.secondary,
-    },
-
-    // Set Values (Reduced font size)
-    setWeight: {
-        flex: 1,
-        textAlign: 'center',
-        fontSize: 14, // Reduced font size
-        fontFamily: FONTS.semiBold,
-        color: COLORS.text,
-    },
-    setReps: {
-        flex: 1,
-        textAlign: 'center',
-        fontSize: 14, // Reduced font size
-        fontFamily: FONTS.semiBold,
-        color: COLORS.text,
-    },
-    setOneRM: {
-        flex: 1,
-        textAlign: 'center',
-        fontSize: 12, // Reduced font size
-        fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
-    },
-
-    // PR Badge Container
-    prContainer: {
-        width: 55, // Fixed width
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        gap: 3, // Reduced gap
-        alignItems: 'center',
-    },
-    miniPrBadge: {
-        paddingHorizontal: 4,
-        paddingVertical: 1, // Reduced vertical padding
-        borderRadius: 4,
-    },
-    miniPrText: {
-        fontSize: 10, // Minimum font size for readability
-        fontFamily: FONTS.bold,
-        color: '#f5f5f5ff',
-    },
-
-    // Action Sheet
-    actionSheetContainer: {
-        height: '94%',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        backgroundColor: COLORS.surface,
-    },
-});
 
 export default WorkoutDetail;

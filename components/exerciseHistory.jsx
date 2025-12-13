@@ -4,16 +4,26 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { fetchExerciseHistory, fetchExercises } from './db';
 import { useFocusEffect } from 'expo-router';
-import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Body from "react-native-body-highlighter";
 import ActionSheet from "react-native-actions-sheet";
 import NewExercise from "./NewExercise"
+import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
+const GradientOrView = ({ colors, style, theme, children }) => {
+    if (theme.type === 'dynamic') {
+        return <View style={[style, { backgroundColor: theme.surface }]}>{children}</View>;
+    }
+    return <LinearGradient colors={colors} style={style}>{children}</LinearGradient>;
+};
+
 const ExerciseHistory = (props) => {
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
@@ -136,10 +146,22 @@ const ExerciseHistory = (props) => {
         });
     };
 
+    // Safe fallback colors for Body component and Reanimated views
+    const isDynamic = theme.type === 'dynamic';
+    // User requested swap: "actually flipped like earlier".
+    // Swapping order to: [Full Color (Target?), Light Color (Accessory?)] or vice versa.
+    // Previous state: [`${theme.primary}80`, theme.primary] (Light, Dark).
+    // Swapped state: [theme.primary, `${theme.primary}80`] (Dark, Light).
+    const bodyColors = isDynamic
+        ? ['#2DC4B6', '#2DC4B680']
+        : [theme.primary, `${theme.primary}80`];
+    const safeBorder = isDynamic ? '#e5e5e5' : theme.border;
+    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
+                <ActivityIndicator size="large" color={theme.primary} />
             </View>
         );
     }
@@ -155,9 +177,9 @@ const ExerciseHistory = (props) => {
                 keyExtractor={([session]) => session.toString()}
                 ListHeaderComponent={
                     <View>
-                        <LinearGradient
-                            colors={[COLORS.surface, COLORS.background]}
-                            style={styles.headerGradient}
+                        {/* Replaced GradientOrView with flat View for all themes as requested */}
+                        <View
+                            style={[styles.headerGradient, { backgroundColor: theme.surface }]}
                         >
                             <View style={styles.titleRow}>
                                 <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
@@ -168,7 +190,7 @@ const ExerciseHistory = (props) => {
                                     <MaterialIcons
                                         name="edit"
                                         size={20}
-                                        color={COLORS.primary}
+                                        color={theme.primary}
                                     />
                                 </TouchableOpacity>
                             </View>
@@ -181,7 +203,8 @@ const ExerciseHistory = (props) => {
                                 enableGestureBack={true}
                                 closeOnPressBack={true}
                                 androidCloseOnBackPress={true}
-                                containerStyle={{ height: '94%' }}
+                                containerStyle={{ height: '94%', backgroundColor: safeSurface }}
+                                indicatorStyle={{ backgroundColor: theme.textSecondary }}
                                 snapPoints={[94]}
                                 initialSnapIndex={0}
                             >
@@ -207,7 +230,7 @@ const ExerciseHistory = (props) => {
                                     <Text style={styles.statValue}>{(stats.totalVolume / 1000).toFixed(1)}k</Text>
                                 </View>
                             </View>
-                        </LinearGradient>
+                        </View>
 
                         <View style={styles.bodyContainer}>
                             <Body
@@ -215,14 +238,16 @@ const ExerciseHistory = (props) => {
                                 gender="male"
                                 side="front"
                                 scale={1.0}
-                                border={COLORS.border}
+                                border={safeBorder}
+                                colors={bodyColors}
                             />
                             <Body
                                 data={formattedTargets}
                                 gender="male"
                                 side="back"
                                 scale={1.0}
-                                border={COLORS.border}
+                                border={safeBorder}
+                                colors={bodyColors}
                             />
                         </View>
 
@@ -249,7 +274,7 @@ const ExerciseHistory = (props) => {
                                 <View>
                                     <Text style={styles.sessionTitle}>{workoutName}</Text>
                                     <View style={styles.sessionDateContainer}>
-                                        <Feather name="calendar" size={12} color={COLORS.textSecondary} />
+                                        <Feather name="calendar" size={12} color={theme.textSecondary} />
                                         <Text style={styles.sessionDate}>
                                             {formatDate(exercises[0].time)}
                                         </Text>
@@ -262,50 +287,57 @@ const ExerciseHistory = (props) => {
                             {/* Session Note */}
                             {sessionNote && (
                                 <View style={styles.noteContainer}>
-                                    <MaterialCommunityIcons name="text" size={14} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
+                                    <MaterialCommunityIcons name="text" size={14} color={theme.textSecondary} style={{ marginTop: 2 }} />
                                     <Text style={styles.noteText}>{sessionNote}</Text>
                                 </View>
                             )}
 
                             <View style={styles.setsContainer}>
                                 <View style={styles.setsHeaderRow}>
-                                    <Text style={[styles.colHeader, { width: 30, textAlign: 'center' }]}>Set</Text>
+                                    <Text style={[styles.colHeader, { width: 32, textAlign: 'center' }]}>Set</Text>
                                     <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>kg</Text>
                                     <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>Reps</Text>
                                     <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>1RM</Text>
-                                    <View style={{ width: 60 }} />
                                 </View>
                                 {setsWithDisplayNumbers.map((set, setIndex) => {
                                     const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+                                    const hasBadges = isPR;
+
                                     return (
                                         <View key={setIndex} style={[
-                                            styles.setRow,
-                                            setIndex % 2 === 1 && { backgroundColor: 'rgba(255,255,255,0.02)' },
-                                            isPR && { backgroundColor: 'rgba(64, 186, 173, 0.15)' }
+                                            styles.setRowContainer,
+                                            setIndex % 2 === 1 && { backgroundColor: theme.surfaceVariant || 'rgba(255,255,255,0.02)' }
                                         ]}>
-                                            <View style={[
-                                                styles.setBadge,
-                                                set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.15)' },
-                                                set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.15)' }
-                                            ]}>
-                                                <Text style={[
-                                                    styles.setNumber,
-                                                    set.setType === 'W' && { color: COLORS.warning },
-                                                    set.setType === 'D' && { color: COLORS.secondary }
+                                            <View style={styles.setRow}>
+                                                <View style={[
+                                                    styles.setBadge,
+                                                    set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.15)' },
+                                                    set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.15)' }
                                                 ]}>
-                                                    {set.displayNumber}
-                                                </Text>
+                                                    <Text style={[
+                                                        styles.setNumber,
+                                                        set.setType === 'W' && { color: theme.warning },
+                                                        set.setType === 'D' && { color: theme.secondary }
+                                                    ]}>
+                                                        {set.displayNumber}
+                                                    </Text>
+                                                </View>
+
+                                                <Text style={styles.setWeight}>{set.weight} kg</Text>
+                                                <Text style={styles.setReps}>{set.reps}</Text>
+                                                <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
                                             </View>
 
-                                            <Text style={styles.setWeight}>{set.weight}</Text>
-                                            <Text style={styles.setReps}>{set.reps}</Text>
-                                            <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
-
-                                            <View style={styles.prContainer}>
-                                                {set.is1rmPR === 1 && <PRBadge type="1RM" />}
-                                                {set.isVolumePR === 1 && <PRBadge type="VOL" />}
-                                                {set.isWeightPR === 1 && <PRBadge type="KG" />}
-                                            </View>
+                                            {/* PR Badges Row */}
+                                            {hasBadges && (
+                                                <View style={styles.badgeRow}>
+                                                    {/* Indent to align with data if desired, or just flush left */}
+                                                    <View style={{ width: 40 }} />
+                                                    {set.is1rmPR === 1 && <PRBadge type="1RM" styles={styles} />}
+                                                    {set.isVolumePR === 1 && <PRBadge type="VOL" styles={styles} />}
+                                                    {set.isWeightPR === 1 && <PRBadge type="KG" styles={styles} />}
+                                                </View>
+                                            )}
                                         </View>
                                     );
                                 })}
@@ -315,7 +347,7 @@ const ExerciseHistory = (props) => {
                 }}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Feather name="activity" size={48} color={COLORS.textSecondary} style={{ opacity: 0.5 }} />
+                        <Feather name="activity" size={48} color={theme.textSecondary} style={{ opacity: 0.5 }} />
                         <Text style={styles.emptyText}>No workout history yet</Text>
                         <Text style={styles.emptySubtext}>Complete a workout to see your progress</Text>
                     </View>
@@ -330,53 +362,51 @@ const ExerciseHistory = (props) => {
     );
 };
 
-const PRBadge = ({ type }) => {
-    let colors = [COLORS.primary, COLORS.secondary];
-    let icon = "trophy";
+const PRBadge = ({ type, styles }) => {
+    // Fixed: Use MaterialCommunityIcons for Trophy
+    const iconName = "trophy";
+    let label = "PR";
 
-    if (type === 'VOL') {
-        colors = ['#4834d4', '#686de0'];
-        icon = "chart-bar";
-    } else if (type === 'KG') {
-        colors = ['#6ab04c', '#badc58'];
-        icon = "weight-kilogram";
-    }
+    // Logic: Distinction in Text, Unity in Color
+    if (type === '1RM') label = "1RM";
+    if (type === 'VOL') label = "Vol.";
+    if (type === 'KG') label = "Weight";
+
+    const color = '#FFD700'; // Gold
+    const bgColor = 'rgba(255, 215, 0, 0.15)'; // Low opacity gold
+    const borderColor = 'rgba(255, 215, 0, 0.3)';
 
     return (
-        <LinearGradient
-            colors={colors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.miniPrBadge}
-        >
-            <Text style={styles.miniPrText}>{type}</Text>
-        </LinearGradient>
+        <View style={[styles.strongBadge, { backgroundColor: bgColor, borderColor: borderColor }]}>
+            <MaterialCommunityIcons name={iconName} size={10} color={color} />
+            <Text style={[styles.strongBadgeText, { color: color }]}>{label}</Text>
+        </View>
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: {
         height: '100%',
-        backgroundColor: COLORS.background,
+        backgroundColor: theme.background,
     },
     dragHandleArea: {
         paddingVertical: 12,
         paddingTop: 8,
         alignItems: 'center',
-        backgroundColor: COLORS.background,
+        backgroundColor: theme.background,
     },
     dragHandle: {
         width: 40,
         height: 4,
         borderRadius: 2,
-        backgroundColor: COLORS.textSecondary,
+        backgroundColor: theme.textSecondary,
         opacity: 0.3,
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: COLORS.background,
+        backgroundColor: theme.background,
     },
     list: {
         flex: 1,
@@ -390,7 +420,7 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 24,
         borderBottomRightRadius: 24,
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+        borderBottomColor: theme.border,
     },
     titleRow: {
         flexDirection: 'row',
@@ -403,16 +433,16 @@ const styles = StyleSheet.create({
     exerciseTitle: {
         fontSize: 24,
         fontFamily: FONTS.bold,
-        color: COLORS.text,
+        color: theme.text,
         textAlign: 'center',
         flex: 1,
     },
     editButton: {
         padding: 8,
-        backgroundColor: COLORS.surface,
+        backgroundColor: theme.surface,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: theme.border,
     },
     statsRow: {
         flexDirection: 'row',
@@ -426,7 +456,7 @@ const styles = StyleSheet.create({
     statLabel: {
         fontSize: 12,
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
         marginBottom: 4,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
@@ -434,12 +464,12 @@ const styles = StyleSheet.create({
     statValue: {
         fontSize: 20,
         fontFamily: FONTS.bold,
-        color: COLORS.primary,
+        color: theme.primary,
     },
     statDivider: {
         width: 1,
         height: 30,
-        backgroundColor: COLORS.border,
+        backgroundColor: theme.border,
     },
     bodyContainer: {
         flexDirection: 'row',
@@ -454,33 +484,36 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontFamily: FONTS.bold,
-        color: COLORS.text,
+        color: theme.text,
         marginLeft: 20,
         marginTop: 16,
         marginBottom: 16,
     },
+    // Updated Styles to match [session].jsx
     sessionCard: {
-        marginHorizontal: 16,
-        marginBottom: 16,
-        backgroundColor: COLORS.surface,
+        marginBottom: 12,
+        backgroundColor: theme.surface,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: theme.border,
         ...SHADOWS.small,
         overflow: 'hidden',
     },
     sessionHeader: {
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: 'rgba(255,255,255,0.02)',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        backgroundColor: 'rgba(255,255,255,0.03)',
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+        borderBottomColor: theme.border,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     sessionTitle: {
-        fontSize: 16,
+        fontSize: 15,
         fontFamily: FONTS.semiBold,
-        color: COLORS.text,
-        marginBottom: 4,
+        color: theme.text,
+        marginBottom: 2,
     },
     sessionDateContainer: {
         flexDirection: 'row',
@@ -488,102 +521,102 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     sessionDate: {
-        fontSize: 13,
+        fontSize: 11,
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
     },
     dot: {
-        width: 3,
-        height: 3,
-        borderRadius: 1.5,
-        backgroundColor: COLORS.textSecondary,
+        width: 2,
+        height: 2,
+        borderRadius: 1,
+        backgroundColor: theme.textSecondary,
         opacity: 0.5,
     },
     noteContainer: {
         flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingTop: 12,
+        paddingHorizontal: 12,
+        paddingTop: 8,
         paddingBottom: 4,
-        gap: 8,
+        gap: 6,
+        backgroundColor: 'rgba(255, 253, 203, 0.05)',
     },
     noteText: {
         flex: 1,
-        fontSize: 13,
-        color: COLORS.textSecondary,
+        fontSize: 11,
+        color: theme.textSecondary,
         fontFamily: FONTS.regular,
         fontStyle: 'italic',
-        lineHeight: 18,
+        lineHeight: 16,
     },
     setsContainer: {
-        paddingVertical: 4,
+        paddingVertical: 2,
     },
     setsHeaderRow: {
         flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingVertical: 6,
+        paddingHorizontal: 16, // added back horizontal padding for header row alignment
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.05)',
+        borderBottomColor: theme.border,
     },
     colHeader: {
-        fontSize: 11,
+        fontSize: 10,
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
         textTransform: 'uppercase',
+    },
+    setRowContainer: {
+        paddingVertical: 6,
+        paddingHorizontal: 16,
     },
     setRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 6,
-        paddingHorizontal: 16,
+    },
+    badgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+        flexWrap: 'wrap',
     },
     setBadge: {
-        width: 30,
+        width: 24, // reduced from 30
+        height: 20,
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: 4,
-        paddingVertical: 2,
+        marginRight: 8,
     },
     setNumber: {
-        fontSize: 13,
+        fontSize: 12,
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
     },
     setWeight: {
         flex: 1,
         textAlign: 'center',
-        fontSize: 15,
+        fontSize: 14,
         fontFamily: FONTS.semiBold,
-        color: COLORS.text,
+        color: theme.text,
     },
     setReps: {
         flex: 1,
         textAlign: 'center',
-        fontSize: 15,
+        fontSize: 14,
         fontFamily: FONTS.semiBold,
-        color: COLORS.text,
+        color: theme.text,
     },
     setOneRM: {
         flex: 1,
         textAlign: 'center',
-        fontSize: 14,
+        fontSize: 12,
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
     },
     prContainer: {
-        width: 60,
+        width: 50,
         flexDirection: 'row',
         justifyContent: 'flex-end',
         gap: 4,
-    },
-    miniPrBadge: {
-        paddingHorizontal: 4,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    miniPrText: {
-        fontSize: 9,
-        fontFamily: FONTS.bold,
-        color: '#fff',
     },
     emptyContainer: {
         padding: 40,
@@ -591,17 +624,26 @@ const styles = StyleSheet.create({
         marginTop: 40,
     },
     emptyText: {
-        color: COLORS.text,
+        color: theme.text,
         fontFamily: FONTS.bold,
         fontSize: 18,
         marginTop: 16,
         marginBottom: 8,
     },
-    emptySubtext: {
-        color: COLORS.textSecondary,
-        fontFamily: FONTS.regular,
-        fontSize: 14,
-    }
+    strongBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 8,
+        borderWidth: 1,
+        gap: 4,
+        marginRight: 6,
+    },
+    strongBadgeText: {
+        fontSize: 10,
+        fontFamily: FONTS.bold,
+    },
 });
 
 export default ExerciseHistory;

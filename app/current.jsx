@@ -1,15 +1,15 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, UIManager } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import DraggableFlatList, { ScaleDecorator, ShadowDecorator, OpacityDecorator } from 'react-native-draggable-flatlist';
+import { AnySizeDragSortableView } from 'react-native-drag-sort';
 import * as Haptics from 'expo-haptics';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-import { Dimensions } from 'react-native';   // ← make sure this import exists at the top!
+import { Dimensions } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 
 import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs } from '../components/db';
@@ -22,7 +22,7 @@ import ExerciseHistory from "../components/exerciseHistory"
 
 
 import FilteredExerciseList from '../components/FilteredExerciseList';
-import { COLORS, FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import Timer from '../components/Timer';
 import RestTimer from '../components/RestTimer';
@@ -30,17 +30,20 @@ import { useFocusEffect } from 'expo-router';
 
 import TestSoundButton from '../components/TestSoundButton';
 import TestNotificationButton from '../components/TestNotificationButton';
+import { useTheme } from '../context/ThemeContext';
 
 const Current = () => {
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
 
     const [exercises, setExercises] = useState([]);
     const [startTime, setStartTime] = useState(null);
 
-    // Ref for DraggableFlatList to coordinate gestures (e.g. swipes)
+
     const listRef = useRef(null);
 
 
-    NavigationBar.setBackgroundColorAsync(COLORS.background);
+    NavigationBar.setBackgroundColorAsync(theme.background);
 
     const startWorkout = async () => {
         const now = new Date().toISOString();
@@ -174,6 +177,11 @@ const Current = () => {
                         maxWeightInfo.weight > historicalPRs.maxWeight ||
                         (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight);
 
+                    // Track assigned PRs to avoid duplicate badges in the same workout (first set gets priority)
+                    let pr1rmAssigned = false;
+                    let prVolumeAssigned = false;
+                    let prWeightAssigned = false;
+
                     for (const set of exercise.sets) {
                         // Calculate metrics for the set
                         const calculatedOneRM = calculateOneRepMax(
@@ -185,11 +193,24 @@ const Current = () => {
                         const reps = parseInt(set.reps);
 
                         // Determine if this specific set is the PR-setting set
-                        const is1rmPR = (calculatedOneRM === maxOneRMForExercise && isOverall1rmPR) ? 1 : 0;
-                        const isVolumePR = (volume === maxVolumeForExercise && isOverallVolumePR) ? 1 : 0;
+                        // Logic: Must match the workout max AND represent an overall PR AND not have been assigned yet
+                        let is1rmPR = 0;
+                        if (!pr1rmAssigned && calculatedOneRM === maxOneRMForExercise && isOverall1rmPR) {
+                            is1rmPR = 1;
+                            pr1rmAssigned = true;
+                        }
 
-                        // Only mark as Weight PR if it's the exact set with max weight and max reps at that weight
-                        const isWeightPR = (reps > 0 && weight === maxWeightInfo.weight && reps === maxWeightInfo.reps && isOverallWeightPR) ? 1 : 0;
+                        let isVolumePR = 0;
+                        if (!prVolumeAssigned && volume === maxVolumeForExercise && isOverallVolumePR) {
+                            isVolumePR = 1;
+                            prVolumeAssigned = true;
+                        }
+
+                        let isWeightPR = 0;
+                        if (!prWeightAssigned && reps > 0 && weight === maxWeightInfo.weight && reps === maxWeightInfo.reps && isOverallWeightPR) {
+                            isWeightPR = 1;
+                            prWeightAssigned = true;
+                        }
 
                         // Legacy PR flag (1RM)
                         const isPR = is1rmPR;
@@ -361,16 +382,82 @@ const Current = () => {
         ]);
     };
 
-    const renderItem = useCallback(({ item, drag, isActive, index }) => {
+    const renderHeader = () => {
         return (
-            <TouchableOpacity
-                onLongPress={drag}
-                activeOpacity={1}
+            <View>
+                <View style={styles.headerContainer}>
+                    <View style={styles.headerTopRow}>
+                        <Text style={styles.headerTitle}>New Workout</Text>
+                        <TextInput
+                            style={styles.workoutNameInput}
+                            placeholder="Workout Name"
+                            placeholderTextColor={theme.textSecondary}
+                            value={workoutName}
+                            onChangeText={setWorkoutName}
+                            keyboardType="text"
+                        />
+                        {startTime && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                <Timer startTime={startTime} />
+                                <RestTimer />
+                            </View>
+                        )}
+                    </View>
+                    <View style={styles.headerDivider} />
+                </View>
+            </View>
+        );
+    };
+
+    const renderFooter = () => {
+        return (
+            <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
+                <TouchableOpacity
+                    style={styles.addExerciseButton}
+                    onPress={plusButtonShowExerciseList}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.addExerciseText}>Add Exercise</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={endWorkout}
+                    activeOpacity={0.8}
+                    style={styles.finishButtonContainer}
+                >
+                    <ButtonBackground style={styles.finishButton}>
+                        <Text style={styles.finishButtonText}>Finish Workout</Text>
+                    </ButtonBackground>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={() =>
+                        Alert.alert(
+                            "Clear Workout?",
+                            "This will remove all data.",
+                            [
+                                { text: "Cancel", style: "cancel" },
+                                { text: "OK", onPress: clearWorkout }
+                            ]
+                        )
+                    }
+                    activeOpacity={0.7}
+                    style={styles.clearButton}
+                >
+                    <Text style={styles.clearButtonText}>Clear Workout</Text>
+                </TouchableOpacity>
+            </Animated.View>
+        );
+    };
+
+    const renderItem = useCallback((item, index, isMoved) => {
+        return (
+            <View
                 style={[
-                    isActive && { zIndex: 999 }
+                    isMoved && { zIndex: 999, opacity: 0.9, transform: [{ scale: 1.02 }] }
                 ]}
             >
-                <View key={item.id}>
+                <View collapsable={false}>
                     {item.exercises.map((exercise, exerciseIndex) => {
                         const exerciseDetails = exercises.find(
                             (e) => e.exerciseID === exercise.exerciseID
@@ -380,22 +467,51 @@ const Current = () => {
                             <ExerciseEditable
                                 exerciseID={exercise.exerciseID}
                                 workoutID={item.id}
-                                key={exerciseIndex}
+                                key={exercise.exerciseID}
                                 exercise={exercise}
                                 exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
                                 updateCurrentWorkout={setCurrentWorkout}
-                                drag={drag}
-                                isActive={isActive}
+                                drag={null}
+                                isActive={isMoved}
                                 onOpenDetails={() => showExerciseInfo(exerciseDetails)}
-                                simultaneousHandlers={listRef} // Pass ref to coordinate with swipeable rows
+                                simultaneousHandlers={listRef}
                             />
                         );
                     })}
                 </View>
-            </TouchableOpacity>
+            </View>
         );
     }, [setCurrentWorkout, exercises]);
 
+
+    // Safe Colors for Reanimated / Linear Gradient fallbacks
+    const isDynamic = theme.type === 'dynamic';
+    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
+    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
+    const safeText = isDynamic ? '#FFFFFF' : theme.text;
+    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
+    const safeDanger = isDynamic ? '#FF4444' : theme.danger;
+
+    // Helper for Button Gradient
+    const ButtonBackground = ({ children, style }) => {
+        if (isDynamic) {
+            return (
+                <View style={[style, { backgroundColor: safePrimary, alignItems: 'center', justifyContent: 'center' }]}>
+                    {children}
+                </View>
+            );
+        }
+        return (
+            <LinearGradient
+                colors={[theme.primary, theme.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={style}
+            >
+                {children}
+            </LinearGradient>
+        );
+    };
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -403,19 +519,14 @@ const Current = () => {
                 {!startTime && currentWorkout.length === 0 && (
                     <View style={styles.startContainer}>
                         <View style={styles.emptyStateContent}>
-                            <Feather name="activity" size={64} color={COLORS.primary} style={{ marginBottom: 24, opacity: 0.8 }} />
+                            <Feather name="activity" size={64} color={theme.primary} style={{ marginBottom: 24, opacity: 0.8 }} />
                             <Text style={styles.emptyStateTitle}>Ready to train?</Text>
                             <Text style={styles.emptyStateSubtitle}>Start an empty workout or choose a template to begin your session.</Text>
 
                             <TouchableOpacity onPress={startWorkout} activeOpacity={0.8} style={styles.startWorkoutButtonContainer}>
-                                <LinearGradient
-                                    colors={[COLORS.primary, COLORS.secondary]}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.startButton}
-                                >
+                                <ButtonBackground style={styles.startButton}>
                                     <Text style={styles.startButtonText}>Start an Empty Workout</Text>
-                                </LinearGradient>
+                                </ButtonBackground>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -423,84 +534,18 @@ const Current = () => {
 
                 {(startTime || currentWorkout.length > 0) && (
                     <View style={{ flex: 1 }}>
-                        {/* Header */}
-                        <View style={styles.headerContainer}>
-                            <View style={styles.headerTopRow}>
-                                <TextInput
-                                    style={styles.workoutTitleInput}
-                                    onChangeText={setWorkoutTitle}
-                                    value={workoutTitle}
-                                    placeholder="Workout Name"
-                                    placeholderTextColor={COLORS.textSecondary}
-                                    keyboardType="text"
-                                />
-                                {startTime && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                        <Timer startTime={startTime} />
-                                        <RestTimer />
-                                    </View>
-                                )}
-                            </View>
-                            <View style={styles.headerDivider} />
-
-                        </View>
-
-                        <DraggableFlatList
+                        <AnySizeDragSortableView
                             ref={listRef}
-                            data={currentWorkout}
-                            onDragEnd={({ data }) => {
-                                setCurrentWorkout(data);
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            }}
-                            onDragBegin={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                            keyExtractor={(item) => item.id}
+                            dataSource={currentWorkout}
+                            keyExtractor={(item) => String(item.id)}
                             renderItem={renderItem}
-                            contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
-                            activationDistance={20}
-                            // Smooth layout transitions when adding/removing items (not during drag)
-                            itemLayoutAnimation={LinearTransition.springify().damping(14).stiffness(100)}
-                            keyboardShouldPersistTaps="handled"
-                            keyboardDismissMode="on-drag"
-                            ListFooterComponent={
-                                <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
-                                    <TouchableOpacity
-                                        style={styles.addExerciseButton}
-                                        onPress={plusButtonShowExerciseList}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Text style={styles.addExerciseText}>Add Exercise</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        onPress={endWorkout}
-                                        activeOpacity={0.7}
-                                        style={styles.actionButton}
-                                    >
-                                        <Text style={[styles.actionText, { color: COLORS.success }]}>
-                                            Finish Workout
-                                        </Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        onPress={() =>
-                                            Alert.alert(
-                                                "Clear Workout?",
-                                                "This will remove all data.",
-                                                [
-                                                    { text: "Cancel", style: "cancel" },
-                                                    { text: "OK", onPress: clearWorkout }
-                                                ]
-                                            )
-                                        }
-                                        activeOpacity={0.7}
-                                        style={styles.actionButton}
-                                    >
-                                        <Text style={[styles.actionText, { color: COLORS.danger }]}>
-                                            Clear Workout
-                                        </Text>
-                                    </TouchableOpacity>
-                                </Animated.View>
-                            }
+                            onDataChange={(data) => {
+                                setCurrentWorkout(data);
+                            }}
+                            renderHeaderView={renderHeader()}
+                            renderBottomView={renderFooter()}
+                            movedWrapStyle={{ zIndex: 9999, transform: [{ scale: 1.05 }], opacity: 0.9 }}
+                            childHeight={100} // Approximate height for initial calculation, though AnySize adjusts?
                         />
                     </View>
                 )}
@@ -515,7 +560,8 @@ const Current = () => {
                     enableGestureBack={true}
                     closeOnPressBack={true}
                     androidCloseOnBackPress={true}
-                    containerStyle={{ height: '94%' }}
+                    containerStyle={{ height: '94%', backgroundColor: safeSurface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
+                    indicatorStyle={{ backgroundColor: isDynamic ? '#aaaaaa' : theme.textSecondary }}
                     snapPoints={[94]}
                     initialSnapIndex={0}
                 >
@@ -529,129 +575,147 @@ const Current = () => {
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: COLORS.background,
-    },
-    startContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 32,
-    },
-    emptyStateContent: {
-        alignItems: 'center',
-        width: '100%',
-    },
-    emptyStateTitle: {
-        fontSize: 24,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-        marginBottom: 12,
-        textAlign: 'center',
-    },
-    emptyStateSubtitle: {
-        fontSize: 16,
-        fontFamily: FONTS.regular,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-        marginBottom: 48,
-        lineHeight: 24,
-    },
-    startWorkoutButtonContainer: {
-        width: '100%',
-        ...SHADOWS.medium,
-    },
-    startButton: {
-        paddingVertical: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    startButtonText: {
-        color: COLORS.text,
-        fontSize: 16,
-        fontFamily: FONTS.bold,
-    },
-    headerContainer: {
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 8,
-        backgroundColor: COLORS.background,
-        zIndex: 10,
-    },
-    headerTopRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    workoutTitleInput: {
-        flex: 1,
-        fontSize: 20,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-        marginRight: 16,
-    },
-    headerDivider: {
-        height: 1,
-        backgroundColor: COLORS.border,
-        opacity: 0.5,
-    },
-    scrollContent: {
-        padding: 16,
-        paddingBottom: 40,
-    },
-    exerciseWrapper: {
-        marginBottom: 0,
-    },
-    addExerciseButton: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        paddingVertical: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
-        borderStyle: 'dashed',
-    },
-    addExerciseText: {
-        color: COLORS.primary,
-        fontSize: 16,
-        fontFamily: FONTS.semiBold,
-    },
-    buttonContainer: {
-        ...SHADOWS.medium,
-        paddingBottom: 12,
-    },
-    actionButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 18,
-        borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.05)', // subtle glow on dark bg
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 12,
-    },
 
-    actionText: {
-        fontSize: 17,
-        fontFamily: FONTS.bold,
-        letterSpacing: 0.4,
-    },
-    footer: {
-        padding: 16,
-    },
-    restTimerButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: 'rgba(64, 186, 173, 0.1)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    }
-});
+const getStyles = (theme) => {
+    const isDynamic = theme.type === 'dynamic';
+    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
+    const safeText = isDynamic ? '#FFFFFF' : theme.text;
+    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
+    const safeDanger = isDynamic ? '#FF4444' : theme.danger;
 
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: theme.background,
+        },
+        startContainer: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 32,
+        },
+        emptyStateContent: {
+            alignItems: 'center',
+            width: '100%',
+        },
+        emptyStateTitle: {
+            fontSize: 24,
+            fontFamily: FONTS.bold,
+            color: safeText, // Safe for Reanimated
+            marginBottom: 12,
+            textAlign: 'center',
+        },
+        emptyStateSubtitle: {
+            fontSize: 16,
+            fontFamily: FONTS.regular,
+            color: theme.textSecondary,
+            textAlign: 'center',
+            marginBottom: 48,
+            lineHeight: 24,
+        },
+        startWorkoutButtonContainer: {
+            width: '100%',
+            ...SHADOWS.medium,
+        },
+        startButton: {
+            paddingVertical: 16,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        startButtonText: {
+            color: safeText, // Safe for Reanimated
+            fontSize: 16,
+            fontFamily: FONTS.bold,
+        },
+        headerContainer: {
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            paddingBottom: 8,
+            backgroundColor: theme.background,
+            zIndex: 10,
+        },
+        headerTopRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8,
+        },
+        workoutTitleInput: {
+            flex: 1,
+            fontSize: 20,
+            fontFamily: FONTS.bold,
+            color: safeText, // Safe for Reanimated
+            marginRight: 16,
+        },
+        headerDivider: {
+            height: 1,
+            backgroundColor: safeBorder, // Safe for Reanimated
+            opacity: 0.5,
+        },
+        scrollContent: {
+            padding: 16,
+            paddingBottom: 40,
+        },
+        exerciseWrapper: {
+            marginBottom: 0,
+        },
+        addExerciseButton: {
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            paddingVertical: 16,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 24,
+            borderWidth: 1,
+            borderColor: safeBorder, // Safe for Reanimated
+            borderStyle: 'dashed',
+        },
+        addExerciseText: {
+            color: safePrimary, // Safe for Reanimated
+            fontSize: 16,
+            fontFamily: FONTS.semiBold,
+        },
+        finishButtonContainer: {
+            marginBottom: 16,
+            borderRadius: 12,
+            ...SHADOWS.medium,
+        },
+        finishButton: {
+            paddingVertical: 16,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        finishButtonText: {
+            fontSize: 18,
+            fontFamily: FONTS.bold,
+            color: safeText, // Safe for Reanimated
+            letterSpacing: 0.5,
+        },
+        clearButton: {
+            paddingVertical: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 8,
+        },
+        clearButtonText: {
+            fontSize: 15,
+            fontFamily: FONTS.medium,
+            color: safeDanger, // Safe for Reanimated
+            opacity: 0.8,
+        },
+        footer: {
+            padding: 16,
+        },
+        restTimerButton: {
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: 'rgba(64, 186, 173, 0.1)',
+            alignItems: 'center',
+            justifyContent: 'center',
+        }
+    });
+};
 export default Current;

@@ -3,15 +3,18 @@ import React, { useState, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchWorkoutHistory, fetchExercises } from '../components/db';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { COLORS, FONTS, SHADOWS } from '../constants/theme';
-import { LinearGradient } from 'expo-linear-gradient';
+// import { COLORS, FONTS, SHADOWS } from '../constants/theme'; // Removed static
+import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 const History = () => {
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
     const router = useRouter();
+    const { theme } = useTheme(); // Use Theme Hook
+    const styles = getStyles(theme);
 
     useFocusEffect(
         React.useCallback(() => {
@@ -81,7 +84,7 @@ const History = () => {
     if (loading) {
         return (
             <SafeAreaView style={styles.container}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
+                <ActivityIndicator size="large" color={theme.primary} />
             </SafeAreaView>
         );
     }
@@ -108,21 +111,20 @@ const History = () => {
                             onPress={() => router.push(`/workout/${session}`)}
                             style={styles.cardContainer}
                         >
-                            <LinearGradient
-                                colors={[COLORS.surface, COLORS.surface]}
-                                style={styles.cardContent}
+                            <View
+                                style={[styles.cardContent, { backgroundColor: theme.surface }]}
                             >
                                 <View style={styles.cardHeader}>
                                     <View>
                                         <Text style={styles.workoutName}>{exercises[0].name}</Text>
                                         <View style={styles.metaContainer}>
                                             <View style={styles.metaItem}>
-                                                <Feather name="calendar" size={12} color={COLORS.textSecondary} />
+                                                <Feather name="calendar" size={12} color={theme.textSecondary} />
                                                 <Text style={styles.metaText}>{formatDate(exercises[0].time)}</Text>
                                             </View>
                                             <View style={styles.metaDivider} />
                                             <View style={styles.metaItem}>
-                                                <Feather name="clock" size={12} color={COLORS.textSecondary} />
+                                                <Feather name="clock" size={12} color={theme.textSecondary} />
                                                 <Text style={styles.metaText}>{formatDuration(duration)}</Text>
                                             </View>
                                         </View>
@@ -130,7 +132,8 @@ const History = () => {
                                     <View style={styles.badgeContainer}>
                                         {totalPRs > 0 && (
                                             <View style={styles.prSummaryBadge}>
-                                                <MaterialCommunityIcons name="trophy" size={14} color={'rgba(45, 196, 182)'} />
+                                                {/* FIXED: Using Gold Color for PRs */}
+                                                <MaterialCommunityIcons name="trophy" size={14} color={'#FFD700'} />
                                                 <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
                                             </View>
                                         )}
@@ -145,9 +148,13 @@ const History = () => {
                                 <View style={styles.summaryList}>
                                     {groupedExercises.slice(0, 4).map((group, idx) => {
                                         const exerciseName = exercisesList.find(e => e.exerciseID === group[0].exerciseID)?.name || 'Unknown Exercise';
+                                        const workingSets = group.filter(set => set.setType !== 'W');
+                                        const count = workingSets.length;
+                                        // Only show if count > 0? No, show even if just warmups maybe? No, user wants working set counts.
+
                                         return (
                                             <Text key={idx} style={styles.summaryText} numberOfLines={1}>
-                                                <Text style={styles.summaryCount}>{group.length} x</Text> {exerciseName}
+                                                <Text style={styles.summaryCount}>{count} x</Text> {exerciseName}
                                             </Text>
                                         );
                                     })}
@@ -155,7 +162,7 @@ const History = () => {
                                         <Text style={styles.moreText}>+ {groupedExercises.length - 4} more exercises</Text>
                                     )}
                                 </View>
-                            </LinearGradient>
+                            </View>
                         </TouchableOpacity>
                     );
                 }}
@@ -164,7 +171,7 @@ const History = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     badgeContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -173,27 +180,27 @@ const styles = StyleSheet.create({
     prSummaryBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(44, 86, 85, 0.4)',
+        backgroundColor: 'rgba(255, 215, 0, 0.1)', // Gold tint
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
         gap: 4,
         borderWidth: 1,
-        borderColor: 'rgba(45, 196, 182, 0.3)',
+        borderColor: 'rgba(255, 215, 0, 0.3)', // Gold border
     },
     prSummaryText: {
         fontSize: 12,
         fontFamily: FONTS.bold,
-        color: 'rgba(45, 196, 182)',
+        color: '#FFD700', // Gold Text
     },
     container: {
         flex: 1,
-        backgroundColor: COLORS.background,
+        backgroundColor: theme.background,
     },
     title: {
         fontSize: 28,
         fontFamily: FONTS.bold,
-        color: COLORS.text,
+        color: theme.text,
         padding: 20,
     },
     list: {
@@ -207,10 +214,10 @@ const styles = StyleSheet.create({
     cardContainer: {
         marginBottom: 16,
         borderRadius: 16,
-        backgroundColor: COLORS.surface,
+        backgroundColor: theme.surface,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: theme.border,
         ...SHADOWS.small,
     },
     cardContent: {
@@ -225,7 +232,7 @@ const styles = StyleSheet.create({
     workoutName: {
         fontSize: 18,
         fontFamily: FONTS.bold,
-        color: COLORS.text,
+        color: theme.text,
         marginBottom: 6,
     },
     metaContainer: {
@@ -241,12 +248,12 @@ const styles = StyleSheet.create({
     metaText: {
         fontSize: 12,
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
     },
     metaDivider: {
         width: 1,
         height: 12,
-        backgroundColor: COLORS.border,
+        backgroundColor: theme.border,
     },
     sessionBadge: {
         backgroundColor: 'rgba(255,255,255,0.05)',
@@ -257,11 +264,11 @@ const styles = StyleSheet.create({
     sessionBadgeText: {
         fontSize: 12,
         fontFamily: FONTS.bold,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
     },
     divider: {
         height: 1,
-        backgroundColor: COLORS.border,
+        backgroundColor: theme.border,
         marginBottom: 12,
         opacity: 0.5,
     },
@@ -271,16 +278,16 @@ const styles = StyleSheet.create({
     summaryText: {
         fontSize: 14,
         fontFamily: FONTS.regular,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
     },
     summaryCount: {
-        color: COLORS.primary,
+        color: theme.primary,
         fontFamily: FONTS.semiBold,
     },
     moreText: {
         fontSize: 12,
         fontFamily: FONTS.medium,
-        color: COLORS.textSecondary,
+        color: theme.textSecondary,
         marginTop: 4,
         fontStyle: 'italic',
     },
