@@ -1,9 +1,9 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, UIManager } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { AnySizeDragSortableView } from 'react-native-drag-sort';
+import DraggableFlatList, { ScaleDecorator, ShadowDecorator, OpacityDecorator } from 'react-native-draggable-flatlist';
 import * as Haptics from 'expo-haptics';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -39,7 +39,7 @@ const Current = () => {
     const [exercises, setExercises] = useState([]);
     const [startTime, setStartTime] = useState(null);
 
-
+    // Ref for DraggableFlatList to coordinate gestures (e.g. swipes)
     const listRef = useRef(null);
 
 
@@ -382,104 +382,43 @@ const Current = () => {
         ]);
     };
 
-    const renderHeader = () => {
+    const renderItem = useCallback(({ item, drag, isActive, index }) => {
         return (
-            <View>
-                <View style={styles.headerContainer}>
-                    <View style={styles.headerTopRow}>
-                        <Text style={styles.headerTitle}>New Workout</Text>
-                        <TextInput
-                            style={styles.workoutNameInput}
-                            placeholder="Workout Name"
-                            placeholderTextColor={theme.textSecondary}
-                            value={workoutName}
-                            onChangeText={setWorkoutName}
-                            keyboardType="text"
-                        />
-                        {startTime && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                <Timer startTime={startTime} />
-                                <RestTimer />
-                            </View>
-                        )}
-                    </View>
-                    <View style={styles.headerDivider} />
-                </View>
-            </View>
-        );
-    };
+            <ScaleDecorator>
+                <ShadowDecorator>
+                    <TouchableOpacity
+                        onLongPress={drag}
+                        activeOpacity={1}
+                        disabled={isActive}
+                        style={[
+                            isActive && { zIndex: 999, opacity: 0.9 }
+                        ]}
+                    >
+                        <View collapsable={false}>
+                            {item.exercises.map((exercise, exerciseIndex) => {
+                                const exerciseDetails = exercises.find(
+                                    (e) => e.exerciseID === exercise.exerciseID
+                                );
 
-    const renderFooter = () => {
-        return (
-            <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
-                <TouchableOpacity
-                    style={styles.addExerciseButton}
-                    onPress={plusButtonShowExerciseList}
-                    activeOpacity={0.7}
-                >
-                    <Text style={styles.addExerciseText}>Add Exercise</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    onPress={endWorkout}
-                    activeOpacity={0.8}
-                    style={styles.finishButtonContainer}
-                >
-                    <ButtonBackground style={styles.finishButton}>
-                        <Text style={styles.finishButtonText}>Finish Workout</Text>
-                    </ButtonBackground>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    onPress={() =>
-                        Alert.alert(
-                            "Clear Workout?",
-                            "This will remove all data.",
-                            [
-                                { text: "Cancel", style: "cancel" },
-                                { text: "OK", onPress: clearWorkout }
-                            ]
-                        )
-                    }
-                    activeOpacity={0.7}
-                    style={styles.clearButton}
-                >
-                    <Text style={styles.clearButtonText}>Clear Workout</Text>
-                </TouchableOpacity>
-            </Animated.View>
-        );
-    };
-
-    const renderItem = useCallback((item, index, isMoved) => {
-        return (
-            <View
-                style={[
-                    isMoved && { zIndex: 999, opacity: 0.9, transform: [{ scale: 1.02 }] }
-                ]}
-            >
-                <View collapsable={false}>
-                    {item.exercises.map((exercise, exerciseIndex) => {
-                        const exerciseDetails = exercises.find(
-                            (e) => e.exerciseID === exercise.exerciseID
-                        );
-
-                        return (
-                            <ExerciseEditable
-                                exerciseID={exercise.exerciseID}
-                                workoutID={item.id}
-                                key={exercise.exerciseID}
-                                exercise={exercise}
-                                exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
-                                updateCurrentWorkout={setCurrentWorkout}
-                                drag={null}
-                                isActive={isMoved}
-                                onOpenDetails={() => showExerciseInfo(exerciseDetails)}
-                                simultaneousHandlers={listRef}
-                            />
-                        );
-                    })}
-                </View>
-            </View>
+                                return (
+                                    <ExerciseEditable
+                                        exerciseID={exercise.exerciseID}
+                                        workoutID={item.id}
+                                        key={exerciseIndex}
+                                        exercise={exercise}
+                                        exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
+                                        updateCurrentWorkout={setCurrentWorkout}
+                                        drag={drag}
+                                        isActive={isActive}
+                                        onOpenDetails={() => showExerciseInfo(exerciseDetails)}
+                                        simultaneousHandlers={listRef} // Pass ref to coordinate with swipeable rows
+                                    />
+                                );
+                            })}
+                        </View>
+                    </TouchableOpacity>
+                </ShadowDecorator>
+            </ScaleDecorator>
         );
     }, [setCurrentWorkout, exercises]);
 
@@ -534,18 +473,82 @@ const Current = () => {
 
                 {(startTime || currentWorkout.length > 0) && (
                     <View style={{ flex: 1 }}>
-                        <AnySizeDragSortableView
+                        {/* Header */}
+                        <View style={styles.headerContainer}>
+                            <View style={styles.headerTopRow}>
+                                <TextInput
+                                    style={styles.workoutTitleInput}
+                                    onChangeText={setWorkoutTitle}
+                                    value={workoutTitle}
+                                    placeholder="Workout Name"
+                                    placeholderTextColor={theme.textSecondary}
+                                    keyboardType="text"
+                                />
+                                {startTime && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        <Timer startTime={startTime} />
+                                        <RestTimer />
+                                    </View>
+                                )}
+                            </View>
+                            <View style={styles.headerDivider} />
+
+                        </View>
+
+                        <DraggableFlatList
                             ref={listRef}
-                            dataSource={currentWorkout}
+                            data={currentWorkout}
+                            extraData={currentWorkout}
+                            onDragEnd={({ data }) => {
+                                setCurrentWorkout(data);
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            }}
+                            onDragBegin={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
                             keyExtractor={(item) => String(item.id)}
                             renderItem={renderItem}
-                            onDataChange={(data) => {
-                                setCurrentWorkout(data);
-                            }}
-                            renderHeaderView={renderHeader()}
-                            renderBottomView={renderFooter()}
-                            movedWrapStyle={{ zIndex: 9999, transform: [{ scale: 1.05 }], opacity: 0.9 }}
-                            childHeight={100} // Approximate height for initial calculation, though AnySize adjusts?
+                            contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
+                            activationDistance={20}
+                            removeClippedSubviews={false}
+                            keyboardShouldPersistTaps="handled"
+                            keyboardDismissMode="on-drag"
+                            ListFooterComponent={
+                                <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
+                                    <TouchableOpacity
+                                        style={styles.addExerciseButton}
+                                        onPress={plusButtonShowExerciseList}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.addExerciseText}>Add Exercise</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={endWorkout}
+                                        activeOpacity={0.8}
+                                        style={styles.finishButtonContainer}
+                                    >
+                                        <ButtonBackground style={styles.finishButton}>
+                                            <Text style={styles.finishButtonText}>Finish Workout</Text>
+                                        </ButtonBackground>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={() =>
+                                            Alert.alert(
+                                                "Clear Workout?",
+                                                "This will remove all data.",
+                                                [
+                                                    { text: "Cancel", style: "cancel" },
+                                                    { text: "OK", onPress: clearWorkout }
+                                                ]
+                                            )
+                                        }
+                                        activeOpacity={0.7}
+                                        style={styles.clearButton}
+                                    >
+                                        <Text style={styles.clearButtonText}>Clear Workout</Text>
+                                    </TouchableOpacity>
+                                </Animated.View>
+                            }
                         />
                     </View>
                 )}
