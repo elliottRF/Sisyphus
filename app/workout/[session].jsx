@@ -192,10 +192,18 @@ const WorkoutDetail = () => {
         <SafeAreaView style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
 
+
             <ScrollView contentContainerStyle={styles.scrollContent}>
 
                 {/* New Sleek Header (Replaces Summary Card) */}
                 <View style={styles.sleekHeaderContainer}>
+                    <TouchableOpacity
+                        style={styles.editIcon}
+                        onPress={() => console.log('Edit Pressed')} // Add your navigation/action here
+                        activeOpacity={0.7}
+                    >
+                        <Feather name="edit" size={24} color={theme.text} />
+                    </TouchableOpacity>
                     <Text style={styles.workoutDateDisplay}>{formatDate(workoutDate)}</Text>
                     <Text style={styles.workoutNameHuge}>{workoutName}</Text>
 
@@ -345,6 +353,13 @@ const getStyles = (theme) => {
             padding: 8,
             backgroundColor: 'rgba(0,0,0,0.3)',
             borderRadius: 20,
+        },
+        editIcon: {
+            position: 'absolute',
+            top: 10, // Adjust this value for vertical spacing
+            right: 20, // Adjust this value for horizontal spacing
+            zIndex: 10, // Ensures it appears above the ScrollView content
+            padding: 5, // Optional: makes the tap target a bit bigger
         },
         scrollContent: {
             paddingTop: 10,

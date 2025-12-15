@@ -7,9 +7,9 @@ import Animated, {
     withSpring,
     runOnJS,
     LinearTransition,
-    // Removed ZoomIn/ZoomOut to fix the "gray box" glitch
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useReorderableDrag, useIsActive } from 'react-native-reorderable-list';
 
 import { FONTS, SHADOWS } from '../constants/theme'
 import { Feather, MaterialIcons } from '@expo/vector-icons';
@@ -118,11 +118,15 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
     );
 };
 
-const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, drag, isActive, onOpenDetails, simultaneousHandlers }) => {
+const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, onOpenDetails, simultaneousHandlers }) => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
     const [isNoteVisible, setIsNoteVisible] = useState(false);
     const [previousSets, setPreviousSets] = useState([]);
+
+    // Use the reorderable list hooks
+    const drag = useReorderableDrag();
+    const isActive = useIsActive();
 
     useEffect(() => {
         const loadPreviousData = async () => {
@@ -173,7 +177,12 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
             {/* Header */}
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <TouchableOpacity style={styles.dragHandle} onLongPress={drag} delayLongPress={100} activeOpacity={0.7}>
+                    <TouchableOpacity
+                        style={styles.dragHandle}
+                        onLongPress={drag}
+                        delayLongPress={100}
+                        activeOpacity={0.7}
+                    >
                         <MaterialIcons name="drag-indicator" size={20} color={theme.textSecondary} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={onOpenDetails} style={{ flex: 1 }}>
@@ -193,7 +202,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                         />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={deleteExercise} style={styles.iconButton}>
-                        <Feather name="more-horizontal" size={18} color={theme.textSecondary} />
+                        <Feather name="x" size={18} color={theme.textSecondary} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -327,12 +336,10 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
 
 const getStyles = (theme) => {
     // Determine safe colors for Reanimated components
-    // Reanimated 2/3 cannot animate/handle PlatformColor objects in shared values or view props easily
-    // So we fallback to a safe hex color for specific styles that affect Animated.Views.
     const isDynamic = theme.type === 'dynamic';
-    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface; // Fallback for Animated.View
+    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
     const safeError = isDynamic ? '#EF4444' : (theme.error || '#EF4444');
-    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary; // Fallback for Animated.View borderColor
+    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
     const safeSuccess = isDynamic ? '#22c55e' : (theme.success || '#22c55e');
 
     return StyleSheet.create({
@@ -340,15 +347,11 @@ const getStyles = (theme) => {
             backgroundColor: theme.surface,
             borderRadius: 12,
             marginBottom: 12,
-
-            // --- FIX: Reserve border space constantly ---
             borderWidth: 1,
-            borderColor: 'transparent', // Or borderColor: theme.surface
-            // --------------------------------------------
+            borderColor: 'transparent',
         },
         containerActive: {
-            borderColor: safePrimary, // Safe hex for Reanimated
-            // borderWidth: 1, // <--- Remove this, it's now inherited from container
+            borderColor: safePrimary,
             backgroundColor: theme.surface,
             elevation: 10,
             shadowColor: "#000",
@@ -422,7 +425,7 @@ const getStyles = (theme) => {
         colCheck: { width: 30, alignItems: 'center' },
 
         setsContainer: {
-            backgroundColor: theme.surface, // Ensure opacity is 1
+            backgroundColor: theme.surface,
         },
         swipeableContainer: {
             overflow: 'hidden',
@@ -430,7 +433,7 @@ const getStyles = (theme) => {
         },
         deleteBackground: {
             ...StyleSheet.absoluteFillObject,
-            backgroundColor: safeError, // Use safe color for View (though regular view is likely fine, Animated child might check parent)
+            backgroundColor: safeError,
             flexDirection: 'row',
             justifyContent: 'flex-end',
             alignItems: 'center',
@@ -440,16 +443,25 @@ const getStyles = (theme) => {
             alignItems: 'center',
             justifyContent: 'center'
         },
+        deleteIconContainer: {
+            // Add this style if missing
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        rowForeground: {
+            // Add this style if missing
+            backgroundColor: 'transparent',
+        },
 
         setRow: {
-            backgroundColor: theme.surface, // Safe to use dynamic PlatformColor on standard View
+            backgroundColor: theme.surface,
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 12,
             paddingVertical: 4,
             borderBottomWidth: 1,
             borderBottomColor: 'rgba(255,255,255,0.03)',
-            overflow: 'hidden', // Ensure overlay stays within bounds if rounded (not rounded here but good practice)
+            overflow: 'hidden',
         },
         completionOverlay: {
             ...StyleSheet.absoluteFillObject,
@@ -491,7 +503,7 @@ const getStyles = (theme) => {
             borderColor: 'rgba(255,255,255,0.05)',
         },
         inputFocused: {
-            borderColor: safePrimary, // Safe hex for Reanimated
+            borderColor: safePrimary,
             backgroundColor: 'rgba(0,0,0,0.4)',
         },
         inputDisabled: {
@@ -518,8 +530,8 @@ const getStyles = (theme) => {
             borderColor: 'rgba(255,255,255,0.1)',
         },
         checkButtonCompleted: {
-            backgroundColor: safeSuccess, // Safe hex for Reanimated
-            borderColor: safeSuccess, // Safe hex for Reanimated
+            backgroundColor: safeSuccess,
+            borderColor: safeSuccess,
         },
 
         addSetButton: {

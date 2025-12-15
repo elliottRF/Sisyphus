@@ -1,9 +1,9 @@
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import DraggableFlatList, { ScaleDecorator, ShadowDecorator, OpacityDecorator } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView, Gesture } from 'react-native-gesture-handler';
+import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
 import * as Haptics from 'expo-haptics';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -39,7 +39,7 @@ const Current = () => {
     const [exercises, setExercises] = useState([]);
     const [startTime, setStartTime] = useState(null);
 
-    // Ref for DraggableFlatList to coordinate gestures (e.g. swipes)
+    // Ref for ReorderableList
     const listRef = useRef(null);
 
 
@@ -382,45 +382,43 @@ const Current = () => {
         ]);
     };
 
-    const renderItem = useCallback(({ item, drag, isActive, index }) => {
-        return (
-            <ScaleDecorator>
-                <ShadowDecorator>
-                    <TouchableOpacity
-                        onLongPress={drag}
-                        activeOpacity={1}
-                        disabled={isActive}
-                        style={[
-                            isActive && { zIndex: 999, opacity: 0.9 }
-                        ]}
-                    >
-                        <View collapsable={false}>
-                            {item.exercises.map((exercise, exerciseIndex) => {
-                                const exerciseDetails = exercises.find(
-                                    (e) => e.exerciseID === exercise.exerciseID
-                                );
+    // Handler for when reordering completes
+    const handleReorder = useCallback(({ from, to }) => {
+        setCurrentWorkout((prevWorkout) => reorderItems(prevWorkout, from, to));
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }, []);
 
-                                return (
-                                    <ExerciseEditable
-                                        exerciseID={exercise.exerciseID}
-                                        workoutID={item.id}
-                                        key={exerciseIndex}
-                                        exercise={exercise}
-                                        exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
-                                        updateCurrentWorkout={setCurrentWorkout}
-                                        drag={drag}
-                                        isActive={isActive}
-                                        onOpenDetails={() => showExerciseInfo(exerciseDetails)}
-                                        simultaneousHandlers={listRef} // Pass ref to coordinate with swipeable rows
-                                    />
-                                );
-                            })}
-                        </View>
-                    </TouchableOpacity>
-                </ShadowDecorator>
-            </ScaleDecorator>
+    // Render function for each item
+    const renderItem = useCallback(({ item, index }) => {
+        return (
+            <View collapsable={false} style={styles.exerciseWrapper}>
+                {item.exercises.map((exercise, exerciseIndex) => {
+                    const exerciseDetails = exercises.find(
+                        (e) => e.exerciseID === exercise.exerciseID
+                    );
+
+                    return (
+                        <ExerciseEditable
+                            exerciseID={exercise.exerciseID}
+                            workoutID={item.id}
+                            key={exerciseIndex}
+                            exercise={exercise}
+                            exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
+                            updateCurrentWorkout={setCurrentWorkout}
+                            onOpenDetails={() => showExerciseInfo(exerciseDetails)}
+                            simultaneousHandlers={listRef}
+                        />
+                    );
+                })}
+            </View>
         );
     }, [setCurrentWorkout, exercises]);
+
+    // Pan gesture configuration to work with swipeable rows
+    const panGesture = useMemo(
+        () => Gesture.Pan().activeOffsetX([-20, 20]).activeOffsetY([0, 0]),
+        []
+    );
 
 
     // Safe Colors for Reanimated / Linear Gradient fallbacks
@@ -495,22 +493,18 @@ const Current = () => {
 
                         </View>
 
-                        <DraggableFlatList
+                        <ReorderableList
                             ref={listRef}
                             data={currentWorkout}
-                            extraData={currentWorkout}
-                            onDragEnd={({ data }) => {
-                                setCurrentWorkout(data);
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            }}
-                            onDragBegin={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                            onReorder={handleReorder}
                             keyExtractor={(item) => String(item.id)}
                             renderItem={renderItem}
+                            style={styles.list}
                             contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
-                            activationDistance={20}
-                            removeClippedSubviews={false}
                             keyboardShouldPersistTaps="handled"
                             keyboardDismissMode="on-drag"
+                            panGesture={panGesture}
+                            updateActiveItem
                             ListFooterComponent={
                                 <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
                                     <TouchableOpacity
@@ -591,6 +585,9 @@ const getStyles = (theme) => {
             flex: 1,
             backgroundColor: theme.background,
         },
+        list: {
+            flex: 1,
+        },
         startContainer: {
             flex: 1,
             justifyContent: 'center',
@@ -604,7 +601,7 @@ const getStyles = (theme) => {
         emptyStateTitle: {
             fontSize: 24,
             fontFamily: FONTS.bold,
-            color: safeText, // Safe for Reanimated
+            color: safeText,
             marginBottom: 12,
             textAlign: 'center',
         },
@@ -627,7 +624,7 @@ const getStyles = (theme) => {
             justifyContent: 'center',
         },
         startButtonText: {
-            color: safeText, // Safe for Reanimated
+            color: safeText,
             fontSize: 16,
             fontFamily: FONTS.bold,
         },
@@ -648,12 +645,12 @@ const getStyles = (theme) => {
             flex: 1,
             fontSize: 20,
             fontFamily: FONTS.bold,
-            color: safeText, // Safe for Reanimated
+            color: safeText,
             marginRight: 16,
         },
         headerDivider: {
             height: 1,
-            backgroundColor: safeBorder, // Safe for Reanimated
+            backgroundColor: safeBorder,
             opacity: 0.5,
         },
         scrollContent: {
@@ -671,11 +668,11 @@ const getStyles = (theme) => {
             justifyContent: 'center',
             marginBottom: 24,
             borderWidth: 1,
-            borderColor: safeBorder, // Safe for Reanimated
+            borderColor: safeBorder,
             borderStyle: 'dashed',
         },
         addExerciseText: {
-            color: safePrimary, // Safe for Reanimated
+            color: safePrimary,
             fontSize: 16,
             fontFamily: FONTS.semiBold,
         },
@@ -693,7 +690,7 @@ const getStyles = (theme) => {
         finishButtonText: {
             fontSize: 18,
             fontFamily: FONTS.bold,
-            color: safeText, // Safe for Reanimated
+            color: safeText,
             letterSpacing: 0.5,
         },
         clearButton: {
@@ -705,7 +702,7 @@ const getStyles = (theme) => {
         clearButtonText: {
             fontSize: 15,
             fontFamily: FONTS.medium,
-            color: safeDanger, // Safe for Reanimated
+            color: safeDanger,
             opacity: 0.8,
         },
         footer: {
