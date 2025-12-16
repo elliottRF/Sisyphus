@@ -155,7 +155,7 @@ const ExerciseHistory = (props) => {
     const bodyColors = isDynamic
         ? ['#2DC4B6', '#2DC4B680']
         : [theme.primary, `${theme.primary}80`];
-    const safeBorder = isDynamic ? '#e5e5e5' : theme.border;
+    const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
 
     if (loading) {

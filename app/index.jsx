@@ -212,7 +212,7 @@ const Home = () => {
     const bodyColors = isDynamic
         ? ['#2DC4B680', '#2DC4B6'] // Light Teal (Accessory) and Teal (Target)
         : [`${theme.primary}80`, theme.primary];
-    const safeBorder = isDynamic ? '#e5e5e5' : theme.border;
+    const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
 
     return (
         <SafeAreaView style={styles.container}>

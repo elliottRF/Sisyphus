@@ -208,6 +208,63 @@ export const fetchWorkoutHistoryBySession = async (sessionNumber) => {
   );
 };
 
+// Overwrite an existing workout session with new data.
+// It deletes all existing sets for the sessionNumber and then inserts the new set of workoutEntries.
+export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, workoutTitle, duration) => {
+  const database = await getDb();
+  let setsOverwritten = 0;
+
+  try {
+    // 1. Start a transaction for atomicity
+    await database.withTransactionAsync(async () => {
+      // 2. Delete existing entries for the session
+      const deleteResult = await database.runAsync(
+        `DELETE FROM workoutHistory WHERE workoutSession = ?;`,
+        [sessionNumber]
+      );
+
+      // Optional: Check if any rows were deleted
+      console.log(`Deleted ${deleteResult.changes} existing sets for session ${sessionNumber}.`);
+
+      // 3. Insert the new workout history entries
+      for (const entry of workoutEntries) {
+        await database.runAsync(
+          `INSERT INTO workoutHistory 
+           (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          [
+            sessionNumber, // Use the existing sessionNumber
+            entry.exerciseNum,
+            entry.setNum,
+            entry.exerciseID,
+            entry.weight,
+            entry.reps,
+            entry.oneRM,
+            entry.time,
+            workoutTitle, // Use the new or existing title
+            entry.pr || 0, // Legacy PR
+            duration,     // Use the new or existing duration
+            entry.setType || 'N',
+            entry.notes || '',
+            entry.is1rmPR || 0,
+            entry.isVolumePR || 0,
+            entry.isWeightPR || 0
+          ]
+        );
+        setsOverwritten++;
+      }
+    });
+
+    console.log(`Workout session ${sessionNumber} overwritten successfully with ${setsOverwritten} sets.`);
+    return setsOverwritten;
+  } catch (error) {
+    console.error('Error in overwriteWorkoutSession:', error);
+    // The transaction will automatically roll back on error.
+    throw new Error(`Failed to overwrite workout session ${sessionNumber}: ${error.message}`);
+  }
+};
+
+
 // Calculate total volume for a specific workout session
 export const calculateSessionVolume = async (sessionNumber) => {
   const database = await getDb();
@@ -371,7 +428,8 @@ export const fetchRecentMuscleUsage = async (days) => {
     [cutoffDate.toISOString()]
   );
 };
-// Import Strong CSV data with PR calculation and progress tracking
+// Fixed importStrongData - properly assigns exerciseNum
+
 export const importStrongData = async (csvContent, progressCallback = null) => {
   const database = await getDb();
 
@@ -384,25 +442,22 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           const rows = results.data;
           const totalRows = rows.length;
 
-          // Report parsing complete
           if (progressCallback) {
             progressCallback({ stage: 'parsing', current: totalRows, total: totalRows });
           }
 
-          // Pre-process: Group rows by date (timestamp key for grouping, will be replaced with sequential numbers)
-          const workoutMap = new Map(); // Map<timestamp, Map<exerciseName, Array<setData>>>
-          const notesMap = new Map(); // Map<timestamp, Map<exerciseName, noteString>>
+          // Pre-process: Group rows by date
+          const workoutMap = new Map();
+          const notesMap = new Map();
 
           // First pass: validate and group data by date
           for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
 
-            // Validate Row
             if (!row['Date'] || !row['Exercise Name']) continue;
 
             const date = new Date(row['Date']).toISOString();
             const exerciseName = row['Exercise Name'].trim();
-            // Use timestamp as temporary key for grouping workouts by date
             const dateKey = new Date(row['Date']).getTime();
 
             // Handle Notes Row
@@ -411,7 +466,6 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                 notesMap.set(dateKey, new Map());
               }
               const sessionNotes = notesMap.get(dateKey);
-              // If there's already a note, append it? Or overwrite? Strong usually has one note per exercise per session.
               sessionNotes.set(exerciseName, row['Notes'] || '');
               continue;
             }
@@ -424,12 +478,11 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             const workoutTitle = row['Workout Name'] || 'Strong Import';
 
             let setNum = parseInt(row['Set Order'], 10);
-            let setType = 'N'; // Normal
+            let setType = 'N';
 
-            // Handle Set Type (W, D)
             if (row['Set Order'] === 'W' || (row['Set Order'] && row['Set Order'].toString().toUpperCase().includes('W'))) {
               setType = 'W';
-              setNum = 0; // Or keep it 0 for sorting? We'll assign sequential numbers later if needed, but for now let's trust the order in CSV or just assign 0.
+              setNum = 0;
             } else if (row['Set Order'] === 'D' || (row['Set Order'] && row['Set Order'].toString().toUpperCase().includes('D'))) {
               setType = 'D';
               setNum = 0;
@@ -447,7 +500,6 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               oneRM = weight * (1 + reps / 30);
             }
 
-            // Store set data
             const setData = {
               exerciseName,
               weight,
@@ -460,7 +512,6 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               setType
             };
 
-            // Group by date key (temporary timestamp grouping)
             if (!workoutMap.has(dateKey)) {
               workoutMap.set(dateKey, new Map());
             }
@@ -473,35 +524,38 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             exerciseMap.get(exerciseName).push(setData);
           }
 
-          // Sort workout sessions chronologically (oldest first)
+          // Sort workout sessions chronologically
           const sortedDateKeys = Array.from(workoutMap.keys()).sort((a, b) => a - b);
 
           if (progressCallback) {
             progressCallback({ stage: 'preparing', current: 0, total: sortedDateKeys.length });
           }
 
-          // Get the current max session number to continue from
+          // Get the current max session number
           const currentMaxSession = await database.getFirstAsync(
             'SELECT MAX(workoutSession) as maxSession FROM workoutHistory'
           );
           let nextSessionNumber = (currentMaxSession?.maxSession || 0) + 1;
 
-          // Track best 1RM per exercise across all imports
-          const exerciseBestOneRM = new Map(); // Map<exerciseID, bestOneRM>
-          const exerciseBestVolume = new Map(); // Map<exerciseID, bestVolume>
-          const exerciseBestWeight = new Map(); // Map<exerciseID, bestWeight>
-          const exerciseBestRepsAtMaxWeight = new Map(); // Map<exerciseID, bestRepsAtMaxWeight>
+          // Track best PRs per exercise
+          const exerciseBestOneRM = new Map();
+          const exerciseBestVolume = new Map();
+          const exerciseBestWeight = new Map();
+          const exerciseBestRepsAtMaxWeight = new Map();
           let importedCount = 0;
 
           await database.withTransactionAsync(async () => {
-            // Process workouts chronologically, assigning sequential session numbers
+            // Process workouts chronologically
             for (let sessionIdx = 0; sessionIdx < sortedDateKeys.length; sessionIdx++) {
               const dateKey = sortedDateKeys[sessionIdx];
-              const workoutSession = nextSessionNumber; // Use sequential session number
-              nextSessionNumber++; // Increment for next session
+              const workoutSession = nextSessionNumber;
+              nextSessionNumber++;
 
               const exerciseMap = workoutMap.get(dateKey);
               const sessionNotes = notesMap.get(dateKey);
+
+              // FIXED: Track exerciseNum for this session
+              let exerciseNumInSession = 1;
 
               // For each exercise in this workout
               for (const [exerciseName, sets] of exerciseMap.entries()) {
@@ -517,15 +571,14 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                 } else {
                   const result = await database.runAsync(
                     'INSERT INTO exercises (name, targetMuscle, accessoryMuscles) VALUES (?, ?, ?)',
-                    [exerciseName, 'Other', '']
+                    [exerciseName, '', '']
                   );
                   exerciseID = result.lastInsertRowId;
                 }
 
-                // Get Note for this exercise
                 const note = sessionNotes ? sessionNotes.get(exerciseName) : '';
 
-                // Check if this is a PR (beats historical best for this exercise)
+                // Get historical bests
                 const historicalBestOneRM = exerciseBestOneRM.get(exerciseID) || 0;
                 const historicalBestVolume = exerciseBestVolume.get(exerciseID) || 0;
                 const historicalBestWeight = exerciseBestWeight.get(exerciseID) || 0;
@@ -541,18 +594,15 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                 let bestSetIndexWeight = -1;
 
                 sets.forEach((set, idx) => {
-                  // 1RM
                   if (set.oneRM > maxOneRMInWorkout) {
                     maxOneRMInWorkout = set.oneRM;
                     bestSetIndexOneRM = idx;
                   }
-                  // Volume (Weight * Reps)
                   const volume = set.weight * set.reps;
                   if (volume > maxVolumeInWorkout) {
                     maxVolumeInWorkout = volume;
                     bestSetIndexVolume = idx;
                   }
-                  // Weight: find max weight, then max reps at that weight
                   if (set.reps > 0) {
                     if (set.weight > maxWeightInWorkout) {
                       maxWeightInWorkout = set.weight;
@@ -567,12 +617,10 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
                 const is1rmPR = maxOneRMInWorkout > historicalBestOneRM;
                 const isVolumePR = maxVolumeInWorkout > historicalBestVolume;
-                // Weight PR: either new max weight OR matching weight with more reps
                 const isWeightPR =
                   maxWeightInWorkout > historicalBestWeight ||
                   (maxWeightInWorkout === historicalBestWeight && maxRepsAtMaxWeight > historicalBestRepsAtMaxWeight);
 
-                // Update historical bests if PRs
                 if (is1rmPR) exerciseBestOneRM.set(exerciseID, maxOneRMInWorkout);
                 if (isVolumePR) exerciseBestVolume.set(exerciseID, maxVolumeInWorkout);
                 if (isWeightPR) {
@@ -580,16 +628,12 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                   exerciseBestRepsAtMaxWeight.set(exerciseID, maxRepsAtMaxWeight);
                 }
 
-                // Insert all sets
+                // Insert all sets with proper exerciseNum
                 for (let i = 0; i < sets.length; i++) {
                   const set = sets[i];
                   const isThisSet1rmPR = (is1rmPR && i === bestSetIndexOneRM) ? 1 : 0;
                   const isThisSetVolumePR = (isVolumePR && i === bestSetIndexVolume) ? 1 : 0;
                   const isThisSetWeightPR = (isWeightPR && i === bestSetIndexWeight) ? 1 : 0;
-
-                  // Legacy PR flag (if it's any kind of PR, or just 1RM? Let's stick to 1RM for legacy or maybe OR them)
-                  // For now, let's say legacy PR = 1RM PR to avoid confusion, or maybe if any PR is hit?
-                  // The prompt says "it already does the 1RM", so let's keep `pr` as 1RM PR for backward compat.
                   const isLegacyPR = isThisSet1rmPR;
 
                   await database.runAsync(
@@ -598,7 +642,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
                     [
                       workoutSession,
-                      1,
+                      exerciseNumInSession,  // FIXED: Use proper exerciseNum
                       set.setNum,
                       exerciseID,
                       set.weight,
@@ -618,9 +662,11 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
                   importedCount++;
                 }
+
+                // FIXED: Increment exerciseNum after finishing all sets for this exercise
+                exerciseNumInSession++;
               }
 
-              // Report progress every 10 workouts or at the end
               if (progressCallback && (sessionIdx % 10 === 0 || sessionIdx === sortedDateKeys.length - 1)) {
                 progressCallback({
                   stage: 'importing',

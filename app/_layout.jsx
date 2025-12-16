@@ -104,6 +104,15 @@ const ThemeConsumer = () => {
                     }}
                 />
                 <Tabs.Screen
+                    name="workout/EditWorkout"
+                    options={{
+                        href: null,
+                        tabBarStyle: {
+                            display: 'none',
+                        },
+                    }}
+                />
+                <Tabs.Screen
                     name="settings"
                     options={{
                         title: "Settings",

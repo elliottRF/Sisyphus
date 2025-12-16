@@ -144,12 +144,11 @@ const NewExercise = (props) => {
     const handlers = useScrollHandlers();
 
     // Safe fallbacks for Body
-    const safeBorder = theme.type === 'dynamic' ? '#e5e5e5' : theme.border;
+    const safeBorder = theme.type === 'dynamic' ? '#4d4d4dff' : theme.border;
     // Monochromatic: [Primary 50% (Accessory), Primary 100% (Target)]
     const safeBodyColors = theme.type === 'dynamic'
-        ? ['#2DC4B680', '#2DC4B6']
-        : [`${theme.primary}80`, theme.primary];
-
+        ? ['#2DC4B6', '#2DC4B680']
+        : [theme.primary, `${theme.primary}80`];
 
     return (
         <View style={styles.container}>

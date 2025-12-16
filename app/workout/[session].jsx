@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/db';
@@ -156,6 +156,19 @@ const WorkoutDetail = () => {
         actionSheetRef.current?.show();
     };
 
+    // ** NEW FUNCTIONALITY **
+    const showEditPage = useCallback(() => {
+        if (session) {
+            // FIX: Use the ABSOLUTE path that matches the <Tabs.Screen name="workout/[session]/edit" />
+            console.log(session);
+            router.push(`/workout/EditWorkout?session=${session}`);
+        } else {
+            console.warn("Cannot navigate to edit page: Session ID is missing.");
+        }
+    }, [session, router]);
+    // ** END NEW FUNCTIONALITY **
+
+
     if (loading) {
         return (
             <SafeAreaView style={styles.container}>
@@ -199,7 +212,7 @@ const WorkoutDetail = () => {
                 <View style={styles.sleekHeaderContainer}>
                     <TouchableOpacity
                         style={styles.editIcon}
-                        onPress={() => console.log('Edit Pressed')} // Add your navigation/action here
+                        onPress={showEditPage}
                         activeOpacity={0.7}
                     >
                         <Feather name="edit" size={24} color={theme.text} />

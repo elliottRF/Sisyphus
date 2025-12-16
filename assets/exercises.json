@@ -32,7 +32,7 @@
   {
     "exerciseID": 6,
     "name": "Lat Pulldown (Cable)",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Forearm"
   },
   {
@@ -50,19 +50,19 @@
   {
     "exerciseID": 9,
     "name": "Seated Row (Cable)",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Forearm"
   },
   {
     "exerciseID": 10,
     "name": "Romanian Deadlift (Barbell)",
     "targetMuscle": "Hamstring",
-    "accessoryMuscles": "Gluteal,Lower-back"
+    "accessoryMuscles": "Gluteal,Lower-Back"
   },
   {
     "exerciseID": 11,
     "name": "Neutral Grip Lat Pulldown",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Forearm"
   },
   {
@@ -92,8 +92,8 @@
   {
     "exerciseID": 16,
     "name": "Bent Over Row (Smith Machine)",
-    "targetMuscle": "Upper-back",
-    "accessoryMuscles": "Biceps,Lower-back"
+    "targetMuscle": "Upper-Back",
+    "accessoryMuscles": "Biceps,Lower-Back"
   },
   {
     "exerciseID": 17,
@@ -110,7 +110,7 @@
   {
     "exerciseID": 19,
     "name": "Pull Up (Assisted)",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Abs"
   },
   {
@@ -123,7 +123,7 @@
     "exerciseID": 21,
     "name": "Squat (Barbell)",
     "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Hamstring,Lower-back"
+    "accessoryMuscles": "Gluteal,Hamstring,Lower-Back"
   },
   {
     "exerciseID": 22,
@@ -146,7 +146,7 @@
   {
     "exerciseID": 25,
     "name": "Iso-Lateral Row (Machine)",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Forearm"
   },
   {
@@ -224,13 +224,13 @@
   {
     "exerciseID": 38,
     "name": "Bent Over Row (Barbell)",
-    "targetMuscle": "Upper-back",
-    "accessoryMuscles": "Biceps,Lower-back"
+    "targetMuscle": "Upper-Back",
+    "accessoryMuscles": "Biceps,Lower-Back"
   },
   {
     "exerciseID": 39,
     "name": "Pull Up",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Abs"
   },
   {
@@ -254,7 +254,7 @@
   {
     "exerciseID": 43,
     "name": "Wide Grip Seated Row (Cable)",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Trapezius"
   },
   {
@@ -278,7 +278,7 @@
   {
     "exerciseID": 47,
     "name": "Neutral Grip Pull Up (Assisted)",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Abs"
   },
   {
@@ -350,7 +350,7 @@
   {
     "exerciseID": 59,
     "name": "Neutral Grip Pull Up",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Abs"
   },
   {
@@ -362,7 +362,7 @@
   {
     "exerciseID": 61,
     "name": "Lat Pulldown (Plate Loaded)",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Forearm"
   },
   {
@@ -381,13 +381,13 @@
     "exerciseID": 64,
     "name": "Face Pull (Cable)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Trapezius,Upper-back"
+    "accessoryMuscles": "Trapezius,Upper-Back"
   },
   {
     "exerciseID": 65,
     "name": "T Bar Row",
-    "targetMuscle": "Upper-back",
-    "accessoryMuscles": "Biceps,Lower-back"
+    "targetMuscle": "Upper-Back",
+    "accessoryMuscles": "Biceps,Lower-Back"
   },
   {
     "exerciseID": 66,
@@ -398,7 +398,7 @@
   {
     "exerciseID": 67,
     "name": "Deadlift (Barbell)",
-    "targetMuscle": "Lower-back",
+    "targetMuscle": "Lower-Back",
     "accessoryMuscles": "Hamstring,Gluteal,Quadriceps,Trapezius"
   },
   {
@@ -434,7 +434,7 @@
   {
     "exerciseID": 73,
     "name": "Chin Up",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Abs"
   },
   {
@@ -446,7 +446,7 @@
   {
     "exerciseID": 75,
     "name": "Seated Wide-Grip Row (Cable)",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Trapezius"
   },
   {
@@ -458,7 +458,7 @@
   {
     "exerciseID": 77,
     "name": "Lat Pulldown (Single Arm)",
-    "targetMuscle": "Upper-back",
+    "targetMuscle": "Upper-Back",
     "accessoryMuscles": "Biceps,Abs"
   },
   {
@@ -495,7 +495,7 @@
     "exerciseID": 83,
     "name": "Goblet Squat (Kettlebell)",
     "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Lower-back"
+    "accessoryMuscles": "Gluteal,Lower-Back"
   },
   {
     "exerciseID": 84,
