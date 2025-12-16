@@ -103,6 +103,14 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                 const date = new Date(entry.time);
                 if (isNaN(date.getTime())) return;
 
+                // --- FIX STARTS HERE ---
+                // 1. Get the rep count
+                const reps = Number(entry.reps) || 0;
+
+                // 2. If reps are 0 (failed set), skip this entry entirely
+                if (reps <= 0) return;
+                // --- FIX ENDS HERE ---
+
                 const dateKey = date.toISOString().split('T')[0];
                 const oneRM = Number(entry.oneRM) || 0;
                 const weight = Number(entry.weight) || 0;
