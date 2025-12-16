@@ -211,7 +211,7 @@ const Home = () => {
     // User requested "Accessory similar to main one, just lighter".
     const bodyColors = isDynamic
         ? ['#2DC4B680', '#2DC4B6'] // Light Teal (Accessory) and Teal (Target)
-        : [`${theme.primary}80`, theme.primary];
+        : [`${theme.primary}60`, theme.primary];
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
 
     return (

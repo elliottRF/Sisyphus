@@ -150,11 +150,11 @@ const ExerciseHistory = (props) => {
     const isDynamic = theme.type === 'dynamic';
     // User requested swap: "actually flipped like earlier".
     // Swapping order to: [Full Color (Target?), Light Color (Accessory?)] or vice versa.
-    // Previous state: [`${theme.primary}80`, theme.primary] (Light, Dark).
-    // Swapped state: [theme.primary, `${theme.primary}80`] (Dark, Light).
+    // Previous state: [`${theme.primary}60`, theme.primary] (Light, Dark).
+    // Swapped state: [theme.primary, `${theme.primary}60`] (Dark, Light).
     const bodyColors = isDynamic
         ? ['#2DC4B6', '#2DC4B680']
-        : [theme.primary, `${theme.primary}80`];
+        : [theme.primary, `${theme.primary}60`];
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
 

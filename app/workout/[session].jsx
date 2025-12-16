@@ -1,31 +1,26 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import React, { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/db';
-import { FONTS, SHADOWS } from '../../constants/theme';
+import { FONTS } from '../../constants/theme';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import ActionSheet from "react-native-actions-sheet";
 import ExerciseHistory from '../../components/exerciseHistory';
 import { useTheme } from '../../context/ThemeContext';
 
 const PRBadge = React.memo(({ type }) => {
-    // Fixed: Use MaterialCommunityIcons for Trophy
     const iconName = "trophy";
     let label = "PR";
 
-    // Logic: Distinction in Text, Unity in Color
     if (type === '1RM') label = "1RM";
     if (type === 'VOL') label = "Vol.";
     if (type === 'KG') label = "Weight";
 
-    const color = '#FFD700'; // Gold
-    const bgColor = 'rgba(255, 215, 0, 0.15)'; // Low opacity gold
+    const color = '#FFD700';
+    const bgColor = 'rgba(255, 215, 0, 0.15)';
     const borderColor = 'rgba(255, 215, 0, 0.3)';
 
-    // Note: Styles for this are passed or computed? 
-    // Since getStyles is inside main component, we can't use it easily here unless we pass styles prop or use inline.
-    // I'll stick to a small static style object for the badge layout/text, but colors are inline.
     return (
         <View style={{
             flexDirection: 'row',
@@ -47,7 +42,7 @@ const PRBadge = React.memo(({ type }) => {
 
 const SetNumberBadge = React.memo(({ type, number, theme }) => {
     let containerStyle = {
-        width: 20,
+        width: 22,
         height: 18,
         alignItems: 'center',
         justifyContent: 'center',
@@ -60,14 +55,18 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
     };
 
     if (type === 'W') {
-        containerStyle.backgroundColor = 'rgba(253, 203, 110, 0.15)';
+        containerStyle.backgroundColor = 'rgba(253, 203, 110, 0.25)';
         TextStyle.color = theme.warning;
+        TextStyle.fontFamily = FONTS.bold;
+        TextStyle.fontSize = 10;
     } else if (type === 'D') {
         containerStyle.backgroundColor = 'rgba(116, 185, 255, 0.15)';
         TextStyle.color = theme.info;
+        TextStyle.fontFamily = FONTS.semiBold;
     } else {
-        // Default
-        TextStyle.color = theme.textSecondary;
+        containerStyle.backgroundColor = 'rgba(255,255,255,0.05)';
+        TextStyle.color = theme.text;
+        TextStyle.fontFamily = FONTS.semiBold;
     }
 
     return (
@@ -76,9 +75,6 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
         </View>
     );
 });
-
-
-// --- Main Component ---
 
 const WorkoutDetail = () => {
     const { session } = useLocalSearchParams();
@@ -93,6 +89,10 @@ const WorkoutDetail = () => {
     const actionSheetRef = useRef(null);
     const [selectedExerciseId, setSelectedExerciseId] = useState(null);
     const [currentExerciseName, setCurrentExerciseName] = useState(null);
+
+    // ✅ IMPORTANT: single hook, not inside any map
+    // Tracks warmup expand/collapse per exerciseID
+    const [expandedWarmups, setExpandedWarmups] = useState({});
 
     useEffect(() => {
         const loadData = async () => {
@@ -156,18 +156,20 @@ const WorkoutDetail = () => {
         actionSheetRef.current?.show();
     };
 
-    // ** NEW FUNCTIONALITY **
     const showEditPage = useCallback(() => {
         if (session) {
-            // FIX: Use the ABSOLUTE path that matches the <Tabs.Screen name="workout/[session]/edit" />
-            console.log(session);
             router.push(`/workout/EditWorkout?session=${session}`);
         } else {
             console.warn("Cannot navigate to edit page: Session ID is missing.");
         }
     }, [session, router]);
-    // ** END NEW FUNCTIONALITY **
 
+    const toggleWarmups = useCallback((exerciseId) => {
+        setExpandedWarmups(prev => ({
+            ...prev,
+            [exerciseId]: !prev[exerciseId],
+        }));
+    }, []);
 
     if (loading) {
         return (
@@ -180,7 +182,6 @@ const WorkoutDetail = () => {
     if (!workoutDetails || workoutDetails.length === 0) {
         return (
             <SafeAreaView style={styles.container}>
-                {/* Fixed: Back Button Overlay logic with dynamic theme */}
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButtonOver}>
                     <Ionicons name="arrow-back" size={24} color={theme.text} />
                 </TouchableOpacity>
@@ -196,7 +197,6 @@ const WorkoutDetail = () => {
     const workoutDuration = workoutDetails[0].duration;
     const groupedExercises = groupExercisesByName(workoutDetails);
 
-    // Calculate total PRs (Matching History Logic: counting individual records, not just sets)
     const totalPRs = workoutDetails.reduce((acc, ex) => {
         return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
     }, 0);
@@ -205,10 +205,7 @@ const WorkoutDetail = () => {
         <SafeAreaView style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
 
-
             <ScrollView contentContainerStyle={styles.scrollContent}>
-
-                {/* New Sleek Header (Replaces Summary Card) */}
                 <View style={styles.sleekHeaderContainer}>
                     <TouchableOpacity
                         style={styles.editIcon}
@@ -217,6 +214,7 @@ const WorkoutDetail = () => {
                     >
                         <Feather name="edit" size={24} color={theme.text} />
                     </TouchableOpacity>
+
                     <Text style={styles.workoutDateDisplay}>{formatDate(workoutDate)}</Text>
                     <Text style={styles.workoutNameHuge}>{workoutName}</Text>
 
@@ -225,8 +223,12 @@ const WorkoutDetail = () => {
                             <Feather name="clock" size={14} color={theme.text} />
                             <Text style={styles.metaText}>{formatDuration(workoutDuration)}</Text>
                         </View>
+
                         {totalPRs > 0 && (
-                            <View style={[styles.metaItem, { borderColor: 'rgba(255, 215, 0, 0.3)', backgroundColor: 'rgba(255, 215, 0, 0.05)' }]}>
+                            <View style={[
+                                styles.metaItem,
+                                { borderColor: 'rgba(255, 215, 0, 0.3)', backgroundColor: 'rgba(255, 215, 0, 0.05)' }
+                            ]}>
                                 <MaterialCommunityIcons name="trophy" size={14} color={'#FFD700'} />
                                 <Text style={[styles.metaText, { color: '#FFD700', fontFamily: FONTS.bold }]}>
                                     {totalPRs} New PR{totalPRs > 1 ? 's' : ''}
@@ -236,13 +238,14 @@ const WorkoutDetail = () => {
                     </View>
                 </View>
 
-                {/* Exercises List */}
                 <View style={styles.exercisesList}>
                     {groupedExercises.map((exerciseGroup, index) => {
+                        const exerciseId = exerciseGroup[0].exerciseID;
+
                         const exerciseDetails = exercisesList.find(
-                            ex => ex.exerciseID === exerciseGroup[0].exerciseID
+                            ex => ex.exerciseID === exerciseId
                         );
-                        const exerciseName = exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseGroup[0].exerciseID}`;
+                        const exerciseName = exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseId}`;
 
                         let workingSetCount = 0;
                         const setsWithDisplayNumbers = exerciseGroup.map(set => {
@@ -251,62 +254,111 @@ const WorkoutDetail = () => {
                                 workingSetCount++;
                                 displayNumber = workingSetCount;
                             }
-                            return { ...set, displayNumber: displayNumber };
+                            return { ...set, displayNumber };
                         });
 
-                        // Get note from any set
                         const exerciseNote = exerciseGroup.find(e => e.notes)?.notes;
+
+                        // Warmup split (keeps original order)
+                        const warmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') === 'W');
+                        const nonWarmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') !== 'W');
+
+                        const warmupsExpanded = !!expandedWarmups[exerciseId];
+                        const visibleSets = warmupsExpanded ? [...warmups, ...nonWarmups] : nonWarmups;
 
                         return (
                             <View key={index} style={styles.exerciseCard}>
-                                {/* Exercise Header */}
                                 <TouchableOpacity
                                     activeOpacity={0.8}
-                                    onPress={() => showExerciseInfo(exerciseGroup[0].exerciseID, exerciseName)}
+                                    onPress={() => showExerciseInfo(exerciseId, exerciseName)}
                                     style={styles.exerciseHeader}
                                 >
                                     <Text style={styles.exerciseName}>{exerciseName}</Text>
                                     <Feather name="chevron-right" size={18} color={theme.textSecondary} />
                                 </TouchableOpacity>
 
-                                {/* Note Section */}
                                 {exerciseNote && (
                                     <View style={styles.noteContainer}>
-                                        <MaterialCommunityIcons name="comment-text-outline" size={12} color={theme.textSecondary} style={{ marginTop: 2 }} />
+                                        <MaterialCommunityIcons
+                                            name="comment-text-outline"
+                                            size={12}
+                                            color={theme.textSecondary}
+                                            style={{ marginTop: 2 }}
+                                        />
                                         <Text style={styles.noteText}>{exerciseNote}</Text>
                                     </View>
                                 )}
 
+                                {/* ✅ Warmups toggle row (Step 3) */}
+                                {warmups.length > 0 && (
+                                    <TouchableOpacity
+                                        onPress={() => toggleWarmups(exerciseId)}
+                                        activeOpacity={0.8}
+                                        style={styles.warmupToggle}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <MaterialCommunityIcons
+                                                name="fire"
+                                                size={14}
+                                                color={theme.textSecondary}
+                                            />
+                                            <Text style={styles.warmupToggleText}>
+                                                {warmups.length}
+                                            </Text>
+                                        </View>
+
+                                        <Feather
+                                            name={warmupsExpanded ? 'chevron-down' : 'chevron-right'}
+                                            size={16}
+                                            color={theme.textSecondary}
+                                        />
+                                    </TouchableOpacity>
+                                )}
+
                                 <View style={styles.setsContainer}>
-                                    {/* Sets Header Row */}
                                     <View style={styles.setsHeaderRow}>
                                         <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
-                                        <Text style={[styles.colHeader, styles.colHeaderKg]}>KG</Text>
-                                        <Text style={[styles.colHeader, styles.colHeaderReps]}>REPS</Text>
+                                        <Text style={[styles.colHeader, styles.colHeaderLift]}>LIFT</Text>
                                         <Text style={[styles.colHeader, styles.colHeader1RM]}>1RM</Text>
                                     </View>
 
-                                    {setsWithDisplayNumbers.map((set, setIndex) => {
+                                    {/* ✅ Visible sets render (Step 4) */}
+                                    {visibleSets.map((set, setIndex) => {
                                         const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
                                         const setType = set.setType || 'N';
+                                        const isWarmup = setType === 'W';
+                                        const isDrop = setType === 'D';
 
                                         return (
-                                            // Set Row Container
-                                            <View key={setIndex} style={[
-                                                styles.setRowContainer,
-                                                setIndex % 2 === 1 && styles.setRowOdd
-                                            ]}>
+                                            <View
+                                                key={`${set.exerciseHistoryID ?? ''}-${setIndex}`}
+                                                style={[
+                                                    styles.setRowContainer,
+                                                    setIndex % 2 === 1 && styles.setRowOdd,
+                                                    isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
+                                                    isDrop && { backgroundColor: 'rgba(116, 185, 255, 0.05)' },
+                                                ]}
+                                            >
                                                 <View style={styles.setRow}>
                                                     <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
-                                                    <Text style={styles.setWeight}>{set.weight} kg</Text>
-                                                    <Text style={styles.setReps}>{set.reps}</Text>
-                                                    <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
+
+                                                    <Text
+                                                        style={[
+                                                            styles.setLift,
+                                                            isWarmup && styles.setLiftWarmup,
+                                                            isDrop && styles.setLiftDrop,
+                                                        ]}
+                                                    >
+                                                        {set.weight}kg × {set.reps}
+                                                    </Text>
+
+                                                    <Text style={styles.setOneRM}>
+                                                        {set.oneRM ? Math.round(set.oneRM) : '-'}
+                                                    </Text>
                                                 </View>
 
-                                                {/* PR Row */}
                                                 {isPR && (
                                                     <View style={styles.badgeRow}>
-                                                        {/* Indent */}
                                                         <View style={{ width: 32 }} />
                                                         {set.is1rmPR === 1 && <PRBadge type="1RM" />}
                                                         {set.isVolumePR === 1 && <PRBadge type="VOL" />}
@@ -323,7 +375,6 @@ const WorkoutDetail = () => {
                 </View>
             </ScrollView>
 
-            {/* Action Sheet for Exercise History */}
             <ActionSheet
                 ref={actionSheetRef}
                 enableGestureBack={true}
@@ -334,7 +385,6 @@ const WorkoutDetail = () => {
                 snapPoints={[94]}
                 initialSnapIndex={0}
             >
-                {/* Note: ExerciseHistory needs its own refactor for Theme support, passing theme ID or context usage inside it */}
                 <ExerciseHistory
                     exerciseID={selectedExerciseId}
                     exerciseName={currentExerciseName}
@@ -344,9 +394,7 @@ const WorkoutDetail = () => {
     );
 };
 
-// --- Styles Generator ---
 const getStyles = (theme) => {
-    // Safe Colors for Reanimated (ActionSheet)
     const isDynamic = theme.type === 'dynamic';
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
     const safeIndicator = isDynamic ? '#aaaaaa' : theme.textSecondary;
@@ -357,8 +405,6 @@ const getStyles = (theme) => {
             backgroundColor: theme.background,
         },
         backButtonOver: {
-            // Floating button, keeping static style logic but could theme background?
-            // Let's keep it semi-transparent black as it might be over content
             position: 'absolute',
             top: 10,
             left: 16,
@@ -369,17 +415,26 @@ const getStyles = (theme) => {
         },
         editIcon: {
             position: 'absolute',
-            top: 10, // Adjust this value for vertical spacing
-            right: 20, // Adjust this value for horizontal spacing
-            zIndex: 10, // Ensures it appears above the ScrollView content
-            padding: 5, // Optional: makes the tap target a bit bigger
+            top: 10,
+            right: 20,
+            zIndex: 10,
+            padding: 5,
         },
         scrollContent: {
             paddingTop: 10,
             paddingBottom: 40,
         },
 
-        // Header
+        header: {
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+        },
+        title: {
+            fontSize: 20,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+        },
+
         sleekHeaderContainer: {
             paddingHorizontal: 20,
             paddingVertical: 12,
@@ -422,7 +477,6 @@ const getStyles = (theme) => {
             color: theme.text,
         },
 
-        // Exercise List
         exercisesList: {
             gap: 8,
             paddingHorizontal: 12,
@@ -459,14 +513,29 @@ const getStyles = (theme) => {
         },
         noteText: {
             flex: 1,
-            fontSize: 11,
+            fontSize: 14,
             color: theme.textSecondary,
             fontFamily: FONTS.regular,
             fontStyle: 'italic',
             lineHeight: 16,
         },
 
-        // Sets Table
+        warmupToggle: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderBottomWidth: 1,
+            borderBottomColor: 'rgba(255,255,255,0.05)',
+            backgroundColor: 'rgba(255,255,255,0.02)',
+        },
+        warmupToggleText: {
+            fontSize: 12,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+        },
+
         setsContainer: {
             paddingVertical: 2,
         },
@@ -484,18 +553,21 @@ const getStyles = (theme) => {
             textTransform: 'uppercase',
         },
         colHeaderSet: { width: 32 },
-        colHeaderKg: { flex: 1, textAlign: 'center' },
-        colHeaderReps: { flex: 1, textAlign: 'center' },
+        colHeaderLift: {
+            flex: 2,
+            textAlign: 'left',
+            paddingLeft: 6,
+        },
         colHeader1RM: { flex: 1, textAlign: 'center' },
 
-        // Set Rows
         setRowContainer: {
-            paddingVertical: 4,
+            paddingVertical: 3,
             paddingHorizontal: 12,
         },
         setRow: {
             flexDirection: 'row',
             alignItems: 'center',
+            minHeight: 28,
         },
         setRowOdd: {
             backgroundColor: 'rgba(255,255,255,0.01)',
@@ -506,20 +578,25 @@ const getStyles = (theme) => {
             marginTop: 4,
             flexWrap: 'wrap',
         },
-        setWeight: {
-            flex: 1,
-            textAlign: 'center',
-            fontSize: 14,
-            fontFamily: FONTS.semiBold,
+
+        setLift: {
+            flex: 2,
+            textAlign: 'left',
+            paddingLeft: 6,
+            fontSize: 15,
+            fontFamily: FONTS.bold,
             color: theme.text,
+            letterSpacing: 0.3,
         },
-        setReps: {
-            flex: 1,
-            textAlign: 'center',
-            fontSize: 14,
-            fontFamily: FONTS.semiBold,
-            color: theme.text,
+        setLiftWarmup: {
+            color: theme.textSecondary,
+            opacity: 0.75,
         },
+        setLiftDrop: {
+            color: theme.info,
+            opacity: 0.8,
+        },
+
         setOneRM: {
             flex: 1,
             textAlign: 'center',
@@ -527,6 +604,7 @@ const getStyles = (theme) => {
             fontFamily: FONTS.medium,
             color: theme.textSecondary,
         },
+
         actionSheetContainer: {
             backgroundColor: safeSurface,
             borderTopLeftRadius: 24,

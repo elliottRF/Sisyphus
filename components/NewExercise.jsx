@@ -148,7 +148,7 @@ const NewExercise = (props) => {
     // Monochromatic: [Primary 50% (Accessory), Primary 100% (Target)]
     const safeBodyColors = theme.type === 'dynamic'
         ? ['#2DC4B6', '#2DC4B680']
-        : [theme.primary, `${theme.primary}80`];
+        : [theme.primary, `${theme.primary}60`];
 
     return (
         <View style={styles.container}>
