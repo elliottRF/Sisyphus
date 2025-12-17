@@ -275,6 +275,67 @@ const CALIPER = {
     warning: "#eab308",
     info: "#38bdf8",
 };
+
+const CHERRY_BLOSSOM = {
+    primary: "#ff85a1",      // Soft Pink
+    primaryDark: "#f75c81",
+    secondary: "#f9dbbd",    // Pale Peach
+    background: "#fff5f7",   // Very light pink tint
+    surface: "#ffffff",
+    text: "#4a2c33",         // Dark berry for readability
+    textSecondary: "#a38089",
+    border: "#f2d5da",
+    success: "#4ade80",
+    danger: "#f87171",
+    warning: "#fbbf24",
+    info: "#60a5fa",
+};
+
+const CYBER_PINK = {
+    primary: "#ff007f",      // Neon Magenta
+    primaryDark: "#c70063",
+    secondary: "#7000ff",    // Electric Purple
+    background: "#0d0108",   // Near-black with pink tint
+    surface: "#1a0212",      // Deep wine/black
+    text: "#ffe0f0",
+    textSecondary: "#b37795",
+    border: "#3d142b",
+    success: "#00f5d4",
+    danger: "#ff4d6d",
+    warning: "#fee440",
+    info: "#00bbf9",
+};
+
+const VIOLET = {
+    primary: "#8e00a3",      // Deep Purple
+    primaryDark: "#670087",
+    secondary: "#d6c2ff",    // Lighter purple
+    background: "#1e1e1e",   // Dark background
+    surface: "#2d2d2d",      // Slightly lighter surface
+    text: "#ffffff",
+    textSecondary: "#a38089",
+    border: "#3d142b",
+    success: "#22c55e",
+    danger: "#ef4444",
+    warning: "#eab308",
+    info: "#38bdf8",
+};
+const TITANIUM = {
+    primary: "#0A84FF",      // Apple San Francisco Blue
+    primaryDark: "#0066CC",
+    secondary: "#0066CC",    // iOS System Gray
+    background: "#080808ff",   // Pure Black (OLED optimized)
+    surface: "#121214",      // iOS Secondary System Background
+    text: "#FFFFFF",         // Primary Label
+    textSecondary: "#8E8E93",// Secondary Label
+    border: "#2C2C2E",       // Thin, subtle separator
+    success: "#32D74B",      // iOS System Green
+    danger: "#FF453A",       // iOS System Red
+    warning: "#FF9F0A",      // iOS System Orange
+    info: "#64D2FF",         // iOS System Cyan
+
+};
+
 // Android System Theme (Material You)
 const SYSTEM = Platform.OS === 'android' ? {
     type: 'dynamic', // Flag to indicate special handling needed (no gradients etc)
@@ -309,6 +370,10 @@ export const THEMES = {
     SCHEMATIC,
     PAPER,
     CALIPER,
+    CHERRY_BLOSSOM,
+    CYBER_PINK,
+    VIOLET,
+    TITANIUM,
     ...(Platform.OS === 'android' ? { SYSTEM } : {})
 };
 

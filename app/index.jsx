@@ -311,7 +311,7 @@ const Home = () => {
                 androidCloseOnBackPress={true}
                 containerStyle={styles.actionSheetContainer}
                 indicatorStyle={styles.indicator}
-                snapPoints={[94]}
+                snapPoints={[100]}
                 initialSnapIndex={0}
             >
                 <View style={styles.contentContainer}>

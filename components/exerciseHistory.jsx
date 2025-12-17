@@ -1,12 +1,11 @@
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { FlatList } from 'react-native-gesture-handler';  // ← Gesture handler version
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Switch } from 'react-native';
+import { FlatList } from 'react-native-gesture-handler';
 import React, { useState, useEffect, useRef } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { fetchExerciseHistory, fetchExercises } from './db';
 import { useFocusEffect } from 'expo-router';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import Body from "react-native-body-highlighter";
 import ActionSheet from "react-native-actions-sheet";
 import NewExercise from "./NewExercise"
@@ -14,12 +13,72 @@ import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
-const GradientOrView = ({ colors, style, theme, children }) => {
-    if (theme.type === 'dynamic') {
-        return <View style={[style, { backgroundColor: theme.surface }]}>{children}</View>;
+const PRBadge = React.memo(({ type }) => {
+    const iconName = "trophy";
+    let label = "PR";
+
+    if (type === '1RM') label = "1RM";
+    if (type === 'VOL') label = "Vol.";
+    if (type === 'KG') label = "Weight";
+
+    const color = '#FFD700';
+    const bgColor = 'rgba(255, 215, 0, 0.15)';
+    const borderColor = 'rgba(255, 215, 0, 0.3)';
+
+    return (
+        <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 6,
+            paddingVertical: 1,
+            borderRadius: 4,
+            borderWidth: 1,
+            gap: 3,
+            marginRight: 6,
+            backgroundColor: bgColor,
+            borderColor: borderColor
+        }}>
+            <MaterialCommunityIcons name={iconName} size={10} color={color} />
+            <Text style={{ fontSize: 9, fontFamily: FONTS.bold, color: color }}>{label}</Text>
+        </View>
+    );
+});
+
+const SetNumberBadge = React.memo(({ type, number, theme }) => {
+    let containerStyle = {
+        width: 22,
+        height: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 4,
+        marginRight: 8,
+    };
+    let textStyle = {
+        fontSize: 11,
+        fontFamily: FONTS.medium,
+    };
+
+    if (type === 'W') {
+        containerStyle.backgroundColor = 'rgba(253, 203, 110, 0.25)';
+        textStyle.color = theme.warning;
+        textStyle.fontFamily = FONTS.bold;
+        textStyle.fontSize = 10;
+    } else if (type === 'D') {
+        containerStyle.backgroundColor = 'rgba(116, 185, 255, 0.15)';
+        textStyle.color = theme.info;
+        textStyle.fontFamily = FONTS.semiBold;
+    } else {
+        containerStyle.backgroundColor = 'rgba(255,255,255,0.05)';
+        textStyle.color = theme.text;
+        textStyle.fontFamily = FONTS.semiBold;
     }
-    return <LinearGradient colors={colors} style={style}>{children}</LinearGradient>;
-};
+
+    return (
+        <View style={containerStyle}>
+            <Text style={textStyle}>{number}</Text>
+        </View>
+    );
+});
 
 const ExerciseHistory = (props) => {
     const { theme } = useTheme();
@@ -33,27 +92,34 @@ const ExerciseHistory = (props) => {
         personalBest: 0,
         totalVolume: 0
     });
+    const [showOnlyPRs, setShowOnlyPRs] = useState(false);
 
+    // Memoize filtered data to prevent re-computation on every render
+    const filteredWorkoutHistory = React.useMemo(() => {
+        if (!showOnlyPRs) return workoutHistory;
+
+        return workoutHistory
+            .map(([session, exercises]) => {
+                const prSets = exercises.filter(set =>
+                    set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1
+                );
+                return prSets.length > 0 ? [session, prSets] : null;
+            })
+            .filter(Boolean);
+    }, [workoutHistory, showOnlyPRs]);
 
     const actionSheetRef = useRef(null);
 
     const showEditSheet = () => {
-
-
         actionSheetRef.current?.show();
     };
-    const handleCloseEditSheet = () => {
 
+    const handleCloseEditSheet = () => {
         fetchExercises()
             .then(data => setExercises(data))
             .catch(err => console.error(err));
-
-
         actionSheetRef.current?.hide();
     };
-
-
-
 
     useEffect(() => {
         if (exercisesList) {
@@ -112,7 +178,6 @@ const ExerciseHistory = (props) => {
         let volume = 0;
 
         history.forEach(entry => {
-            // Only count sets with at least 1 rep for personal best
             if (entry.reps > 0 && entry.weight > maxWeight) {
                 maxWeight = entry.weight;
             }
@@ -146,12 +211,7 @@ const ExerciseHistory = (props) => {
         });
     };
 
-    // Safe fallback colors for Body component and Reanimated views
     const isDynamic = theme.type === 'dynamic';
-    // User requested swap: "actually flipped like earlier".
-    // Swapping order to: [Full Color (Target?), Light Color (Accessory?)] or vice versa.
-    // Previous state: [`${theme.primary}60`, theme.primary] (Light, Dark).
-    // Swapped state: [theme.primary, `${theme.primary}60`] (Dark, Light).
     const bodyColors = isDynamic
         ? ['#2DC4B6', '#2DC4B680']
         : [theme.primary, `${theme.primary}60`];
@@ -166,21 +226,20 @@ const ExerciseHistory = (props) => {
         );
     }
 
-
     return (
         <View style={styles.container}>
-
             <FlatList
-                data={workoutHistory}
+                data={filteredWorkoutHistory}
                 style={styles.list}
                 contentContainerStyle={styles.listContentContainer}
                 keyExtractor={([session]) => session.toString()}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={5}
+                updateCellsBatchingPeriod={50}
+                windowSize={10}
                 ListHeaderComponent={
                     <View>
-                        {/* Replaced GradientOrView with flat View for all themes as requested */}
-                        <View
-                            style={[styles.headerGradient, { backgroundColor: theme.surface }]}
-                        >
+                        <View style={[styles.headerGradient, { backgroundColor: theme.surface }]}>
                             <View style={styles.titleRow}>
                                 <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
                                 <TouchableOpacity
@@ -195,24 +254,18 @@ const ExerciseHistory = (props) => {
                                 </TouchableOpacity>
                             </View>
 
-
-
-
                             <ActionSheet
                                 ref={actionSheetRef}
                                 enableGestureBack={true}
                                 closeOnPressBack={true}
                                 androidCloseOnBackPress={true}
-                                containerStyle={{ height: '94%', backgroundColor: safeSurface }}
+                                containerStyle={{ height: '100%', backgroundColor: safeSurface }}
                                 indicatorStyle={{ backgroundColor: theme.textSecondary }}
-                                snapPoints={[94]}
+                                snapPoints={[100]}
                                 initialSnapIndex={0}
                             >
                                 <NewExercise exerciseID={props.exerciseID} close={handleCloseEditSheet} />
                             </ActionSheet>
-
-
-
 
                             <View style={styles.statsRow}>
                                 <View style={styles.statItem}>
@@ -251,21 +304,44 @@ const ExerciseHistory = (props) => {
                             />
                         </View>
 
-                        <Text style={styles.sectionTitle}>History</Text>
+                        <View style={styles.historyHeaderRow}>
+                            <Text style={styles.sectionTitle}>History</Text>
+                            <View style={styles.prFilterContainer}>
+                                <MaterialCommunityIcons
+                                    name="trophy"
+                                    size={14}
+                                    color={showOnlyPRs ? '#FFD700' : theme.textSecondary}
+                                />
+                                <Text style={[
+                                    styles.prFilterText,
+                                    showOnlyPRs && { color: '#FFD700' }
+                                ]}>
+                                    PRs Only
+                                </Text>
+                                <Switch
+                                    value={showOnlyPRs}
+                                    onValueChange={setShowOnlyPRs}
+                                    trackColor={{ false: theme.border, true: 'rgba(255, 215, 0, 0.3)' }}
+                                    thumbColor={showOnlyPRs ? '#FFD700' : theme.textSecondary}
+                                    ios_backgroundColor={theme.border}
+                                />
+                            </View>
+                        </View>
                     </View>
                 }
                 renderItem={({ item: [session, exercises] }) => {
                     const sessionNote = exercises.find(e => e.notes)?.notes;
                     const workoutName = exercises[0].name || "Workout";
 
-                    // Calculate display numbers
+                    // Calculate display numbers matching [session].jsx
                     let workingSetCount = 0;
                     const setsWithDisplayNumbers = exercises.map(set => {
+                        let displayNumber = set.setType;
                         if (set.setType === 'N' || !set.setType) {
                             workingSetCount++;
-                            return { ...set, displayNumber: workingSetCount };
+                            displayNumber = workingSetCount;
                         }
-                        return { ...set, displayNumber: set.setType };
+                        return { ...set, displayNumber };
                     });
 
                     return (
@@ -284,58 +360,65 @@ const ExerciseHistory = (props) => {
                                 </View>
                             </View>
 
-                            {/* Session Note */}
                             {sessionNote && (
                                 <View style={styles.noteContainer}>
-                                    <MaterialCommunityIcons name="text" size={14} color={theme.textSecondary} style={{ marginTop: 2 }} />
+                                    <MaterialCommunityIcons
+                                        name="comment-text-outline"
+                                        size={12}
+                                        color={theme.textSecondary}
+                                        style={{ marginTop: 2 }}
+                                    />
                                     <Text style={styles.noteText}>{sessionNote}</Text>
                                 </View>
                             )}
 
                             <View style={styles.setsContainer}>
                                 <View style={styles.setsHeaderRow}>
-                                    <Text style={[styles.colHeader, { width: 32, textAlign: 'center' }]}>Set</Text>
-                                    <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>kg</Text>
-                                    <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>Reps</Text>
-                                    <Text style={[styles.colHeader, { flex: 1, textAlign: 'center' }]}>1RM</Text>
+                                    <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
+                                    <Text style={[styles.colHeader, styles.colHeaderLift]}>LIFT</Text>
+                                    <Text style={[styles.colHeader, styles.colHeader1RM]}>1RM</Text>
                                 </View>
+
                                 {setsWithDisplayNumbers.map((set, setIndex) => {
                                     const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
-                                    const hasBadges = isPR;
+                                    const setType = set.setType || 'N';
+                                    const isWarmup = setType === 'W';
+                                    const isDrop = setType === 'D';
 
                                     return (
-                                        <View key={setIndex} style={[
-                                            styles.setRowContainer,
-                                            setIndex % 2 === 1 && { backgroundColor: theme.surfaceVariant || 'rgba(255,255,255,0.02)' }
-                                        ]}>
+                                        <View
+                                            key={`${set.exerciseHistoryID ?? ''}-${setIndex}`}
+                                            style={[
+                                                styles.setRowContainer,
+                                                setIndex % 2 === 1 && styles.setRowOdd,
+                                                isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
+                                                isDrop && { backgroundColor: 'rgba(116, 185, 255, 0.05)' },
+                                            ]}
+                                        >
                                             <View style={styles.setRow}>
-                                                <View style={[
-                                                    styles.setBadge,
-                                                    set.setType === 'W' && { backgroundColor: 'rgba(253, 203, 110, 0.15)' },
-                                                    set.setType === 'D' && { backgroundColor: 'rgba(116, 185, 255, 0.15)' }
-                                                ]}>
-                                                    <Text style={[
-                                                        styles.setNumber,
-                                                        set.setType === 'W' && { color: theme.warning },
-                                                        set.setType === 'D' && { color: theme.secondary }
-                                                    ]}>
-                                                        {set.displayNumber}
-                                                    </Text>
-                                                </View>
+                                                <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
 
-                                                <Text style={styles.setWeight}>{set.weight} kg</Text>
-                                                <Text style={styles.setReps}>{set.reps}</Text>
-                                                <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
+                                                <Text
+                                                    style={[
+                                                        styles.setLift,
+                                                        isWarmup && styles.setLiftWarmup,
+                                                        isDrop && styles.setLiftDrop,
+                                                    ]}
+                                                >
+                                                    {set.weight}kg × {set.reps}
+                                                </Text>
+
+                                                <Text style={styles.setOneRM}>
+                                                    {set.oneRM ? Math.round(set.oneRM) : '-'}
+                                                </Text>
                                             </View>
 
-                                            {/* PR Badges Row */}
-                                            {hasBadges && (
+                                            {isPR && (
                                                 <View style={styles.badgeRow}>
-                                                    {/* Indent to align with data if desired, or just flush left */}
-                                                    <View style={{ width: 40 }} />
-                                                    {set.is1rmPR === 1 && <PRBadge type="1RM" styles={styles} />}
-                                                    {set.isVolumePR === 1 && <PRBadge type="VOL" styles={styles} />}
-                                                    {set.isWeightPR === 1 && <PRBadge type="KG" styles={styles} />}
+                                                    <View style={{ width: 32 }} />
+                                                    {set.is1rmPR === 1 && <PRBadge type="1RM" />}
+                                                    {set.isVolumePR === 1 && <PRBadge type="VOL" />}
+                                                    {set.isWeightPR === 1 && <PRBadge type="KG" />}
                                                 </View>
                                             )}
                                         </View>
@@ -343,7 +426,7 @@ const ExerciseHistory = (props) => {
                                 })}
                             </View>
                         </View>
-                    )
+                    );
                 }}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
@@ -356,30 +439,7 @@ const ExerciseHistory = (props) => {
                 nestedScrollEnabled={true}
                 bounces={true}
                 scrollEventThrottle={16}
-                onScrollBeginDrag={() => { }}
             />
-        </View>
-    );
-};
-
-const PRBadge = ({ type, styles }) => {
-    // Fixed: Use MaterialCommunityIcons for Trophy
-    const iconName = "trophy";
-    let label = "PR";
-
-    // Logic: Distinction in Text, Unity in Color
-    if (type === '1RM') label = "1RM";
-    if (type === 'VOL') label = "Vol.";
-    if (type === 'KG') label = "Weight";
-
-    const color = '#FFD700'; // Gold
-    const bgColor = 'rgba(255, 215, 0, 0.15)'; // Low opacity gold
-    const borderColor = 'rgba(255, 215, 0, 0.3)';
-
-    return (
-        <View style={[styles.strongBadge, { backgroundColor: bgColor, borderColor: borderColor }]}>
-            <MaterialCommunityIcons name={iconName} size={10} color={color} />
-            <Text style={[styles.strongBadgeText, { color: color }]}>{label}</Text>
         </View>
     );
 };
@@ -388,19 +448,6 @@ const getStyles = (theme) => StyleSheet.create({
     container: {
         height: '100%',
         backgroundColor: theme.background,
-    },
-    dragHandleArea: {
-        paddingVertical: 12,
-        paddingTop: 8,
-        alignItems: 'center',
-        backgroundColor: theme.background,
-    },
-    dragHandle: {
-        width: 40,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: theme.textSecondary,
-        opacity: 0.3,
     },
     loadingContainer: {
         flex: 1,
@@ -486,32 +533,53 @@ const getStyles = (theme) => StyleSheet.create({
         fontFamily: FONTS.bold,
         color: theme.text,
         marginLeft: 20,
+    },
+    historyHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginTop: 16,
         marginBottom: 16,
+        paddingHorizontal: 20,
     },
-    // Updated Styles to match [session].jsx
+    prFilterContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: theme.surface,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: theme.border,
+    },
+    prFilterText: {
+        fontSize: 12,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+    },
     sessionCard: {
         marginBottom: 12,
+        marginHorizontal: 12,
         backgroundColor: theme.surface,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.border,
-        ...SHADOWS.small,
         overflow: 'hidden',
     },
     sessionHeader: {
         paddingHorizontal: 12,
         paddingVertical: 10,
         backgroundColor: 'rgba(255,255,255,0.03)',
-        borderBottomWidth: 1,
-        borderBottomColor: theme.border,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.05)',
     },
     sessionTitle: {
         fontSize: 15,
-        fontFamily: FONTS.semiBold,
+        fontFamily: FONTS.bold,
         color: theme.text,
         marginBottom: 2,
     },
@@ -535,14 +603,13 @@ const getStyles = (theme) => StyleSheet.create({
     noteContainer: {
         flexDirection: 'row',
         paddingHorizontal: 12,
-        paddingTop: 8,
-        paddingBottom: 4,
+        paddingVertical: 6,
         gap: 6,
         backgroundColor: 'rgba(255, 253, 203, 0.05)',
     },
     noteText: {
         flex: 1,
-        fontSize: 11,
+        fontSize: 14,
         color: theme.textSecondary,
         fontFamily: FONTS.regular,
         fontStyle: 'italic',
@@ -554,23 +621,34 @@ const getStyles = (theme) => StyleSheet.create({
     setsHeaderRow: {
         flexDirection: 'row',
         paddingVertical: 6,
-        paddingHorizontal: 16, // added back horizontal padding for header row alignment
         borderBottomWidth: 1,
-        borderBottomColor: theme.border,
+        borderBottomColor: 'rgba(255,255,255,0.05)',
+        paddingHorizontal: 12,
     },
     colHeader: {
-        fontSize: 10,
+        fontSize: 9,
         fontFamily: FONTS.medium,
         color: theme.textSecondary,
         textTransform: 'uppercase',
     },
+    colHeaderSet: { width: 32 },
+    colHeaderLift: {
+        flex: 2,
+        textAlign: 'left',
+        paddingLeft: 6,
+    },
+    colHeader1RM: { flex: 1, textAlign: 'center' },
     setRowContainer: {
-        paddingVertical: 6,
-        paddingHorizontal: 16,
+        paddingVertical: 3,
+        paddingHorizontal: 12,
     },
     setRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        minHeight: 28,
+    },
+    setRowOdd: {
+        backgroundColor: 'rgba(255,255,255,0.01)',
     },
     badgeRow: {
         flexDirection: 'row',
@@ -578,32 +656,22 @@ const getStyles = (theme) => StyleSheet.create({
         marginTop: 4,
         flexWrap: 'wrap',
     },
-    setBadge: {
-        width: 24, // reduced from 30
-        height: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 4,
-        marginRight: 8,
+    setLift: {
+        flex: 2,
+        textAlign: 'left',
+        paddingLeft: 6,
+        fontSize: 15,
+        fontFamily: FONTS.bold,
+        color: theme.text,
+        letterSpacing: 0.3,
     },
-    setNumber: {
-        fontSize: 12,
-        fontFamily: FONTS.medium,
+    setLiftWarmup: {
         color: theme.textSecondary,
+        opacity: 0.75,
     },
-    setWeight: {
-        flex: 1,
-        textAlign: 'center',
-        fontSize: 14,
-        fontFamily: FONTS.semiBold,
-        color: theme.text,
-    },
-    setReps: {
-        flex: 1,
-        textAlign: 'center',
-        fontSize: 14,
-        fontFamily: FONTS.semiBold,
-        color: theme.text,
+    setLiftDrop: {
+        color: theme.info,
+        opacity: 0.8,
     },
     setOneRM: {
         flex: 1,
@@ -611,12 +679,6 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 12,
         fontFamily: FONTS.medium,
         color: theme.textSecondary,
-    },
-    prContainer: {
-        width: 50,
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        gap: 4,
     },
     emptyContainer: {
         padding: 40,
@@ -630,19 +692,10 @@ const getStyles = (theme) => StyleSheet.create({
         marginTop: 16,
         marginBottom: 8,
     },
-    strongBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 8,
-        borderWidth: 1,
-        gap: 4,
-        marginRight: 6,
-    },
-    strongBadgeText: {
-        fontSize: 10,
-        fontFamily: FONTS.bold,
+    emptySubtext: {
+        color: theme.textSecondary,
+        fontFamily: FONTS.regular,
+        fontSize: 14,
     },
 });
 

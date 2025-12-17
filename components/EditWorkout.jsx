@@ -513,9 +513,9 @@ const EditWorkout = ({ sessionNumber, onSaveSuccess, onCancel }) => {
                     enableGestureBack={true}
                     closeOnPressBack={true}
                     androidCloseOnBackPress={true}
-                    containerStyle={{ height: '94%', backgroundColor: safeSurface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
+                    containerStyle={{ height: '100%', backgroundColor: safeSurface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
                     indicatorStyle={{ backgroundColor: isDynamic ? '#aaaaaa' : theme.textSecondary }}
-                    snapPoints={[94]}
+                    snapPoints={[100]}
                     initialSnapIndex={0}
                 >
                     <ExerciseHistory

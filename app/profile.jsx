@@ -248,7 +248,7 @@ const getStyles = (theme) => StyleSheet.create({
         fontFamily: FONTS.semiBold,
     },
     actionSheetContainer: {
-        height: '90%',
+        height: '100%',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         // backgroundColor removed from here to be dynamic inline

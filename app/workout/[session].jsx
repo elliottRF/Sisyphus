@@ -382,7 +382,7 @@ const WorkoutDetail = () => {
                 androidCloseOnBackPress={true}
                 containerStyle={styles.actionSheetContainer}
                 indicatorStyle={styles.indicator}
-                snapPoints={[94]}
+                snapPoints={[100]}
                 initialSnapIndex={0}
             >
                 <ExerciseHistory
@@ -609,7 +609,7 @@ const getStyles = (theme) => {
             backgroundColor: safeSurface,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
-            height: '94%',
+            height: '100%',
         },
         indicator: {
             backgroundColor: safeIndicator,
