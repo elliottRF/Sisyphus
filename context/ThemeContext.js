@@ -8,19 +8,28 @@ export const ThemeProvider = ({ children }) => {
     const [themeID, setThemeID] = useState('TITANIUM');
     const [theme, setTheme] = useState(THEMES.TITANIUM);
 
+    const [gender, setGender] = useState('male');
+
     useEffect(() => {
-        loadTheme();
+        loadSettings();
     }, []);
 
-    const loadTheme = async () => {
+    const loadSettings = async () => {
         try {
-            const storedThemeID = await AsyncStorage.getItem('user_theme');
+            const [storedThemeID, storedGender] = await Promise.all([
+                AsyncStorage.getItem('user_theme'),
+                AsyncStorage.getItem('user_gender')
+            ]);
+
             if (storedThemeID && THEMES[storedThemeID]) {
                 setThemeID(storedThemeID);
                 setTheme(THEMES[storedThemeID]);
             }
+            if (storedGender) {
+                setGender(storedGender);
+            }
         } catch (error) {
-            console.error("Failed to load theme:", error);
+            console.error("Failed to load settings:", error);
         }
     };
 
@@ -36,8 +45,17 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updateGender = async (newGender) => {
+        setGender(newGender);
+        try {
+            await AsyncStorage.setItem('user_gender', newGender);
+        } catch (error) {
+            console.error("Failed to save gender:", error);
+        }
+    };
+
     return (
-        <ThemeContext.Provider value={{ theme, themeID, updateTheme }}>
+        <ThemeContext.Provider value={{ theme, themeID, updateTheme, gender, updateGender }}>
             {children}
         </ThemeContext.Provider>
     );

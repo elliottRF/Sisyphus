@@ -1,5 +1,6 @@
 import { View, Text, ScrollView, StyleSheet, TextInput, Keyboard, FlatList, TouchableOpacity } from 'react-native'
 import React, { useState, useEffect, useRef } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR } from '../components/db';
@@ -17,6 +18,9 @@ import { useTheme } from '../context/ThemeContext';
 const Profile = () => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
+
+    const scrollRef = useRef(null);
+    useScrollToTop(scrollRef);
     const [searchQuery, setSearchQuery] = useState('');
     const [exercises, setExercises] = useState([]);
     const [selectedExerciseId, setSelectedExerciseId] = useState(null);
@@ -136,6 +140,7 @@ const Profile = () => {
             </View>
 
             <FlatList
+                ref={scrollRef}
                 data={sortedAndFilteredExercises}
                 keyExtractor={(item) => item.exerciseID.toString()}
                 renderItem={renderItem}

@@ -14,7 +14,7 @@ import { useTheme } from '../context/ThemeContext';
 
 const Settings = () => {
     const router = useRouter();
-    const { theme, themeID, updateTheme } = useTheme(); // Use Theme Hook
+    const { theme, themeID, updateTheme, gender, updateGender } = useTheme(); // Use Theme Hook
     const styles = getStyles(theme);
 
     const [importing, setImporting] = useState(false);
@@ -122,6 +122,40 @@ const Settings = () => {
                             );
                         })}
                     </ScrollView>
+                </View>
+
+                {/* --- PREFERENCES --- */}
+                <Text style={styles.sectionTitle}>Preferences</Text>
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <MaterialCommunityIcons name="human-male-female" size={24} color={theme.primary} />
+                        <Text style={styles.cardTitle}>Highlighter Gender</Text>
+                    </View>
+                    <Text style={styles.cardDescription}>
+                        Choose the gender of the muscle highlighter shown across the app.
+                    </Text>
+                    <View style={styles.genderToggleContainer}>
+                        <TouchableOpacity
+                            style={[
+                                styles.genderOption,
+                                gender === 'male' && { backgroundColor: theme.primary, borderColor: theme.primary }
+                            ]}
+                            onPress={() => updateGender('male')}
+                        >
+                            <Feather name="user" size={20} color={gender === 'male' ? theme.surface : theme.text} />
+                            <Text style={[styles.genderText, gender === 'male' && { color: theme.surface }]}>Male</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[
+                                styles.genderOption,
+                                gender === 'female' && { backgroundColor: theme.primary, borderColor: theme.primary }
+                            ]}
+                            onPress={() => updateGender('female')}
+                        >
+                            <Feather name="user" size={20} color={gender === 'female' ? theme.surface : theme.text} />
+                            <Text style={[styles.genderText, gender === 'female' && { color: theme.surface }]}>Female</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* --- DATA MANAGEMENT --- */}
@@ -320,6 +354,26 @@ const getStyles = (theme) => StyleSheet.create({
     themeName: {
         fontSize: 12,
         fontFamily: FONTS.medium,
+    },
+    genderToggleContainer: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    genderOption: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+        gap: 8,
+    },
+    genderText: {
+        fontSize: 14,
+        fontFamily: FONTS.semiBold,
+        color: theme.text,
     },
 });
 

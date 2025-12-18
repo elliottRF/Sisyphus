@@ -97,7 +97,7 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 });
 
 const ExerciseHistory = (props) => {
-    const { theme } = useTheme();
+    const { theme, gender } = useTheme();
     const styles = getStyles(theme);
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -304,19 +304,21 @@ const ExerciseHistory = (props) => {
                         <View style={styles.bodyContainer}>
                             <Body
                                 data={formattedTargets}
-                                gender="male"
+                                gender={gender}
                                 side="front"
                                 scale={0.7}
                                 border={safeBorder}
                                 colors={bodyColors}
+                                defaultFill={theme.bodyFill}
                             />
                             <Body
                                 data={formattedTargets}
-                                gender="male"
+                                gender={gender}
                                 side="back"
                                 scale={0.7}
                                 border={safeBorder}
                                 colors={bodyColors}
+                                defaultFill={theme.bodyFill}
                             />
                         </View>
 

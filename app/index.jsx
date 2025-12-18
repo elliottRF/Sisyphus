@@ -1,5 +1,6 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Keyboard, ActivityIndicator } from 'react-native'
 import React, { useState, useCallback, useRef, useEffect } from 'react'
+import { useScrollToTop } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ActionSheet from "react-native-actions-sheet";
@@ -48,7 +49,7 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 };
 
 const Home = () => {
-    const { theme } = useTheme();
+    const { theme, gender } = useTheme();
     const styles = getStyles(theme);
     const [bodyData, setBodyData] = useState([]);
     const [pinnedExercises, setPinnedExercises] = useState([]);
@@ -57,6 +58,9 @@ const Home = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const actionSheetRef = useRef(null);
     const router = useRouter();
+
+    const scrollRef = useRef(null);
+    useScrollToTop(scrollRef);
 
     // Load data only on mount
     useEffect(() => {
@@ -217,6 +221,7 @@ const Home = () => {
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <ScrollView
+                ref={scrollRef}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollViewContent}
             >
@@ -254,12 +259,13 @@ const Home = () => {
                         <Text style={styles.cardTitle}>Front</Text>
                         <Body
                             data={bodyData}
-                            gender="male"
+                            gender={gender}
                             side="front"
                             scale={1.1}
                             border={safeBorder}
                             colors={bodyColors}
                             bg={theme.surface}
+                            defaultFill={theme.bodyFill}
                         />
                     </View>
 
@@ -267,12 +273,13 @@ const Home = () => {
                         <Text style={styles.cardTitle}>Back</Text>
                         <Body
                             data={bodyData}
-                            gender="male"
+                            gender={gender}
                             side="back"
                             scale={1.1}
                             border={safeBorder}
                             colors={bodyColors}
                             bg={theme.surface}
+                            defaultFill={theme.bodyFill}
                         />
                     </View>
                 </ScrollView>

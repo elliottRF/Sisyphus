@@ -18,7 +18,7 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 };
 
 const NewExercise = (props) => {
-    const { theme } = useTheme();
+    const { theme, gender } = useTheme();
     const styles = getStyles(theme);
     const [exerciseName, setExerciseName] = useState('');
     const [targetSelected, setTargetSelected] = useState([]);
@@ -163,19 +163,21 @@ const NewExercise = (props) => {
                     <View style={styles.bodyContainer}>
                         <Body
                             data={formattedTargets}
-                            gender="male"
+                            gender={gender}
                             side="front"
                             scale={1}
                             border={safeBorder}
                             colors={safeBodyColors}
+                            defaultFill={theme.bodyFill}
                         />
                         <Body
                             data={formattedTargets}
-                            gender="male"
+                            gender={gender}
                             side="back"
                             scale={1}
                             border={safeBorder}
                             colors={safeBodyColors}
+                            defaultFill={theme.bodyFill}
                         />
                     </View>
 

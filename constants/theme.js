@@ -53,6 +53,7 @@ const MONO = {
     danger: "#e74c3c",
     warning: "#f1c40f",
     info: "#3498db",
+    bodyFill: "#333333",
 };
 
 const ARCTIC = {
@@ -68,6 +69,7 @@ const ARCTIC = {
     danger: "#ff7675",
     warning: "#ffeaa7",
     info: "#54a0ff",
+    bodyFill: "#333333",
 };
 
 const NOTHING = {
@@ -83,6 +85,7 @@ const NOTHING = {
     danger: "#ff2a2a",
     warning: "#ffcc00",
     info: "#ffffff",
+    bodyFill: "#333333",
 };
 
 const TERMINAL = {
@@ -98,6 +101,7 @@ const TERMINAL = {
     danger: "#ff4d4d",
     warning: "#ffd166",
     info: "#4ddcff",
+    bodyFill: "#333333",
 };
 
 const SCHEMATIC = {
@@ -113,6 +117,7 @@ const SCHEMATIC = {
     danger: "#ff5c5c",
     warning: "#ffb300",
     info: "#00e5ff",
+    bodyFill: "#333333",
 };
 
 const CALIPER = {
@@ -128,6 +133,7 @@ const CALIPER = {
     danger: "#ef4444",
     warning: "#eab308",
     info: "#38bdf8",
+    bodyFill: "#333333",
 };
 
 const CHERRY_BLOSSOM = {
@@ -143,6 +149,7 @@ const CHERRY_BLOSSOM = {
     danger: "#f87171",
     warning: "#fbbf24",
     info: "#60a5fa",
+    bodyFill: "#e0e0e0",
 };
 
 const CYBER_PINK = {
@@ -158,6 +165,7 @@ const CYBER_PINK = {
     danger: "#ff4d6d",
     warning: "#fee440",
     info: "#00bbf9",
+    bodyFill: "#333333",
 };
 
 const TITANIUM = {
@@ -173,6 +181,7 @@ const TITANIUM = {
     danger: "#FF453A",       // iOS System Red
     warning: "#FF9F0A",      // iOS System Orange
     info: "#64D2FF",         // iOS System Cyan
+    bodyFill: "#333333",
 };
 
 const SYSTEM = Platform.OS === 'android' ? {
@@ -188,6 +197,7 @@ const SYSTEM = Platform.OS === 'android' ? {
     danger: '#ef4444', // Keep standard dangers/warnings for safety visibility
     warning: '#f59e0b',
     info: '#3b82f6',
+    bodyFill: '#333333',
 } : TITANIUM; // Fallback for non-android
 
 

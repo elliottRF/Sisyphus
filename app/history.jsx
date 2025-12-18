@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native'
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchWorkoutHistory, fetchExercises } from '../components/db';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -29,6 +30,9 @@ const History = () => {
     const router = useRouter();
     const { theme } = useTheme(); // Use Theme Hook
     const styles = getStyles(theme);
+
+    const scrollRef = useRef(null);
+    useScrollToTop(scrollRef);
 
     useFocusEffect(
         React.useCallback(() => {
@@ -107,6 +111,7 @@ const History = () => {
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <Text style={styles.title}>Workout History</Text>
             <FlatList
+                ref={scrollRef}
                 data={workoutHistory}
                 style={styles.list}
                 contentContainerStyle={styles.listContentContainer}
