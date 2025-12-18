@@ -9,11 +9,11 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GRAPH_HEIGHT = 220;
+const DEFAULT_GRAPH_HEIGHT = 220;
+const COMPACT_GRAPH_HEIGHT = 140;
 const CARD_PADDING = 40;
 const CARD_MARGIN = 32;
 const Y_AXIS_WIDTH = 40;
-const GRAPH_WIDTH = SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH;
 
 const CustomSelectionDot = ({ isActive, color }) => (
     <View style={{
@@ -65,9 +65,15 @@ const GradientOrView = ({ colors, style, theme, children }) => {
     return <LinearGradient colors={colors} style={style}>{children}</LinearGradient>;
 };
 
-const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => {
+const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCompact = false }) => {
     const { theme } = useTheme();
-    const styles = getStyles(theme);
+    const styles = getStyles(theme, isCompact);
+
+    // Dynamic dimensions based on compact mode
+    const graphWidth = isCompact
+        ? SCREEN_WIDTH - 24 - 16 - Y_AXIS_WIDTH // Smaller margins/padding
+        : SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH;
+    const graphHeight = isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT;
     const [allData, setAllData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [graphMode, setGraphMode] = useState('history'); // 'history' | 'truePR' | 'maxWeight'
@@ -393,51 +399,83 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                 style={styles.content}
                 theme={theme}
             >
-                <View style={styles.header}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                        <Text style={styles.title}>{exerciseName}</Text>
-                        <Text style={styles.subtitle}>
-                            {graphMode === 'truePR' ? 'True PRs Only' :
-                                graphMode === 'maxWeight' ? 'Max Weight PRs' :
-                                    '1RM History'}
-                        </Text>
+                {!isCompact && (
+                    <View style={styles.header}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                            <Text style={styles.title}>{exerciseName}</Text>
+                            <Text style={styles.subtitle}>
+                                {graphMode === 'truePR' ? 'True PRs Only' :
+                                    graphMode === 'maxWeight' ? 'Max Weight PRs' :
+                                        '1RM History'}
+                            </Text>
 
+                            {points.length >= 2 && (
+                                <View style={[styles.trendBadge, {
+                                    backgroundColor:
+                                        trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.15)' :
+                                            trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.15)' :
+                                                'rgba(100, 100, 100, 0.1)'
+                                }]}>
+                                    <Text style={[styles.trendArrow, {
+                                        color: trendData.direction === 'up' ? '#22c55e' :
+                                            trendData.direction === 'down' ? '#ef4444' :
+                                                theme.textSecondary
+                                    }]}>
+                                        {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
+                                    </Text>
+                                    <Text style={[styles.trendText, {
+                                        color: trendData.direction === 'up' ? '#22c55e' :
+                                            trendData.direction === 'down' ? '#ef4444' :
+                                                theme.textSecondary,
+                                        fontFamily: FONTS.bold
+                                    }]}>
+                                        {trendData.label} kg
+                                    </Text>
+                                    <Text style={styles.trendPeriod}>· {trendData.period}</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                            <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} theme={theme} styles={styles} />
+                            <TouchableOpacity onPress={handleUnpin} style={styles.unpinButton}>
+                                <Feather name="x" size={16} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+
+                {isCompact && (
+                    <View style={styles.compactHeader}>
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                            <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} theme={theme} styles={styles} />
+                        </View>
                         {points.length >= 2 && (
                             <View style={[styles.trendBadge, {
+                                marginVertical: 0,
+                                paddingVertical: 4,
+                                height: 26,
+                                paddingHorizontal: 10,
                                 backgroundColor:
-                                    trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.15)' :
-                                        trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.15)' :
-                                            'rgba(100, 100, 100, 0.1)'
+                                    trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.1)' :
+                                        trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.1)' :
+                                            'rgba(100, 100, 100, 0.05)'
                             }]}>
-                                <Text style={[styles.trendArrow, {
-                                    color: trendData.direction === 'up' ? '#22c55e' :
-                                        trendData.direction === 'down' ? '#ef4444' :
-                                            theme.textSecondary
-                                }]}>
-                                    {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
-                                </Text>
                                 <Text style={[styles.trendText, {
                                     color: trendData.direction === 'up' ? '#22c55e' :
                                         trendData.direction === 'down' ? '#ef4444' :
                                             theme.textSecondary,
+                                    fontSize: 12,
                                     fontFamily: FONTS.bold
                                 }]}>
                                     {trendData.label} kg
                                 </Text>
-                                <Text style={styles.trendPeriod}>· {trendData.period}</Text>
                             </View>
                         )}
                     </View>
+                )}
 
-                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                        <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} theme={theme} styles={styles} />
-                        <TouchableOpacity onPress={handleUnpin} style={styles.unpinButton}>
-                            <Feather name="x" size={16} color={theme.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                <View style={styles.modeToggleContainer}>
+                <View style={[styles.modeToggleContainer, isCompact && { marginBottom: 8 }]}>
                     {[
                         { key: 'history', label: '1RM', icon: 'activity' },
                         { key: 'truePR', label: 'True PR', icon: 'trending-up' },
@@ -466,26 +504,30 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                     ))}
                 </View>
 
-                <View style={styles.tooltipContainer}>
+                <View style={[styles.tooltipContainer, isCompact && { height: 32, marginBottom: 4 }]}>
                     {selectedPoint ? (
                         <View style={styles.activeTooltip}>
-                            <Text style={styles.tooltipValue}>{selectedPoint.value} kg</Text>
-                            <Text style={styles.tooltipDate}>
-                                {selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </Text>
+                            <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{selectedPoint.value} kg</Text>
+                            {!isCompact && (
+                                <Text style={styles.tooltipDate}>
+                                    {selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </Text>
+                            )}
                         </View>
                     ) : (
                         <View style={styles.placeholderTooltip}>
-                            <Text style={styles.tooltipValue}>{currentValue} kg</Text>
-                            <Text style={styles.tooltipDate}>
-                                {graphMode === 'maxWeight' ? 'Heaviest Lift' : 'Current PR'}
-                            </Text>
+                            <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{currentValue} kg</Text>
+                            {!isCompact && (
+                                <Text style={styles.tooltipDate}>
+                                    {graphMode === 'maxWeight' ? 'Heaviest Lift' : 'Current PR'}
+                                </Text>
+                            )}
                         </View>
                     )}
                 </View>
 
-                <View style={styles.graphRow}>
-                    <View style={styles.yAxis}>
+                <View style={[styles.graphRow, { height: graphHeight + 30 }]}>
+                    <View style={[styles.yAxis, { height: graphHeight }]}>
                         <Text style={styles.yAxisText}>{yRange[1].toFixed(0)}</Text>
                         <Text style={styles.yAxisText}>{Math.round((yRange[0] + yRange[1]) / 2)}</Text>
                         <Text style={styles.yAxisText}>{yRange[0].toFixed(0)}</Text>
@@ -508,10 +550,10 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
                             onGestureStart={onGestureStart}
                             onGestureEnd={onGestureEnd}
                             range={{ y: { min: yRange[0], max: yRange[1] } }}
-                            style={{ width: GRAPH_WIDTH, height: GRAPH_HEIGHT }}
+                            style={{ width: graphWidth, height: graphHeight }}
                         />
 
-                        <View style={styles.xAxisContainer}>
+                        <View style={[styles.xAxisContainer, { top: graphHeight + 8 }]}>
                             {axisLabels.map((label, index) => (
                                 <Text key={index} style={[styles.xAxisLabel, { left: label.left }]}>
                                     {label.text}
@@ -525,11 +567,11 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger }) => 
     );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme, isCompact) => StyleSheet.create({
     container: {
-        marginBottom: 20,
-        marginHorizontal: 16,
-        borderRadius: 24,
+        marginBottom: isCompact ? 12 : 20,
+        marginHorizontal: isCompact ? 12 : 16,
+        borderRadius: isCompact ? 16 : 24,
         backgroundColor: theme.surface,
         borderWidth: 1,
         borderColor: theme.border,
@@ -537,13 +579,19 @@ const getStyles = (theme) => StyleSheet.create({
         ...SHADOWS.medium,
     },
     content: {
-        padding: 20,
+        padding: isCompact ? 12 : 20,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
         marginBottom: 12,
+    },
+    compactHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
     },
     title: {
         fontSize: 18,
@@ -564,11 +612,11 @@ const getStyles = (theme) => StyleSheet.create({
     graphRow: {
         flexDirection: 'row',
         marginTop: 10,
-        height: GRAPH_HEIGHT + 30,
+        height: (isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT) + 30,
     },
     yAxis: {
         width: Y_AXIS_WIDTH,
-        height: GRAPH_HEIGHT,
+        height: isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT,
         justifyContent: 'space-between',
         paddingRight: 8,
     },
@@ -582,7 +630,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     xAxisContainer: {
         position: 'absolute',
-        top: GRAPH_HEIGHT + 8,
+        top: (isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT) + 8,
         left: 0,
         right: 0,
         height: 20,
@@ -633,32 +681,33 @@ const getStyles = (theme) => StyleSheet.create({
     },
     modeToggleContainer: {
         flexDirection: 'row',
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.03)',
+        borderRadius: 14,
         padding: 4,
-        marginBottom: 12,
-        alignSelf: 'flex-start',
-        gap: 4,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.02)',
     },
     modeButton: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
+        justifyContent: 'center',
+        paddingVertical: 10,
         borderRadius: 10,
-        gap: 6,
+        gap: 8,
     },
     modeButtonActive: {
-        backgroundColor: 'rgba(255,255,255,0.15)',
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        ...SHADOWS.small,
     },
     modeButtonText: {
-        fontSize: 11,
-        fontFamily: FONTS.medium,
+        fontSize: 12,
+        fontFamily: FONTS.bold,
         color: theme.textSecondary,
     },
     modeButtonTextActive: {
         color: theme.primary,
-        fontFamily: FONTS.bold,
     },
     tooltipContainer: {
         height: 44,

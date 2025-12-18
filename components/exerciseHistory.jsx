@@ -9,6 +9,7 @@ import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-ico
 import Body from "react-native-body-highlighter";
 import ActionSheet from "react-native-actions-sheet";
 import NewExercise from "./NewExercise"
+import PRGraphCard from "./PRGraphCard";
 import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
@@ -290,7 +291,7 @@ const ExerciseHistory = (props) => {
                                 data={formattedTargets}
                                 gender="male"
                                 side="front"
-                                scale={1.0}
+                                scale={0.7}
                                 border={safeBorder}
                                 colors={bodyColors}
                             />
@@ -298,11 +299,17 @@ const ExerciseHistory = (props) => {
                                 data={formattedTargets}
                                 gender="male"
                                 side="back"
-                                scale={1.0}
+                                scale={0.7}
                                 border={safeBorder}
                                 colors={bodyColors}
                             />
                         </View>
+
+                        <PRGraphCard
+                            exerciseID={props.exerciseID}
+                            exerciseName={props.exerciseName}
+                            isCompact={true}
+                        />
 
                         <View style={styles.historyHeaderRow}>
                             <Text style={styles.sectionTitle}>History</Text>
@@ -523,10 +530,10 @@ const getStyles = (theme) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         width: '100%',
-        height: 350,
-        marginTop: 24,
-        marginBottom: 20,
-        gap: 20,
+        height: 220,
+        marginTop: 16,
+        marginBottom: 8,
+        gap: 12,
     },
     sectionTitle: {
         fontSize: 18,
