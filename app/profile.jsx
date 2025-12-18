@@ -109,7 +109,7 @@ const Profile = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <Text style={styles.title}>Exercises</Text>
 
             <View style={styles.searchContainer}>

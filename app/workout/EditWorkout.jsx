@@ -56,7 +56,6 @@ const EditWorkout = () => {
     const exerciseInfoActionSheetRef = useRef(null);
     const listRef = useRef(null);
 
-    NavigationBar.setBackgroundColorAsync(theme.background);
 
     // --- Utility Functions ---
     const calculateOneRepMax = (weight, reps) => {

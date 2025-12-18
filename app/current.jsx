@@ -43,7 +43,6 @@ const Current = () => {
     const listRef = useRef(null);
 
 
-    NavigationBar.setBackgroundColorAsync(theme.background);
 
     const startWorkout = async () => {
         const now = new Date().toISOString();

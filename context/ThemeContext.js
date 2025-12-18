@@ -5,8 +5,8 @@ import { COLORS as DEFAULT_COLORS, THEMES } from '../constants/theme';
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-    const [themeID, setThemeID] = useState('MIDNIGHT');
-    const [theme, setTheme] = useState(THEMES.MIDNIGHT);
+    const [themeID, setThemeID] = useState('TITANIUM');
+    const [theme, setTheme] = useState(THEMES.TITANIUM);
 
     useEffect(() => {
         loadTheme();

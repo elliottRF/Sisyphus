@@ -97,14 +97,14 @@ const History = () => {
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.container}>
+            <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
                 <ActivityIndicator size="large" color={theme.primary} />
             </SafeAreaView>
         );
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <Text style={styles.title}>Workout History</Text>
             <FlatList
                 data={workoutHistory}

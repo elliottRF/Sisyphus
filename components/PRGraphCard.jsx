@@ -379,12 +379,12 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
     const maxWeightColor = theme.type === 'dynamic' ? '#A29BFE' : theme.secondary;
 
     const gradientFill = theme.type === 'dynamic'
-        ? ['#2DC4B6CC', 'transparent']
-        : [`${theme.primary}CC`, 'transparent'];
+        ? ['#2DC4B6CC', '#2DC4B600']
+        : [`${theme.primary}CC`, `${theme.primary}00`];
 
     const maxWeightGradient = theme.type === 'dynamic'
-        ? ['#A29BFECC', 'transparent']
-        : [`${theme.secondary}CC`, 'transparent'];
+        ? ['#A29BFECC', '#A29BFE00']
+        : [`${theme.secondary}CC`, `${theme.secondary}00`];
 
     return (
         <View style={styles.container}>
@@ -524,24 +524,20 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
 
                 {hasEnoughData ? (
                     <>
-                        <View style={[styles.tooltipContainer, isCompact && { height: 32, marginBottom: 4 }]}>
+                        <View style={[styles.tooltipContainer, isCompact && { height: 44, marginBottom: 4 }]}>
                             {selectedPoint?.date ? (
                                 <View style={styles.activeTooltip}>
                                     <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{selectedPoint.value} kg</Text>
-                                    {!isCompact && (
-                                        <Text style={styles.tooltipDate}>
-                                            {selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                        </Text>
-                                    )}
+                                    <Text style={styles.tooltipDate}>
+                                        {selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </Text>
                                 </View>
                             ) : (
                                 <View style={styles.placeholderTooltip}>
                                     <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{currentValue} kg</Text>
-                                    {!isCompact && (
-                                        <Text style={styles.tooltipDate}>
-                                            {graphMode === 'maxWeight' ? 'Heaviest Lift' : 'Current PR'}
-                                        </Text>
-                                    )}
+                                    <Text style={styles.tooltipDate}>
+                                        {graphMode === 'maxWeight' ? 'Heaviest Lift' : 'Current PR'}
+                                    </Text>
                                 </View>
                             )}
                         </View>
@@ -558,10 +554,9 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
                                     points={points}
                                     animated={true}
                                     color={graphMode === 'maxWeight' ? maxWeightColor : graphColor}
-                                    gradientFillColors={[
-                                        graphMode === 'maxWeight' ? maxWeightGradient[0] : gradientFill[0],
-                                        'transparent'
-                                    ]}
+                                    gradientFillColors={
+                                        graphMode === 'maxWeight' ? maxWeightGradient : gradientFill
+                                    }
                                     enablePanGesture={true}
                                     enableIndicator={true}
                                     indicatorPulsating={true}

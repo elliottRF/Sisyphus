@@ -11,7 +11,7 @@ const ExerciseDetail = () => {
     const router = useRouter();
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <Stack.Screen options={{ headerShown: false }} />
 
             <View style={styles.header}>

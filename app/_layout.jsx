@@ -1,4 +1,6 @@
-import { View, Text } from 'react-native'
+import { View, Text, Platform } from 'react-native'
+import { StatusBar } from 'expo-status-bar';
+import * as NavigationBar from 'expo-navigation-bar';
 import React, { useState, useEffect, useCallback } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Tabs } from 'expo-router'
@@ -54,19 +56,28 @@ const _layout = () => {
 
 // Separate component to consume theme and render content with dynamic styles
 const ThemeConsumer = () => {
-    const { theme } = useTheme(); // Now we can use the hook
+    const { theme, themeID } = useTheme(); // Now we can use the hook
+
+    useEffect(() => {
+        if (Platform.OS === 'android') {
+            NavigationBar.setButtonStyleAsync(themeID === 'CHERRY_BLOSSOM' ? 'dark' : 'light');
+        }
+    }, [themeID]);
 
     // We need to pass the theme down to the Tabs or use it here for the background
     return (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
+            <StatusBar style={themeID === 'CHERRY_BLOSSOM' ? 'dark' : 'light'} />
             <Tabs
                 backBehavior="history"
                 tabBar={props => <TabBar {...props} />}
                 screenOptions={{
                     headerShown: false,
                     tabBarStyle: {
-                        backgroundColor: theme.background,
+                        position: 'absolute',
+                        backgroundColor: 'transparent',
                         borderTopWidth: 0,
+                        elevation: 0,
                     }
                 }}
             >

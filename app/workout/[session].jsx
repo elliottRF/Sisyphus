@@ -188,7 +188,7 @@ const WorkoutDetail = () => {
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.container}>
+            <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
                 <ActivityIndicator size="large" color={theme.primary} />
             </SafeAreaView>
         );
@@ -196,7 +196,7 @@ const WorkoutDetail = () => {
 
     if (!workoutDetails || workoutDetails.length === 0) {
         return (
-            <SafeAreaView style={styles.container}>
+            <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButtonOver}>
                     <Ionicons name="arrow-back" size={24} color={theme.text} />
                 </TouchableOpacity>
@@ -217,7 +217,7 @@ const WorkoutDetail = () => {
     }, 0);
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <Stack.Screen options={{ headerShown: false }} />
 
             <ScrollView contentContainerStyle={styles.scrollContent}>

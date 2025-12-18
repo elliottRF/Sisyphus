@@ -86,19 +86,14 @@ const Settings = () => {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Feather name="arrow-left" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <Text style={styles.title}>Settings</Text>
-            </View>
+
 
             <ScrollView contentContainerStyle={styles.content}>
 
                 {/* --- THEME SETTINGS --- */}
                 <Text style={styles.sectionTitle}>Appearance</Text>
                 <View style={[styles.card, { paddingVertical: 16 }]}>
-                    <View style={[styles.cardHeader, { paddingHorizontal: 20 }]}>
+                    <View style={[styles.cardHeader, { paddingHorizontal: 0 }]}>
                         <Feather name="droplet" size={24} color={theme.primary} />
                         <Text style={styles.cardTitle}>App Theme</Text>
                     </View>
@@ -208,8 +203,9 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.text,
     },
     content: {
-        padding: 20,
-        paddingBottom: 40,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        paddingBottom: 60,
     },
     sectionTitle: {
         fontSize: 14,

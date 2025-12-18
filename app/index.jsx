@@ -215,7 +215,7 @@ const Home = () => {
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollViewContent}
