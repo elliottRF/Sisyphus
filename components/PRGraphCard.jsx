@@ -5,7 +5,7 @@ import { LineGraph } from 'react-native-graph';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { fetchExerciseProgress, unpinExercise } from './db';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -432,9 +432,11 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
 
                         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                             <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} theme={theme} styles={styles} />
-                            <TouchableOpacity onPress={handleUnpin} style={styles.unpinButton}>
-                                <Feather name="x" size={16} color={theme.textSecondary} />
-                            </TouchableOpacity>
+                            {onRemove && (
+                                <TouchableOpacity onPress={handleUnpin} style={styles.unpinButton}>
+                                    <Feather name="x" size={16} color={theme.textSecondary} />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
                 )}
@@ -447,8 +449,23 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
                             <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} theme={theme} styles={styles} />
                         </View>
                         <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                            <TouchableOpacity onPress={handleUnpin} style={[styles.unpinButton, { padding: 4 }]}>
-                                <Feather name="x" size={14} color={theme.textSecondary} />
+                            {onRemove && (
+                                <TouchableOpacity onPress={handleUnpin} style={[styles.unpinButton, { padding: 4 }]}>
+                                    <Feather name="x" size={14} color={theme.textSecondary} />
+                                </TouchableOpacity>
+                            )}
+                            <TouchableOpacity
+                                onPress={() => setGraphMode(prev =>
+                                    prev === 'history' ? 'truePR' :
+                                        prev === 'truePR' ? 'maxWeight' : 'history'
+                                )}
+                                style={[styles.unpinButton, { padding: 4 }]}
+                            >
+                                <MaterialIcons
+                                    name={graphMode === 'truePR' ? "trending-up" : graphMode === 'maxWeight' ? "fitness-center" : "history"}
+                                    size={14}
+                                    color={theme.primary}
+                                />
                             </TouchableOpacity>
                             {hasEnoughData && points.length >= 2 && (
                                 <View style={[styles.trendBadge, {
@@ -710,7 +727,6 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     },
     modeButtonActive: {
         backgroundColor: 'rgba(255,255,255,0.08)',
-        ...SHADOWS.small,
     },
     modeButtonText: {
         fontSize: 12,

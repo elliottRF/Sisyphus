@@ -545,9 +545,9 @@ const getStyles = (theme) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         width: '100%',
-        height: 220,
+        height: 240,
         marginTop: 16,
-        marginBottom: 8,
+        marginBottom: 20,
         gap: 12,
     },
     sectionTitle: {
