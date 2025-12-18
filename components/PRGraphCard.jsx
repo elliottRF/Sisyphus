@@ -264,33 +264,50 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
     }, [allData, timeRange, graphMode]);
 
     const trendData = useMemo(() => {
-        if (points.length < 2) return { direction: 'flat', label: '±0', period: '30d' };
+        if (points.length < 2) return { direction: 'flat', label: '0%', period: 'all time' };
 
         const now = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(now.getDate() - 30);
+        let pastDate = new Date(0); // Default to start for 'ALL'
+        let periodLabel = 'all time';
+
+        if (timeRange === '3M') {
+            pastDate = new Date();
+            pastDate.setMonth(now.getMonth() - 3);
+            periodLabel = '3m';
+        } else if (timeRange === '1Y') {
+            pastDate = new Date();
+            pastDate.setFullYear(now.getFullYear() - 1);
+            periodLabel = '1y';
+        }
 
         let pastPoint = null;
         for (let i = points.length - 1; i >= 0; i--) {
-            if (points[i].date <= thirtyDaysAgo) {
+            if (points[i].date <= pastDate) {
                 pastPoint = points[i];
                 break;
             }
         }
-        if (!pastPoint) pastPoint = points[0];
+
+        // If no point is older than the range, use the earliest available point
+        if (!pastPoint) {
+            pastPoint = points[0];
+            periodLabel = 'since start';
+        }
 
         const current = points[points.length - 1].value;
         const past = pastPoint.value;
         const diff = current - past;
 
-        const isShortHistory = points[0].date > thirtyDaysAgo;
+        // Calculate percentage change
+        const percentChange = past > 0 ? (diff / past) * 100 : 0;
+        const formattedPercent = percentChange === 0 ? '0%' : `${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%`;
 
         return {
             direction: diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat',
-            label: diff === 0 ? '±0' : `${diff > 0 ? '+' : ''}${Math.round(diff)}`,
-            period: isShortHistory ? 'since start' : '30d'
+            label: formattedPercent,
+            period: periodLabel
         };
-    }, [points]);
+    }, [points, timeRange]);
 
     const axisLabels = useMemo(() => {
         if (!points.length) return [];
@@ -355,37 +372,14 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
         );
     }
 
-    if (allData.length < 2) {
-        return (
-            <View style={styles.container}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>{exerciseName}</Text>
-                    <TouchableOpacity onPress={handleUnpin} style={styles.unpinButton}>
-                        <Feather name="x" size={16} color={theme.textSecondary} />
-                    </TouchableOpacity>
-                </View>
-                <View style={styles.emptyState}>
-                    <Text style={styles.emptyText}>Not enough data yet</Text>
-                    <Text style={styles.emptySubText}>Need 2+ workouts to show progress</Text>
-                </View>
-            </View>
-        );
-    }
-
+    const hasEnoughData = allData.length >= 2 && points.length >= 2;
     const currentValue = points[points.length - 1]?.value || 0;
 
-    // Use solid color for graph line if system theme (gradient fill won't work perfectly)
-    // Actually LineGraph supports gradientFillColors as hex array.
-    // PlatformColor cannot be converted to Hex.
-    // If dynamic theme, we use a single solid color fallback or just clear
-    const graphColor = theme.type === 'dynamic' ? '#2DC4B6' : theme.primary; // Fallback to Teal if dynamic
-    // User requested "different but complementing". theme.secondary is usually complementary.
-    // System: Teal (#2DC4B6) -> Complementary could be Purple (#A29BFE) or Orange.
-    // We'll use Purple (#A29BFE) as fallback for secondary.
+    const graphColor = theme.type === 'dynamic' ? '#2DC4B6' : theme.primary;
     const maxWeightColor = theme.type === 'dynamic' ? '#A29BFE' : theme.secondary;
 
     const gradientFill = theme.type === 'dynamic'
-        ? ['#2DC4B6CC', 'transparent'] // Fallback
+        ? ['#2DC4B6CC', 'transparent']
         : [`${theme.primary}CC`, 'transparent'];
 
     const maxWeightGradient = theme.type === 'dynamic'
@@ -409,13 +403,13 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
                                         '1RM History'}
                             </Text>
 
-                            {points.length >= 2 && (
+                            {hasEnoughData && points.length >= 2 && (
                                 <View style={[styles.trendBadge, {
                                     backgroundColor:
                                         trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.15)' :
                                             trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.15)' :
                                                 'rgba(100, 100, 100, 0.1)'
-                                }]}>
+                                }]} >
                                     <Text style={[styles.trendArrow, {
                                         color: trendData.direction === 'up' ? '#22c55e' :
                                             trendData.direction === 'down' ? '#ef4444' :
@@ -429,7 +423,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
                                                 theme.textSecondary,
                                         fontFamily: FONTS.bold
                                     }]}>
-                                        {trendData.label} kg
+                                        {trendData.label}
                                     </Text>
                                     <Text style={styles.trendPeriod}>· {trendData.period}</Text>
                                 </View>
@@ -448,30 +442,37 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
                 {isCompact && (
                     <View style={styles.compactHeader}>
                         <View style={{ flex: 1, marginRight: 12 }}>
+                            <Text style={[styles.title, { fontSize: 16 }]} numberOfLines={1}>{exerciseName}</Text>
+                            <View style={{ height: 4 }} />
                             <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} theme={theme} styles={styles} />
                         </View>
-                        {points.length >= 2 && (
-                            <View style={[styles.trendBadge, {
-                                marginVertical: 0,
-                                paddingVertical: 4,
-                                height: 26,
-                                paddingHorizontal: 10,
-                                backgroundColor:
-                                    trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.1)' :
-                                        trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.1)' :
-                                            'rgba(100, 100, 100, 0.05)'
-                            }]}>
-                                <Text style={[styles.trendText, {
-                                    color: trendData.direction === 'up' ? '#22c55e' :
-                                        trendData.direction === 'down' ? '#ef4444' :
-                                            theme.textSecondary,
-                                    fontSize: 12,
-                                    fontFamily: FONTS.bold
+                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                            <TouchableOpacity onPress={handleUnpin} style={[styles.unpinButton, { padding: 4 }]}>
+                                <Feather name="x" size={14} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                            {hasEnoughData && points.length >= 2 && (
+                                <View style={[styles.trendBadge, {
+                                    marginVertical: 0,
+                                    paddingVertical: 4,
+                                    height: 26,
+                                    paddingHorizontal: 10,
+                                    backgroundColor:
+                                        trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.1)' :
+                                            trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.1)' :
+                                                'rgba(100, 100, 100, 0.05)'
                                 }]}>
-                                    {trendData.label} kg
-                                </Text>
-                            </View>
-                        )}
+                                    <Text style={[styles.trendText, {
+                                        color: trendData.direction === 'up' ? '#22c55e' :
+                                            trendData.direction === 'down' ? '#ef4444' :
+                                                theme.textSecondary,
+                                        fontSize: 12,
+                                        fontFamily: FONTS.bold
+                                    }]}>
+                                        {trendData.label}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
                     </View>
                 )}
 
@@ -504,64 +505,74 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
                     ))}
                 </View>
 
-                <View style={[styles.tooltipContainer, isCompact && { height: 32, marginBottom: 4 }]}>
-                    {selectedPoint ? (
-                        <View style={styles.activeTooltip}>
-                            <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{selectedPoint.value} kg</Text>
-                            {!isCompact && (
-                                <Text style={styles.tooltipDate}>
-                                    {selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                </Text>
+                {hasEnoughData ? (
+                    <>
+                        <View style={[styles.tooltipContainer, isCompact && { height: 32, marginBottom: 4 }]}>
+                            {selectedPoint?.date ? (
+                                <View style={styles.activeTooltip}>
+                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{selectedPoint.value} kg</Text>
+                                    {!isCompact && (
+                                        <Text style={styles.tooltipDate}>
+                                            {selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </Text>
+                                    )}
+                                </View>
+                            ) : (
+                                <View style={styles.placeholderTooltip}>
+                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{currentValue} kg</Text>
+                                    {!isCompact && (
+                                        <Text style={styles.tooltipDate}>
+                                            {graphMode === 'maxWeight' ? 'Heaviest Lift' : 'Current PR'}
+                                        </Text>
+                                    )}
+                                </View>
                             )}
                         </View>
-                    ) : (
-                        <View style={styles.placeholderTooltip}>
-                            <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{currentValue} kg</Text>
-                            {!isCompact && (
-                                <Text style={styles.tooltipDate}>
-                                    {graphMode === 'maxWeight' ? 'Heaviest Lift' : 'Current PR'}
-                                </Text>
-                            )}
+
+                        <View style={[styles.graphRow, { height: graphHeight + 30 }]}>
+                            <View style={[styles.yAxis, { height: graphHeight }]}>
+                                <Text style={styles.yAxisText}>{yRange[1].toFixed(0)}</Text>
+                                <Text style={styles.yAxisText}>{Math.round((yRange[0] + yRange[1]) / 2)}</Text>
+                                <Text style={styles.yAxisText}>{yRange[0].toFixed(0)}</Text>
+                            </View>
+
+                            <View style={styles.graphCol}>
+                                <LineGraph
+                                    points={points}
+                                    animated={true}
+                                    color={graphMode === 'maxWeight' ? maxWeightColor : graphColor}
+                                    gradientFillColors={[
+                                        graphMode === 'maxWeight' ? maxWeightGradient[0] : gradientFill[0],
+                                        'transparent'
+                                    ]}
+                                    enablePanGesture={true}
+                                    enableIndicator={true}
+                                    indicatorPulsating={true}
+                                    SelectionDot={CustomSelectionDot}
+                                    onPointSelected={onPointSelected}
+                                    onGestureStart={onGestureStart}
+                                    onGestureEnd={onGestureEnd}
+                                    range={{ y: { min: yRange[0], max: yRange[1] } }}
+                                    style={{ width: graphWidth, height: graphHeight }}
+                                />
+
+                                <View style={[styles.xAxisContainer, { top: graphHeight + 8 }]}>
+                                    {axisLabels.map((label, index) => (
+                                        <Text key={index} style={[styles.xAxisLabel, { left: label.left }]}>
+                                            {label.text}
+                                        </Text>
+                                    ))}
+                                </View>
+                            </View>
                         </View>
-                    )}
-                </View>
-
-                <View style={[styles.graphRow, { height: graphHeight + 30 }]}>
-                    <View style={[styles.yAxis, { height: graphHeight }]}>
-                        <Text style={styles.yAxisText}>{yRange[1].toFixed(0)}</Text>
-                        <Text style={styles.yAxisText}>{Math.round((yRange[0] + yRange[1]) / 2)}</Text>
-                        <Text style={styles.yAxisText}>{yRange[0].toFixed(0)}</Text>
+                    </>
+                ) : (
+                    <View style={[styles.emptyState, isCompact ? { height: 160 } : { height: 260 }]}>
+                        <Feather name="bar-chart-2" size={isCompact ? 32 : 48} color={theme.textSecondary} style={{ opacity: 0.3, marginBottom: 12 }} />
+                        <Text style={styles.emptyText}>Not enough data for this period</Text>
+                        <Text style={styles.emptySubText}>Need 2+ workouts to show progress</Text>
                     </View>
-
-                    <View style={styles.graphCol}>
-                        <LineGraph
-                            points={points}
-                            animated={true}
-                            color={graphMode === 'maxWeight' ? maxWeightColor : graphColor}
-                            gradientFillColors={[
-                                graphMode === 'maxWeight' ? maxWeightGradient[0] : gradientFill[0],
-                                'transparent'
-                            ]}
-                            enablePanGesture={true}
-                            enableIndicator={true}
-                            indicatorPulsating={true}
-                            SelectionDot={CustomSelectionDot}
-                            onPointSelected={onPointSelected}
-                            onGestureStart={onGestureStart}
-                            onGestureEnd={onGestureEnd}
-                            range={{ y: { min: yRange[0], max: yRange[1] } }}
-                            style={{ width: graphWidth, height: graphHeight }}
-                        />
-
-                        <View style={[styles.xAxisContainer, { top: graphHeight + 8 }]}>
-                            {axisLabels.map((label, index) => (
-                                <Text key={index} style={[styles.xAxisLabel, { left: label.left }]}>
-                                    {label.text}
-                                </Text>
-                            ))}
-                        </View>
-                    </View>
-                </View>
+                )}
             </GradientOrView>
         </View>
     );

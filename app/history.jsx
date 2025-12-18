@@ -8,6 +8,20 @@ import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
+const lightenColor = (color, percent) => {
+    if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
+    try {
+        const num = parseInt(color.replace("#", ""), 16),
+            amt = Math.round(2.55 * percent),
+            R = (num >> 16) + amt,
+            G = (num >> 8 & 0x00FF) + amt,
+            B = (num & 0x0000FF) + amt;
+        return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+    } catch (e) {
+        return color;
+    }
+};
+
 const History = () => {
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -132,8 +146,8 @@ const History = () => {
                                     <View style={styles.badgeContainer}>
                                         {totalPRs > 0 && (
                                             <View style={styles.prSummaryBadge}>
-                                                {/* FIXED: Using Gold Color for PRs */}
-                                                <MaterialCommunityIcons name="trophy" size={14} color={'#FFD700'} />
+                                                {/* FIXED: Using Theme Color for PRs */}
+                                                <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
                                                 <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
                                             </View>
                                         )}
@@ -180,18 +194,18 @@ const getStyles = (theme) => StyleSheet.create({
     prSummaryBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 215, 0, 0.1)', // Gold tint
+        backgroundColor: `${lightenColor(theme.primary, 20)}40`, // 25% opacity
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
         gap: 4,
         borderWidth: 1,
-        borderColor: 'rgba(255, 215, 0, 0.3)', // Gold border
+        borderColor: `${lightenColor(theme.primary, 20)}66`, // 40% opacity
     },
     prSummaryText: {
         fontSize: 12,
         fontFamily: FONTS.bold,
-        color: '#FFD700', // Gold Text
+        color: lightenColor(theme.primary, 20),
     },
     container: {
         flex: 1,

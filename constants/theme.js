@@ -320,11 +320,25 @@ const VIOLET = {
     warning: "#eab308",
     info: "#38bdf8",
 };
+const BARBIE_CORE = {
+    primary: "#FF1493",      // Deep Pink / Hot Pink
+    primaryDark: "#C71585",  // Medium Violet Red
+    secondary: "#FF8AD8",    // Bubblegum Pink
+    background: "#FFF0F6",   // Extremely light blush
+    surface: "#FFFFFF",      // Pure white for contrast
+    text: "#52002B",         // Very dark maroon-pink for readability
+    textSecondary: "#A34275",
+    border: "#FFC2E0",       // Soft pink border
+    success: "#2ecc71",      // Keeping standard success for utility
+    danger: "#FF0000",
+    warning: "#FFD700",
+    info: "#FF1493",
+};
 const TITANIUM = {
     primary: "#0A84FF",      // Apple San Francisco Blue
     primaryDark: "#0066CC",
     secondary: "#0A84FF",    // iOS System Gray
-    background: "#080808ff",   // Pure Black (OLED optimized)
+    background: "#000000",   // Pure Black (OLED optimized) - FIXED from #080808ff
     surface: "#121214",      // iOS Secondary System Background
     text: "#FFFFFF",         // Primary Label
     textSecondary: "#8E8E93",// Secondary Label
@@ -333,7 +347,21 @@ const TITANIUM = {
     danger: "#FF453A",       // iOS System Red
     warning: "#FF9F0A",      // iOS System Orange
     info: "#64D2FF",         // iOS System Cyan
+};
 
+const MAGENTA_NIGHT = {
+    primary: "#FF4D94",      // Vibrant Pink (glows against dark)
+    primaryDark: "#D4145A",  // Deep Raspberry
+    secondary: "#911F52",    // Muted Plum
+    background: "#0F0208",   // Black with a hint of Magenta
+    surface: "#1A0510",      // Deepest Wine
+    text: "#FFE5F1",         // Lightest pink-white
+    textSecondary: "#B37A95",// Muted dusty rose
+    border: "#3D1226",       // Subtle dark pink border
+    success: "#00FF9C",
+    danger: "#FF3366",
+    warning: "#FFCC00",
+    info: "#FF4D94",
 };
 
 // Android System Theme (Material You)
@@ -355,11 +383,17 @@ const SYSTEM = Platform.OS === 'android' ? {
 // Export the dictionary
 export const THEMES = {
     MIDNIGHT,
+    MIDNIGHT_PREMIUM: TITANIUM, // Alias based on aesthetic description
     OCEAN,
+    OCEAN_BLUE: OCEAN,
     SUNSET,
+    SUNSET_ORANGE: SUNSET,
     FOREST,
+    FOREST_GREEN: FOREST,
     SOLAR,
     NEBULA,
+    DYNAMIC: SYSTEM, // Added DYNAMIC alias for SYSTEM
+    DEEP_PURPLE: NEBULA,
     MONO,
     DESERT,
     ARCTIC,
@@ -370,10 +404,13 @@ export const THEMES = {
     SCHEMATIC,
     PAPER,
     CALIPER,
+    SLATE_GRAY: CALIPER,
     CHERRY_BLOSSOM,
     CYBER_PINK,
     VIOLET,
+    BARBIE_CORE,
     TITANIUM,
+    MAGENTA_NIGHT,
     ...(Platform.OS === 'android' ? { SYSTEM } : {})
 };
 

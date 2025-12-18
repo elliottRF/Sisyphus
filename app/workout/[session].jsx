@@ -9,7 +9,21 @@ import ActionSheet from "react-native-actions-sheet";
 import ExerciseHistory from '../../components/exerciseHistory';
 import { useTheme } from '../../context/ThemeContext';
 
-const PRBadge = React.memo(({ type }) => {
+const lightenColor = (color, percent) => {
+    if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
+    try {
+        const num = parseInt(color.replace("#", ""), 16),
+            amt = Math.round(2.55 * percent),
+            R = (num >> 16) + amt,
+            G = (num >> 8 & 0x00FF) + amt,
+            B = (num & 0x0000FF) + amt;
+        return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+    } catch (e) {
+        return color;
+    }
+};
+
+const PRBadge = React.memo(({ type, theme }) => {
     const iconName = "trophy";
     let label = "PR";
 
@@ -17,9 +31,10 @@ const PRBadge = React.memo(({ type }) => {
     if (type === 'VOL') label = "Vol.";
     if (type === 'KG') label = "Weight";
 
-    const color = '#FFD700';
-    const bgColor = 'rgba(255, 215, 0, 0.15)';
-    const borderColor = 'rgba(255, 215, 0, 0.3)';
+    const brightColor = lightenColor(theme.primary, 20);
+    const color = brightColor;
+    const bgColor = `${brightColor}40`; // 25% opacity
+    const borderColor = `${brightColor}66`; // 40% opacity
 
     return (
         <View style={{
@@ -227,10 +242,10 @@ const WorkoutDetail = () => {
                         {totalPRs > 0 && (
                             <View style={[
                                 styles.metaItem,
-                                { borderColor: 'rgba(255, 215, 0, 0.3)', backgroundColor: 'rgba(255, 215, 0, 0.05)' }
+                                { borderColor: `${lightenColor(theme.primary, 20)}66`, backgroundColor: `${lightenColor(theme.primary, 20)}40` }
                             ]}>
-                                <MaterialCommunityIcons name="trophy" size={14} color={'#FFD700'} />
-                                <Text style={[styles.metaText, { color: '#FFD700', fontFamily: FONTS.bold }]}>
+                                <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
+                                <Text style={[styles.metaText, { color: lightenColor(theme.primary, 20), fontFamily: FONTS.bold }]}>
                                     {totalPRs} New PR{totalPRs > 1 ? 's' : ''}
                                 </Text>
                             </View>
@@ -360,9 +375,9 @@ const WorkoutDetail = () => {
                                                 {isPR && (
                                                     <View style={styles.badgeRow}>
                                                         <View style={{ width: 32 }} />
-                                                        {set.is1rmPR === 1 && <PRBadge type="1RM" />}
-                                                        {set.isVolumePR === 1 && <PRBadge type="VOL" />}
-                                                        {set.isWeightPR === 1 && <PRBadge type="KG" />}
+                                                        {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
+                                                        {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
+                                                        {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
                                                     </View>
                                                 )}
                                             </View>
