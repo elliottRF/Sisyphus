@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/db';
 import { FONTS } from '../../constants/theme';
@@ -109,26 +109,26 @@ const WorkoutDetail = () => {
     // Tracks warmup expand/collapse per exerciseID
     const [expandedWarmups, setExpandedWarmups] = useState({});
 
-    useEffect(() => {
-        const loadData = async () => {
-            setLoading(true);
-            setWorkoutDetails([]);
-            setExercises([]);
-            try {
-                const [historyData, exercisesData] = await Promise.all([
-                    fetchWorkoutHistoryBySession(session),
-                    fetchExercises()
-                ]);
-                setWorkoutDetails(historyData);
-                setExercises(exercisesData);
-            } catch (error) {
-                console.error("Error loading workout details:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadData();
-    }, [session]);
+    useFocusEffect(
+        React.useCallback(() => {
+            const loadData = async () => {
+                // setLoading(true); // Don't set loading to true on refresh to avoid flickering
+                try {
+                    const [historyData, exercisesData] = await Promise.all([
+                        fetchWorkoutHistoryBySession(session),
+                        fetchExercises()
+                    ]);
+                    setWorkoutDetails(historyData);
+                    setExercises(exercisesData);
+                } catch (error) {
+                    console.error("Error loading workout details:", error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            loadData();
+        }, [session])
+    );
 
     const groupExercisesByName = (exercises) => {
         const grouped = {};

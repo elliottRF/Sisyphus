@@ -29,6 +29,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
                 id: uniqueId,
                 exercises: [
                     {
+                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                         exerciseID: item.exerciseID,
                         sets: [
                             {

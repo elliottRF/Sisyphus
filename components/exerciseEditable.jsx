@@ -141,30 +141,30 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     }, [exerciseID]);
 
     const handleWeightChange = (text, setIndex) => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, weight: text } : s) } : e) } : w));
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, weight: text } : s) } : e) } : w));
     };
     const handleRepsChange = (text, setIndex) => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, reps: text } : s) } : e) } : w));
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, reps: text } : s) } : e) } : w));
     };
     const toggleSetComplete = (setIndex) => {
         const set = exercise.sets[setIndex];
         if (!set.completed) Keyboard.dismiss();
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
     };
     const toggleSetType = (setIndex) => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: e.sets.map((s, i) => { if (i === setIndex) { const t = s.setType || 'N'; const n = t === 'N' ? 'W' : t === 'W' ? 'D' : 'N'; return { ...s, setType: n }; } return s; }) } : e) } : w));
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => { if (i === setIndex) { const t = s.setType || 'N'; const n = t === 'N' ? 'W' : t === 'W' ? 'D' : 'N'; return { ...s, setType: n }; } return s; }) } : e) } : w));
     };
     const handleNoteChange = (text) => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, notes: text } : e) } : w));
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, notes: text } : e) } : w));
     };
     const addNewSet = () => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: [...e.sets, { id: Date.now().toString() + Math.random().toString(36).substr(2, 9), weight: null, reps: null, completed: false, setType: 'N' }] } : e) } : w));
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: [...e.sets, { id: Date.now().toString() + Math.random().toString(36).substr(2, 9), weight: null, reps: null, completed: false, setType: 'N' }] } : e) } : w));
     };
     const deleteSet = (setIndex) => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.exerciseID === exerciseID ? { ...e, sets: e.sets.filter((_, i) => i !== setIndex) } : e) } : w));
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.filter((_, i) => i !== setIndex) } : e) } : w));
     };
     const deleteExercise = () => {
-        updateCurrentWorkout(prev => prev.map(w => ({ ...w, exercises: w.exercises.filter(ex => ex.exerciseID !== exerciseID) })).filter(w => w.exercises.length > 0));
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.filter(ex => ex.id !== exercise.id) } : w).filter(w => w.exercises.length > 0));
     };
 
     let previousSetIndex = 0;

@@ -319,6 +319,7 @@ const Current = () => {
                         id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 9),
                         exercises: item.exercises.map(ex => ({
                             ...ex,
+                            id: ex.id || Date.now().toString() + Math.random().toString(36).substr(2, 9),
                             sets: ex.sets.map(set => ({
                                 ...set,
                                 id: set.id || Date.now().toString() + Math.random().toString(36).substr(2, 9)
@@ -365,6 +366,7 @@ const Current = () => {
                 id: uniqueId,
                 exercises: [
                     {
+                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                         exerciseID: item.exerciseID,
                         sets: [
                             {

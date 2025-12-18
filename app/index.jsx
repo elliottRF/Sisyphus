@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Keyboard, ActivityIndicator } from 'react-native'
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { useScrollToTop } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ActionSheet from "react-native-actions-sheet";
 import { FlatList } from 'react-native-gesture-handler';
@@ -62,11 +62,13 @@ const Home = () => {
     const scrollRef = useRef(null);
     useScrollToTop(scrollRef);
 
-    // Load data only on mount
-    useEffect(() => {
-        loadMuscleData();
-        loadPinnedExercises();
-    }, []);
+    // Load data on focus to ensure it's always fresh
+    useFocusEffect(
+        React.useCallback(() => {
+            loadMuscleData();
+            loadPinnedExercises();
+        }, [])
+    );
 
     // Listen for workout completion events
     useEffect(() => {
