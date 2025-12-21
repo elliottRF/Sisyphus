@@ -31,6 +31,7 @@ import { useFocusEffect } from 'expo-router';
 import TestSoundButton from '../components/TestSoundButton';
 import TestNotificationButton from '../components/TestNotificationButton';
 import { useTheme } from '../context/ThemeContext';
+import { ActivityIndicator } from 'react-native';
 
 const Current = () => {
     const { theme } = useTheme();
@@ -38,6 +39,7 @@ const Current = () => {
 
     const [exercises, setExercises] = useState([]);
     const [startTime, setStartTime] = useState(null);
+    const [isReady, setIsReady] = useState(false);
 
     // Ref for ReorderableList
     const listRef = useRef(null);
@@ -341,6 +343,8 @@ const Current = () => {
                 }
             } catch (error) {
                 console.error('Error loading workout from AsyncStorage:', error);
+            } finally {
+                setIsReady(true);
             }
         };
 
@@ -460,120 +464,127 @@ const Current = () => {
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-                {!startTime && currentWorkout.length === 0 && (
+                {!isReady ? (
                     <View style={styles.startContainer}>
-                        <View style={styles.emptyStateContent}>
-                            <Feather name="activity" size={64} color={theme.primary} style={{ marginBottom: 24, opacity: 0.8 }} />
-                            <Text style={styles.emptyStateTitle}>Ready to train?</Text>
-                            <Text style={styles.emptyStateSubtitle}>Start an empty workout or choose a template to begin your session.</Text>
-
-                            <TouchableOpacity onPress={startWorkout} activeOpacity={0.8} style={styles.startWorkoutButtonContainer}>
-                                <ButtonBackground style={styles.startButton}>
-                                    <Text style={styles.startButtonText}>Start an Empty Workout</Text>
-                                </ButtonBackground>
-                            </TouchableOpacity>
-                        </View>
+                        <ActivityIndicator size="large" color={theme.primary} />
                     </View>
-                )}
+                ) : (
+                    <>
+                        {!startTime && currentWorkout.length === 0 && (
+                            <View style={styles.startContainer}>
+                                <View style={styles.emptyStateContent}>
+                                    <Feather name="activity" size={64} color={theme.primary} style={{ marginBottom: 24, opacity: 0.8 }} />
+                                    <Text style={styles.emptyStateTitle}>Ready to train?</Text>
+                                    <Text style={styles.emptyStateSubtitle}>Start an empty workout or choose a template to begin your session.</Text>
 
-                {(startTime || currentWorkout.length > 0) && (
-                    <View style={{ flex: 1 }}>
-                        {/* Header */}
-                        <View style={styles.headerContainer}>
-                            <View style={styles.headerTopRow}>
-                                <TextInput
-                                    style={styles.workoutTitleInput}
-                                    onChangeText={setWorkoutTitle}
-                                    value={workoutTitle}
-                                    placeholder="Workout Name"
-                                    placeholderTextColor={theme.textSecondary}
-                                    keyboardType="text"
-                                />
-                                {startTime && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                        <Timer startTime={startTime} />
-                                        <RestTimer />
-                                    </View>
-                                )}
-                            </View>
-                            <View style={styles.headerDivider} />
-
-                        </View>
-
-                        <ReorderableList
-                            ref={listRef}
-                            data={currentWorkout}
-                            onReorder={handleReorder}
-                            keyExtractor={(item) => String(item.id)}
-                            renderItem={renderItem}
-                            style={styles.list}
-                            contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
-                            keyboardShouldPersistTaps="handled"
-                            keyboardDismissMode="on-drag"
-                            panGesture={panGesture}
-                            updateActiveItem
-                            ListFooterComponent={
-                                <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
-                                    <TouchableOpacity
-                                        style={styles.addExerciseButton}
-                                        onPress={plusButtonShowExerciseList}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Text style={styles.addExerciseText}>Add Exercise</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        onPress={endWorkout}
-                                        activeOpacity={0.8}
-                                        style={styles.finishButtonContainer}
-                                    >
-                                        <ButtonBackground style={styles.finishButton}>
-                                            <Text style={styles.finishButtonText}>Finish Workout</Text>
+                                    <TouchableOpacity onPress={startWorkout} activeOpacity={0.8} style={styles.startWorkoutButtonContainer}>
+                                        <ButtonBackground style={styles.startButton}>
+                                            <Text style={styles.startButtonText}>Start an Empty Workout</Text>
                                         </ButtonBackground>
                                     </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
 
-                                    <TouchableOpacity
-                                        onPress={() =>
-                                            Alert.alert(
-                                                "Clear Workout?",
-                                                "This will remove all data.",
-                                                [
-                                                    { text: "Cancel", style: "cancel" },
-                                                    { text: "OK", onPress: clearWorkout }
-                                                ]
-                                            )
-                                        }
-                                        activeOpacity={0.7}
-                                        style={styles.clearButton}
-                                    >
-                                        <Text style={styles.clearButtonText}>Clear Workout</Text>
-                                    </TouchableOpacity>
-                                </Animated.View>
-                            }
+                        {(startTime || currentWorkout.length > 0) && (
+                            <View style={{ flex: 1 }}>
+                                {/* Header */}
+                                <View style={styles.headerContainer}>
+                                    <View style={styles.headerTopRow}>
+                                        <TextInput
+                                            style={styles.workoutTitleInput}
+                                            onChangeText={setWorkoutTitle}
+                                            value={workoutTitle}
+                                            placeholder="Workout Name"
+                                            placeholderTextColor={theme.textSecondary}
+                                            keyboardType="text"
+                                        />
+                                        {startTime && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                <Timer startTime={startTime} />
+                                                <RestTimer />
+                                            </View>
+                                        )}
+                                    </View>
+                                    <View style={styles.headerDivider} />
+
+                                </View>
+
+                                <ReorderableList
+                                    ref={listRef}
+                                    data={currentWorkout}
+                                    onReorder={handleReorder}
+                                    keyExtractor={(item) => String(item.id)}
+                                    renderItem={renderItem}
+                                    style={styles.list}
+                                    contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
+                                    keyboardShouldPersistTaps="handled"
+                                    keyboardDismissMode="on-drag"
+                                    updateActiveItem
+                                    ListFooterComponent={
+                                        <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
+                                            <TouchableOpacity
+                                                style={styles.addExerciseButton}
+                                                onPress={plusButtonShowExerciseList}
+                                                activeOpacity={0.7}
+                                            >
+                                                <Text style={styles.addExerciseText}>Add Exercise</Text>
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                                onPress={endWorkout}
+                                                activeOpacity={0.8}
+                                                style={styles.finishButtonContainer}
+                                            >
+                                                <ButtonBackground style={styles.finishButton}>
+                                                    <Text style={styles.finishButtonText}>Finish Workout</Text>
+                                                </ButtonBackground>
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                                onPress={() =>
+                                                    Alert.alert(
+                                                        "Clear Workout?",
+                                                        "This will remove all data.",
+                                                        [
+                                                            { text: "Cancel", style: "cancel" },
+                                                            { text: "OK", onPress: clearWorkout }
+                                                        ]
+                                                    )
+                                                }
+                                                activeOpacity={0.7}
+                                                style={styles.clearButton}
+                                            >
+                                                <Text style={styles.clearButtonText}>Clear Workout</Text>
+                                            </TouchableOpacity>
+                                        </Animated.View>
+                                    }
+                                />
+                            </View>
+                        )}
+                        <FilteredExerciseList
+                            exercises={exercises}
+                            actionSheetRef={actionSheetRef}
+                            setCurrentWorkout={setCurrentWorkout}
                         />
-                    </View>
-                )}
-                <FilteredExerciseList
-                    exercises={exercises}
-                    actionSheetRef={actionSheetRef}
-                    setCurrentWorkout={setCurrentWorkout}
-                />
 
-                <ActionSheet
-                    ref={exerciseInfoActionSheetRef}
-                    enableGestureBack={true}
-                    closeOnPressBack={true}
-                    androidCloseOnBackPress={true}
-                    containerStyle={{ height: '100%', backgroundColor: safeSurface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
-                    indicatorStyle={{ backgroundColor: isDynamic ? '#aaaaaa' : theme.textSecondary }}
-                    snapPoints={[100]}
-                    initialSnapIndex={0}
-                >
-                    <ExerciseHistory
-                        exerciseID={selectedExerciseId}
-                        exerciseName={currentExerciseName}
-                    />
-                </ActionSheet>
+                        <ActionSheet
+                            ref={exerciseInfoActionSheetRef}
+                            enableGestureBack={true}
+                            closeOnPressBack={true}
+                            androidCloseOnBackPress={true}
+                            containerStyle={{ height: '100%', backgroundColor: safeSurface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
+                            indicatorStyle={{ backgroundColor: isDynamic ? '#aaaaaa' : theme.textSecondary }}
+                            snapPoints={[100]}
+                            initialSnapIndex={0}
+                        >
+                            <ExerciseHistory
+                                exerciseID={selectedExerciseId}
+                                exerciseName={currentExerciseName}
+                            />
+                        </ActionSheet>
+                    </>
+                )}
             </SafeAreaView>
         </GestureHandlerRootView>
     );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, UIManager, Dimensions, LayoutAnimation, TextInput, Pressable, Keyboard } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Platform, UIManager, Dimensions, LayoutAnimation, Pressable, Keyboard, TextInput } from 'react-native'
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -28,30 +28,47 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
 
     useEffect(() => {
         const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
-            if (isFocused) inputRef.current?.blur();
+            if (isFocused) {
+                inputRef.current?.blur();
+                setIsFocused(false);
+            }
         });
         return () => keyboardDidHideListener.remove();
     }, [isFocused]);
 
+    const handlePress = () => {
+        if (editable) {
+            setIsFocused(true);
+            // Delayed focus to ensure state updates first
+            setTimeout(() => inputRef.current?.focus(), 50);
+        }
+    };
+
     return (
         <Pressable
             style={[style, isFocused && styles.inputFocused, !editable && styles.inputDisabled]}
-            onPress={() => editable && inputRef.current?.focus()}
+            onPress={handlePress}
         >
-            <TextInput
-                ref={inputRef}
-                style={[styles.textInputInternal, { color: editable ? theme.text : theme.textSecondary }]}
-                value={value}
-                onChangeText={onChangeText}
-                placeholder={placeholder}
-                placeholderTextColor={placeholderTextColor}
-                keyboardType={keyboardType}
-                maxLength={maxLength}
-                editable={editable}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                selectTextOnFocus
-            />
+            {isFocused ? (
+                <TextInput
+                    ref={inputRef}
+                    style={[styles.textInputInternal, { color: editable ? theme.text : theme.textSecondary, width: '100%', height: '100%' }]}
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={placeholder}
+                    placeholderTextColor={placeholderTextColor}
+                    keyboardType={keyboardType}
+                    maxLength={maxLength}
+                    editable={editable}
+                    onBlur={() => setIsFocused(false)}
+                    selectTextOnFocus
+                    autoFocus
+                />
+            ) : (
+                <Text style={[styles.textInputInternal, { color: editable ? theme.text : theme.textSecondary }]}>
+                    {value || placeholder}
+                </Text>
+            )}
         </Pressable>
     );
 };
