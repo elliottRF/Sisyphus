@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator }
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { fetchWorkoutHistory, fetchExercises } from '../components/db';
+import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession } from '../components/db';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import ActionSheet from "react-native-actions-sheet";
@@ -81,16 +81,41 @@ const calculateItemHeight = (entry) => {
 const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styles, formatDate, formatDuration, router }) => {
     const groupedExercises = groupExercisesByName(exercises);
     const duration = exercises[0].duration;
+    const [isLoading, setIsLoading] = useState(false);
 
     const totalPRs = exercises.reduce((acc, ex) => {
         return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
     }, 0);
 
+    const handlePress = async () => {
+        if (isLoading) return;
+        setIsLoading(true);
+        try {
+            // Pre-fetch the data
+            const sessionData = await fetchWorkoutHistoryBySession(session);
+
+            // Navigate with the data
+            router.push({
+                pathname: `/workout/${session}`,
+                params: {
+                    initialData: JSON.stringify(sessionData)
+                }
+            });
+        } catch (error) {
+            console.error("Error pre-fetching workout:", error);
+            // Fallback to normal navigation if fetch fails
+            router.push(`/workout/${session}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => router.push(`/workout/${session}`)}
+            onPress={handlePress}
             style={styles.cardContainer}
+            disabled={isLoading}
         >
             <View style={[styles.cardContent, { backgroundColor: theme.surface }]}>
                 <View style={styles.cardHeader}>
@@ -109,15 +134,21 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
                         </View>
                     </View>
                     <View style={styles.badgeContainer}>
-                        {totalPRs > 0 && (
-                            <View style={styles.prSummaryBadge}>
-                                <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
-                                <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
-                            </View>
+                        {isLoading ? (
+                            <ActivityIndicator size="small" color={theme.primary} style={{ marginRight: 8 }} />
+                        ) : (
+                            <>
+                                {totalPRs > 0 && (
+                                    <View style={styles.prSummaryBadge}>
+                                        <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
+                                        <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
+                                    </View>
+                                )}
+                                <View style={styles.sessionBadge}>
+                                    <Text style={styles.sessionBadgeText}>#{session}</Text>
+                                </View>
+                            </>
                         )}
-                        <View style={styles.sessionBadge}>
-                            <Text style={styles.sessionBadgeText}>#{session}</Text>
-                        </View>
                     </View>
                 </View>
 

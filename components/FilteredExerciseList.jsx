@@ -21,19 +21,19 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
 
     const inputExercise = (item) => {
         actionSheetRef.current?.hide();
-        const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
         setCurrentWorkout((prevWorkouts) => [
             ...prevWorkouts,
             {
-                id: uniqueId,
+                id: generateId(),
                 exercises: [
                     {
-                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                        id: generateId(),
                         exerciseID: item.exerciseID,
                         sets: [
                             {
-                                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                                id: generateId(),
                                 weight: null,
                                 reps: null
                             }

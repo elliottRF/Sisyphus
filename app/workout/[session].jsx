@@ -92,42 +92,87 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 });
 
 const WorkoutDetail = () => {
-    const { session } = useLocalSearchParams();
+    const { session, initialData } = useLocalSearchParams();
     const router = useRouter();
     const { theme } = useTheme();
     const styles = getStyles(theme);
 
-    const [workoutDetails, setWorkoutDetails] = useState([]);
-    const [loading, setLoading] = useState(true);
+    // 1. Synchronously derive initial data from params to ensure first-frame correctness
+    const syncedInitialData = React.useMemo(() => {
+        if (initialData) {
+            try {
+                return JSON.parse(initialData);
+            } catch (e) {
+                console.error("Error parsing initialData", e);
+            }
+        }
+        return null;
+    }, [initialData]);
+
+    const [workoutDetails, setWorkoutDetails] = useState(syncedInitialData || []);
     const [exercisesList, setExercises] = useState([]);
+
+    // 2. Determine if we have valid data for THIS session
+    const currentSessionId = parseInt(session);
+    const dataSessionId = workoutDetails[0]?.workoutSession;
+    const isDataMismatch = workoutDetails.length > 0 && dataSessionId !== currentSessionId;
+
+    // If mismatch, fall back to synced data (if it matches) or empty
+    const effectiveWorkoutDetails = isDataMismatch
+        ? (syncedInitialData && syncedInitialData[0]?.workoutSession === currentSessionId ? syncedInitialData : [])
+        : workoutDetails;
+
+    // Loading if we have no data for this session
+    const [loading, setLoading] = useState(!effectiveWorkoutDetails.length);
+
 
     const actionSheetRef = useRef(null);
     const [selectedExerciseId, setSelectedExerciseId] = useState(null);
     const [currentExerciseName, setCurrentExerciseName] = useState(null);
 
-    // ✅ IMPORTANT: single hook, not inside any map
     // Tracks warmup expand/collapse per exerciseID
     const [expandedWarmups, setExpandedWarmups] = useState({});
 
     useFocusEffect(
         React.useCallback(() => {
             const loadData = async () => {
-                // setLoading(true); // Don't set loading to true on refresh to avoid flickering
                 try {
+                    // Update exercises list in background or parallel
+                    const exPromise = fetchExercises();
+
+                    // If we don't have valid details, or just to refresh:
+                    let historyPromise;
+                    if (!effectiveWorkoutDetails.length) {
+                        historyPromise = fetchWorkoutHistoryBySession(session);
+                    } else {
+                        // We have data (maybe from initialData), but let's refresh to be safe, quietly
+                        historyPromise = fetchWorkoutHistoryBySession(session);
+                    }
+
                     const [historyData, exercisesData] = await Promise.all([
-                        fetchWorkoutHistoryBySession(session),
-                        fetchExercises()
+                        historyPromise,
+                        exPromise
                     ]);
-                    setWorkoutDetails(historyData);
-                    setExercises(exercisesData);
+
+                    if (historyData) setWorkoutDetails(historyData);
+                    if (exercisesData) setExercises(exercisesData);
+
                 } catch (error) {
                     console.error("Error loading workout details:", error);
                 } finally {
                     setLoading(false);
                 }
             };
+
+            // If we have synced data, we are "loaded" immediately, but still want to fetch fresh
+            if (syncedInitialData) {
+                setLoading(false);
+            } else {
+                setLoading(true);
+            }
+
             loadData();
-        }, [session])
+        }, [session, syncedInitialData]) // Re-run if session changes
     );
 
     const groupExercisesByName = (exercises) => {
@@ -135,7 +180,7 @@ const WorkoutDetail = () => {
         const order = [];
 
         exercises.forEach(exercise => {
-            const key = exercise.exerciseID;
+            const key = exercise.exerciseNum;
             if (!grouped[key]) {
                 grouped[key] = [];
                 order.push(key);
@@ -194,7 +239,7 @@ const WorkoutDetail = () => {
         );
     }
 
-    if (!workoutDetails || workoutDetails.length === 0) {
+    if (!effectiveWorkoutDetails || effectiveWorkoutDetails.length === 0) {
         return (
             <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButtonOver}>
@@ -207,12 +252,12 @@ const WorkoutDetail = () => {
         );
     }
 
-    const workoutName = workoutDetails[0].name;
-    const workoutDate = workoutDetails[0].time;
-    const workoutDuration = workoutDetails[0].duration;
-    const groupedExercises = groupExercisesByName(workoutDetails);
+    const workoutName = effectiveWorkoutDetails[0].name;
+    const workoutDate = effectiveWorkoutDetails[0].time;
+    const workoutDuration = effectiveWorkoutDetails[0].duration;
+    const groupedExercises = groupExercisesByName(effectiveWorkoutDetails);
 
-    const totalPRs = workoutDetails.reduce((acc, ex) => {
+    const totalPRs = effectiveWorkoutDetails.reduce((acc, ex) => {
         return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
     }, 0);
 

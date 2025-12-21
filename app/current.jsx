@@ -314,19 +314,25 @@ const Current = () => {
                 const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
                 if (storedWorkout) {
                     const { workout, title } = JSON.parse(storedWorkout);
-                    const workoutWithIds = workout.map(item => ({
+
+                    // Robust unique ID generator
+                    const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+
+                    // Re-generate IDs to ensure uniqueness across the entire workout structure
+                    const workoutWithUniqueIds = workout.map(item => ({
                         ...item,
-                        id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                        id: generateId(),
                         exercises: item.exercises.map(ex => ({
                             ...ex,
-                            id: ex.id || Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                            id: generateId(), // New unique ID for exercise instance
                             sets: ex.sets.map(set => ({
                                 ...set,
-                                id: set.id || Date.now().toString() + Math.random().toString(36).substr(2, 9)
+                                id: generateId() // New unique ID for set
                             }))
                         }))
                     }));
-                    setCurrentWorkout(workoutWithIds);
+
+                    setCurrentWorkout(workoutWithUniqueIds);
                     if (title) setWorkoutTitle(title);
                 }
                 const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
@@ -358,19 +364,19 @@ const Current = () => {
     const inputExercise = (item) => {
         actionSheetRef.current?.hide();
 
-        const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
         setCurrentWorkout((prevWorkouts) => [
             ...prevWorkouts,
             {
-                id: uniqueId,
+                id: generateId(),
                 exercises: [
                     {
-                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                        id: generateId(),
                         exerciseID: item.exerciseID,
                         sets: [
                             {
-                                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                                id: generateId(),
                                 weight: null,
                                 reps: null,
                                 setType: 'N' // Normal
