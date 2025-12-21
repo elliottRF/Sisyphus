@@ -54,6 +54,12 @@ const MONO = {
     warning: "#f1c40f",
     info: "#3498db",
     bodyFill: "#333333",
+    // Adaptive overlays (white for dark themes)
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
 const ARCTIC = {
@@ -70,6 +76,12 @@ const ARCTIC = {
     warning: "#ffeaa7",
     info: "#54a0ff",
     bodyFill: "#333333",
+    // Adaptive overlays (white for dark themes)
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
 const NOTHING = {
@@ -86,6 +98,12 @@ const NOTHING = {
     warning: "#ffcc00",
     info: "#ffffff",
     bodyFill: "#333333",
+    // Adaptive overlays (white for dark themes)
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
 const TERMINAL = {
@@ -102,6 +120,12 @@ const TERMINAL = {
     warning: "#ffd166",
     info: "#4ddcff",
     bodyFill: "#333333",
+    // Adaptive overlays (white for dark themes)
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
 const SCHEMATIC = {
@@ -118,6 +142,12 @@ const SCHEMATIC = {
     warning: "#ffb300",
     info: "#00e5ff",
     bodyFill: "#333333",
+    // Adaptive overlays (white for dark themes)
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
 const CALIPER = {
@@ -134,13 +164,19 @@ const CALIPER = {
     warning: "#eab308",
     info: "#38bdf8",
     bodyFill: "#333333",
+    // Adaptive overlays (white for dark themes)
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
 const CHERRY_BLOSSOM = {
     primary: "#ff85a1",      // Soft Pink
     primaryDark: "#f75c81",
     secondary: "#ff85a1",    // Soft Pink
-    background: "#fff5f7",   // Very light pink tint
+    background: "#ffeaeeff",   // Very light pink tint
     surface: "#ffffff",
     text: "#4a2c33",         // Dark berry for readability
     textSecondary: "#a38089",
@@ -150,6 +186,12 @@ const CHERRY_BLOSSOM = {
     warning: "#fbbf24",
     info: "#60a5fa",
     bodyFill: "#e0e0e0",
+    // Adaptive overlays (black for light themes)
+    overlaySubtle: "rgba(0,0,0,0.02)",
+    overlayMedium: "rgba(0,0,0,0.03)",
+    overlayBorder: "rgba(0,0,0,0.05)",
+    overlayInput: "rgba(0,0,0,0.05)",
+    overlayInputFocused: "rgba(0,0,0,0.1)",
 };
 
 const CYBER_PINK = {
@@ -166,6 +208,12 @@ const CYBER_PINK = {
     warning: "#fee440",
     info: "#00bbf9",
     bodyFill: "#333333",
+    // Adaptive overlays (white for dark themes)
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
 const TITANIUM = {
@@ -182,6 +230,12 @@ const TITANIUM = {
     warning: "#FF9F0A",      // iOS System Orange
     info: "#64D2FF",         // iOS System Cyan
     bodyFill: "#333333",
+    // Adaptive overlays (white for dark themes)
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
 const SYSTEM = Platform.OS === 'android' ? {
@@ -198,6 +252,12 @@ const SYSTEM = Platform.OS === 'android' ? {
     warning: '#f59e0b',
     info: '#3b82f6',
     bodyFill: '#333333',
+    // Adaptive overlays (white for dark themes)
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
 } : TITANIUM; // Fallback for non-android
 
 

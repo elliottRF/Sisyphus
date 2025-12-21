@@ -416,7 +416,7 @@ const getStyles = (theme) => {
             color: theme.text,
             fontFamily: FONTS.regular,
             fontSize: 13,
-            backgroundColor: 'rgba(255,255,255,0.03)',
+            backgroundColor: theme.overlayMedium,
             borderRadius: 4,
             padding: 8,
             minHeight: 32,
@@ -426,7 +426,7 @@ const getStyles = (theme) => {
             paddingHorizontal: 12,
             paddingVertical: 6,
             alignItems: 'center',
-            backgroundColor: 'rgba(255,255,255,0.02)',
+            backgroundColor: theme.overlaySubtle,
         },
         columnHeader: {
             fontSize: 10,
@@ -477,7 +477,7 @@ const getStyles = (theme) => {
             paddingHorizontal: 12,
             paddingVertical: 4,
             borderBottomWidth: 1,
-            borderBottomColor: 'rgba(255,255,255,0.03)',
+            borderBottomColor: theme.overlayMedium,
             overflow: 'hidden',
         },
         completionOverlay: {
@@ -512,16 +512,16 @@ const getStyles = (theme) => {
         },
 
         inputContainer: {
-            backgroundColor: 'rgba(0,0,0,0.2)',
+            backgroundColor: theme.overlayInput,
             borderRadius: 4,
             height: 32,
             justifyContent: 'center',
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.05)',
+            borderColor: theme.overlayBorder,
         },
         inputFocused: {
             borderColor: safePrimary,
-            backgroundColor: 'rgba(0,0,0,0.4)',
+            backgroundColor: theme.overlayInputFocused,
         },
         inputDisabled: {
             opacity: 0.5,
@@ -540,11 +540,11 @@ const getStyles = (theme) => {
             width: 24,
             height: 24,
             borderRadius: 4,
-            backgroundColor: 'rgba(255,255,255,0.05)',
+            backgroundColor: theme.overlayBorder,
             alignItems: 'center',
             justifyContent: 'center',
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.1)',
+            borderColor: theme.overlayBorder,
         },
         checkButtonCompleted: {
             backgroundColor: safeSuccess,
@@ -554,7 +554,7 @@ const getStyles = (theme) => {
         addSetButton: {
             paddingVertical: 10,
             alignItems: 'center',
-            backgroundColor: 'rgba(255,255,255,0.02)',
+            backgroundColor: theme.overlaySubtle,
             borderBottomLeftRadius: 12,
             borderBottomRightRadius: 12,
         },
