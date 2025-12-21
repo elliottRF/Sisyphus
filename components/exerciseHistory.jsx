@@ -2,14 +2,15 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Switch } from 're
 import { FlatList } from 'react-native-gesture-handler';
 import React, { useState, useEffect, useRef } from 'react';
 import { ActivityIndicator } from 'react-native';
-import { fetchExerciseHistory, fetchExercises } from './db';
-import { useFocusEffect } from 'expo-router';
+import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession } from './db';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import Body from "react-native-body-highlighter";
 import ActionSheet from "react-native-actions-sheet";
 import NewExercise from "./NewExercise"
 import PRGraphCard from "./PRGraphCard";
+import WorkoutSessionView from './WorkoutSessionView';
 import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
@@ -96,13 +97,144 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
     );
 });
 
+const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect }) => {
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handlePress = async () => {
+        if (isLoading) return;
+        setIsLoading(true);
+        try {
+            // Pre-fetch the data
+            const sessionData = await fetchWorkoutHistoryBySession(session);
+            // Open ActionSheet instead of navigating
+            onSessionSelect(sessionData);
+        } catch (error) {
+            console.error("Error pre-fetching workout:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const sessionNote = exercises.find(e => e.notes)?.notes;
+    const workoutName = exercises[0].name || "Workout";
+
+    // Calculate display numbers matching [session].jsx
+    let workingSetCount = 0;
+    const setsWithDisplayNumbers = exercises.map(set => {
+        let displayNumber = set.setType;
+        if (set.setType === 'N' || !set.setType) {
+            workingSetCount++;
+            displayNumber = workingSetCount;
+        }
+        return { ...set, displayNumber };
+    });
+
+    return (
+        <TouchableOpacity
+            onPress={handlePress}
+            activeOpacity={0.8}
+            delayPressIn={50} // slight delay to prevent accidental triggers while scrolling
+            disabled={isLoading}
+        >
+            <View style={styles.sessionCard}>
+                <View style={styles.sessionHeader}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.sessionTitle}>{workoutName}</Text>
+                        <View style={styles.sessionDateContainer}>
+                            <Feather name="calendar" size={12} color={theme.textSecondary} />
+                            <Text style={styles.sessionDate}>
+                                {formatDate(exercises[0].time)}
+                            </Text>
+                            <View style={styles.dot} />
+                            <Text style={styles.sessionDate}>Session {session}</Text>
+                        </View>
+                    </View>
+                    {isLoading ? (
+                        <ActivityIndicator size="small" color={theme.primary} style={{ marginLeft: 8 }} />
+                    ) : (
+                        <Feather name="chevron-right" size={20} color={theme.textSecondary} style={{ opacity: 0.5 }} />
+                    )}
+                </View>
+
+                {sessionNote && (
+                    <View style={styles.noteContainer}>
+                        <MaterialCommunityIcons
+                            name="comment-text-outline"
+                            size={12}
+                            color={theme.textSecondary}
+                            style={{ marginTop: 2 }}
+                        />
+                        <Text style={styles.noteText}>{sessionNote}</Text>
+                    </View>
+                )}
+
+                <View style={styles.setsContainer}>
+                    <View style={styles.setsHeaderRow}>
+                        <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
+                        <Text style={[styles.colHeader, styles.colHeaderLift]}>LIFT</Text>
+                        <Text style={[styles.colHeader, styles.colHeader1RM]}>1RM</Text>
+                    </View>
+
+                    {setsWithDisplayNumbers.map((set, setIndex) => {
+                        const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+                        const setType = set.setType || 'N';
+                        const isWarmup = setType === 'W';
+                        const isDrop = setType === 'D';
+
+                        return (
+                            <View
+                                key={`${set.exerciseHistoryID ?? ''}-${setIndex}`}
+                                style={[
+                                    styles.setRowContainer,
+                                    setIndex % 2 === 1 && styles.setRowOdd,
+                                    isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
+                                    isDrop && { backgroundColor: 'rgba(116, 185, 255, 0.05)' },
+                                ]}
+                            >
+                                <View style={styles.setRow}>
+                                    <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
+
+                                    <Text
+                                        style={[
+                                            styles.setLift,
+                                            isWarmup && styles.setLiftWarmup,
+                                            isDrop && styles.setLiftDrop,
+                                        ]}
+                                    >
+                                        {set.weight}kg × {set.reps}
+                                    </Text>
+
+                                    <Text style={styles.setOneRM}>
+                                        {set.oneRM ? Math.round(set.oneRM) : '-'}
+                                    </Text>
+                                </View>
+
+                                {isPR && (
+                                    <View style={styles.badgeRow}>
+                                        <View style={{ width: 32 }} />
+                                        {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
+                                        {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
+                                        {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
+                                    </View>
+                                )}
+                            </View>
+                        );
+                    })}
+                </View>
+            </View>
+        </TouchableOpacity>
+    );
+});
+
 const ExerciseHistory = (props) => {
     const { theme, gender } = useTheme();
+    // const router = useRouter();
     const styles = getStyles(theme);
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
     const [formattedTargets, setFormattedTargets] = useState([]);
+    const [selectedSessionData, setSelectedSessionData] = useState(null);
     const [stats, setStats] = useState({
         totalSets: 0,
         personalBest: 0,
@@ -125,6 +257,7 @@ const ExerciseHistory = (props) => {
     }, [workoutHistory, showOnlyPRs]);
 
     const actionSheetRef = useRef(null);
+    const sessionActionSheetRef = useRef(null);
 
     const showEditSheet = () => {
         actionSheetRef.current?.show();
@@ -135,6 +268,11 @@ const ExerciseHistory = (props) => {
             .then(data => setExercises(data))
             .catch(err => console.error(err));
         actionSheetRef.current?.hide();
+    };
+
+    const handleSessionSelect = (data) => {
+        setSelectedSessionData(data);
+        sessionActionSheetRef.current?.show();
     };
 
     useEffect(() => {
@@ -353,105 +491,16 @@ const ExerciseHistory = (props) => {
                         </View>
                     </View>
                 }
-                renderItem={({ item: [session, exercises] }) => {
-                    const sessionNote = exercises.find(e => e.notes)?.notes;
-                    const workoutName = exercises[0].name || "Workout";
-
-                    // Calculate display numbers matching [session].jsx
-                    let workingSetCount = 0;
-                    const setsWithDisplayNumbers = exercises.map(set => {
-                        let displayNumber = set.setType;
-                        if (set.setType === 'N' || !set.setType) {
-                            workingSetCount++;
-                            displayNumber = workingSetCount;
-                        }
-                        return { ...set, displayNumber };
-                    });
-
-                    return (
-                        <View style={styles.sessionCard}>
-                            <View style={styles.sessionHeader}>
-                                <View>
-                                    <Text style={styles.sessionTitle}>{workoutName}</Text>
-                                    <View style={styles.sessionDateContainer}>
-                                        <Feather name="calendar" size={12} color={theme.textSecondary} />
-                                        <Text style={styles.sessionDate}>
-                                            {formatDate(exercises[0].time)}
-                                        </Text>
-                                        <View style={styles.dot} />
-                                        <Text style={styles.sessionDate}>Session {session}</Text>
-                                    </View>
-                                </View>
-                            </View>
-
-                            {sessionNote && (
-                                <View style={styles.noteContainer}>
-                                    <MaterialCommunityIcons
-                                        name="comment-text-outline"
-                                        size={12}
-                                        color={theme.textSecondary}
-                                        style={{ marginTop: 2 }}
-                                    />
-                                    <Text style={styles.noteText}>{sessionNote}</Text>
-                                </View>
-                            )}
-
-                            <View style={styles.setsContainer}>
-                                <View style={styles.setsHeaderRow}>
-                                    <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
-                                    <Text style={[styles.colHeader, styles.colHeaderLift]}>LIFT</Text>
-                                    <Text style={[styles.colHeader, styles.colHeader1RM]}>1RM</Text>
-                                </View>
-
-                                {setsWithDisplayNumbers.map((set, setIndex) => {
-                                    const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
-                                    const setType = set.setType || 'N';
-                                    const isWarmup = setType === 'W';
-                                    const isDrop = setType === 'D';
-
-                                    return (
-                                        <View
-                                            key={`${set.exerciseHistoryID ?? ''}-${setIndex}`}
-                                            style={[
-                                                styles.setRowContainer,
-                                                setIndex % 2 === 1 && styles.setRowOdd,
-                                                isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
-                                                isDrop && { backgroundColor: 'rgba(116, 185, 255, 0.05)' },
-                                            ]}
-                                        >
-                                            <View style={styles.setRow}>
-                                                <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
-
-                                                <Text
-                                                    style={[
-                                                        styles.setLift,
-                                                        isWarmup && styles.setLiftWarmup,
-                                                        isDrop && styles.setLiftDrop,
-                                                    ]}
-                                                >
-                                                    {set.weight}kg × {set.reps}
-                                                </Text>
-
-                                                <Text style={styles.setOneRM}>
-                                                    {set.oneRM ? Math.round(set.oneRM) : '-'}
-                                                </Text>
-                                            </View>
-
-                                            {isPR && (
-                                                <View style={styles.badgeRow}>
-                                                    <View style={{ width: 32 }} />
-                                                    {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
-                                                    {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
-                                                    {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
-                                                </View>
-                                            )}
-                                        </View>
-                                    );
-                                })}
-                            </View>
-                        </View>
-                    );
-                }}
+                renderItem={({ item: [session, exercises] }) => (
+                    <HistorySessionCard
+                        session={session}
+                        exercises={exercises}
+                        theme={theme}
+                        styles={styles}
+                        formatDate={formatDate}
+                        onSessionSelect={handleSessionSelect}
+                    />
+                )}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                         <Feather name="activity" size={48} color={theme.textSecondary} style={{ opacity: 0.5 }} />
@@ -464,6 +513,26 @@ const ExerciseHistory = (props) => {
                 bounces={true}
                 scrollEventThrottle={16}
             />
+
+            <ActionSheet
+                ref={sessionActionSheetRef}
+                enableGestureBack={true}
+                closeOnPressBack={true}
+                androidCloseOnBackPress={true}
+                containerStyle={{ height: '100%', backgroundColor: safeSurface }}
+                indicatorStyle={{ backgroundColor: theme.textSecondary }}
+                snapPoints={[100]}
+                initialSnapIndex={0}
+            >
+                {selectedSessionData && (
+                    <WorkoutSessionView
+                        workoutDetails={selectedSessionData}
+                        exercisesList={exercisesList}
+                    // Optional: onEdit={...} if we want to allow editing from here
+                    // Optional: onExerciseInfo={...} if we want recursion
+                    />
+                )}
+            </ActionSheet>
         </View>
     );
 };
