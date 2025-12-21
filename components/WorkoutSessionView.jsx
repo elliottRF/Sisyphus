@@ -1,8 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import React, { useState, useCallback } from 'react';
 import { FONTS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useScrollHandlers } from 'react-native-actions-sheet';
+import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -28,8 +30,8 @@ const PRBadge = React.memo(({ type, theme }) => {
 
     const brightColor = lightenColor(theme.primary, 20);
     const color = brightColor;
-    const bgColor = `${brightColor}40`; // 25% opacity
-    const borderColor = `${brightColor}66`; // 40% opacity
+    const bgColor = `${brightColor}40`;
+    const borderColor = `${brightColor}66`;
 
     return (
         <View style={{
@@ -90,9 +92,9 @@ const WorkoutSessionView = ({ workoutDetails, exercisesList, onEdit, onExerciseI
     const { theme } = useTheme();
     const styles = getStyles(theme);
     const [expandedWarmups, setExpandedWarmups] = useState({});
+    const handlers = useScrollHandlers();
 
     const toggleWarmups = useCallback((exerciseId, event) => {
-        // Prevent event propagation if necessary
         event?.stopPropagation();
         setExpandedWarmups(prev => ({
             ...prev,
@@ -145,152 +147,159 @@ const WorkoutSessionView = ({ workoutDetails, exercisesList, onEdit, onExerciseI
     }, 0);
 
     return (
-        <ScrollView contentContainerStyle={[styles.scrollContent, contentContainerStyle]} showsVerticalScrollIndicator={false}>
-            <View style={styles.sleekHeaderContainer}>
-                {onEdit && (
-                    <TouchableOpacity
-                        style={styles.editIcon}
-                        onPress={onEdit}
-                        activeOpacity={0.7}
-                    >
-                        <Feather name="edit" size={24} color={theme.text} />
-                    </TouchableOpacity>
-                )}
-
-                <Text style={styles.workoutDateDisplay}>{formatDate(workoutDate)}</Text>
-                <Text style={styles.workoutNameHuge}>{workoutName}</Text>
-
-                <View style={styles.metaDataRow}>
-                    <View style={styles.metaItem}>
-                        <Feather name="clock" size={14} color={theme.text} />
-                        <Text style={styles.metaText}>{formatDuration(workoutDuration)}</Text>
-                    </View>
-
-                    {totalPRs > 0 && (
-                        <View style={[
-                            styles.metaItem,
-                            { borderColor: `${lightenColor(theme.primary, 20)}66`, backgroundColor: `${lightenColor(theme.primary, 20)}40` }
-                        ]}>
-                            <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
-                            <Text style={[styles.metaText, { color: lightenColor(theme.primary, 20), fontFamily: FONTS.bold }]}>
-                                {totalPRs} New PR{totalPRs > 1 ? 's' : ''}
-                            </Text>
-                        </View>
+        <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
+            <ScrollView
+                {...handlers}
+                contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
+                showsVerticalScrollIndicator={false}
+                showsHorizontalScrollIndicator={false}
+            >
+                <View style={styles.sleekHeaderContainer}>
+                    {onEdit && (
+                        <TouchableOpacity
+                            style={styles.editIcon}
+                            onPress={onEdit}
+                            activeOpacity={0.7}
+                        >
+                            <Feather name="edit" size={24} color={theme.text} />
+                        </TouchableOpacity>
                     )}
-                </View>
-            </View>
 
-            <View style={styles.exercisesList}>
-                {groupedExercises.map((exerciseGroup, index) => {
-                    const exerciseId = exerciseGroup[0].exerciseID;
-                    const exerciseDetails = exercisesList?.find(ex => ex.exerciseID === exerciseId);
-                    const exerciseName = exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseId}`;
+                    <Text style={styles.workoutDateDisplay}>{formatDate(workoutDate)}</Text>
+                    <Text style={styles.workoutNameHuge}>{workoutName}</Text>
 
-                    let workingSetCount = 0;
-                    const setsWithDisplayNumbers = exerciseGroup.map(set => {
-                        let displayNumber = set.setType;
-                        if (set.setType === 'N' || !set.setType) {
-                            workingSetCount++;
-                            displayNumber = workingSetCount;
-                        }
-                        return { ...set, displayNumber };
-                    });
-
-                    const exerciseNote = exerciseGroup.find(e => e.notes)?.notes;
-                    const warmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') === 'W');
-                    const nonWarmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') !== 'W');
-                    const warmupsExpanded = !!expandedWarmups[exerciseId];
-                    const visibleSets = warmupsExpanded ? [...warmups, ...nonWarmups] : nonWarmups;
-
-                    return (
-                        <View key={index} style={styles.exerciseCard}>
-                            <TouchableOpacity
-                                activeOpacity={onExerciseInfo ? 0.8 : 1}
-                                onPress={() => onExerciseInfo?.(exerciseId, exerciseName)}
-                                style={styles.exerciseHeader}
-                                disabled={!onExerciseInfo}
-                            >
-                                <Text style={styles.exerciseName}>{exerciseName}</Text>
-                                {onExerciseInfo && <Feather name="chevron-right" size={18} color={theme.textSecondary} />}
-                            </TouchableOpacity>
-
-                            {exerciseNote && (
-                                <View style={styles.noteContainer}>
-                                    <MaterialCommunityIcons
-                                        name="comment-text-outline"
-                                        size={12}
-                                        color={theme.textSecondary}
-                                        style={{ marginTop: 2 }}
-                                    />
-                                    <Text style={styles.noteText}>{exerciseNote}</Text>
-                                </View>
-                            )}
-
-                            {warmups.length > 0 && (
-                                <TouchableOpacity
-                                    onPress={(e) => toggleWarmups(exerciseId, e)}
-                                    activeOpacity={0.8}
-                                    style={styles.warmupToggle}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <MaterialCommunityIcons name="fire" size={14} color={theme.textSecondary} />
-                                        <Text style={styles.warmupToggleText}>{warmups.length}</Text>
-                                    </View>
-                                    <Feather
-                                        name={warmupsExpanded ? 'chevron-down' : 'chevron-right'}
-                                        size={16}
-                                        color={theme.textSecondary}
-                                    />
-                                </TouchableOpacity>
-                            )}
-
-                            <View style={styles.setsContainer}>
-                                <View style={styles.setsHeaderRow}>
-                                    <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
-                                    <Text style={[styles.colHeader, styles.colHeaderLift]}>LIFT</Text>
-                                    <Text style={[styles.colHeader, styles.colHeader1RM]}>1RM</Text>
-                                </View>
-                                {visibleSets.map((set, setIndex) => {
-                                    const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
-                                    const setType = set.setType || 'N';
-                                    const isWarmup = setType === 'W';
-                                    const isDrop = setType === 'D';
-
-                                    return (
-                                        <View key={`${set.exerciseHistoryID ?? ''}-${setIndex}`} style={[
-                                            styles.setRowContainer,
-                                            setIndex % 2 === 1 && styles.setRowOdd,
-                                            isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
-                                            isDrop && { backgroundColor: 'rgba(116, 185, 255, 0.05)' },
-                                        ]}>
-                                            <View style={styles.setRow}>
-                                                <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
-                                                <Text style={[
-                                                    styles.setLift,
-                                                    isWarmup && styles.setLiftWarmup,
-                                                    isDrop && styles.setLiftDrop,
-                                                ]}>
-                                                    {set.weight}kg × {set.reps}
-                                                </Text>
-                                                <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
-                                            </View>
-                                            {isPR && (
-                                                <View style={styles.badgeRow}>
-                                                    <View style={{ width: 32 }} />
-                                                    {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
-                                                    {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
-                                                    {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
-                                                </View>
-                                            )}
-                                        </View>
-                                    );
-                                })}
-                            </View>
+                    <View style={styles.metaDataRow}>
+                        <View style={styles.metaItem}>
+                            <Feather name="clock" size={14} color={theme.text} />
+                            <Text style={styles.metaText}>{formatDuration(workoutDuration)}</Text>
                         </View>
-                    );
-                })}
-            </View>
-        </ScrollView>
+
+                        {totalPRs > 0 && (
+                            <View style={[
+                                styles.metaItem,
+                                { borderColor: `${lightenColor(theme.primary, 20)}66`, backgroundColor: `${lightenColor(theme.primary, 20)}40` }
+                            ]}>
+                                <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
+                                <Text style={[styles.metaText, { color: lightenColor(theme.primary, 20), fontFamily: FONTS.bold }]}>
+                                    {totalPRs} New PR{totalPRs > 1 ? 's' : ''}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+
+                <View style={styles.exercisesList}>
+                    {groupedExercises.map((exerciseGroup, index) => {
+                        const exerciseId = exerciseGroup[0].exerciseID;
+                        const exerciseDetails = exercisesList?.find(ex => ex.exerciseID === exerciseId);
+                        const exerciseName = exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseId}`;
+
+                        let workingSetCount = 0;
+                        const setsWithDisplayNumbers = exerciseGroup.map(set => {
+                            let displayNumber = set.setType;
+                            if (set.setType === 'N' || !set.setType) {
+                                workingSetCount++;
+                                displayNumber = workingSetCount;
+                            }
+                            return { ...set, displayNumber };
+                        });
+
+                        const exerciseNote = exerciseGroup.find(e => e.notes)?.notes;
+                        const warmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') === 'W');
+                        const nonWarmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') !== 'W');
+                        const warmupsExpanded = !!expandedWarmups[exerciseId];
+                        const visibleSets = warmupsExpanded ? [...warmups, ...nonWarmups] : nonWarmups;
+
+                        return (
+                            <View key={index} style={styles.exerciseCard}>
+                                <TouchableOpacity
+                                    activeOpacity={onExerciseInfo ? 0.8 : 1}
+                                    onPress={() => onExerciseInfo?.(exerciseId, exerciseName)}
+                                    style={styles.exerciseHeader}
+                                    disabled={!onExerciseInfo}
+                                >
+                                    <Text style={styles.exerciseName}>{exerciseName}</Text>
+                                    {onExerciseInfo && <Feather name="chevron-right" size={18} color={theme.textSecondary} />}
+                                </TouchableOpacity>
+
+                                {exerciseNote && (
+                                    <View style={styles.noteContainer}>
+                                        <MaterialCommunityIcons
+                                            name="comment-text-outline"
+                                            size={12}
+                                            color={theme.textSecondary}
+                                            style={{ marginTop: 2 }}
+                                        />
+                                        <Text style={styles.noteText}>{exerciseNote}</Text>
+                                    </View>
+                                )}
+
+                                {warmups.length > 0 && (
+                                    <TouchableOpacity
+                                        onPress={(e) => toggleWarmups(exerciseId, e)}
+                                        activeOpacity={0.8}
+                                        style={styles.warmupToggle}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <MaterialCommunityIcons name="fire" size={14} color={theme.textSecondary} />
+                                            <Text style={styles.warmupToggleText}>{warmups.length}</Text>
+                                        </View>
+                                        <Feather
+                                            name={warmupsExpanded ? 'chevron-down' : 'chevron-right'}
+                                            size={16}
+                                            color={theme.textSecondary}
+                                        />
+                                    </TouchableOpacity>
+                                )}
+
+                                <View style={styles.setsContainer}>
+                                    <View style={styles.setsHeaderRow}>
+                                        <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
+                                        <Text style={[styles.colHeader, styles.colHeaderLift]}>LIFT</Text>
+                                        <Text style={[styles.colHeader, styles.colHeader1RM]}>1RM</Text>
+                                    </View>
+                                    {visibleSets.map((set, setIndex) => {
+                                        const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+                                        const setType = set.setType || 'N';
+                                        const isWarmup = setType === 'W';
+                                        const isDrop = setType === 'D';
+
+                                        return (
+                                            <View key={`${set.exerciseHistoryID ?? ''}-${setIndex}`} style={[
+                                                styles.setRowContainer,
+                                                setIndex % 2 === 1 && styles.setRowOdd,
+                                                isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
+                                                isDrop && { backgroundColor: 'rgba(116, 185, 255, 0.05)' },
+                                            ]}>
+                                                <View style={styles.setRow}>
+                                                    <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
+                                                    <Text style={[
+                                                        styles.setLift,
+                                                        isWarmup && styles.setLiftWarmup,
+                                                        isDrop && styles.setLiftDrop,
+                                                    ]}>
+                                                        {set.weight}kg × {set.reps}
+                                                    </Text>
+                                                    <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
+                                                </View>
+                                                {isPR && (
+                                                    <View style={styles.badgeRow}>
+                                                        <View style={{ width: 32 }} />
+                                                        {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
+                                                        {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
+                                                        {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
+                                                    </View>
+                                                )}
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+                        );
+                    })}
+                </View>
+            </ScrollView>
+        </NativeViewGestureHandler>
     );
 };
 
