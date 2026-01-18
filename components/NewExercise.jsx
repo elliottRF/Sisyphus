@@ -27,6 +27,7 @@ const NewExercise = (props) => {
     const [isEditMode, setIsEditMode] = useState(false);
     const [targetModalVisible, setTargetModalVisible] = useState(false);
     const [accessoryModalVisible, setAccessoryModalVisible] = useState(false);
+    const [isCardio, setIsCardio] = useState(false);
 
     // Load exercise data if exerciseID is provided
     useEffect(() => {
@@ -38,6 +39,7 @@ const NewExercise = (props) => {
 
                 if (exercise) {
                     setExerciseName(exercise.name);
+                    setIsCardio(!!exercise.isCardio);
 
                     // Parse target muscles
                     const targets = exercise.targetMuscle ? exercise.targetMuscle.split(',').map((m) => m.trim()) : [];
@@ -109,10 +111,11 @@ const NewExercise = (props) => {
                 props.exerciseID,
                 exerciseName,
                 formatListToString(targetSelected),
-                formatListToString(accessorySelected)
+                formatListToString(accessorySelected),
+                isCardio ? 1 : 0
             );
         } else {
-            await insertExercise(exerciseName, formatListToString(targetSelected), formatListToString(accessorySelected));
+            await insertExercise(exerciseName, formatListToString(targetSelected), formatListToString(accessorySelected), isCardio ? 1 : 0);
         }
 
         props.close();
@@ -190,25 +193,36 @@ const NewExercise = (props) => {
                         keyboardType="default"
                     />
 
-                    <View style={styles.dropdownContainer}>
-                        <Text style={styles.label}>Target Muscles</Text>
-                        <TouchableOpacity style={styles.dropdownBox} onPress={() => setTargetModalVisible(true)}>
-                            <Text style={styles.dropdownInput}>
-                                {targetSelected.length > 0 ? targetSelected.join(', ') : 'Select Target Muscles'}
-                            </Text>
-                            <Feather name="chevron-down" size={20} color={theme.textSecondary} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                        <Text style={styles.label}>Cardio Exercise</Text>
+                        <TouchableOpacity onPress={() => setIsCardio(!isCardio)}>
+                            <Feather name={isCardio ? "check-square" : "square"} size={24} color={theme.text} />
                         </TouchableOpacity>
                     </View>
 
-                    <View style={styles.dropdownContainer}>
-                        <Text style={styles.label}>Accessory Muscles</Text>
-                        <TouchableOpacity style={styles.dropdownBox} onPress={() => setAccessoryModalVisible(true)}>
-                            <Text style={styles.dropdownInput}>
-                                {accessorySelected.length > 0 ? accessorySelected.join(', ') : 'Select Accessory Muscles'}
-                            </Text>
-                            <Feather name="chevron-down" size={20} color={theme.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
+                    {!isCardio && (
+                        <>
+                            <View style={styles.dropdownContainer}>
+                                <Text style={styles.label}>Target Muscles</Text>
+                                <TouchableOpacity style={styles.dropdownBox} onPress={() => setTargetModalVisible(true)}>
+                                    <Text style={styles.dropdownInput}>
+                                        {targetSelected.length > 0 ? targetSelected.join(', ') : 'Select Target Muscles'}
+                                    </Text>
+                                    <Feather name="chevron-down" size={20} color={theme.textSecondary} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.dropdownContainer}>
+                                <Text style={styles.label}>Accessory Muscles</Text>
+                                <TouchableOpacity style={styles.dropdownBox} onPress={() => setAccessoryModalVisible(true)}>
+                                    <Text style={styles.dropdownInput}>
+                                        {accessorySelected.length > 0 ? accessorySelected.join(', ') : 'Select Accessory Muscles'}
+                                    </Text>
+                                    <Feather name="chevron-down" size={20} color={theme.textSecondary} />
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    )}
 
                     <TouchableOpacity onPress={createExercise} activeOpacity={0.8}>
                         <GradientOrView

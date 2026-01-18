@@ -1,17 +1,23 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, runOnJS } from 'react-native-reanimated';
+
 import { MaterialIcons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { COLORS, FONTS } from '../constants/theme';
 import { useFocusEffect } from 'expo-router';
 import Timer from '../app/timer/androidTimerModule';
 
-const RestTimer = () => {
+const RestTimer = forwardRef((props, ref) => {
     const [timeLeft, setTimeLeft] = useState(0);
     const [defaultDuration, setDefaultDuration] = useState(180);
-    const ignorePolls = React.useRef(false);
+    const targetEndTimeRef = useRef(null); // The absolute timestamp when the timer should end
+    const timerRunning = useRef(false); // Track if we consider the timer active
+    const frameIdRef = useRef(null); // RAF ID for smooth UI updates
+
+    console.log("RestTimer Render. timeLeft:", timeLeft);
 
     // Animation values
     const scale = useSharedValue(1);
@@ -32,27 +38,122 @@ const RestTimer = () => {
         }
     };
 
-    // Poll Native Timer
-    useEffect(() => {
-        const id = setInterval(async () => {
-            if (ignorePolls.current) return;
-            const remaining = await Timer.getRemaining();
-            setTimeLeft(remaining);
-        }, 200);
+    // UI Update Loop using requestAnimationFrame for smoothness
+    const updateUI = useCallback(() => {
+        if (!timerRunning.current || !targetEndTimeRef.current) {
+            return;
+        }
 
-        return () => clearInterval(id);
+        const now = Date.now();
+        const diff = targetEndTimeRef.current - now;
+
+        if (diff <= 0) {
+            setTimeLeft(0);
+            timerRunning.current = false;
+            targetEndTimeRef.current = null;
+            return;
+        }
+
+        const secondsRemaining = Math.ceil(diff / 1000);
+        setTimeLeft(secondsRemaining);
+
+        frameIdRef.current = requestAnimationFrame(updateUI);
     }, []);
 
-    const startTimer = () => {
-        if (timeLeft > 0) {
-            Timer.stopTimer();
-        } else {
-            ignorePolls.current = true;
-            setTimeLeft(defaultDuration); // Optimistic start
-            Timer.startTimer(defaultDuration);
+    // Initial Sync
+    useEffect(() => {
+        const syncInitial = async () => {
+            const remaining = await Timer.getRemaining();
+            if (remaining > 0) {
+                targetEndTimeRef.current = Date.now() + (remaining * 1000);
+                timerRunning.current = true;
+                updateUI();
+            }
+        };
+        syncInitial();
 
-            // Resume polling after 1s
-            setTimeout(() => { ignorePolls.current = false; }, 1000);
+        return () => {
+            if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
+        };
+    }, []);
+
+    // Play "Ding" sound helper
+    const playDing = async () => {
+        try {
+            const { sound } = await Audio.Sound.createAsync(
+                require('../assets/notifications/dingnoti.wav'),
+                { volume: 1.0 }
+            );
+            await sound.playAsync();
+
+            // Cleanup when done
+            sound.setOnPlaybackStatusUpdate(async (status) => {
+                if (status.didJustFinish) {
+                    await sound.unloadAsync();
+                }
+            });
+        } catch (error) {
+            console.error("Failed to play ding", error);
+        }
+    };
+
+    useImperativeHandle(ref, () => ({
+        startIfStopped: () => {
+            // Only start if NOT already running
+            if (!timerRunning.current) {
+                console.log("Auto-starting timer from set completion");
+                startTimer();
+            }
+        },
+        stopTimer: () => {
+            if (timerRunning.current) {
+                console.log("Stopping timer from parent");
+                startTimer(); // Toggle off
+            }
+        }
+    }));
+
+    const internalStop = (playAudio = false) => {
+        // Clear Native Persistence (Hack: start with 0 to overwrite any lingering time)
+        Timer.startTimer(0);
+        Timer.stopTimer();
+
+        targetEndTimeRef.current = null;
+        timerRunning.current = false;
+        setTimeLeft(0);
+        if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
+
+        if (playAudio) playDing();
+    };
+
+    useImperativeHandle(ref, () => ({
+        startIfStopped: () => {
+            // Only start if NOT already running
+            if (!timerRunning.current) {
+                console.log("Auto-starting timer from set completion");
+                startTimer();
+            }
+        },
+        stopTimer: () => {
+            if (timerRunning.current) {
+                console.log("Stopping timer from parent (silent)");
+                internalStop(false); // Silent Stop
+            }
+        }
+    }));
+
+    const startTimer = () => {
+        console.log("startTimer called (Tap)");
+
+        if (timerRunning.current) {
+            // STOP (Manual Tap -> Play Sound)
+            internalStop(true);
+        } else {
+            // START
+            targetEndTimeRef.current = Date.now() + (defaultDuration * 1000);
+            timerRunning.current = true;
+            Timer.startTimer(defaultDuration);
+            updateUI(); // Start loop
 
             scale.value = withSequence(
                 withTiming(1.2, { duration: 100 }),
@@ -62,15 +163,28 @@ const RestTimer = () => {
     };
 
     const addTime = () => {
-        if (timeLeft <= 0) return;
-        const newTime = timeLeft + 30;
+        console.log("addTime called (Swipe Up)");
 
-        ignorePolls.current = true;
-        setTimeLeft(newTime); // Optimistic update
-        Timer.startTimer(newTime);
+        // If not running, assume starting from 0? Or just return? 
+        // Assuming we want to start it if stopped, or add to it if running.
+        let newDuration = 30;
 
-        // Resume polling after 1s
-        setTimeout(() => { ignorePolls.current = false; }, 1000);
+        if (timerRunning.current && targetEndTimeRef.current) {
+            const currentRemaining = Math.max(0, Math.ceil((targetEndTimeRef.current - Date.now()) / 1000));
+            newDuration = currentRemaining + 30;
+        }
+
+        targetEndTimeRef.current = Date.now() + (newDuration * 1000);
+        timerRunning.current = true;
+
+        // Optimistically update immediately
+        setTimeLeft(newDuration);
+
+        Timer.startTimer(newDuration); // Sync native
+
+        // Ensure loop is running
+        if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
+        updateUI();
 
         translateY.value = withSequence(
             withTiming(-10, { duration: 100 }),
@@ -79,17 +193,21 @@ const RestTimer = () => {
     };
 
     const subtractTime = () => {
-        if (timeLeft <= 0) return;
-        const newTime = Math.max(0, timeLeft - 30);
+        if (!timerRunning.current || !targetEndTimeRef.current) return;
 
-        ignorePolls.current = true;
-        setTimeLeft(newTime); // Optimistic update
+        const currentRemaining = Math.max(0, Math.ceil((targetEndTimeRef.current - Date.now()) / 1000));
+        const newDuration = Math.max(0, currentRemaining - 30);
 
-        if (newTime === 0) Timer.stopTimer();
-        else Timer.startTimer(newTime);
-
-        // Resume polling after 1s
-        setTimeout(() => { ignorePolls.current = false; }, 1000);
+        if (newDuration === 0) {
+            internalStop(true); // Manual Swipe to 0 -> Play Sound
+        } else {
+            targetEndTimeRef.current = Date.now() + (newDuration * 1000);
+            setTimeLeft(newDuration);
+            Timer.startTimer(newDuration);
+            // Ensure loop is running
+            if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
+            updateUI();
+        }
 
         translateY.value = withSequence(
             withTiming(10, { duration: 100 }),
@@ -119,7 +237,7 @@ const RestTimer = () => {
             }
         });
 
-    const composed = Gesture.Simultaneous(tap, pan);
+    const composed = Gesture.Race(pan, tap);
 
     const rStyle = useAnimatedStyle(() => {
         return {
@@ -141,7 +259,7 @@ const RestTimer = () => {
             </Animated.View>
         </GestureDetector>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {

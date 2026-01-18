@@ -81,7 +81,7 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
     const pan = Gesture.Pan()
         .activeOffsetX([-10, 10])
         .failOffsetY([-5, 5])
-        .simultaneousWithExternalGesture(simultaneousHandlers)
+        .failOffsetY([-5, 5])
         .onUpdate((event) => {
             if (isExerciseDragging) return;
             translateX.value = Math.min(event.translationX, 0);
@@ -135,7 +135,7 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
     );
 };
 
-const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, onOpenDetails, simultaneousHandlers }) => {
+const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, onOpenDetails, simultaneousHandlers, onSetComplete, isCardio }) => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
     const [isNoteVisible, setIsNoteVisible] = useState(false);
@@ -163,9 +163,18 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     const handleRepsChange = (text, setIndex) => {
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, reps: text } : s) } : e) } : w));
     };
+    const handleDistanceChange = (text, setIndex) => {
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, distance: text } : s) } : e) } : w));
+    };
+    const handleMinutesChange = (text, setIndex) => {
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: text } : s) } : e) } : w));
+    };
     const toggleSetComplete = (setIndex) => {
         const set = exercise.sets[setIndex];
-        if (!set.completed) Keyboard.dismiss();
+        if (!set.completed) {
+            Keyboard.dismiss();
+            if (onSetComplete) onSetComplete();
+        }
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
     };
     const toggleSetType = (setIndex) => {
@@ -175,7 +184,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, notes: text } : e) } : w));
     };
     const addNewSet = () => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: [...e.sets, { id: Date.now().toString() + Math.random().toString(36).substr(2, 9), weight: null, reps: null, completed: false, setType: 'N' }] } : e) } : w));
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: [...e.sets, { id: Date.now().toString() + Math.random().toString(36).substr(2, 9), weight: null, reps: null, distance: null, minutes: null, completed: false, setType: 'N' }] } : e) } : w));
     };
     const deleteSet = (setIndex) => {
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.filter((_, i) => i !== setIndex) } : e) } : w));
@@ -242,8 +251,8 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
             <View style={styles.tableHeader}>
                 <Text style={[styles.columnHeader, styles.colSet]}>SET</Text>
                 <Text style={[styles.columnHeader, styles.colPrev]}>PREVIOUS</Text>
-                <Text style={[styles.columnHeader, styles.colKg]}>KG</Text>
-                <Text style={[styles.columnHeader, styles.colReps]}>REPS</Text>
+                <Text style={[styles.columnHeader, styles.colKg]}>{isCardio ? "DIST (km)" : "KG"}</Text>
+                <Text style={[styles.columnHeader, styles.colReps]}>{isCardio ? "TIME (min)" : "REPS"}</Text>
                 <View style={styles.colCheck}><Feather name="check" size={12} color={theme.textSecondary} /></View>
             </View>
 
@@ -262,7 +271,13 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                     if (set.setType !== 'W') {
                         const prevSet = previousSets[previousSetIndex];
                         if (prevSet) {
-                            prevSetText = `${prevSet.weight} × ${prevSet.reps}`;
+                            if (isCardio) {
+                                // Convert previous seconds to minutes for display
+                                const prevMins = prevSet.seconds ? (prevSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : '0';
+                                prevSetText = `${prevSet.distance || 0}km / ${prevMins}m`;
+                            } else {
+                                prevSetText = `${prevSet.weight} × ${prevSet.reps}`;
+                            }
                             previousSetIndex++;
                         }
                     }
@@ -301,8 +316,8 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                 <View style={styles.colKg}>
                                     <ScrollableInput
                                         style={styles.inputContainer}
-                                        value={set.weight?.toString()}
-                                        onChangeText={(text) => handleWeightChange(text, index)}
+                                        value={isCardio ? set.distance?.toString() : set.weight?.toString()}
+                                        onChangeText={(text) => isCardio ? handleDistanceChange(text, index) : handleWeightChange(text, index)}
                                         placeholder="-"
                                         placeholderTextColor={theme.textSecondary}
                                         keyboardType="numeric"
@@ -316,8 +331,8 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                 <View style={styles.colReps}>
                                     <ScrollableInput
                                         style={styles.inputContainer}
-                                        value={set.reps?.toString()}
-                                        onChangeText={(text) => handleRepsChange(text, index)}
+                                        value={isCardio ? set.minutes?.toString() : set.reps?.toString()}
+                                        onChangeText={(text) => isCardio ? handleMinutesChange(text, index) : handleRepsChange(text, index)}
                                         placeholder="-"
                                         placeholderTextColor={theme.textSecondary}
                                         keyboardType="numeric"

@@ -22,7 +22,8 @@ export const setupDatabase = async () => {
         exerciseID INTEGER PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
         targetMuscle TEXT NOT NULL,
-        accessoryMuscles TEXT
+        accessoryMuscles TEXT,
+        isCardio INTEGER DEFAULT 0
       );
       
       CREATE TABLE IF NOT EXISTS workoutHistory (
@@ -37,9 +38,30 @@ export const setupDatabase = async () => {
         name TEXT,
         pr INTEGER,
         duration INTEGER,
+        setType TEXT,
+        notes TEXT,
+        is1rmPR INTEGER DEFAULT 0,
+        isVolumePR INTEGER DEFAULT 0,
+        isWeightPR INTEGER DEFAULT 0,
+        distance FLOAT,
+        seconds INTEGER,
         FOREIGN KEY (exerciseID) REFERENCES exercises(exerciseID)
       );
     `);
+
+    // Helper to ensure column exists
+    const ensureColumnExists = async (tableName, columnName, formattedDefinition) => {
+      try {
+        const tableInfo = await database.getAllAsync(`PRAGMA table_info(${tableName});`);
+        const columnExists = tableInfo.some(col => col.name === columnName);
+        if (!columnExists) {
+          console.log(`Adding missing column ${columnName} to ${tableName}...`);
+          await database.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${formattedDefinition};`);
+        }
+      } catch (e) {
+        console.log(`Error checking/adding column ${columnName} to ${tableName}:`, e);
+      }
+    };
 
     // Check if exercises table is empty before populating
     const result = await database.getFirstAsync('SELECT COUNT(*) as count FROM exercises;');
@@ -47,48 +69,25 @@ export const setupDatabase = async () => {
 
     // Only populate if the table is empty
     if (count === 0) {
-      for (const { exerciseID, name, targetMuscle, accessoryMuscles } of exerciseData) {
+      for (const { exerciseID, name, targetMuscle, accessoryMuscles, cardio } of exerciseData) {
         await database.runAsync(
-          `INSERT OR REPLACE INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles) 
-           VALUES (?, ?, ?, ?);`,
-          [exerciseID, name, targetMuscle, accessoryMuscles]
+          `INSERT OR REPLACE INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles, isCardio) 
+           VALUES (?, ?, ?, ?, ?);`,
+          [exerciseID, name, targetMuscle, accessoryMuscles, cardio ? 1 : 0]
         );
       }
     }
 
-    // Migration: Add duration column if it doesn't exist
-    try {
-      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN duration INTEGER;');
-    } catch (e) {
-      // Column likely already exists, ignore error
-    }
-
-    // Migration: Add setType and notes columns
-    try {
-      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN setType TEXT;');
-    } catch (e) {
-      if (!e.message.includes('duplicate column name')) {
-        console.log('Migration error (setType):', e);
-      }
-    }
-    try {
-      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN notes TEXT;');
-    } catch (e) {
-      if (!e.message.includes('duplicate column name')) {
-        console.log('Migration error (notes):', e);
-      }
-    }
-
-    // Migration: Add new PR columns
-    try {
-      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN is1rmPR INTEGER DEFAULT 0;');
-    } catch (e) { }
-    try {
-      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN isVolumePR INTEGER DEFAULT 0;');
-    } catch (e) { }
-    try {
-      await database.execAsync('ALTER TABLE workoutHistory ADD COLUMN isWeightPR INTEGER DEFAULT 0;');
-    } catch (e) { }
+    // Migrations using helper
+    await ensureColumnExists('workoutHistory', 'duration', 'INTEGER');
+    await ensureColumnExists('workoutHistory', 'setType', 'TEXT');
+    await ensureColumnExists('workoutHistory', 'notes', 'TEXT');
+    await ensureColumnExists('workoutHistory', 'is1rmPR', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('workoutHistory', 'isVolumePR', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('workoutHistory', 'isWeightPR', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('exercises', 'isCardio', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('workoutHistory', 'distance', 'FLOAT');
+    await ensureColumnExists('workoutHistory', 'seconds', 'INTEGER');
 
     // Create pinnedExercises table
     await database.execAsync(`
@@ -112,13 +111,13 @@ export const fetchExercises = async () => {
 };
 
 // Insert exercise entries
-export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscles) => {
+export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscles, isCardio = 0) => {
   const database = await getDb();
   try {
     await database.runAsync(
-      `INSERT INTO exercises (name, targetMuscle, accessoryMuscles) 
-       VALUES (?, ?, ?);`,
-      [exerciseName, targetMuscles, accessoryMuscles]
+      `INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio) 
+       VALUES (?, ?, ?, ?);`,
+      [exerciseName, targetMuscles, accessoryMuscles, isCardio]
     );
     return "Exercise inserted successfully!";
   } catch (error) {
@@ -130,14 +129,14 @@ export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscl
 };
 
 // Update existing exercise
-export const updateExercise = async (exerciseID, exerciseName, targetMuscles, accessoryMuscles) => {
+export const updateExercise = async (exerciseID, exerciseName, targetMuscles, accessoryMuscles, isCardio = 0) => {
   const database = await getDb();
   try {
     await database.runAsync(
       `UPDATE exercises 
-       SET name = ?, targetMuscle = ?, accessoryMuscles = ? 
+       SET name = ?, targetMuscle = ?, accessoryMuscles = ?, isCardio = ? 
        WHERE exerciseID = ?;`,
-      [exerciseName, targetMuscles, accessoryMuscles, exerciseID]
+      [exerciseName, targetMuscles, accessoryMuscles, isCardio, exerciseID]
     );
     return "Exercise updated successfully!";
   } catch (error) {
@@ -170,8 +169,8 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
     for (const entry of workoutEntries) {
       await database.runAsync(
         `INSERT INTO workoutHistory 
-        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR, distance, seconds) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           entry.workoutSession,
           entry.exerciseNum,
@@ -182,13 +181,15 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
           entry.oneRM,
           entry.time,
           workoutTitle,
-          entry.pr, // Keeping this for backward compatibility or as a general "is any PR" flag? Plan says to use specific flags. Let's keep it as is1rmPR for now or just map it.
+          entry.pr,
           duration,
-          entry.setType || 'N', // Default to Normal
+          entry.setType || 'N',
           entry.notes || '',
           entry.is1rmPR || 0,
           entry.isVolumePR || 0,
-          entry.isWeightPR || 0
+          entry.isWeightPR || 0,
+          entry.distance || null,
+          entry.seconds || null
         ]
       );
     }
@@ -230,8 +231,8 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
       for (const entry of workoutEntries) {
         await database.runAsync(
           `INSERT INTO workoutHistory 
-           (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+           (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR, distance, seconds) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
           [
             sessionNumber, // Use the existing sessionNumber
             entry.exerciseNum,
@@ -248,7 +249,9 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
             entry.notes || '',
             entry.is1rmPR || 0,
             entry.isVolumePR || 0,
-            entry.isWeightPR || 0
+            entry.isWeightPR || 0,
+            entry.distance || null,
+            entry.seconds || null
           ]
         );
         setsOverwritten++;
@@ -433,6 +436,13 @@ export const fetchRecentMuscleUsage = async (days) => {
 export const importStrongData = async (csvContent, progressCallback = null) => {
   const database = await getDb();
 
+  const cleanFloat = (val) => {
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    const cleanup = val.toString().replace(/,/g, '').replace(/[^\d.-]/g, '');
+    return parseFloat(cleanup) || 0;
+  };
+
   return new Promise((resolve, reject) => {
     Papa.parse(csvContent, {
       header: true,
@@ -445,6 +455,9 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           if (progressCallback) {
             progressCallback({ stage: 'parsing', current: totalRows, total: totalRows });
           }
+
+          console.log("First row keys:", Object.keys(rows[0]));
+          console.log("First row sample:", rows[0]);
 
           // Pre-process: Group rows by date
           const workoutMap = new Map();
@@ -460,8 +473,11 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             const exerciseName = row['Exercise Name'].trim();
             const dateKey = new Date(row['Date']).getTime();
 
-            // Handle Notes Row
-            if (row['Set Order'] === 'Note') {
+            // Handle Notes Row (Case-insensitive match)
+            // Some CSV exports might have "Note" or "note" or "Note "
+            const setOrderRaw = row['Set Order'] ? row['Set Order'].toString().trim() : '';
+
+            if (setOrderRaw.toLowerCase() === 'note') {
               if (!notesMap.has(dateKey)) {
                 notesMap.set(dateKey, new Map());
               }
@@ -477,13 +493,34 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             const durationMinutes = Math.floor(durationSeconds / 60);
             const workoutTitle = row['Workout Name'] || 'Strong Import';
 
-            let setNum = parseInt(row['Set Order'], 10);
+            // Cardio Parsing - Normalize keys for safer lookup
+            // Find keys that resemble distance/time
+            const keys = Object.keys(row);
+            const distKey = keys.find(k => k.toLowerCase().includes('distance') || k.toLowerCase().includes('meters'));
+            const timeKey = keys.find(k => k.toLowerCase() === 'seconds' || k.toLowerCase() === 'time');
+
+            const distanceVal = distKey ? row[distKey] : 0;
+            const distanceMeters = cleanFloat(distanceVal);
+
+            const timeVal = timeKey ? row[timeKey] : 0;
+            const cardiosSeconds = cleanFloat(timeVal);
+
+            const distanceKm = distanceMeters > 0 ? distanceMeters / 1000 : 0;
+
+            // Determine if this specific set is a cardio set
+            const isCardioSet = distanceMeters > 0 || cardiosSeconds > 0;
+
+            if (exerciseName.toLowerCase().includes('run') || exerciseName.toLowerCase().includes('cardio')) {
+              console.log(`[Import Debug] ${exerciseName}: RawDist=${distanceVal} CleanDist=${distanceMeters} RawTime=${timeVal} CleanTime=${cardiosSeconds}`);
+            }
+
+            let setNum = parseInt(setOrderRaw, 10);
             let setType = 'N';
 
-            if (row['Set Order'] === 'W' || (row['Set Order'] && row['Set Order'].toString().toUpperCase().includes('W'))) {
+            if (setOrderRaw.toUpperCase() === 'W' || setOrderRaw.toUpperCase().includes('W')) {
               setType = 'W';
               setNum = 0;
-            } else if (row['Set Order'] === 'D' || (row['Set Order'] && row['Set Order'].toString().toUpperCase().includes('D'))) {
+            } else if (setOrderRaw.toUpperCase() === 'D' || setOrderRaw.toUpperCase().includes('D')) {
               setType = 'D';
               setNum = 0;
             }
@@ -509,7 +546,10 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               date,
               workoutTitle,
               durationMinutes,
-              setType
+              setType,
+              distance: distanceKm > 0 ? distanceKm : null,
+              seconds: cardiosSeconds > 0 ? cardiosSeconds : null,
+              isCardio: isCardioSet
             };
 
             if (!workoutMap.has(dateKey)) {
@@ -562,16 +602,24 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                 // Get or create exercise
                 let exerciseID;
                 const existingExercise = await database.getFirstAsync(
-                  'SELECT exerciseID FROM exercises WHERE name = ?',
+                  'SELECT exerciseID, isCardio FROM exercises WHERE name = ?',
                   [exerciseName]
                 );
 
+                // Detect if this exercise should be marked as cardio based on imports
+                // If ANY set in the import has cardio data, we treat the exercise as cardio capable
+                const hasCardioData = sets.some(s => s.isCardio);
+
                 if (existingExercise) {
                   exerciseID = existingExercise.exerciseID;
+                  // If we found cardio data, ALWAYS enable cardio on the exercise, even if previously false
+                  if (hasCardioData) {
+                    await database.runAsync('UPDATE exercises SET isCardio = 1 WHERE exerciseID = ?', [exerciseID]);
+                  }
                 } else {
                   const result = await database.runAsync(
-                    'INSERT INTO exercises (name, targetMuscle, accessoryMuscles) VALUES (?, ?, ?)',
-                    [exerciseName, '', '']
+                    'INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio) VALUES (?, ?, ?, ?)',
+                    [exerciseName, '', '', hasCardioData ? 1 : 0]
                   );
                   exerciseID = result.lastInsertRowId;
                 }
@@ -638,11 +686,11 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
                   await database.runAsync(
                     `INSERT INTO workoutHistory 
-                    (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                    (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR, distance, seconds) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
                     [
                       workoutSession,
-                      exerciseNumInSession,  // FIXED: Use proper exerciseNum
+                      exerciseNumInSession,
                       set.setNum,
                       exerciseID,
                       set.weight,
@@ -656,7 +704,9 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                       note,
                       isThisSet1rmPR,
                       isThisSetVolumePR,
-                      isThisSetWeightPR
+                      isThisSetWeightPR,
+                      set.distance,
+                      set.seconds
                     ]
                   );
 

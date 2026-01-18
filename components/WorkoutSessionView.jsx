@@ -255,8 +255,8 @@ const WorkoutSessionView = ({ workoutDetails, exercisesList, onEdit, onExerciseI
                                 <View style={styles.setsContainer}>
                                     <View style={styles.setsHeaderRow}>
                                         <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
-                                        <Text style={[styles.colHeader, styles.colHeaderLift]}>LIFT</Text>
-                                        <Text style={[styles.colHeader, styles.colHeader1RM]}>1RM</Text>
+                                        <Text style={[styles.colHeader, styles.colHeaderLift]}>{exerciseDetails?.isCardio ? "DIST / TIME" : "LIFT"}</Text>
+                                        <Text style={[styles.colHeader, styles.colHeader1RM]}>{exerciseDetails?.isCardio ? "PACE" : "1RM"}</Text>
                                     </View>
                                     {visibleSets.map((set, setIndex) => {
                                         const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
@@ -278,9 +278,19 @@ const WorkoutSessionView = ({ workoutDetails, exercisesList, onEdit, onExerciseI
                                                         isWarmup && styles.setLiftWarmup,
                                                         isDrop && styles.setLiftDrop,
                                                     ]}>
-                                                        {set.weight}kg × {set.reps}
+                                                        {exerciseDetails?.isCardio ? (
+                                                            `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)}m`
+                                                        ) : (
+                                                            `${set.weight}kg × ${set.reps}`
+                                                        )}
                                                     </Text>
-                                                    <Text style={styles.setOneRM}>{set.oneRM ? Math.round(set.oneRM) : '-'}</Text>
+                                                    <Text style={styles.setOneRM}>
+                                                        {exerciseDetails?.isCardio ? (
+                                                            set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} m/k` : '-'
+                                                        ) : (
+                                                            set.oneRM ? Math.round(set.oneRM) : '-'
+                                                        )}
+                                                    </Text>
                                                 </View>
                                                 {isPR && (
                                                     <View style={styles.badgeRow}>

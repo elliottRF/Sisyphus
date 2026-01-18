@@ -97,7 +97,7 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
     );
 });
 
-const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect }) => {
+const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect, exercisesList }) => {
     const [isLoading, setIsLoading] = useState(false);
 
     const handlePress = async () => {
@@ -128,6 +128,21 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
         }
         return { ...set, displayNumber };
     });
+
+    // Check if cardio:
+    // 1. Check prop passed directly (if available) -> This would be ideal but not always passed
+    // 2. Check exercise list details (most reliable if list is populated)
+    // 3. Inference from data (fallback)
+    const exerciseID = exercises[0]?.exerciseID;
+    const exerciseDetails = exercisesList ? exercisesList.find(e => e.exerciseID === exerciseID) : null;
+
+    const isCardio = exerciseDetails
+        ? exerciseDetails.isCardio === 1
+        : exercises.some(ex => ex.distance > 0 || ex.seconds > 0);
+
+    if (isCardio) {
+        console.log(`[HistorySessionCard] Cardio Session ${session}:`, exercises);
+    }
 
     return (
         <TouchableOpacity
@@ -171,8 +186,8 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                 <View style={styles.setsContainer}>
                     <View style={styles.setsHeaderRow}>
                         <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
-                        <Text style={[styles.colHeader, styles.colHeaderLift]}>LIFT</Text>
-                        <Text style={[styles.colHeader, styles.colHeader1RM]}>1RM</Text>
+                        <Text style={[styles.colHeader, styles.colHeaderLift]}>{isCardio ? "DIST / TIME" : "LIFT"}</Text>
+                        <Text style={[styles.colHeader, styles.colHeader1RM]}>{isCardio ? "PACE" : "1RM"}</Text>
                     </View>
 
                     {setsWithDisplayNumbers.map((set, setIndex) => {
@@ -201,11 +216,19 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                                             isDrop && styles.setLiftDrop,
                                         ]}
                                     >
-                                        {set.weight}kg × {set.reps}
+                                        {isCardio ? (
+                                            `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)}m`
+                                        ) : (
+                                            `${set.weight}kg × ${set.reps}`
+                                        )}
                                     </Text>
 
                                     <Text style={styles.setOneRM}>
-                                        {set.oneRM ? Math.round(set.oneRM) : '-'}
+                                        {isCardio ? (
+                                            set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)}` : '-'
+                                        ) : (
+                                            set.oneRM ? Math.round(set.oneRM) : '-'
+                                        )}
                                     </Text>
                                 </View>
 
@@ -439,26 +462,28 @@ const ExerciseHistory = (props) => {
                             </View>
                         </View>
 
-                        <View style={styles.bodyContainer}>
-                            <Body
-                                data={formattedTargets}
-                                gender={gender}
-                                side="front"
-                                scale={0.7}
-                                border={safeBorder}
-                                colors={bodyColors}
-                                defaultFill={theme.bodyFill}
-                            />
-                            <Body
-                                data={formattedTargets}
-                                gender={gender}
-                                side="back"
-                                scale={0.7}
-                                border={safeBorder}
-                                colors={bodyColors}
-                                defaultFill={theme.bodyFill}
-                            />
-                        </View>
+                        {!exercisesList.find(e => e.exerciseID === props.exerciseID)?.isCardio && (
+                            <View style={styles.bodyContainer}>
+                                <Body
+                                    data={formattedTargets}
+                                    gender={gender}
+                                    side="front"
+                                    scale={0.7}
+                                    border={safeBorder}
+                                    colors={bodyColors}
+                                    defaultFill={theme.bodyFill}
+                                />
+                                <Body
+                                    data={formattedTargets}
+                                    gender={gender}
+                                    side="back"
+                                    scale={0.7}
+                                    border={safeBorder}
+                                    colors={bodyColors}
+                                    defaultFill={theme.bodyFill}
+                                />
+                            </View>
+                        )}
 
                         <PRGraphCard
                             exerciseID={props.exerciseID}
@@ -499,6 +524,7 @@ const ExerciseHistory = (props) => {
                         styles={styles}
                         formatDate={formatDate}
                         onSessionSelect={handleSessionSelect}
+                        exercisesList={exercisesList}
                     />
                 )}
                 ListEmptyComponent={

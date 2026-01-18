@@ -37,6 +37,10 @@ class TimerService : Service() {
     when (intent?.action) {
       "start" -> {
         remaining = intent.getIntExtra("seconds", 0)
+        getSharedPreferences("timer", MODE_PRIVATE)
+          .edit()
+          .putInt("remaining", remaining)
+          .apply()
         startTimer()
       }
       "stop" -> stopSelf()

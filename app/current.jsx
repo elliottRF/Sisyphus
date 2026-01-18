@@ -41,9 +41,10 @@ const Current = () => {
     const [startTime, setStartTime] = useState(null);
     const [isReady, setIsReady] = useState(false);
 
-    // Ref for ReorderableList
+    const actionSheetRef = useRef(null);
+    const restTimerRef = useRef(null);
     const listRef = useRef(null);
-
+    const isFirstLaunch = useRef(true);
 
 
     const startWorkout = async () => {
@@ -62,6 +63,7 @@ const Current = () => {
     const clearWorkout = async () => {
         setCurrentWorkout([]);
         setStartTime(null);
+        restTimerRef.current?.stopTimer();
         await AsyncStorage.removeItem('@currentWorkout');
         await AsyncStorage.removeItem('@workoutStartTime');
     };
@@ -78,7 +80,6 @@ const Current = () => {
         return Math.round(oneRepMax * 100) / 100; // Truncates to 2 decimal places
     };
 
-    const actionSheetRef = useRef(null);
     const exerciseInfoActionSheetRef = useRef(null);
 
     const [currentWorkout, setCurrentWorkout] = useState([]);
@@ -105,7 +106,10 @@ const Current = () => {
                 exercises: exerciseGroup.exercises.map(exercise => ({
                     ...exercise,
                     sets: exercise.sets.filter(set =>
-                        set.weight !== null && set.reps !== null && set.completed
+                        set.completed && (
+                            (set.weight !== null && set.reps !== null) ||
+                            (set.distance !== null && set.minutes !== null)
+                        )
                     )
                 }))
             }));
@@ -128,18 +132,18 @@ const Current = () => {
                     for (const set of exercise.sets) {
                         // Calculate One Rep Max
                         const calculatedOneRM = calculateOneRepMax(
-                            parseFloat(set.weight),
-                            parseInt(set.reps)
+                            parseFloat(set.weight) || 0,
+                            parseInt(set.reps) || 0
                         );
-                        if (calculatedOneRM > maxOneRM) maxOneRM = calculatedOneRM;
+                        if (calculatedOneRM > maxOneRM) maxOneRM = calculatedOneOneRM;
 
                         // Calculate Volume
-                        const volume = parseFloat(set.weight) * parseInt(set.reps);
+                        const volume = (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0);
                         if (volume > maxVolume) maxVolume = volume;
 
                         // Calculate Weight (ignore 0 reps)
-                        const weight = parseFloat(set.weight);
-                        const reps = parseInt(set.reps);
+                        const weight = parseFloat(set.weight) || 0;
+                        const reps = parseInt(set.reps) || 0;
                         if (reps > 0) {
                             if (weight > maxWeight) {
                                 maxWeight = weight;
@@ -186,12 +190,12 @@ const Current = () => {
                     for (const set of exercise.sets) {
                         // Calculate metrics for the set
                         const calculatedOneRM = calculateOneRepMax(
-                            parseFloat(set.weight),
-                            parseInt(set.reps)
+                            parseFloat(set.weight) || 0,
+                            parseInt(set.reps) || 0
                         );
-                        const volume = parseFloat(set.weight) * parseInt(set.reps);
-                        const weight = parseFloat(set.weight);
-                        const reps = parseInt(set.reps);
+                        const volume = (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0);
+                        const weight = parseFloat(set.weight) || 0;
+                        const reps = parseInt(set.reps) || 0;
 
                         // Determine if this specific set is the PR-setting set
                         // Logic: Must match the workout max AND represent an overall PR AND not have been assigned yet
@@ -232,7 +236,10 @@ const Current = () => {
                             notes: exercise.notes || '',
                             is1rmPR: is1rmPR,
                             isVolumePR: isVolumePR,
-                            isWeightPR: isWeightPR
+                            isWeightPR: isWeightPR,
+                            isWeightPR: isWeightPR,
+                            distance: set.distance || null,
+                            seconds: set.minutes ? Math.round(parseFloat(set.minutes) * 60) : null
                         });
 
                         setNum++;
@@ -256,6 +263,7 @@ const Current = () => {
             setCurrentWorkout([]);
             setStartTime(null);
             setWorkoutTitle("New Workout");
+            restTimerRef.current?.stopTimer();
             console.log("Workout saved successfully");
         }
         catch (error) {
@@ -383,6 +391,8 @@ const Current = () => {
                                 id: generateId(),
                                 weight: null,
                                 reps: null,
+                                distance: null,
+                                minutes: null,
                                 setType: 'N' // Normal
                             }
                         ],
@@ -397,6 +407,11 @@ const Current = () => {
     const handleReorder = useCallback(({ from, to }) => {
         setCurrentWorkout((prevWorkout) => reorderItems(prevWorkout, from, to));
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }, []);
+
+    const handleSetComplete = useCallback(() => {
+        console.log("Set completed, checking timer...");
+        restTimerRef.current?.startIfStopped();
     }, []);
 
     // Render function for each item
@@ -418,12 +433,14 @@ const Current = () => {
                             updateCurrentWorkout={setCurrentWorkout}
                             onOpenDetails={() => showExerciseInfo(exerciseDetails)}
                             simultaneousHandlers={listRef}
+                            onSetComplete={handleSetComplete}
+                            isCardio={!!exerciseDetails?.isCardio}
                         />
                     );
                 })}
             </View>
         );
-    }, [setCurrentWorkout, exercises]);
+    }, [setCurrentWorkout, exercises, handleSetComplete]);
 
     // Pan gesture configuration to work with swipeable rows
     const panGesture = useMemo(
@@ -502,7 +519,7 @@ const Current = () => {
                                         {startTime && (
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                                 <Timer startTime={startTime} />
-                                                <RestTimer />
+                                                <RestTimer ref={restTimerRef} />
                                             </View>
                                         )}
                                     </View>
@@ -519,8 +536,6 @@ const Current = () => {
                                     style={styles.list}
                                     contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                                     keyboardShouldPersistTaps="handled"
-                                    keyboardDismissMode="on-drag"
-                                    updateActiveItem
                                     ListFooterComponent={
                                         <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
                                             <TouchableOpacity

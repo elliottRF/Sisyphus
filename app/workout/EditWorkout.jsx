@@ -86,6 +86,8 @@ const EditWorkout = () => {
                                 id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                                 weight: null,
                                 reps: null,
+                                minutes: null,
+                                distance: null,
                                 setType: 'N',
                                 completed: false,
                             }
@@ -135,6 +137,7 @@ const EditWorkout = () => {
                             updateCurrentWorkout={setCurrentWorkout}
                             onOpenDetails={() => showExerciseInfo(exerciseDetails)}
                             simultaneousHandlers={listRef}
+                            isCardio={exerciseDetails ? exerciseDetails.isCardio : false}
                         />
                     );
                 })}
@@ -161,7 +164,10 @@ const EditWorkout = () => {
                 exercises: exerciseGroup.exercises.map(exercise => ({
                     ...exercise,
                     sets: exercise.sets.filter(set =>
-                        set.weight !== null && set.reps !== null && set.completed
+                        set.completed && (
+                            (set.weight !== null && set.reps !== null) ||
+                            (set.distance !== null && set.minutes !== null)
+                        )
                     )
                 }))
             }));
@@ -271,7 +277,10 @@ const EditWorkout = () => {
                             notes: exercise.notes || '',
                             is1rmPR: is1rmPR,
                             isVolumePR: isVolumePR,
-                            isWeightPR: isWeightPR
+                            isVolumePR: isVolumePR,
+                            isWeightPR: isWeightPR,
+                            distance: set.distance || null,
+                            seconds: set.minutes ? Math.round(parseFloat(set.minutes) * 60) : null
                         });
 
                         setNum++;
@@ -397,6 +406,8 @@ const EditWorkout = () => {
                             id: `set-${row.exerciseNum}-${row.setNum}-${index}`,
                             weight: parseFloat(row.weight),
                             reps: parseInt(row.reps),
+                            distance: row.distance || null,
+                            minutes: row.seconds ? (row.seconds / 60).toString() : null,
                             setType: row.setType || 'N',
                             completed: true,
                         });

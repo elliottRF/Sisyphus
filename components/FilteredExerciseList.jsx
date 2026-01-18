@@ -35,7 +35,9 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
                             {
                                 id: generateId(),
                                 weight: null,
-                                reps: null
+                                reps: null,
+                                distance: null,
+                                minutes: null
                             }
                         ]
                     }
