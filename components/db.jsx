@@ -486,6 +486,12 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               continue;
             }
 
+            // Handle Rest Timer Row
+            // These rows often contain duration but aren't actual sets
+            if (setOrderRaw.toLowerCase().includes('rest timer')) {
+              continue;
+            }
+
             // Parse Data
             const weight = parseFloat(row['Weight (kg)']) || 0;
             const reps = parseInt(row['Reps'], 10) || 0;
@@ -508,10 +514,12 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             const distanceKm = distanceMeters > 0 ? distanceMeters / 1000 : 0;
 
             // Determine if this specific set is a cardio set
+            // USER RULE: If Distance OR Seconds has a value, it is Cardio.
+            // (Even if Reps > 0. We trust the CSV columns, having filtered out Rest Timers).
             const isCardioSet = distanceMeters > 0 || cardiosSeconds > 0;
 
-            if (exerciseName.toLowerCase().includes('run') || exerciseName.toLowerCase().includes('cardio')) {
-              console.log(`[Import Debug] ${exerciseName}: RawDist=${distanceVal} CleanDist=${distanceMeters} RawTime=${timeVal} CleanTime=${cardiosSeconds}`);
+            if (isCardioSet) {
+              console.log(`[Import Match] ${exerciseName}: Dist=${distanceMeters} Time=${cardiosSeconds}`);
             }
 
             let setNum = parseInt(setOrderRaw, 10);
@@ -584,6 +592,9 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           const exerciseBestRepsAtMaxWeight = new Map();
           let importedCount = 0;
 
+          // Track which exercises we've seen in this import to reset their flags once
+          const processedExercises = new Set();
+
           await database.withTransactionAsync(async () => {
             // Process workouts chronologically
             for (let sessionIdx = 0; sessionIdx < sortedDateKeys.length; sessionIdx++) {
@@ -612,7 +623,15 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
                 if (existingExercise) {
                   exerciseID = existingExercise.exerciseID;
-                  // If we found cardio data, ALWAYS enable cardio on the exercise, even if previously false
+
+                  // Self-Healing: If this is the first time we see this exercise in this import,
+                  // reset its cardio flag to 0. This clears any "tainted" flags from previous bad imports.
+                  if (!processedExercises.has(exerciseName)) {
+                    await database.runAsync('UPDATE exercises SET isCardio = 0 WHERE exerciseID = ?', [exerciseID]);
+                    processedExercises.add(exerciseName);
+                  }
+
+                  // If we found cardio data, ALWAYS enable cardio on the exercise
                   if (hasCardioData) {
                     await database.runAsync('UPDATE exercises SET isCardio = 1 WHERE exerciseID = ?', [exerciseID]);
                   }
