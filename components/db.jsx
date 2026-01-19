@@ -488,7 +488,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
             // Handle Rest Timer Row
             // These rows often contain duration but aren't actual sets
-            if (setOrderRaw.toLowerCase().includes('rest timer')) {
+            if (setOrderRaw.toLowerCase().includes('timer')) {
               continue;
             }
 
@@ -516,7 +516,8 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             // Determine if this specific set is a cardio set
             // USER RULE: If Distance OR Seconds has a value, it is Cardio.
             // (Even if Reps > 0. We trust the CSV columns, having filtered out Rest Timers).
-            const isCardioSet = distanceMeters > 0 || cardiosSeconds > 0;
+            // SAFEGUARD: Ensure it is definitely not a timer row
+            const isCardioSet = (distanceMeters > 0 || cardiosSeconds > 0) && !setOrderRaw.toLowerCase().includes('timer');
 
             if (isCardioSet) {
               console.log(`[Import Match] ${exerciseName}: Dist=${distanceMeters} Time=${cardiosSeconds}`);
