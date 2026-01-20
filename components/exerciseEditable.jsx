@@ -135,7 +135,7 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
     );
 };
 
-const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, onOpenDetails, simultaneousHandlers, onSetComplete, isCardio }) => {
+const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, onOpenDetails, simultaneousHandlers, onSetComplete, isCardio, isTemplate = false }) => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
     const [isNoteVisible, setIsNoteVisible] = useState(false);
@@ -146,6 +146,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     const isActive = useIsActive();
 
     useEffect(() => {
+        if (isTemplate) return; // Don't load previous sets for templates
         const loadPreviousData = async () => {
             try {
                 const prevSets = await fetchLastWorkoutSets(exerciseID);
@@ -155,7 +156,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
             }
         };
         loadPreviousData();
-    }, [exerciseID]);
+    }, [exerciseID, isTemplate]);
 
     const handleWeightChange = (text, setIndex) => {
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, weight: text } : s) } : e) } : w));
@@ -170,6 +171,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: text } : s) } : e) } : w));
     };
     const toggleSetComplete = (setIndex) => {
+        if (isTemplate) return; // No completion in templates
         const set = exercise.sets[setIndex];
         if (!set.completed) {
             Keyboard.dismiss();
@@ -250,10 +252,14 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
             {/* Table Header */}
             <View style={styles.tableHeader}>
                 <Text style={[styles.columnHeader, styles.colSet]}>SET</Text>
-                <Text style={[styles.columnHeader, styles.colPrev]}>PREVIOUS</Text>
+                {!isTemplate ? (
+                    <Text style={[styles.columnHeader, styles.colPrev]}>PREVIOUS</Text>
+                ) : (
+                    <View style={{ flex: 1 }} />
+                )}
                 <Text style={[styles.columnHeader, styles.colKg]}>{isCardio ? "DIST (km)" : "KG"}</Text>
                 <Text style={[styles.columnHeader, styles.colReps]}>{isCardio ? "TIME (min)" : "REPS"}</Text>
-                <View style={styles.colCheck}><Feather name="check" size={12} color={theme.textSecondary} /></View>
+                {!isTemplate && <View style={styles.colCheck}><Feather name="check" size={12} color={theme.textSecondary} /></View>}
             </View>
 
             {/* Sets */}
@@ -311,7 +317,11 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                     </TouchableOpacity>
                                 </View>
 
-                                <Text style={[styles.prevText, styles.colPrev]} numberOfLines={1}>{prevSetText}</Text>
+                                {!isTemplate ? (
+                                    <Text style={[styles.prevText, styles.colPrev]} numberOfLines={1}>{prevSetText}</Text>
+                                ) : (
+                                    <View style={{ flex: 1 }} />
+                                )}
 
                                 <View style={styles.colKg}>
                                     <ScrollableInput
@@ -343,14 +353,16 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                     />
                                 </View>
 
-                                <View style={styles.colCheck}>
-                                    <TouchableOpacity
-                                        style={[styles.checkButton, set.completed && styles.checkButtonCompleted]}
-                                        onPress={() => toggleSetComplete(index)}
-                                    >
-                                        <Feather name="check" size={14} color={set.completed ? '#fff' : 'transparent'} />
-                                    </TouchableOpacity>
-                                </View>
+                                {!isTemplate && (
+                                    <View style={styles.colCheck}>
+                                        <TouchableOpacity
+                                            style={[styles.checkButton, set.completed && styles.checkButtonCompleted]}
+                                            onPress={() => toggleSetComplete(index)}
+                                        >
+                                            <Feather name="check" size={14} color={set.completed ? '#fff' : 'transparent'} />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
                             </View>
                         </SwipeableSetRow>
                     );

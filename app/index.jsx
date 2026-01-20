@@ -314,6 +314,7 @@ const Home = () => {
             </ScrollView>
 
             <ActionSheet
+                gestureEnabled={true}
                 ref={actionSheetRef}
                 enableGestureBack={true}
                 closeOnPressBack={true}

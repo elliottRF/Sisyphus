@@ -89,11 +89,22 @@ export const setupDatabase = async () => {
     await ensureColumnExists('workoutHistory', 'distance', 'FLOAT');
     await ensureColumnExists('workoutHistory', 'seconds', 'INTEGER');
 
+
     // Create pinnedExercises table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS pinnedExercises (
         exerciseID INTEGER PRIMARY KEY,
         FOREIGN KEY (exerciseID) REFERENCES exercises(exerciseID)
+      );
+    `);
+
+    // Create workoutTemplates table
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS workoutTemplates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        data TEXT NOT NULL,
+        createdAt TEXT
       );
     `);
 
@@ -431,6 +442,84 @@ export const fetchRecentMuscleUsage = async (days) => {
     [cutoffDate.toISOString()]
   );
 };
+
+// --- Template Functions ---
+
+// Create a new template
+export const createTemplate = async (name, workoutData) => {
+  const database = await getDb();
+  try {
+    const dataString = JSON.stringify(workoutData);
+    const result = await database.runAsync(
+      `INSERT INTO workoutTemplates (name, data, createdAt) VALUES (?, ?, ?);`,
+      [name, dataString, new Date().toISOString()]
+    );
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('Error creating template:', error);
+    throw error;
+  }
+};
+
+// Get all templates
+export const getTemplates = async () => {
+  const database = await getDb();
+  try {
+    const rows = await database.getAllAsync('SELECT * FROM workoutTemplates ORDER BY id DESC;');
+    return rows.map(row => ({
+      ...row,
+      data: JSON.parse(row.data)
+    }));
+  } catch (error) {
+    console.error('Error fetching templates:', error);
+    return [];
+  }
+};
+
+// Get a single template by ID
+export const getTemplate = async (id) => {
+  const database = await getDb();
+  try {
+    const row = await database.getFirstAsync('SELECT * FROM workoutTemplates WHERE id = ?;', [id]);
+    if (row) {
+      return {
+        ...row,
+        data: JSON.parse(row.data)
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching template:', error);
+    return null;
+  }
+};
+
+// Delete a template
+export const deleteTemplate = async (id) => {
+  const database = await getDb();
+  try {
+    await database.runAsync('DELETE FROM workoutTemplates WHERE id = ?;', [id]);
+  } catch (error) {
+    console.error('Error deleting template:', error);
+    throw error;
+  }
+};
+
+// Update an existing template
+export const updateTemplate = async (id, name, workoutData) => {
+  const database = await getDb();
+  try {
+    const dataString = JSON.stringify(workoutData);
+    await database.runAsync(
+      `UPDATE workoutTemplates SET name = ?, data = ? WHERE id = ?;`,
+      [name, dataString, id]
+    );
+  } catch (error) {
+    console.error('Error updating template:', error);
+    throw error;
+  }
+};
+
 // Fixed importStrongData - properly assigns exerciseNum
 
 export const importStrongData = async (csvContent, progressCallback = null) => {

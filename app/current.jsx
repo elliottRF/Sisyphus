@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation } from 'react-native'
+
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, Dimensions } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,10 +10,9 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-import { Dimensions } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 
-import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs } from '../components/db';
+import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, fetchLastWorkoutSets } from '../components/db';
 
 
 import ExerciseEditable from '../components/exerciseEditable'
@@ -26,12 +26,14 @@ import { FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import Timer from '../components/Timer';
 import RestTimer from '../components/RestTimer';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 
 import TestSoundButton from '../components/TestSoundButton';
 import TestNotificationButton from '../components/TestNotificationButton';
 import { useTheme } from '../context/ThemeContext';
 import { ActivityIndicator } from 'react-native';
+
+const { width } = Dimensions.get('window');
 
 const Current = () => {
     const { theme } = useTheme();
@@ -46,6 +48,17 @@ const Current = () => {
     const listRef = useRef(null);
     const isFirstLaunch = useRef(true);
 
+    // Real template data
+    const [templates, setTemplates] = useState([]);
+
+    const loadTemplates = async () => {
+        try {
+            const data = await getTemplates();
+            setTemplates(data);
+        } catch (error) {
+            console.error("Error loading templates:", error);
+        }
+    };
 
     const startWorkout = async () => {
         const now = new Date().toISOString();
@@ -57,12 +70,69 @@ const Current = () => {
             .catch(err => console.error(err));
 
         actionSheetRef.current?.show();
+    };
 
+    const loadTemplate = async (template) => {
+        const now = new Date().toISOString();
+        setStartTime(now);
+        saveStartTimeToAsyncStorage(now);
+        setWorkoutTitle(template.name);
+
+        const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+
+        // Fetch history for all exercises in the template to overwrite structure
+        const workoutWithDynamicData = await Promise.all(template.data.map(async (item) => {
+            const updatedExercises = await Promise.all(item.exercises.map(async (ex) => {
+                const history = await fetchLastWorkoutSets(ex.exerciseID);
+
+                let setsToUse = ex.sets;
+                if (history && history.length > 0) {
+                    // Overwrite template sets with history (weights, reps, counts)
+                    setsToUse = history.map(hSet => ({
+                        id: generateId(),
+                        weight: hSet.weight?.toString() || null,
+                        reps: hSet.reps?.toString() || null,
+                        distance: hSet.distance?.toString() || null,
+                        minutes: hSet.seconds ? (hSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : null,
+                        setType: hSet.setType || 'N',
+                        completed: false
+                    }));
+                } else {
+                    // Use template sets but refresh IDs
+                    setsToUse = ex.sets.map(set => ({
+                        ...set,
+                        id: generateId(),
+                        completed: false
+                    }));
+                }
+
+                return {
+                    ...ex,
+                    id: generateId(),
+                    sets: setsToUse
+                };
+            }));
+
+            return {
+                ...item,
+                id: generateId(),
+                exercises: updatedExercises
+            };
+        }));
+
+        setCurrentWorkout(workoutWithDynamicData);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    };
+
+    const handleLongPressTemplate = (template) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        router.push(`/template/${template.id}`);
     };
 
     const clearWorkout = async () => {
         setCurrentWorkout([]);
         setStartTime(null);
+        setWorkoutTitle("New Workout"); // Reset title
         restTimerRef.current?.stopTimer();
         await AsyncStorage.removeItem('@currentWorkout');
         await AsyncStorage.removeItem('@workoutStartTime');
@@ -135,7 +205,7 @@ const Current = () => {
                             parseFloat(set.weight) || 0,
                             parseInt(set.reps) || 0
                         );
-                        if (calculatedOneRM > maxOneRM) maxOneRM = calculatedOneOneRM;
+                        if (calculatedOneRM > maxOneRM) maxOneRM = calculatedOneRM;
 
                         // Calculate Volume
                         const volume = (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0);
@@ -368,6 +438,63 @@ const Current = () => {
     );
 
     useEffect(() => {
+        const loadWorkout = async () => {
+            fetchExercises()
+                .then(data => setExercises(data))
+                .catch(err => console.error(err));
+
+            setupDatabase().catch(err => console.error("DB Setup Error:", err));
+            loadTemplates(); // Load templates on mount
+
+            try {
+                const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
+                if (storedWorkout) {
+                    const { workout, title } = JSON.parse(storedWorkout);
+
+                    // Robust unique ID generator
+                    const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+
+                    // Re-generate IDs to ensure uniqueness across the entire workout structure
+                    const workoutWithUniqueIds = workout.map(item => ({
+                        ...item,
+                        id: generateId(),
+                        exercises: item.exercises.map(ex => ({
+                            ...ex,
+                            id: generateId(), // New unique ID for exercise instance
+                            sets: ex.sets.map(set => ({
+                                ...set,
+                                id: generateId() // New unique ID for set
+                            }))
+                        }))
+                    }));
+
+                    setCurrentWorkout(workoutWithUniqueIds);
+                    if (title) setWorkoutTitle(title);
+                }
+                const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
+                if (storedStartTime) {
+                    setStartTime(storedStartTime);
+                }
+            } catch (error) {
+                console.error('Error loading workout from AsyncStorage:', error);
+            } finally {
+                setIsReady(true);
+            }
+        };
+
+        loadWorkout();
+    }, []);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchExercises()
+                .then(data => setExercises(data))
+                .catch(err => console.error(err));
+            loadTemplates(); // Refresh templates when focusing
+        }, [])
+    );
+
+    useEffect(() => {
         if (currentWorkout.length > 0) {
             saveWorkoutToAsyncStorage(currentWorkout);
         }
@@ -482,18 +609,57 @@ const Current = () => {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
                 {!isReady ? (
-                    <View style={styles.startContainer}>
+                    <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color={theme.primary} />
                     </View>
                 ) : (
                     <>
                         {!startTime && currentWorkout.length === 0 && (
-                            <View style={styles.startContainer}>
-                                <View style={styles.emptyStateContent}>
-                                    <Feather name="activity" size={64} color={theme.primary} style={{ marginBottom: 24, opacity: 0.8 }} />
-                                    <Text style={styles.emptyStateTitle}>Ready to train?</Text>
-                                    <Text style={styles.emptyStateSubtitle}>Start an empty workout or choose a template to begin your session.</Text>
+                            <View style={{ flex: 1 }}>
+                                <ScrollView contentContainerStyle={styles.emptyStateScrollContent}>
+                                    <View style={styles.emptyStateHeader}>
+                                        <Feather name="activity" size={48} color={theme.primary} style={{ marginBottom: 16, opacity: 0.8 }} />
+                                        <Text style={styles.emptyStateTitle}>Ready to train?</Text>
+                                        <Text style={styles.emptyStateSubtitle}>Start an empty workout or choose a template to begin your session.</Text>
+                                    </View>
 
+                                    <View style={styles.templatesGrid}>
+                                        {templates.map((template) => (
+                                            <TouchableOpacity
+                                                key={template.id}
+                                                style={styles.templateCard}
+                                                activeOpacity={0.7}
+                                                onPress={() => loadTemplate(template)}
+                                            >
+                                                <TouchableOpacity
+                                                    style={styles.templateEditButton}
+                                                    onPress={(e) => {
+                                                        e.stopPropagation();
+                                                        handleLongPressTemplate(template);
+                                                    }}
+                                                >
+                                                    <Feather name="edit-2" size={16} color={safeText} />
+                                                </TouchableOpacity>
+
+                                                <Text style={styles.templateName} numberOfLines={2}>{template.name}</Text>
+                                                <Text style={styles.templateDetails}>
+                                                    {template.data.length} exercises
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+
+                                        {/* Add Template Button */}
+                                        <TouchableOpacity
+                                            style={[styles.templateCard, styles.addTemplateCard]}
+                                            activeOpacity={0.7}
+                                            onPress={() => router.push('/template/new')}
+                                        >
+                                            <AntDesign name="plus" size={32} color={theme.textSecondary} />
+                                        </TouchableOpacity>
+                                    </View>
+                                </ScrollView>
+
+                                <View style={styles.bottomButtonContainer}>
                                     <TouchableOpacity onPress={startWorkout} activeOpacity={0.8} style={styles.startWorkoutButtonContainer}>
                                         <ButtonBackground style={styles.startButton}>
                                             <Text style={styles.startButtonText}>Start an Empty Workout</Text>
@@ -613,6 +779,14 @@ const getStyles = (theme) => {
     const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
     const safeDanger = isDynamic ? '#FF4444' : theme.danger;
 
+    // Grid sizing
+    const numColumns = 3;
+    const gap = 12;
+    const padding = 16;
+    // Use Math.floor to ensure we don't exceed availability due to fractional pixels
+    const availableWidth = width - (padding * 2) - ((numColumns - 1) * gap);
+    const itemWidth = Math.floor(availableWidth / numColumns);
+
     return StyleSheet.create({
         container: {
             flex: 1,
@@ -621,21 +795,25 @@ const getStyles = (theme) => {
         list: {
             flex: 1,
         },
-        startContainer: {
+        loadingContainer: {
             flex: 1,
             justifyContent: 'center',
             alignItems: 'center',
-            paddingHorizontal: 32,
         },
-        emptyStateContent: {
+        emptyStateScrollContent: {
+            padding: padding,
+            paddingBottom: 160, // Increased space to clear the floating button + tab bar
+        },
+        emptyStateHeader: {
             alignItems: 'center',
-            width: '100%',
+            marginTop: 40,
+            marginBottom: 32,
         },
         emptyStateTitle: {
             fontSize: 24,
             fontFamily: FONTS.bold,
             color: safeText,
-            marginBottom: 12,
+            marginBottom: 8,
             textAlign: 'center',
         },
         emptyStateSubtitle: {
@@ -643,8 +821,64 @@ const getStyles = (theme) => {
             fontFamily: FONTS.regular,
             color: theme.textSecondary,
             textAlign: 'center',
-            marginBottom: 48,
             lineHeight: 24,
+            width: '80%',
+        },
+        templatesGrid: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: gap,
+        },
+        templateCard: {
+            width: itemWidth,
+            height: itemWidth * 1.6, // Longer than wide
+            backgroundColor: theme.surface,
+            borderRadius: 12,
+            padding: 12,
+            justifyContent: 'space-between',
+            borderWidth: 1,
+            borderColor: safeBorder,
+        },
+        addTemplateCard: {
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderStyle: 'dashed',
+            backgroundColor: 'transparent',
+            borderColor: theme.textSecondary,
+            opacity: 0.6,
+        },
+        templateEditButton: {
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            backgroundColor: 'rgba(255,255,255,0.1)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10,
+        },
+        templateName: {
+            fontSize: 14,
+            fontFamily: FONTS.semiBold,
+            color: safeText,
+            marginTop: 8,
+        },
+        templateDetails: {
+            fontSize: 12,
+            fontFamily: FONTS.regular,
+            color: theme.textSecondary,
+            marginTop: 4,
+        },
+        bottomButtonContainer: {
+            position: 'absolute',
+            bottom: 84, // Moved up to clear the floating tab bar (approx 50-60px height + margin)
+            left: 0,
+            right: 0,
+            padding: 16,
+            // paddingBottom handled by bottom position
+            backgroundColor: 'transparent', // Make transparent so it floats nicely, or add gradient mask if needed
+            // If background is needed to cover content:
+            // backgroundColor: theme.background, 
+            // paddingBottom: 0,
         },
         startWorkoutButtonContainer: {
             width: '100%',

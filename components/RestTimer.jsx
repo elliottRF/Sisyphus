@@ -17,7 +17,6 @@ const RestTimer = forwardRef((props, ref) => {
     const timerRunning = useRef(false); // Track if we consider the timer active
     const frameIdRef = useRef(null); // RAF ID for smooth UI updates
 
-    console.log("RestTimer Render. timeLeft:", timeLeft);
 
     // Animation values
     const scale = useSharedValue(1);

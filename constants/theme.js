@@ -238,6 +238,29 @@ const TITANIUM = {
     overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
+const THRIVE = {
+    primary: "#45a299",      // Apple San Francisco Blue
+    primaryDark: "#2E7F78",
+    secondary: "#5a2676",    // iOS System Gray
+    background: "#000000",   // Pure Black (OLED optimized) - FIXED from #080808ff
+    surface: "#121214",      // iOS Secondary System Background
+    text: "#FFFFFF",         // Primary Label
+    textSecondary: "#8E8E93",// Secondary Label
+    border: "#2C2C2E",       // Thin, subtle separator
+    success: "#32D74B",      // iOS System Green
+    danger: "#FF453A",       // iOS System Red
+    warning: "#FF9F0A",      // iOS System Orange
+    info: "#64D2FF",         // iOS System Cyan
+    bodyFill: "#333333",
+    // Adaptive overlays (white for dark themes)
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
+};
+
+
 const SYSTEM = Platform.OS === 'android' ? {
     type: 'dynamic', // Flag to indicate special handling needed (no gradients etc)
     primary: PlatformColor('@android:color/system_accent1_200'), // Lighter accent for dark mode
@@ -273,6 +296,7 @@ export const THEMES = {
     CHERRY_BLOSSOM,
     SCHEMATIC,
     CALIPER,
+    THRIVE
 };
 
 // Deprecated: Backwards compatibility for now, will be removed
