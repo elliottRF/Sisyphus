@@ -46,6 +46,7 @@ const WorkoutDetail = () => {
 
 
     const actionSheetRef = useRef(null);
+    const sessionViewRef = useRef(null);
     const [selectedExerciseId, setSelectedExerciseId] = useState(null);
     const [currentExerciseName, setCurrentExerciseName] = useState(null);
 
@@ -91,6 +92,13 @@ const WorkoutDetail = () => {
         }, [session, syncedInitialData]) // Re-run if session changes
     );
 
+    useFocusEffect(
+        React.useCallback(() => {
+            // Immediate scroll to top when focused
+            sessionViewRef.current?.scrollTo({ y: 0, animated: false });
+        }, [])
+    );
+
     const showExerciseInfo = (exerciseId, exerciseName) => {
         setSelectedExerciseId(exerciseId);
         setCurrentExerciseName(exerciseName);
@@ -132,11 +140,19 @@ const WorkoutDetail = () => {
 
             {effectiveWorkoutDetails && (
                 <WorkoutSessionView
+                    ref={sessionViewRef}
+                    key={session}
                     workoutDetails={effectiveWorkoutDetails}
                     exercisesList={exercisesList}
                     onEdit={showEditPage}
                     onExerciseInfo={showExerciseInfo}
                 />
+            )}
+
+            {loading && (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', zIndex: 20 }]}>
+                    <ActivityIndicator size="large" color={theme.primary} />
+                </View>
             )}
 
             <ActionSheet

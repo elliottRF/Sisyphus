@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useLayoutEffect, forwardRef } from 'react';
 import { FONTS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -88,11 +88,19 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
     );
 });
 
-const WorkoutSessionView = ({ workoutDetails, exercisesList, onEdit, onExerciseInfo, contentContainerStyle }) => {
+const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, onExerciseInfo, contentContainerStyle }, ref) => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
     const [expandedWarmups, setExpandedWarmups] = useState({});
     const handlers = useScrollHandlers();
+
+    useLayoutEffect(() => {
+        // Reset scroll position when workout details change (e.g. entering a new session)
+        // useLayoutEffect runs before paint to eliminate visual "jump"
+        if (ref && typeof ref === 'object') {
+            ref.current?.scrollTo({ y: 0, animated: false });
+        }
+    }, [workoutDetails]);
 
     const toggleWarmups = useCallback((exerciseId, event) => {
         event?.stopPropagation();
@@ -135,7 +143,19 @@ const WorkoutSessionView = ({ workoutDetails, exercisesList, onEdit, onExerciseI
         return `${mins}m`;
     };
 
-    if (!workoutDetails || workoutDetails.length === 0) return null;
+    const isEmpty = !workoutDetails || workoutDetails.length === 0;
+    if (isEmpty) {
+        return (
+            <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
+                <ScrollView
+                    {...handlers}
+                    ref={ref}
+                    contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
+                    showsVerticalScrollIndicator={false}
+                />
+            </NativeViewGestureHandler>
+        );
+    }
 
     const workoutName = workoutDetails[0].name;
     const workoutDate = workoutDetails[0].time;
@@ -150,6 +170,7 @@ const WorkoutSessionView = ({ workoutDetails, exercisesList, onEdit, onExerciseI
         <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
             <ScrollView
                 {...handlers}
+                ref={ref}
                 contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
                 showsVerticalScrollIndicator={false}
                 showsHorizontalScrollIndicator={false}
@@ -311,7 +332,7 @@ const WorkoutSessionView = ({ workoutDetails, exercisesList, onEdit, onExerciseI
             </ScrollView>
         </NativeViewGestureHandler>
     );
-};
+});
 
 const getStyles = (theme) => {
     return StyleSheet.create({
