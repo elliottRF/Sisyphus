@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Dimensions } from 'react-native';
+import { getPreloadedData } from '../../constants/preloader';
 
 import {
     fetchExercises,
@@ -33,10 +34,42 @@ const EditTemplate = () => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
 
-    const [exercises, setExercises] = useState([]);
-    const [currentWorkout, setCurrentWorkout] = useState([]);
-    const [templateName, setTemplateName] = useState("");
-    const [isLoading, setIsLoading] = useState(true);
+    const [prevId, setPrevId] = useState(TEMPLATE_ID);
+
+    // Initial state based on preloaded data or defaults
+    const getInitialState = () => {
+        const preloaded = getPreloadedData();
+        if (preloaded.template || preloaded.exercises) {
+            return {
+                exercises: preloaded.exercises || [],
+                workout: preloaded.template?.data || [],
+                name: preloaded.template?.name || "",
+                loading: false
+            };
+        }
+        return {
+            exercises: [],
+            workout: [],
+            name: "",
+            loading: true
+        };
+    };
+
+    const initialState = getInitialState();
+    const [exercises, setExercises] = useState(initialState.exercises);
+    const [currentWorkout, setCurrentWorkout] = useState(initialState.workout);
+    const [templateName, setTemplateName] = useState(initialState.name);
+    const [isLoading, setIsLoading] = useState(initialState.loading);
+
+    // Synchronous state reset when TEMPLATE_ID changes
+    if (prevId !== TEMPLATE_ID) {
+        setPrevId(TEMPLATE_ID);
+        const freshState = getInitialState();
+        setTemplateName(freshState.name);
+        setCurrentWorkout(freshState.workout);
+        setExercises(freshState.exercises);
+        setIsLoading(freshState.loading);
+    }
 
     const [selectedExerciseId, setSelectedExerciseId] = useState(null);
     const [currentExerciseName, setCurrentExerciseName] = useState(null);
@@ -201,7 +234,13 @@ const EditTemplate = () => {
 
     useEffect(() => {
         const load = async () => {
-            setIsLoading(true);
+            // Only show loader if we don't have enough data to render yet
+            // This prevents the "brief black screen" flash
+            const isMissingData = exercises.length === 0 || (TEMPLATE_ID !== 'new' && currentWorkout.length === 0);
+            if (isMissingData) {
+                setIsLoading(true);
+            }
+
             try {
                 await setupDatabase();
                 const exercisesData = await fetchExercises();
@@ -213,6 +252,10 @@ const EditTemplate = () => {
                         setTemplateName(template.name);
                         setCurrentWorkout(template.data);
                     }
+                } else {
+                    // Reset state for new template
+                    setTemplateName("");
+                    setCurrentWorkout([]);
                 }
             } catch (error) {
                 console.error("Error loading template editor:", error);
@@ -250,8 +293,8 @@ const EditTemplate = () => {
 
     if (isLoading) {
         return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color={theme.primary} />
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }]}>
+                {/* No loading circle here for a smoother feel, or a very subtle one if needed */}
             </View>
         );
     }

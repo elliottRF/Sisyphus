@@ -12,7 +12,8 @@ import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons'
 
 import * as NavigationBar from 'expo-navigation-bar';
 
-import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, fetchLastWorkoutSets } from '../components/db';
+import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, fetchLastWorkoutSets, getTemplate } from '../components/db';
+import { setPreloadedData } from '../constants/preloader';
 
 
 import ExerciseEditable from '../components/exerciseEditable'
@@ -50,6 +51,7 @@ const Current = () => {
 
     // Real template data
     const [templates, setTemplates] = useState([]);
+    const [loadingTemplateId, setLoadingTemplateId] = useState(null);
 
     const loadTemplates = async () => {
         try {
@@ -124,9 +126,51 @@ const Current = () => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     };
 
-    const handleLongPressTemplate = (template) => {
+    const handleLongPressTemplate = async (template) => {
+        setLoadingTemplateId(template.id);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        router.push(`/template/${template.id}`);
+
+        try {
+            // We fetch the full template data in parallel with a 300ms visual delay
+            // This ensures the next screen has what it needs before it even mounts
+            const [fullTemplate, exercisesData] = await Promise.all([
+                getTemplate(template.id),
+                fetchExercises(),
+                new Promise(resolve => setTimeout(resolve, 300))
+            ]);
+
+            setPreloadedData({
+                template: fullTemplate,
+                exercises: exercisesData
+            });
+
+            router.push(`/template/${template.id}`);
+        } catch (error) {
+            console.error("Error pre-loading template:", error);
+            router.push(`/template/${template.id}`);
+        }
+    };
+
+    const handleAddTemplate = async () => {
+        setLoadingTemplateId('new');
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+        try {
+            // Clear preloader and fetch exercises in background during the delay
+            const [exercisesData] = await Promise.all([
+                fetchExercises(),
+                new Promise(resolve => setTimeout(resolve, 300))
+            ]);
+
+            setPreloadedData({
+                template: null,
+                exercises: exercisesData
+            });
+
+            router.push('/template/new');
+        } catch (error) {
+            router.push('/template/new');
+        }
     };
 
     const clearWorkout = async () => {
@@ -434,6 +478,7 @@ const Current = () => {
             fetchExercises()
                 .then(data => setExercises(data))
                 .catch(err => console.error(err));
+            setLoadingTemplateId(null);
         }, [])
     );
 
@@ -491,6 +536,7 @@ const Current = () => {
                 .then(data => setExercises(data))
                 .catch(err => console.error(err));
             loadTemplates(); // Refresh templates when focusing
+            setLoadingTemplateId(null);
         }, [])
     );
 
@@ -637,8 +683,13 @@ const Current = () => {
                                                         e.stopPropagation();
                                                         handleLongPressTemplate(template);
                                                     }}
+                                                    disabled={!!loadingTemplateId}
                                                 >
-                                                    <Feather name="edit-2" size={16} color={safeText} />
+                                                    {loadingTemplateId === template.id ? (
+                                                        <ActivityIndicator size="small" color={theme.primary} />
+                                                    ) : (
+                                                        <Feather name="edit-2" size={16} color={safeText} />
+                                                    )}
                                                 </TouchableOpacity>
 
                                                 <Text style={styles.templateName} numberOfLines={2}>{template.name}</Text>
@@ -652,7 +703,8 @@ const Current = () => {
                                         <TouchableOpacity
                                             style={[styles.templateCard, styles.addTemplateCard]}
                                             activeOpacity={0.7}
-                                            onPress={() => router.push('/template/new')}
+                                            onPress={handleAddTemplate}
+                                            disabled={!!loadingTemplateId}
                                         >
                                             <AntDesign name="plus" size={32} color={theme.textSecondary} />
                                         </TouchableOpacity>
@@ -838,6 +890,17 @@ const getStyles = (theme) => {
             justifyContent: 'space-between',
             borderWidth: 1,
             borderColor: safeBorder,
+            position: 'relative',
+        },
+        cardFooter: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'flex-end',
+        },
+        plusCardLoader: {
+            position: 'absolute',
+            bottom: 12,
+            right: 12,
         },
         addTemplateCard: {
             alignItems: 'center',
