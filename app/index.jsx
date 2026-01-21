@@ -13,6 +13,7 @@ import { FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import PRGraphCard from '../components/PRGraphCard';
+import MuscleRadarChart from '../components/MuscleRadarChart';
 import { useTheme } from '../context/ThemeContext';
 
 
@@ -48,10 +49,37 @@ const GradientOrView = ({ colors, style, theme, children }) => {
     return <LinearGradient colors={colors} style={style}>{children}</LinearGradient>;
 };
 
+const TimeRangeSelector = ({ selectedRange, onSelect, theme, styles }) => {
+    const ranges = ['1M', '6M', '1Y', 'ALL'];
+    return (
+        <View style={styles.rangeSelector}>
+            {ranges.map(range => (
+                <TouchableOpacity
+                    key={range}
+                    onPress={() => onSelect(range)}
+                    style={[
+                        styles.rangeButton,
+                        selectedRange === range && styles.rangeButtonActive
+                    ]}
+                >
+                    <Text style={[
+                        styles.rangeText,
+                        selectedRange === range && styles.rangeTextActive
+                    ]}>
+                        {range}
+                    </Text>
+                </TouchableOpacity>
+            ))}
+        </View>
+    );
+};
+
 const Home = () => {
-    const { theme, gender } = useTheme();
+    const { theme, gender, accessoryWeight } = useTheme();
     const styles = getStyles(theme);
     const [bodyData, setBodyData] = useState([]);
+    const [radarData, setRadarData] = useState({});
+    const [radarRange, setRadarRange] = useState('1M');
     const [pinnedExercises, setPinnedExercises] = useState([]);
     const [allExercises, setAllExercises] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -66,8 +94,9 @@ const Home = () => {
     useFocusEffect(
         React.useCallback(() => {
             loadMuscleData();
+            loadRadarData(radarRange);
             loadPinnedExercises();
-        }, [])
+        }, [radarRange, accessoryWeight])
     );
 
     // Listen for workout completion events
@@ -133,8 +162,8 @@ const Home = () => {
             const newBodyData = Object.keys(muscleStats).map(slug => {
                 const { primarySets, accessorySets } = muscleStats[slug];
 
-                // Calculate weighted score: Primary = 1, Accessory = 0.5
-                const weightedScore = primarySets + (accessorySets * 0.5);
+                // Calculate weighted score: Primary = 1, Accessory = user setting
+                const weightedScore = Math.round((primarySets + (accessorySets * accessoryWeight)) * 10) / 10;
 
                 let intensity = 0;
 
@@ -157,6 +186,93 @@ const Home = () => {
         }
     };
 
+    const loadRadarData = async (range = '1M') => {
+        try {
+            let days = 30;
+            if (range === '6M') days = 180;
+            else if (range === '1Y') days = 365;
+            else if (range === 'ALL') days = 3650;
+
+            const usageData = await fetchRecentMuscleUsage(days);
+            const stats = {
+                'Chest': 0,
+                'Shoulders': 0,
+                'Back': 0,
+                'Biceps': 0,
+                'Triceps': 0,
+                'Quads': 0,
+                'Hams': 0,
+                'Glutes': 0,
+                'Abs': 0
+            };
+
+            const radarMapping = {
+                "Chest": "Chest",
+                "Upper Chest": "Chest",
+                "Deltoids": "Shoulders",
+                "Shoulders": "Shoulders",
+                "Trapezius": "Back",
+                "Traps": "Back",
+                "Upper-Back": "Back",
+                "Lower-Back": "Back",
+                "Biceps": "Biceps",
+                "Triceps": "Triceps",
+                "Quadriceps": "Quads",
+                "Quads": "Quads",
+                "Hamstring": "Hams",
+                "Hamstrings": "Hams",
+                "Gluteal": "Glutes",
+                "Glutes": "Glutes",
+                "Abs": "Abs",
+                "Obliques": "Abs"
+            };
+
+            usageData.forEach(exercise => {
+                const sets = parseInt(exercise.sets, 10) || 0;
+                const primaryCategories = new Set();
+                const accessoryCategories = new Set();
+
+                // Determine unique categories hit by this exercise
+                if (exercise.targetMuscle) {
+                    exercise.targetMuscle.split(',').forEach(m => {
+                        const category = radarMapping[m.trim()];
+                        if (category) primaryCategories.add(category);
+                    });
+                }
+
+                if (exercise.accessoryMuscles) {
+                    exercise.accessoryMuscles.split(',').forEach(m => {
+                        const category = radarMapping[m.trim()];
+                        if (category) accessoryCategories.add(category);
+                    });
+                }
+
+                // Apply points: Primary (1pt) takes precedence
+                primaryCategories.forEach(category => {
+                    stats[category] += sets;
+                });
+
+                // Process Accessory Muscles (Accessory = user setting)
+                accessoryCategories.forEach(category => {
+                    // Only add accessory points if it wasn't already counted as primary
+                    if (!primaryCategories.has(category)) {
+                        stats[category] += (sets * accessoryWeight);
+                    }
+                });
+            });
+
+            // Truncate decimals for each category to prevent floating point artifacts
+            const cleanedStats = {};
+            Object.keys(stats).forEach(cat => {
+                cleanedStats[cat] = Math.round(stats[cat] * 10) / 10;
+            });
+
+            setRadarData(cleanedStats);
+        } catch (error) {
+            console.error("Failed to load radar data:", error);
+        }
+    };
+
     const loadPinnedExercises = async () => {
         try {
             const pinned = await getPinnedExercises();
@@ -171,6 +287,7 @@ const Home = () => {
         try {
             await Promise.all([
                 loadMuscleData(),
+                loadRadarData(radarRange),
                 loadPinnedExercises()
             ]);
         } catch (error) {
@@ -250,20 +367,14 @@ const Home = () => {
                     </View>
                 </View>
 
-                <ScrollView
-                    horizontal={true}
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.bodyScrollContent}
-                    snapToInterval={320}
-                    decelerationRate="fast"
-                >
+                <View style={styles.recoveryContainer}>
                     <View style={styles.cardContainer}>
                         <Text style={styles.cardTitle}>Front</Text>
                         <Body
                             data={bodyData}
                             gender={gender}
                             side="front"
-                            scale={1.1}
+                            scale={1}
                             border={safeBorder}
                             colors={bodyColors}
                             bg={theme.surface}
@@ -277,14 +388,22 @@ const Home = () => {
                             data={bodyData}
                             gender={gender}
                             side="back"
-                            scale={1.1}
+                            scale={1}
                             border={safeBorder}
                             colors={bodyColors}
                             bg={theme.surface}
                             defaultFill={theme.bodyFill}
                         />
                     </View>
-                </ScrollView>
+                </View>
+
+                <View style={styles.radarSection}>
+                    <View style={styles.radarHeader}>
+                        <Text style={styles.radarTitle}>Muscle Balance</Text>
+                        <TimeRangeSelector selectedRange={radarRange} onSelect={setRadarRange} theme={theme} styles={styles} />
+                    </View>
+                    <MuscleRadarChart data={radarData} theme={theme} />
+                </View>
 
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Progress Tracker</Text>
@@ -314,7 +433,6 @@ const Home = () => {
             </ScrollView>
 
             <ActionSheet
-                gestureEnabled={true}
                 ref={actionSheetRef}
                 enableGestureBack={true}
                 closeOnPressBack={true}
@@ -430,31 +548,77 @@ const getStyles = (theme) => {
             color: theme.textSecondary,
             marginTop: 4,
         },
-        bodyScrollContent: {
-            paddingHorizontal: 10,
+        recoveryContainer: {
+            flexDirection: 'row',
+            paddingHorizontal: 20,
             marginBottom: 20,
+            gap: 12,
         },
         cardContainer: {
             backgroundColor: theme.surface,
             borderRadius: 24,
-            padding: 20,
-            marginHorizontal: 10,
+            padding: 16,
+            flex: 1,
             alignItems: 'center',
             justifyContent: 'center',
-            width: 300,
-            height: 500,
+            height: 380,
             borderWidth: 1,
             borderColor: theme.border,
             ...SHADOWS.medium,
         },
         cardTitle: {
-            fontSize: 18,
+            fontSize: 14,
             fontFamily: FONTS.semiBold,
             color: theme.textSecondary,
-            marginBottom: 20,
             position: 'absolute',
-            top: 20,
-            left: 20,
+            top: 16,
+            left: 16,
+        },
+        radarSection: {
+            backgroundColor: theme.surface,
+            marginHorizontal: 20,
+            marginBottom: 16,
+            borderRadius: 20,
+            paddingVertical: 20,
+            borderWidth: 1,
+            borderColor: theme.border,
+            ...SHADOWS.medium,
+            alignItems: 'center',
+        },
+        radarHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            width: '100%',
+            marginBottom: 10,
+            paddingHorizontal: 16,
+        },
+        radarTitle: {
+            fontSize: 18,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+        },
+        rangeSelector: {
+            flexDirection: 'row',
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            borderRadius: 8,
+            padding: 2,
+        },
+        rangeButton: {
+            paddingVertical: 4,
+            paddingHorizontal: 8,
+            borderRadius: 6,
+        },
+        rangeButtonActive: {
+            backgroundColor: 'rgba(255,255,255,0.15)',
+        },
+        rangeText: {
+            fontSize: 10,
+            fontFamily: FONTS.bold,
+            color: theme.textSecondary,
+        },
+        rangeTextActive: {
+            color: theme.primary,
         },
         sectionHeader: {
             paddingHorizontal: 20,

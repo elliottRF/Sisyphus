@@ -9,6 +9,7 @@ export const ThemeProvider = ({ children }) => {
     const [theme, setTheme] = useState(THEMES.TITANIUM);
 
     const [gender, setGender] = useState('male');
+    const [accessoryWeight, setAccessoryWeight] = useState(0.5);
 
     useEffect(() => {
         loadSettings();
@@ -16,9 +17,10 @@ export const ThemeProvider = ({ children }) => {
 
     const loadSettings = async () => {
         try {
-            const [storedThemeID, storedGender] = await Promise.all([
+            const [storedThemeID, storedGender, storedAccessoryWeight] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
-                AsyncStorage.getItem('user_gender')
+                AsyncStorage.getItem('user_gender'),
+                AsyncStorage.getItem('user_accessory_weight')
             ]);
 
             if (storedThemeID && THEMES[storedThemeID]) {
@@ -27,6 +29,9 @@ export const ThemeProvider = ({ children }) => {
             }
             if (storedGender) {
                 setGender(storedGender);
+            }
+            if (storedAccessoryWeight !== null) {
+                setAccessoryWeight(parseFloat(storedAccessoryWeight));
             }
         } catch (error) {
             console.error("Failed to load settings:", error);
@@ -54,8 +59,25 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updateAccessoryWeight = async (weight) => {
+        setAccessoryWeight(weight);
+        try {
+            await AsyncStorage.setItem('user_accessory_weight', weight.toString());
+        } catch (error) {
+            console.error("Failed to save accessory weight:", error);
+        }
+    };
+
     return (
-        <ThemeContext.Provider value={{ theme, themeID, updateTheme, gender, updateGender }}>
+        <ThemeContext.Provider value={{
+            theme,
+            themeID,
+            updateTheme,
+            gender,
+            updateGender,
+            accessoryWeight,
+            updateAccessoryWeight
+        }}>
             {children}
         </ThemeContext.Provider>
     );

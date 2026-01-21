@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, PanResponder, Dimensions } from 'react-native';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 // import { COLORS, FONTS, SHADOWS } from '../constants/theme'; // Removed static import
@@ -12,14 +12,43 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TextInput } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 const Settings = () => {
     const router = useRouter();
-    const { theme, themeID, updateTheme, gender, updateGender } = useTheme(); // Use Theme Hook
+    const {
+        theme,
+        themeID,
+        updateTheme,
+        gender,
+        updateGender,
+        accessoryWeight,
+        updateAccessoryWeight
+    } = useTheme(); // Use Theme Hook
     const styles = getStyles(theme);
 
     const [importing, setImporting] = useState(false);
     const [importProgress, setImportProgress] = useState('');
     const [defaultTimer, setDefaultTimer] = useState('180');
+
+    const SLIDER_WIDTH = 200;
+
+    const panResponder = useMemo(() => PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderMove: (evt) => {
+            const { locationX } = evt.nativeEvent;
+            const weight = Math.max(0, Math.min(1, locationX / SLIDER_WIDTH));
+            const steppedWeight = Math.round(weight / 0.05) * 0.05;
+            updateAccessoryWeight(parseFloat(steppedWeight.toFixed(2)));
+        },
+        onPanResponderGrant: (evt) => {
+            const { locationX } = evt.nativeEvent;
+            const weight = Math.max(0, Math.min(1, locationX / SLIDER_WIDTH));
+            const steppedWeight = Math.round(weight / 0.05) * 0.05;
+            updateAccessoryWeight(parseFloat(steppedWeight.toFixed(2)));
+        }
+    }), [updateAccessoryWeight]);
 
     useEffect(() => {
         loadSettings();
@@ -209,6 +238,67 @@ const Settings = () => {
                         <Text style={styles.unitText}>seconds</Text>
                     </View>
                 </View>
+
+                {/* --- MUSCLE ANALYSIS --- */}
+                <Text style={styles.sectionTitle}>Muscle Analysis</Text>
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <MaterialCommunityIcons name="chart-bell-curve-cumulative" size={24} color={theme.primary} />
+                        <Text style={styles.cardTitle}>Accessory Contribution</Text>
+                    </View>
+                    <Text style={styles.cardDescription}>
+                        Set how much sets contribute to a muscle's recovery and balance if they are only an accessory target.
+                    </Text>
+
+                    <View style={styles.sliderContainer}>
+                        <View style={styles.sliderTrack}>
+                            <View
+                                style={[
+                                    styles.sliderFill,
+                                    { width: `${accessoryWeight * 100}%`, backgroundColor: theme.primary }
+                                ]}
+                            />
+                            <View
+                                style={[
+                                    styles.sliderThumb,
+                                    { left: `${accessoryWeight * 100}%`, borderColor: theme.primary, backgroundColor: theme.surface }
+                                ]}
+                            />
+                            {/* Draggable Slider Input */}
+                            <View
+                                {...panResponder.panHandlers}
+                                style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
+                            />
+                        </View>
+                        <View style={styles.sliderLabels}>
+                            <Text style={styles.sliderValueText}>0.0 (None)</Text>
+                            <Text style={[styles.sliderValueText, { color: theme.primary, fontFamily: FONTS.bold }]}>
+                                {accessoryWeight.toFixed(2)}
+                            </Text>
+                            <Text style={styles.sliderValueText}>1.0 (Full)</Text>
+                        </View>
+
+                        <View style={styles.weightQuickSelect}>
+                            {[0, 0.25, 0.5, 0.75, 1].map((val) => (
+                                <TouchableOpacity
+                                    key={val}
+                                    style={[
+                                        styles.weightOption,
+                                        accessoryWeight === val && { backgroundColor: theme.primary, borderColor: theme.primary }
+                                    ]}
+                                    onPress={() => updateAccessoryWeight(val)}
+                                >
+                                    <Text style={[
+                                        styles.weightOptionText,
+                                        accessoryWeight === val && { color: theme.surface }
+                                    ]}>
+                                        {val}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -373,6 +463,73 @@ const getStyles = (theme) => StyleSheet.create({
     genderText: {
         fontSize: 14,
         fontFamily: FONTS.semiBold,
+        color: theme.text,
+    },
+    // Slider Styles
+    sliderContainer: {
+        marginTop: 10,
+    },
+    sliderTrack: {
+        height: 40,
+        backgroundColor: theme.background,
+        borderRadius: 20,
+        position: 'relative',
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: theme.border,
+        width: 200,
+        alignSelf: 'center',
+    },
+    sliderFill: {
+        height: '100%',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+    },
+    sliderThumb: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 3,
+        position: 'absolute',
+        top: 8,
+        marginLeft: -12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 3,
+    },
+    sliderLabels: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 12,
+        paddingHorizontal: 10,
+    },
+    sliderValueText: {
+        fontSize: 12,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+    },
+    weightQuickSelect: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 20,
+    },
+    weightOption: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.background,
+        minWidth: 45,
+        alignItems: 'center',
+    },
+    weightOptionText: {
+        fontSize: 12,
+        fontFamily: FONTS.bold,
         color: theme.text,
     },
 });

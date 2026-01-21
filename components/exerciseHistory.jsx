@@ -444,22 +444,32 @@ const ExerciseHistory = (props) => {
                                 <NewExercise exerciseID={props.exerciseID} close={handleCloseEditSheet} />
                             </ActionSheet>
 
-                            <View style={styles.statsRow}>
-                                <View style={styles.statItem}>
-                                    <Text style={styles.statLabel}>Personal Best</Text>
-                                    <Text style={styles.statValue}>{stats.personalBest}kg</Text>
+                            {/* Conditionally render stats based on exercise type */}
+                            {exercisesList.find(e => e.exerciseID === props.exerciseID)?.isCardio ? (
+                                <View style={[styles.statsRow, { justifyContent: 'center' }]}>
+                                    <View style={styles.statItem}>
+                                        <Text style={styles.statLabel}>Total Sets</Text>
+                                        <Text style={styles.statValue}>{stats.totalSets}</Text>
+                                    </View>
                                 </View>
-                                <View style={styles.statDivider} />
-                                <View style={styles.statItem}>
-                                    <Text style={styles.statLabel}>Total Sets</Text>
-                                    <Text style={styles.statValue}>{stats.totalSets}</Text>
+                            ) : (
+                                <View style={styles.statsRow}>
+                                    <View style={styles.statItem}>
+                                        <Text style={styles.statLabel}>Personal Best</Text>
+                                        <Text style={styles.statValue}>{stats.personalBest}kg</Text>
+                                    </View>
+                                    <View style={styles.statDivider} />
+                                    <View style={styles.statItem}>
+                                        <Text style={styles.statLabel}>Total Sets</Text>
+                                        <Text style={styles.statValue}>{stats.totalSets}</Text>
+                                    </View>
+                                    <View style={styles.statDivider} />
+                                    <View style={styles.statItem}>
+                                        <Text style={styles.statLabel}>Volume</Text>
+                                        <Text style={styles.statValue}>{(stats.totalVolume / 1000).toFixed(1)}k</Text>
+                                    </View>
                                 </View>
-                                <View style={styles.statDivider} />
-                                <View style={styles.statItem}>
-                                    <Text style={styles.statLabel}>Volume</Text>
-                                    <Text style={styles.statValue}>{(stats.totalVolume / 1000).toFixed(1)}k</Text>
-                                </View>
-                            </View>
+                            )}
                         </View>
 
                         {!exercisesList.find(e => e.exerciseID === props.exerciseID)?.isCardio && (
@@ -485,35 +495,45 @@ const ExerciseHistory = (props) => {
                             </View>
                         )}
 
-                        <PRGraphCard
-                            exerciseID={props.exerciseID}
-                            exerciseName={props.exerciseName}
-                            isCompact={true}
-                        />
+                        {!exercisesList.find(e => e.exerciseID === props.exerciseID)?.isCardio && (
+                            <>
+                                <PRGraphCard
+                                    exerciseID={props.exerciseID}
+                                    exerciseName={props.exerciseName}
+                                    isCompact={true}
+                                />
 
-                        <View style={styles.historyHeaderRow}>
-                            <Text style={styles.sectionTitle}>History</Text>
-                            <View style={styles.prFilterContainer}>
-                                <MaterialCommunityIcons
-                                    name="trophy"
-                                    size={14}
-                                    color={showOnlyPRs ? lightenColor(theme.primary, 20) : theme.textSecondary}
-                                />
-                                <Text style={[
-                                    styles.prFilterText,
-                                    showOnlyPRs && { color: lightenColor(theme.primary, 20) }
-                                ]}>
-                                    PRs Only
-                                </Text>
-                                <Switch
-                                    value={showOnlyPRs}
-                                    onValueChange={setShowOnlyPRs}
-                                    trackColor={{ false: theme.border, true: `${lightenColor(theme.primary, 20)}66` }}
-                                    thumbColor={showOnlyPRs ? lightenColor(theme.primary, 20) : theme.textSecondary}
-                                    ios_backgroundColor={theme.border}
-                                />
+                                <View style={styles.historyHeaderRow}>
+                                    <Text style={styles.sectionTitle}>History</Text>
+                                    <View style={styles.prFilterContainer}>
+                                        <MaterialCommunityIcons
+                                            name="trophy"
+                                            size={14}
+                                            color={showOnlyPRs ? lightenColor(theme.primary, 20) : theme.textSecondary}
+                                        />
+                                        <Text style={[
+                                            styles.prFilterText,
+                                            showOnlyPRs && { color: lightenColor(theme.primary, 20) }
+                                        ]}>
+                                            PRs Only
+                                        </Text>
+                                        <Switch
+                                            value={showOnlyPRs}
+                                            onValueChange={setShowOnlyPRs}
+                                            trackColor={{ false: theme.border, true: `${lightenColor(theme.primary, 20)}66` }}
+                                            thumbColor={showOnlyPRs ? lightenColor(theme.primary, 20) : theme.textSecondary}
+                                            ios_backgroundColor={theme.border}
+                                        />
+                                    </View>
+                                </View>
+                            </>
+                        )}
+
+                        {exercisesList.find(e => e.exerciseID === props.exerciseID)?.isCardio && (
+                            <View style={styles.historyHeaderRow}>
+                                <Text style={styles.sectionTitle}>History</Text>
                             </View>
-                        </View>
+                        )}
                     </View>
                 }
                 renderItem={({ item: [session, exercises] }) => (

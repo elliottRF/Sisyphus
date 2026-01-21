@@ -933,7 +933,7 @@ const getStyles = (theme) => {
         },
         bottomButtonContainer: {
             position: 'absolute',
-            bottom: 84, // Moved up to clear the floating tab bar (approx 50-60px height + margin)
+            bottom: 100, // Moved up to clear the floating tab bar (approx 50-60px height + margin)
             left: 0,
             right: 0,
             padding: 16,
