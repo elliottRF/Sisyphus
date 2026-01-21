@@ -115,15 +115,22 @@ const Settings = () => {
 
     return (
         <SafeAreaView style={styles.container}>
+            <View style={styles.header}>
+                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                    <Feather name="chevron-left" size={28} color={theme.text} />
+                </TouchableOpacity>
+                <Text style={styles.title}>Settings</Text>
+            </View>
 
+            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-            <ScrollView contentContainerStyle={styles.content}>
+                {/* --- PREFERENCES SECTION --- */}
+                <Text style={styles.sectionTitle}>Preferences</Text>
 
-                {/* --- THEME SETTINGS --- */}
-                <Text style={styles.sectionTitle}>Appearance</Text>
+                {/* Theme Selector */}
                 <View style={[styles.card, { paddingVertical: 16 }]}>
-                    <View style={[styles.cardHeader, { paddingHorizontal: 0 }]}>
-                        <Feather name="droplet" size={24} color={theme.primary} />
+                    <View style={[styles.cardHeader, { paddingHorizontal: 0, marginBottom: 16, paddingLeft: 20 }]}>
+                        <Feather name="droplet" size={20} color={theme.primary} />
                         <Text style={styles.cardTitle}>App Theme</Text>
                     </View>
 
@@ -153,78 +160,14 @@ const Settings = () => {
                     </ScrollView>
                 </View>
 
-                {/* --- PREFERENCES --- */}
-                <Text style={styles.sectionTitle}>Preferences</Text>
+                {/* Timer Settings */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
-                        <MaterialCommunityIcons name="human-male-female" size={24} color={theme.primary} />
-                        <Text style={styles.cardTitle}>Highlighter Gender</Text>
+                        <Feather name="clock" size={20} color={theme.primary} />
+                        <Text style={styles.cardTitle}>Rest Timer</Text>
                     </View>
                     <Text style={styles.cardDescription}>
-                        Choose the gender of the muscle highlighter shown across the app.
-                    </Text>
-                    <View style={styles.genderToggleContainer}>
-                        <TouchableOpacity
-                            style={[
-                                styles.genderOption,
-                                gender === 'male' && { backgroundColor: theme.primary, borderColor: theme.primary }
-                            ]}
-                            onPress={() => updateGender('male')}
-                        >
-                            <Feather name="user" size={20} color={gender === 'male' ? theme.surface : theme.text} />
-                            <Text style={[styles.genderText, gender === 'male' && { color: theme.surface }]}>Male</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[
-                                styles.genderOption,
-                                gender === 'female' && { backgroundColor: theme.primary, borderColor: theme.primary }
-                            ]}
-                            onPress={() => updateGender('female')}
-                        >
-                            <Feather name="user" size={20} color={gender === 'female' ? theme.surface : theme.text} />
-                            <Text style={[styles.genderText, gender === 'female' && { color: theme.surface }]}>Female</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* --- DATA MANAGEMENT --- */}
-                <Text style={styles.sectionTitle}>Data Management</Text>
-
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Feather name="database" size={24} color={theme.primary} />
-                        <Text style={styles.cardTitle}>Import Data</Text>
-                    </View>
-                    <Text style={styles.cardDescription}>
-                        Import your workout history from the Strong app. Select your exported CSV file.
-                    </Text>
-
-                    <TouchableOpacity
-                        style={styles.importButton}
-                        onPress={handleImportStrong}
-                        disabled={importing}
-                    >
-                        {importing ? (
-                            <ActivityIndicator color={theme.surface} />
-                        ) : (
-                            <>
-                                <Feather name="download" size={20} color={theme.surface} />
-                                <Text style={styles.importButtonText}>Import Strong CSV</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
-                    {importing && importProgress && (
-                        <Text style={styles.progressText}>{importProgress}</Text>
-                    )}
-                </View>
-
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Feather name="clock" size={24} color={theme.primary} />
-                        <Text style={styles.cardTitle}>Timer Settings</Text>
-                    </View>
-                    <Text style={styles.cardDescription}>
-                        Set the default duration (in seconds) for the rest timer.
+                        Default duration for the rest timer in between sets.
                     </Text>
                     <View style={styles.inputContainer}>
                         <TextInput
@@ -239,15 +182,14 @@ const Settings = () => {
                     </View>
                 </View>
 
-                {/* --- MUSCLE ANALYSIS --- */}
-                <Text style={styles.sectionTitle}>Muscle Analysis</Text>
+                {/* Accessory Contribution */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
-                        <MaterialCommunityIcons name="chart-bell-curve-cumulative" size={24} color={theme.primary} />
-                        <Text style={styles.cardTitle}>Accessory Contribution</Text>
+                        <MaterialCommunityIcons name="chart-bell-curve-cumulative" size={20} color={theme.primary} />
+                        <Text style={styles.cardTitle}>Secondary Volume</Text>
                     </View>
                     <Text style={styles.cardDescription}>
-                        Set how much sets contribute to a muscle's recovery and balance if they are only an accessory target.
+                        How much supporting muscles count toward a muscle’s weekly volume (0.0–1.0).
                     </Text>
 
                     <View style={styles.sliderContainer}>
@@ -264,7 +206,6 @@ const Settings = () => {
                                     { left: `${accessoryWeight * 100}%`, borderColor: theme.primary, backgroundColor: theme.surface }
                                 ]}
                             />
-                            {/* Draggable Slider Input */}
                             <View
                                 {...panResponder.panHandlers}
                                 style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
@@ -298,6 +239,70 @@ const Settings = () => {
                             ))}
                         </View>
                     </View>
+                </View>
+
+                {/* Highlighter Gender */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <MaterialCommunityIcons name="human-male-female" size={20} color={theme.primary} />
+                        <Text style={styles.cardTitle}>Muscle Model</Text>
+                    </View>
+                    <Text style={styles.cardDescription}>
+                        Gender of the muscle highlighter model shown across the app.
+                    </Text>
+                    <View style={styles.genderToggleContainer}>
+                        <TouchableOpacity
+                            style={[
+                                styles.genderOption,
+                                gender === 'male' && { backgroundColor: theme.primary, borderColor: theme.primary }
+                            ]}
+                            onPress={() => updateGender('male')}
+                        >
+                            <Feather name="user" size={18} color={gender === 'male' ? theme.surface : theme.text} />
+                            <Text style={[styles.genderText, gender === 'male' && { color: theme.surface }]}>Male</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[
+                                styles.genderOption,
+                                gender === 'female' && { backgroundColor: theme.primary, borderColor: theme.primary }
+                            ]}
+                            onPress={() => updateGender('female')}
+                        >
+                            <Feather name="user" size={18} color={gender === 'female' ? theme.surface : theme.text} />
+                            <Text style={[styles.genderText, gender === 'female' && { color: theme.surface }]}>Female</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* --- DATA & BACKUP SECTION --- */}
+                <Text style={styles.sectionTitle}>Data & Backup</Text>
+
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Feather name="database" size={20} color={theme.primary} />
+                        <Text style={styles.cardTitle}>Import History</Text>
+                    </View>
+                    <Text style={styles.cardDescription}>
+                        Merge your workout history from Strong app by uploading an exported CSV.
+                    </Text>
+
+                    <TouchableOpacity
+                        style={styles.importButton}
+                        onPress={handleImportStrong}
+                        disabled={importing}
+                    >
+                        {importing ? (
+                            <ActivityIndicator color={theme.surface} />
+                        ) : (
+                            <>
+                                <Feather name="download" size={18} color={theme.surface} />
+                                <Text style={styles.importButtonText}>Import Strong CSV</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                    {importing && importProgress && (
+                        <Text style={styles.progressText}>{importProgress}</Text>
+                    )}
                 </View>
             </ScrollView>
         </SafeAreaView>
