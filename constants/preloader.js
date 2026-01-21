@@ -8,8 +8,9 @@ export const setPreloadedData = (data) => {
 };
 
 export const getPreloadedData = () => {
-    const data = { ...cache };
-    // Clear after reading to ensure freshness
+    return { ...cache };
+};
+
+export const clearPreloadedData = () => {
     cache = { template: null, exercises: null };
-    return data;
 };

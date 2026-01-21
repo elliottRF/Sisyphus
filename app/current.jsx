@@ -144,10 +144,10 @@ const Current = () => {
                 exercises: exercisesData
             });
 
-            router.push(`/template/${template.id}`);
+            router.push(`/template/${template.id}?v=${Date.now()}`);
         } catch (error) {
             console.error("Error pre-loading template:", error);
-            router.push(`/template/${template.id}`);
+            router.push(`/template/${template.id}?v=${Date.now()}`);
         }
     };
 
@@ -167,9 +167,9 @@ const Current = () => {
                 exercises: exercisesData
             });
 
-            router.push('/template/new');
+            router.push(`/template/new?v=${Date.now()}`);
         } catch (error) {
-            router.push('/template/new');
+            router.push(`/template/new?v=${Date.now()}`);
         }
     };
 

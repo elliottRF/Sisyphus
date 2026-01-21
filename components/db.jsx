@@ -594,22 +594,24 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             const distKey = keys.find(k => k.toLowerCase().includes('distance') || k.toLowerCase().includes('meters'));
             const timeKey = keys.find(k => k.toLowerCase() === 'seconds' || k.toLowerCase() === 'time');
 
+            // Determine if the header implies KM or Meters
+            const isKmHeader = distKey ? distKey.toLowerCase().includes('km') : false;
             const distanceVal = distKey ? row[distKey] : 0;
-            const distanceMeters = cleanFloat(distanceVal);
+            const distanceRaw = cleanFloat(distanceVal);
 
             const timeVal = timeKey ? row[timeKey] : 0;
             const cardiosSeconds = cleanFloat(timeVal);
 
-            const distanceKm = distanceMeters > 0 ? distanceMeters / 1000 : 0;
+            const distanceKm = isKmHeader ? distanceRaw : (distanceRaw > 0 ? distanceRaw / 1000 : 0);
 
             // Determine if this specific set is a cardio set
             // USER RULE: If Distance OR Seconds has a value, it is Cardio.
             // (Even if Reps > 0. We trust the CSV columns, having filtered out Rest Timers).
             // SAFEGUARD: Ensure it is definitely not a timer row
-            const isCardioSet = (distanceMeters > 0 || cardiosSeconds > 0) && !setOrderRaw.toLowerCase().includes('timer');
+            const isCardioSet = (distanceRaw > 0 || cardiosSeconds > 0) && !setOrderRaw.toLowerCase().includes('timer');
 
             if (isCardioSet) {
-              console.log(`[Import Match] ${exerciseName}: Dist=${distanceMeters} Time=${cardiosSeconds}`);
+              console.log(`[Import Match] ${exerciseName}: Dist=${distanceKm}km Time=${cardiosSeconds}s`);
             }
 
             let setNum = parseInt(setOrderRaw, 10);
@@ -647,7 +649,8 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               setType,
               distance: distanceKm > 0 ? distanceKm : null,
               seconds: cardiosSeconds > 0 ? cardiosSeconds : null,
-              isCardio: isCardioSet
+              isCardio: isCardioSet,
+              notes: row['Notes'] || '' // Capture notes from current row
             };
 
             if (!workoutMap.has(dateKey)) {
@@ -810,7 +813,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                       isLegacyPR,
                       set.durationMinutes,
                       set.setType,
-                      note,
+                      set.notes || note, // Prioritize set-level note, fallback to exercise-level
                       isThisSet1rmPR,
                       isThisSetVolumePR,
                       isThisSetWeightPR,
@@ -851,4 +854,51 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
       }
     });
   });
+};
+
+export const exportWorkoutData = async () => {
+  const database = await getDb();
+  try {
+    const rows = await database.getAllAsync(`
+      SELECT 
+        wh.time as Date,
+        wh.name as [Workout Name],
+        e.name as [Exercise Name],
+        wh.setNum as [Set Order],
+        wh.weight as [Weight (kg)],
+        wh.reps as Reps,
+        wh.distance as Distance,
+        wh.seconds as Seconds,
+        wh.notes as Notes,
+        wh.setType as SetType
+      FROM workoutHistory wh
+      JOIN exercises e ON wh.exerciseID = e.exerciseID
+      ORDER BY wh.time ASC, wh.exerciseNum ASC, wh.setNum ASC;
+    `);
+
+    // Map rows to match Strong CSV format as closely as possible
+    const formattedRows = rows.map(row => {
+      let setOrder = row['Set Order'];
+      if (row.SetType === 'W') setOrder = 'W';
+      else if (row.SetType === 'D') setOrder = 'D';
+
+      return {
+        'Date': row.Date,
+        'Workout Name': row['Workout Name'],
+        'Exercise Name': row['Exercise Name'],
+        'Set Order': setOrder,
+        'Weight (kg)': row['Weight (kg)'],
+        'Reps': row.Reps,
+        'Distance (km)': row.Distance,
+        'Seconds': row.Seconds,
+        'Notes': row.Notes
+      };
+    });
+
+    const csv = Papa.unparse(formattedRows);
+    return csv;
+  } catch (error) {
+    console.error('Export error:', error);
+    throw error;
+  }
 };

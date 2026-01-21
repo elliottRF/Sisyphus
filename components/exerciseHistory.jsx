@@ -140,10 +140,6 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
         ? exerciseDetails.isCardio === 1
         : exercises.some(ex => ex.distance > 0 || ex.seconds > 0);
 
-    if (isCardio) {
-        console.log(`[HistorySessionCard] Cardio Session ${session}:`, exercises);
-    }
-
     return (
         <TouchableOpacity
             onPress={handlePress}
@@ -171,7 +167,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                     )}
                 </View>
 
-                {sessionNote && (
+                {!!sessionNote && (
                     <View style={styles.noteContainer}>
                         <MaterialCommunityIcons
                             name="comment-text-outline"
@@ -395,6 +391,9 @@ const ExerciseHistory = (props) => {
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
 
+    const currentExerciseDetails = exercisesList.find(e => e.exerciseID === props.exerciseID);
+    const isCardioHeader = !!currentExerciseDetails?.isCardio;
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -445,7 +444,7 @@ const ExerciseHistory = (props) => {
                             </ActionSheet>
 
                             {/* Conditionally render stats based on exercise type */}
-                            {exercisesList.find(e => e.exerciseID === props.exerciseID)?.isCardio ? (
+                            {isCardioHeader ? (
                                 <View style={[styles.statsRow, { justifyContent: 'center' }]}>
                                     <View style={styles.statItem}>
                                         <Text style={styles.statLabel}>Total Sets</Text>
@@ -472,7 +471,7 @@ const ExerciseHistory = (props) => {
                             )}
                         </View>
 
-                        {!exercisesList.find(e => e.exerciseID === props.exerciseID)?.isCardio && (
+                        {!isCardioHeader && (
                             <View style={styles.bodyContainer}>
                                 <Body
                                     data={formattedTargets}
@@ -495,7 +494,7 @@ const ExerciseHistory = (props) => {
                             </View>
                         )}
 
-                        {!exercisesList.find(e => e.exerciseID === props.exerciseID)?.isCardio && (
+                        {!isCardioHeader && (
                             <>
                                 <PRGraphCard
                                     exerciseID={props.exerciseID}
@@ -529,7 +528,7 @@ const ExerciseHistory = (props) => {
                             </>
                         )}
 
-                        {exercisesList.find(e => e.exerciseID === props.exerciseID)?.isCardio && (
+                        {isCardioHeader && (
                             <View style={styles.historyHeaderRow}>
                                 <Text style={styles.sectionTitle}>History</Text>
                             </View>

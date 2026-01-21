@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Dimensions } from 'react-native';
-import { getPreloadedData } from '../../constants/preloader';
+import { getPreloadedData, clearPreloadedData } from '../../constants/preloader';
 
 import {
     fetchExercises,
@@ -34,7 +34,7 @@ const EditTemplate = () => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
 
-    const [prevId, setPrevId] = useState(TEMPLATE_ID);
+    const [prevVersion, setPrevVersion] = useState(params.v);
 
     // Initial state based on preloaded data or defaults
     const getInitialState = () => {
@@ -55,20 +55,30 @@ const EditTemplate = () => {
         };
     };
 
-    const initialState = getInitialState();
+    const initialState = useMemo(() => {
+        const state = getInitialState();
+        // Clear preloader after first use to ensure it doesn't leak into next mount
+        // Only if we actually had data to begin with
+        if (state.name || state.workout.length > 0) {
+            clearPreloadedData();
+        }
+        return state;
+    }, [TEMPLATE_ID, params.v]);
+
     const [exercises, setExercises] = useState(initialState.exercises);
     const [currentWorkout, setCurrentWorkout] = useState(initialState.workout);
     const [templateName, setTemplateName] = useState(initialState.name);
     const [isLoading, setIsLoading] = useState(initialState.loading);
 
-    // Synchronous state reset when TEMPLATE_ID changes
-    if (prevId !== TEMPLATE_ID) {
-        setPrevId(TEMPLATE_ID);
+    // Synchronous state reset when version/session changes
+    if (prevVersion !== params.v) {
+        setPrevVersion(params.v);
         const freshState = getInitialState();
         setTemplateName(freshState.name);
         setCurrentWorkout(freshState.workout);
         setExercises(freshState.exercises);
         setIsLoading(freshState.loading);
+        clearPreloadedData();
     }
 
     const [selectedExerciseId, setSelectedExerciseId] = useState(null);
@@ -264,7 +274,7 @@ const EditTemplate = () => {
             }
         };
         load();
-    }, [TEMPLATE_ID]);
+    }, [TEMPLATE_ID, params.v]);
 
     const isDynamic = theme.type === 'dynamic';
     const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;

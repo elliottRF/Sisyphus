@@ -18,6 +18,12 @@ const RADIUS = CHART_SIZE / 2 - 80;
 const CENTER = CHART_SIZE / 2;
 
 const MuscleRadarChart = ({ data, theme }) => {
+    const isDynamic = theme.type === 'dynamic';
+    const accentColor = isDynamic ? '#2DC4B6' : theme.primary;
+    const secondaryColor = isDynamic ? '#A29BFE' : theme.secondary || theme.primary;
+    const textColor = isDynamic ? '#FFFFFF' : theme.text;
+    const borderColor = isDynamic ? 'rgba(255,255,255,0.2)' : theme.border;
+
     const axes = [
         'Chest',
         'Shoulders',
@@ -59,8 +65,8 @@ const MuscleRadarChart = ({ data, theme }) => {
             <Svg width={CHART_SIZE} height={CHART_SIZE}>
                 <Defs>
                     <LinearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                        <Stop offset="0%" stopColor={theme.primary} stopOpacity="0.55" />
-                        <Stop offset="100%" stopColor={theme.primary} stopOpacity="0.15" />
+                        <Stop offset="0%" stopColor={accentColor} stopOpacity="0.55" />
+                        <Stop offset="100%" stopColor={accentColor} stopOpacity="0.15" />
                     </LinearGradient>
                 </Defs>
 
@@ -72,7 +78,7 @@ const MuscleRadarChart = ({ data, theme }) => {
                         cy={CENTER}
                         r={RADIUS * tick}
                         fill="none"
-                        stroke={theme.border}
+                        stroke={borderColor}
                         strokeDasharray="4,4"
                         opacity={0.25}
                     />
@@ -88,7 +94,7 @@ const MuscleRadarChart = ({ data, theme }) => {
                             y1={CENTER}
                             x2={x}
                             y2={y}
-                            stroke={theme.border}
+                            stroke={borderColor}
                             opacity={0.4}
                         />
                     );
@@ -98,7 +104,7 @@ const MuscleRadarChart = ({ data, theme }) => {
                 <Polygon
                     points={points}
                     fill="url(#grad)"
-                    stroke={theme.primary}
+                    stroke={accentColor}
                     strokeWidth="2.5"
                 />
 
@@ -118,13 +124,13 @@ const MuscleRadarChart = ({ data, theme }) => {
                                 cx={x}
                                 cy={y}
                                 r={isWeakest ? 6 : 4}
-                                fill={isWeakest ? '#FF6B6B' : theme.primary}
+                                fill={isWeakest ? '#FF6B6B' : accentColor}
                             />
                             <SvgText
                                 x={vx}
                                 y={vy}
                                 fontSize="10"
-                                fill={theme.text}
+                                fill={textColor}
                                 fontFamily={FONTS.bold}
                                 textAnchor="middle"
                                 alignmentBaseline="middle"
@@ -151,7 +157,7 @@ const MuscleRadarChart = ({ data, theme }) => {
                             key={i}
                             x={x}
                             y={y}
-                            fill={theme.text}
+                            fill={textColor}
                             fontSize="12"
                             fontFamily={FONTS.bold}
                             textAnchor={textAnchor}

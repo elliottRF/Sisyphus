@@ -7,7 +7,8 @@ import { FONTS, SHADOWS, THEMES } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { importStrongData } from '../components/db';
+import { importStrongData, exportWorkoutData } from '../components/db';
+import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TextInput } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
@@ -72,7 +73,7 @@ const Settings = () => {
         }
     };
 
-    const handleImportStrong = async () => {
+    const handleImportData = async () => {
         try {
             const result = await DocumentPicker.getDocumentAsync({
                 type: ['text/csv', 'text/comma-separated-values', 'application/csv'],
@@ -100,7 +101,7 @@ const Settings = () => {
 
             Alert.alert(
                 "Import Successful",
-                `Successfully imported ${count} workout sets from Strong.`,
+                `Successfully imported ${count} workout sets.`,
                 [{ text: "OK" }]
             );
 
@@ -110,6 +111,37 @@ const Settings = () => {
         } finally {
             setImporting(false);
             setImportProgress('');
+        }
+    };
+
+    const handleExportData = async () => {
+        try {
+            // Check if Sharing is available first
+            const isSharingAvailable = await Sharing.isAvailableAsync().catch(() => false);
+            if (!isSharingAvailable) {
+                Alert.alert("Feature Unavailable", "Sharing is not available on this device or the app needs to be rebuilt with native modules.");
+                return;
+            }
+
+            const csv = await exportWorkoutData();
+            if (!csv) {
+                Alert.alert("No Data", "There is no workout data to export.");
+                return;
+            }
+
+            const fileName = `sisyphus_workout_data_${new Date().toISOString().split('T')[0]}.csv`;
+            const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+            await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+
+            await Sharing.shareAsync(fileUri, {
+                mimeType: 'text/csv',
+                dialogTitle: 'Export Workout Data',
+                UTI: 'public.comma-separated-values-text'
+            });
+        } catch (error) {
+            console.error("Export error:", error);
+            Alert.alert("Export Failed", "An error occurred while exporting your data.");
         }
     };
 
@@ -129,7 +161,7 @@ const Settings = () => {
 
                 {/* Theme Selector */}
                 <View style={[styles.card, { paddingVertical: 16 }]}>
-                    <View style={[styles.cardHeader, { paddingHorizontal: 0, marginBottom: 16, paddingLeft: 20 }]}>
+                    <View style={[styles.cardHeader, { marginBottom: 16 }]}>
                         <Feather name="droplet" size={20} color={theme.primary} />
                         <Text style={styles.cardTitle}>App Theme</Text>
                     </View>
@@ -280,26 +312,37 @@ const Settings = () => {
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <Feather name="database" size={20} color={theme.primary} />
-                        <Text style={styles.cardTitle}>Import History</Text>
+                        <Text style={styles.cardTitle}>Data & Backup</Text>
                     </View>
                     <Text style={styles.cardDescription}>
-                        Merge your workout history from Strong app by uploading an exported CSV.
+                        Export your workout data to a CSV file or import history from Sisyphus or Strong.
                     </Text>
 
-                    <TouchableOpacity
-                        style={styles.importButton}
-                        onPress={handleImportStrong}
-                        disabled={importing}
-                    >
-                        {importing ? (
-                            <ActivityIndicator color={theme.surface} />
-                        ) : (
-                            <>
-                                <Feather name="download" size={18} color={theme.surface} />
-                                <Text style={styles.importButtonText}>Import Strong CSV</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
+                    <View style={{ gap: 12 }}>
+                        <TouchableOpacity
+                            style={styles.importButton}
+                            onPress={handleExportData}
+                        >
+                            <Feather name="upload" size={18} color={theme.surface} />
+                            <Text style={styles.importButtonText}>Export Workout Data</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.importButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary }]}
+                            onPress={handleImportData}
+                            disabled={importing}
+                        >
+                            {importing ? (
+                                <ActivityIndicator color={theme.primary} />
+                            ) : (
+                                <>
+                                    <Feather name="download" size={18} color={theme.primary} />
+                                    <Text style={[styles.importButtonText, { color: theme.primary }]}>Import Workout Data</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+
                     {importing && importProgress && (
                         <Text style={styles.progressText}>{importProgress}</Text>
                     )}
