@@ -274,18 +274,16 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                     }
 
                     let prevSetText = '-';
-                    if (set.setType !== 'W') {
-                        const prevSet = previousSets[previousSetIndex];
-                        if (prevSet) {
-                            if (isCardio) {
-                                // Convert previous seconds to minutes for display
-                                const prevMins = prevSet.seconds ? (prevSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : '0';
-                                prevSetText = `${prevSet.distance || 0}km / ${prevMins}m`;
-                            } else {
-                                prevSetText = `${prevSet.weight} × ${prevSet.reps}`;
-                            }
-                            previousSetIndex++;
+                    const prevSet = previousSets[previousSetIndex];
+                    if (prevSet) {
+                        if (isCardio) {
+                            // Convert previous seconds to minutes for display
+                            const prevMins = prevSet.seconds ? (prevSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : '0';
+                            prevSetText = `${prevSet.distance || 0}km / ${prevMins}m`;
+                        } else {
+                            prevSetText = `${prevSet.weight} × ${prevSet.reps}`;
                         }
+                        previousSetIndex++;
                     }
 
                     acc.push(

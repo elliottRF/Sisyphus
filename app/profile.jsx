@@ -35,6 +35,11 @@ const Profile = () => {
             fetchExercises()
                 .then(data => setExercises(data))
                 .catch(err => console.error(err));
+
+            // Cleanup: clear search query when leaving the page
+            return () => {
+                setSearchQuery('');
+            };
         }, [])
     );
 
@@ -128,6 +133,15 @@ const Profile = () => {
                         returnKeyType="done"
                         onSubmitEditing={Keyboard.dismiss}
                     />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity
+                            onPress={() => setSearchQuery('')}
+                            style={styles.clearButton}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Feather name="x" size={20} color={theme.textSecondary} />
+                        </TouchableOpacity>
+                    )}
                 </View>
                 <TouchableOpacity
                     style={styles.addButton}
@@ -218,6 +232,10 @@ const getStyles = (theme) => StyleSheet.create({
         fontFamily: FONTS.medium,
         fontSize: 16,
         height: '100%',
+    },
+    clearButton: {
+        padding: 4,
+        marginLeft: 8,
     },
     addButton: {
         ...SHADOWS.medium,

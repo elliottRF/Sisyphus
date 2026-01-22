@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import ActionSheet from "react-native-actions-sheet";
-import { fetchExercises } from '../components/db';
+import { fetchExercises, fetchLastWorkoutSets } from '../components/db';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -19,9 +19,37 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
             exercise.name.toLowerCase().includes(searchQuery.toLowerCase())
         );
 
-    const inputExercise = (item) => {
+    const inputExercise = async (item) => {
         actionSheetRef.current?.hide();
         const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+
+        // Fetch last workout sets for this exercise
+        const history = await fetchLastWorkoutSets(item.exerciseID);
+
+        let setsToUse;
+        if (history && history.length > 0) {
+            // Use all sets from history including warm-ups
+            setsToUse = history.map(hSet => ({
+                id: generateId(),
+                weight: hSet.weight?.toString() || null,
+                reps: hSet.reps?.toString() || null,
+                distance: hSet.distance?.toString() || null,
+                minutes: hSet.seconds ? (hSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : null,
+                setType: hSet.setType || 'N',
+                completed: false
+            }));
+        } else {
+            // No history, create a single empty set
+            setsToUse = [{
+                id: generateId(),
+                weight: null,
+                reps: null,
+                distance: null,
+                minutes: null,
+                setType: 'N',
+                completed: false
+            }];
+        }
 
         setCurrentWorkout((prevWorkouts) => [
             ...prevWorkouts,
@@ -31,15 +59,8 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
                     {
                         id: generateId(),
                         exerciseID: item.exerciseID,
-                        sets: [
-                            {
-                                id: generateId(),
-                                weight: null,
-                                reps: null,
-                                distance: null,
-                                minutes: null
-                            }
-                        ]
+                        sets: setsToUse,
+                        notes: ''
                     }
                 ]
             }
@@ -65,6 +86,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
             containerStyle={styles.actionSheetContainer}
             indicatorStyle={styles.indicator}
             gestureEnabled={true}
+            onClose={() => setSearchQuery('')}
         >
             <View style={styles.contentContainer}>
                 <View style={styles.searchContainer}>

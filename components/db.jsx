@@ -327,7 +327,7 @@ export const fetchLastWorkoutSets = async (exerciseID) => {
   // Fetch the sets for that session
   return await database.getAllAsync(
     `SELECT * FROM workoutHistory 
-     WHERE exerciseID = ? AND workoutSession = ? AND (setType IS NULL OR setType != 'W')
+     WHERE exerciseID = ? AND workoutSession = ?
      ORDER BY setNum ASC;`,
     [exerciseID, lastSessionResult.lastSession]
   );
