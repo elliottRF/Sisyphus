@@ -1,7 +1,6 @@
 # **Sisyphus** 💪📊
 
-**Sisyphus** is a mobile fitness tracking app focused on **strength progression**, **muscle balance**, and **recovery awareness**.  
-Built for lifters who care about long-term progress, not gimmicks.
+**Sisyphus** is an Android fitness tracking app focused on **strength progression**, **muscle growth**, and **recovery**.  
 
 ---
 
@@ -34,17 +33,14 @@ Built for lifters who care about long-term progress, not gimmicks.
 - **JavaScript**
 
 
-## **Screenshots**
+## Screenshots
 
-<p align="center">
-  <img src="assets/screenshots/Home.png" height="450" />
-  <img src="assets/screenshots/Current.jpg" height="450" />
-  <img src="assets/screenshots/History.jpg" height="450" />
-</p>
-
-<p align="center">
-  <img src="assets/screenshots/Exercise_History.png" height="450" />
-  <img src="assets/screenshots/Session_History.jpg" height="450" />
+<p align="center" style="display: flex; flex-wrap: nowrap; justify-content: center; gap: 12px; overflow-x: auto;">
+  <img src="assets/screenshots/Home.png" height="700" style="object-fit: cover;" />
+  <img src="assets/screenshots/Current.jpg" height="700" style="object-fit: cover;" />
+  <img src="assets/screenshots/History.jpg" height="700" style="object-fit: cover;" />
+  <img src="assets/screenshots/Session_History.jpg" height="700" style="object-fit: cover;" />
+  <img src="assets/screenshots/Exercise_History.png" height="700" style="object-fit: cover;" />
 </p>
 
 ---
