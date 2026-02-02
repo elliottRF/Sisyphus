@@ -34,9 +34,18 @@ Built for lifters who care about long-term progress, not gimmicks.
 - **JavaScript**
 
 
-![Home Screen](assets/screenshots/Screenshot_20260121-143618.png)
+## **Screenshots**
 
+<p align="center">
+  <img src="assets/screenshots/Home.png" height="450" />
+  <img src="assets/screenshots/Current.jpg" height="450" />
+  <img src="assets/screenshots/History.jpg" height="450" />
+</p>
 
+<p align="center">
+  <img src="assets/screenshots/Exercise_History.png" height="450" />
+  <img src="assets/screenshots/Session_History.jpg" height="450" />
+</p>
 
 ---
 
