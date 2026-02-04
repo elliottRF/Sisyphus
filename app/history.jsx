@@ -134,21 +134,18 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
                         </View>
                     </View>
                     <View style={styles.badgeContainer}>
-                        {isLoading ? (
-                            <ActivityIndicator size="small" color={theme.primary} style={{ marginRight: 8 }} />
-                        ) : (
-                            <>
-                                {totalPRs > 0 && (
-                                    <View style={styles.prSummaryBadge}>
-                                        <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
-                                        <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
-                                    </View>
-                                )}
-                                <View style={styles.sessionBadge}>
-                                    <Text style={styles.sessionBadgeText}>#{session}</Text>
-                                </View>
-                            </>
+
+                        {totalPRs > 0 && (
+                            <View style={styles.prSummaryBadge}>
+                                <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
+                                <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
+                            </View>
                         )}
+                        <View style={styles.sessionBadge}>
+                            <Text style={styles.sessionBadgeText}>#{session}</Text>
+                        </View>
+
+
                     </View>
                 </View>
 
