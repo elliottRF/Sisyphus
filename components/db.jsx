@@ -89,6 +89,11 @@ export const setupDatabase = async () => {
     await ensureColumnExists('workoutHistory', 'distance', 'FLOAT');
     await ensureColumnExists('workoutHistory', 'seconds', 'INTEGER');
 
+    // Body Weight Migrations
+    await ensureColumnExists('bodyWeight', 'datetime', 'TEXT');
+    await ensureColumnExists('bodyWeight', 'weight', 'REAL');
+
+
 
     // Create pinnedExercises table
     await database.execAsync(`
@@ -105,6 +110,15 @@ export const setupDatabase = async () => {
         name TEXT NOT NULL,
         data TEXT NOT NULL,
         createdAt TEXT
+      );
+    `);
+
+    // Create bodyWeight table
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS bodyWeight (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        datetime TEXT NOT NULL UNIQUE,
+        weight REAL NOT NULL
       );
     `);
 
@@ -551,6 +565,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           // Pre-process: Group rows by date
           const workoutMap = new Map();
           const notesMap = new Map();
+          const bodyWeightEntries = [];
 
           // First pass: validate and group data by date
           for (let i = 0; i < rows.length; i++) {
@@ -560,6 +575,15 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
             const date = new Date(row['Date']).toISOString();
             const exerciseName = row['Exercise Name'].trim();
+
+            if (exerciseName.toLowerCase() === 'body weight' || exerciseName.toLowerCase() === 'weight') {
+              const weight = parseFloat(row['Weight (kg)']) || 0;
+              if (weight > 0) {
+                bodyWeightEntries.push({ date, weight });
+              }
+              continue;
+            }
+
             const dateKey = new Date(row['Date']).getTime();
 
             // Handle Notes Row (Case-insensitive match)
@@ -689,6 +713,14 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           const processedExercises = new Set();
 
           await database.withTransactionAsync(async () => {
+            // Process body weight entries
+            for (const entry of bodyWeightEntries) {
+              await database.runAsync(
+                `INSERT OR REPLACE INTO bodyWeight (datetime, weight) VALUES (?, ?);`,
+                [entry.date, entry.weight]
+              );
+            }
+
             // Process workouts chronologically
             for (let sessionIdx = 0; sessionIdx < sortedDateKeys.length; sessionIdx++) {
               const dateKey = sortedDateKeys[sessionIdx];
@@ -899,6 +931,121 @@ export const exportWorkoutData = async () => {
     return csv;
   } catch (error) {
     console.error('Export error:', error);
+    throw error;
+  }
+};
+
+// --- Body Weight Functions ---
+
+// Insert or update body weight
+export const insertBodyWeight = async (date, weight) => {
+  const database = await getDb();
+  try {
+    await database.runAsync(
+      `INSERT OR REPLACE INTO bodyWeight (datetime, weight) VALUES (?, ?);`,
+      [date, weight]
+    );
+    return "Weight logged successfully!";
+  } catch (error) {
+    console.error("Error logging body weight:", error);
+    throw error;
+  }
+};
+
+// Get body weight history
+export const getBodyWeightHistory = async () => {
+  const database = await getDb();
+  try {
+    return await database.getAllAsync('SELECT * FROM bodyWeight ORDER BY datetime ASC;');
+  } catch (error) {
+    console.error("Error fetching body weight history:", error);
+    return [];
+  }
+};
+
+// Get latest body weight
+export const getLatestBodyWeight = async () => {
+  const database = await getDb();
+  try {
+    return await database.getFirstAsync('SELECT * FROM bodyWeight ORDER BY datetime DESC LIMIT 1;');
+  } catch (error) {
+    console.error("Error fetching latest body weight:", error);
+    return null;
+  }
+};
+
+// Import body weight data from CSV
+export const importBodyWeightData = async (csvContent) => {
+  const database = await getDb();
+
+  return new Promise((resolve, reject) => {
+    Papa.parse(csvContent, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (h) => h.trim().replace(/^"|"$/g, ''), // Helper to clean headers
+      complete: async (results) => {
+        try {
+          const rows = results.data;
+          let importedCount = 0;
+
+          await database.withTransactionAsync(async () => {
+            for (const row of rows) {
+              // Flexible header matching
+              const keys = Object.keys(row);
+              const dateKey = keys.find(k => k.toLowerCase().includes('date'));
+              const weightKey = keys.find(k => k.toLowerCase().includes('weight') && k.toLowerCase().includes('kg'));
+
+              if (!dateKey || !weightKey) continue;
+
+              const rawDate = row[dateKey];
+              const rawWeight = row[weightKey];
+
+              if (!rawDate || !rawWeight) continue;
+
+              // Format date
+              const dateObj = new Date(rawDate);
+              if (isNaN(dateObj.getTime())) continue;
+
+              const date = dateObj.toISOString();
+
+              // Clean weight string
+              const weightStr = rawWeight.toString().replace(/"/g, '').replace(',', '.');
+              const weight = parseFloat(weightStr);
+
+              if (isNaN(weight)) continue;
+
+              await database.runAsync(
+                `INSERT OR REPLACE INTO bodyWeight (datetime, weight) VALUES (?, ?);`,
+                [date, weight]
+              );
+              importedCount++;
+            }
+          });
+
+          resolve(importedCount);
+        } catch (error) {
+          console.error("Error importing body weight data:", error);
+          reject(error);
+        }
+      },
+      error: (error) => {
+        console.error("Papa Parse Error:", error);
+        reject(error);
+      }
+    });
+  });
+};
+
+export const deleteBodyWeight = async (date) => {
+  const database = await getDb();
+  try {
+    await database.runAsync(
+      `DELETE FROM bodyWeight WHERE datetime = ?;`,
+      [date]
+    );
+    return "Weight deleted successfully!";
+  } catch (error) {
+    console.error("Error deleting body weight:", error);
     throw error;
   }
 };

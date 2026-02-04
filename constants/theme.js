@@ -239,7 +239,7 @@ const TITANIUM = {
 };
 
 const THRIVE = {
-    primary: "#45a299",      // Apple San Francisco Blue
+    primary: "#1bffcd",      // Apple San Francisco Blue
     primaryDark: "#2E7F78",
     secondary: "#5a2676",    // iOS System Gray
     background: "#000000",   // Pure Black (OLED optimized) - FIXED from #080808ff

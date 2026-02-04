@@ -9,8 +9,8 @@ import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const DEFAULT_GRAPH_HEIGHT = 220;
-const COMPACT_GRAPH_HEIGHT = 140;
+const DEFAULT_GRAPH_HEIGHT = 100;
+const COMPACT_GRAPH_HEIGHT = 100;
 const CARD_PADDING = 40;
 const CARD_MARGIN = 32;
 const Y_AXIS_WIDTH = 40;
@@ -223,7 +223,16 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
             const lastDate = processed[processed.length - 1].date;
             const totalDurationMs = lastDate - firstDate;
             const years = totalDurationMs / (1000 * 60 * 60 * 24 * 365);
-            const intervalMs = years > 3 ? (1000 * 60 * 60 * 24 * 30) : (1000 * 60 * 60 * 24 * 7);
+
+            // Determine interval based on time range
+            let intervalMs;
+            if (timeRange === '3M') {
+                intervalMs = 1000 * 60 * 60 * 24 * 3; // 3 days for 3-month view
+            } else if (years > 3) {
+                intervalMs = 1000 * 60 * 60 * 24 * 30; // 30 days for long periods
+            } else {
+                intervalMs = 1000 * 60 * 60 * 24 * 7; // 7 days for 1-year view
+            }
 
             const aggregated = [];
             let iteratorDate = new Date(firstDate);
@@ -579,7 +588,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
                         </View>
                     </>
                 ) : (
-                    <View style={[styles.emptyState, isCompact ? { height: 160 } : { height: 260 }]}>
+                    <View style={[styles.emptyState, isCompact ? { height: 100 } : { height: 100 }]}>
                         <Feather name="bar-chart-2" size={isCompact ? 32 : 48} color={theme.textSecondary} style={{ opacity: 0.3, marginBottom: 12 }} />
                         <Text style={styles.emptyText}>Not enough data for this period</Text>
                         <Text style={styles.emptySubText}>Need 2+ workouts to show progress</Text>
@@ -716,7 +725,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 10,
+        paddingVertical: 5,
         borderRadius: 10,
         gap: 8,
     },

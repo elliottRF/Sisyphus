@@ -1,13 +1,13 @@
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, PanResponder, Dimensions } from 'react-native';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 // import { COLORS, FONTS, SHADOWS } from '../constants/theme'; // Removed static import
 import { FONTS, SHADOWS, THEMES } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { importStrongData, exportWorkoutData } from '../components/db';
+import { importStrongData, exportWorkoutData, importBodyWeightData } from '../components/db';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TextInput } from 'react-native';
@@ -28,9 +28,17 @@ const Settings = () => {
     } = useTheme(); // Use Theme Hook
     const styles = getStyles(theme);
 
-    const [importing, setImporting] = useState(false);
+    const [importingWorkouts, setImportingWorkouts] = useState(false);
+    const [importingBodyWeight, setImportingBodyWeight] = useState(false);
     const [importProgress, setImportProgress] = useState('');
     const [defaultTimer, setDefaultTimer] = useState('180');
+    const scrollRef = useRef(null);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            scrollRef.current?.scrollTo({ y: 0, animated: false });
+        }, [])
+    );
 
     const SLIDER_WIDTH = 200;
 
@@ -82,7 +90,7 @@ const Settings = () => {
 
             if (result.canceled) return;
 
-            setImporting(true);
+            setImportingWorkouts(true);
             setImportProgress('Reading file...');
             const fileUri = result.assets[0].uri;
             const fileContent = await FileSystem.readAsStringAsync(fileUri);
@@ -109,7 +117,39 @@ const Settings = () => {
             console.error("Import error:", error);
             Alert.alert("Import Failed", "An error occurred while importing your data. Please check the CSV format.");
         } finally {
-            setImporting(false);
+            setImportingWorkouts(false);
+            setImportProgress('');
+        }
+    };
+
+    const handleImportBodyWeight = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['text/csv', 'text/comma-separated-values', 'application/csv'],
+                copyToCacheDirectory: true,
+            });
+
+            if (result.canceled) return;
+
+            setImportingBodyWeight(true);
+            setImportProgress('Reading file...');
+            const fileUri = result.assets[0].uri;
+            const fileContent = await FileSystem.readAsStringAsync(fileUri);
+
+            setImportProgress('Importing body weight data...');
+            const count = await importBodyWeightData(fileContent);
+
+            Alert.alert(
+                "Import Successful",
+                `Successfully imported ${count} body weight entries.`,
+                [{ text: "OK" }]
+            );
+
+        } catch (error) {
+            console.error("Import error:", error);
+            Alert.alert("Import Failed", "An error occurred while importing your data. Please check the CSV format.");
+        } finally {
+            setImportingBodyWeight(false);
             setImportProgress('');
         }
     };
@@ -154,7 +194,11 @@ const Settings = () => {
                 <Text style={styles.title}>Settings</Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                ref={scrollRef}
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+            >
 
                 {/* --- PREFERENCES SECTION --- */}
                 <Text style={styles.sectionTitle}>Preferences</Text>
@@ -330,9 +374,9 @@ const Settings = () => {
                         <TouchableOpacity
                             style={[styles.importButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary }]}
                             onPress={handleImportData}
-                            disabled={importing}
+                            disabled={importingWorkouts || importingBodyWeight}
                         >
-                            {importing ? (
+                            {importingWorkouts ? (
                                 <ActivityIndicator color={theme.primary} />
                             ) : (
                                 <>
@@ -341,9 +385,24 @@ const Settings = () => {
                                 </>
                             )}
                         </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.importButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary }]}
+                            onPress={handleImportBodyWeight}
+                            disabled={importingWorkouts || importingBodyWeight}
+                        >
+                            {importingBodyWeight ? (
+                                <ActivityIndicator color={theme.primary} />
+                            ) : (
+                                <>
+                                    <Feather name="download" size={18} color={theme.primary} />
+                                    <Text style={[styles.importButtonText, { color: theme.primary }]}>Import Body Weight Data</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
                     </View>
 
-                    {importing && importProgress && (
+                    {(importingWorkouts || importingBodyWeight) && importProgress && (
                         <Text style={styles.progressText}>{importProgress}</Text>
                     )}
                 </View>

@@ -13,6 +13,7 @@ import { FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import PRGraphCard from '../components/PRGraphCard';
+import BodyweightGraphCard from '../components/bodyweightGraphCard';
 import MuscleRadarChart from '../components/MuscleRadarChart';
 import { useTheme } from '../context/ThemeContext';
 
@@ -78,10 +79,10 @@ const Home = () => {
     const { theme, gender, accessoryWeight } = useTheme();
     const styles = getStyles(theme);
     const [bodyData, setBodyData] = useState([]);
-    const [radarData, setRadarData] = useState({});
-    const [radarRange, setRadarRange] = useState('1M');
     const [pinnedExercises, setPinnedExercises] = useState([]);
     const [allExercises, setAllExercises] = useState([]);
+    const [showBodyWeight, setShowBodyWeight] = useState(false);
+    const [showMuscleRadar, setShowMuscleRadar] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const actionSheetRef = useRef(null);
@@ -94,10 +95,22 @@ const Home = () => {
     useFocusEffect(
         React.useCallback(() => {
             loadMuscleData();
-            loadRadarData(radarRange);
             loadPinnedExercises();
-        }, [radarRange, accessoryWeight])
+            loadModulePrefs();
+        }, [accessoryWeight])
     );
+
+    const loadModulePrefs = async () => {
+        try {
+            const bwVal = await AsyncStorage.getItem('settings_showBodyWeight');
+            setShowBodyWeight(bwVal === 'true');
+            const mrVal = await AsyncStorage.getItem('settings_showMuscleRadar');
+            setShowMuscleRadar(mrVal === 'true');
+        } catch (e) {
+            console.error("Failed to load module prefs", e);
+        }
+    };
+
 
     // Listen for workout completion events
     useEffect(() => {
@@ -186,93 +199,6 @@ const Home = () => {
         }
     };
 
-    const loadRadarData = async (range = '1M') => {
-        try {
-            let days = 30;
-            if (range === '6M') days = 180;
-            else if (range === '1Y') days = 365;
-            else if (range === 'ALL') days = 3650;
-
-            const usageData = await fetchRecentMuscleUsage(days);
-            const stats = {
-                'Chest': 0,
-                'Shoulders': 0,
-                'Back': 0,
-                'Biceps': 0,
-                'Triceps': 0,
-                'Quads': 0,
-                'Hams': 0,
-                'Glutes': 0,
-                'Abs': 0
-            };
-
-            const radarMapping = {
-                "Chest": "Chest",
-                "Upper Chest": "Chest",
-                "Deltoids": "Shoulders",
-                "Shoulders": "Shoulders",
-                "Trapezius": "Back",
-                "Traps": "Back",
-                "Upper-Back": "Back",
-                "Lower-Back": "Back",
-                "Biceps": "Biceps",
-                "Triceps": "Triceps",
-                "Quadriceps": "Quads",
-                "Quads": "Quads",
-                "Hamstring": "Hams",
-                "Hamstrings": "Hams",
-                "Gluteal": "Glutes",
-                "Glutes": "Glutes",
-                "Abs": "Abs",
-                "Obliques": "Abs"
-            };
-
-            usageData.forEach(exercise => {
-                const sets = parseInt(exercise.sets, 10) || 0;
-                const primaryCategories = new Set();
-                const accessoryCategories = new Set();
-
-                // Determine unique categories hit by this exercise
-                if (exercise.targetMuscle) {
-                    exercise.targetMuscle.split(',').forEach(m => {
-                        const category = radarMapping[m.trim()];
-                        if (category) primaryCategories.add(category);
-                    });
-                }
-
-                if (exercise.accessoryMuscles) {
-                    exercise.accessoryMuscles.split(',').forEach(m => {
-                        const category = radarMapping[m.trim()];
-                        if (category) accessoryCategories.add(category);
-                    });
-                }
-
-                // Apply points: Primary (1pt) takes precedence
-                primaryCategories.forEach(category => {
-                    stats[category] += sets;
-                });
-
-                // Process Accessory Muscles (Accessory = user setting)
-                accessoryCategories.forEach(category => {
-                    // Only add accessory points if it wasn't already counted as primary
-                    if (!primaryCategories.has(category)) {
-                        stats[category] += (sets * accessoryWeight);
-                    }
-                });
-            });
-
-            // Truncate decimals for each category to prevent floating point artifacts
-            const cleanedStats = {};
-            Object.keys(stats).forEach(cat => {
-                cleanedStats[cat] = Math.round(stats[cat] * 10) / 10;
-            });
-
-            setRadarData(cleanedStats);
-        } catch (error) {
-            console.error("Failed to load radar data:", error);
-        }
-    };
-
     const loadPinnedExercises = async () => {
         try {
             const pinned = await getPinnedExercises();
@@ -287,7 +213,6 @@ const Home = () => {
         try {
             await Promise.all([
                 loadMuscleData(),
-                loadRadarData(radarRange),
                 loadPinnedExercises()
             ]);
         } catch (error) {
@@ -319,6 +244,29 @@ const Home = () => {
             console.error("Error pinning exercise:", error);
         }
     };
+
+    const toggleBodyWeightGraph = async () => {
+        try {
+            const newState = !showBodyWeight;
+            setShowBodyWeight(newState);
+            await AsyncStorage.setItem('settings_showBodyWeight', String(newState));
+            actionSheetRef.current?.hide();
+        } catch (e) {
+            console.error("Error saving body weight pref", e);
+        }
+    };
+
+    const toggleMuscleRadar = async () => {
+        try {
+            const newState = !showMuscleRadar;
+            setShowMuscleRadar(newState);
+            await AsyncStorage.setItem('settings_showMuscleRadar', String(newState));
+            actionSheetRef.current?.hide();
+        } catch (e) {
+            console.error("Error saving muscle radar pref", e);
+        }
+    };
+
 
     const filteredExercises = allExercises
         .filter(ex => ex.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -397,17 +345,18 @@ const Home = () => {
                     </View>
                 </View>
 
-                <View style={styles.radarSection}>
-                    <View style={styles.radarHeader}>
-                        <Text style={styles.radarTitle}>Muscle Balance</Text>
-                        <TimeRangeSelector selectedRange={radarRange} onSelect={setRadarRange} theme={theme} styles={styles} />
-                    </View>
-                    <MuscleRadarChart data={radarData} theme={theme} />
-                </View>
-
-                <View style={styles.sectionHeader}>
+                <View style={[styles.sectionHeader, { marginTop: 0 }]}>
                     <Text style={styles.sectionTitle}>Progress Tracker</Text>
                 </View>
+
+                {showMuscleRadar && (
+                    <MuscleRadarChart refreshTrigger={isRefreshing} />
+                )}
+
+                {showBodyWeight && (
+                    <BodyweightGraphCard theme={theme} refreshTrigger={isRefreshing} />
+                )}
+
 
                 {pinnedExercises.map((exercise) => (
                     <PRGraphCard
@@ -426,7 +375,7 @@ const Home = () => {
                         theme={theme}
                     >
                         <Feather name="plus-circle" size={24} color={theme.primary} />
-                        <Text style={styles.addGraphText}>Add Progress Graph</Text>
+                        <Text style={styles.addGraphText}>Add Tracker</Text>
                     </GradientOrView>
                 </TouchableOpacity>
 
@@ -442,7 +391,55 @@ const Home = () => {
                 snapPoints={[100]}
                 initialSnapIndex={0}
             >
-                <View style={styles.contentContainer}>
+                <View style={[styles.contentContainer, { paddingBottom: 20 }]}>
+                    <View style={styles.actionSheetHeader}>
+                        <Text style={styles.actionSheetTitle}>Add Module</Text>
+                    </View>
+
+                    <View style={styles.modulesContainer}>
+                        <TouchableOpacity
+                            style={[styles.moduleCard, { borderColor: showBodyWeight ? theme.primary : theme.border }]}
+                            onPress={toggleBodyWeightGraph}
+                        >
+                            <LinearGradient
+                                colors={showBodyWeight ? ['rgba(45, 196, 182, 0.2)', 'rgba(45, 196, 182, 0.05)'] : [theme.surface, theme.surface]}
+                                style={styles.moduleGradient}
+                            >
+                                <Feather name="activity" size={32} color={showBodyWeight ? theme.primary : theme.textSecondary} />
+                                <Text style={[styles.moduleText, showBodyWeight && { color: theme.primary, fontFamily: FONTS.bold }]}>
+                                    Body Weight
+                                </Text>
+                                {showBodyWeight && (
+                                    <View style={styles.checkBadge}>
+                                        <Feather name="check" size={12} color="white" />
+                                    </View>
+                                )}
+                            </LinearGradient>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.moduleCard, { borderColor: showMuscleRadar ? theme.primary : theme.border }]}
+                            onPress={toggleMuscleRadar}
+                        >
+                            <LinearGradient
+                                colors={showMuscleRadar ? ['rgba(45, 196, 182, 0.2)', 'rgba(45, 196, 182, 0.05)'] : [theme.surface, theme.surface]}
+                                style={styles.moduleGradient}
+                            >
+                                <Feather name="pie-chart" size={32} color={showMuscleRadar ? theme.primary : theme.textSecondary} />
+                                <Text style={[styles.moduleText, showMuscleRadar && { color: theme.primary, fontFamily: FONTS.bold }]}>
+                                    Muscle Balance
+                                </Text>
+                                {showMuscleRadar && (
+                                    <View style={styles.checkBadge}>
+                                        <Feather name="check" size={12} color="white" />
+                                    </View>
+                                )}
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.subHeader}>Exercises</Text>
+
                     <View style={styles.searchContainer}>
                         <View style={styles.searchBar}>
                             <Feather name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
@@ -721,6 +718,61 @@ const getStyles = (theme) => {
             color: theme.text,
             fontSize: 16,
             fontFamily: FONTS.semiBold,
+        },
+        // Action Sheet New Styles
+        actionSheetHeader: {
+            padding: 20,
+            paddingBottom: 10,
+        },
+        actionSheetTitle: {
+            fontSize: 20,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+        },
+        subHeader: {
+            fontSize: 16,
+            fontFamily: FONTS.semiBold,
+            color: theme.text,
+            marginLeft: 20,
+            marginTop: 10,
+            marginBottom: 10,
+        },
+        modulesContainer: {
+            flexDirection: 'row',
+            paddingHorizontal: 20,
+            gap: 16,
+            marginBottom: 20,
+        },
+        moduleCard: {
+            flex: 1,
+            height: 100,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: theme.border,
+            overflow: 'hidden',
+            ...SHADOWS.small,
+        },
+        moduleGradient: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+        },
+        moduleText: {
+            fontSize: 14,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+        },
+        checkBadge: {
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            backgroundColor: theme.primary,
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
         },
     });
 };
