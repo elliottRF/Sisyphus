@@ -56,8 +56,8 @@
   {
     "exerciseID": 10,
     "name": "Romanian Deadlift (Barbell)",
-    "targetMuscle": "Hamstring",
-    "accessoryMuscles": "Gluteal,Lower-Back"
+    "targetMuscle": "Hamstring, Gluteal",
+    "accessoryMuscles": "Lower-Back"
   },
   {
     "exerciseID": 11,
@@ -254,8 +254,8 @@
   {
     "exerciseID": 43,
     "name": "Wide Grip Seated Row (Cable)",
-    "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Trapezius"
+    "targetMuscle": "Upper-Back, Trapezius",
+    "accessoryMuscles": "Biceps"
   },
   {
     "exerciseID": 44,
