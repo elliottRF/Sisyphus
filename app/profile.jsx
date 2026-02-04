@@ -203,12 +203,13 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 28,
         fontFamily: FONTS.bold,
         color: theme.text,
-        padding: 20,
+        paddingVertical: 20,
+        paddingHorizontal: 16,
     },
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
+        paddingHorizontal: 16,
         marginBottom: 20,
     },
     searchBar: {
@@ -248,7 +249,7 @@ const getStyles = (theme) => StyleSheet.create({
         alignItems: 'center',
     },
     list: {
-        paddingHorizontal: 20,
+        paddingHorizontal: 16,
         paddingBottom: 100,
     },
     exerciseCard: {

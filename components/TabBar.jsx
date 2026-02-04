@@ -9,7 +9,7 @@ import { FONTS, SHADOWS } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
 const TabBar = ({ state, descriptors, navigation }) => {
-    const { theme } = useTheme();
+    const { theme, workoutInProgress } = useTheme();
     const styles = getStyles(theme);
 
     const focusedRoute = state.routes[state.index];
@@ -76,12 +76,20 @@ const TabBar = ({ state, descriptors, navigation }) => {
                         >
                             {
                                 icons[route.name]({
-                                    color: isFocused ? theme.primary : theme.textSecondary
+                                    color: isFocused
+                                        ? theme.primary
+                                        : (route.name === 'current' && workoutInProgress)
+                                            ? theme.secondary
+                                            : theme.textSecondary
                                 })
                             }
 
                             <Text style={{
-                                color: isFocused ? theme.primary : theme.textSecondary,
+                                color: isFocused
+                                    ? theme.primary
+                                    : (route.name === 'current' && workoutInProgress)
+                                        ? theme.secondary
+                                        : theme.textSecondary,
                                 fontSize: 10,
                                 fontFamily: isFocused ? FONTS.bold : FONTS.medium,
                                 marginTop: 4

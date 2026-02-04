@@ -503,7 +503,7 @@ const getStyles = (theme) => {
             paddingBottom: 100,
         },
         header: {
-            paddingHorizontal: 20,
+            paddingHorizontal: 16,
             paddingTop: 20,
             paddingBottom: 10,
             flexDirection: 'row',
@@ -547,7 +547,7 @@ const getStyles = (theme) => {
         },
         recoveryContainer: {
             flexDirection: 'row',
-            paddingHorizontal: 20,
+            paddingHorizontal: 16,
             marginBottom: 20,
             gap: 12,
         },
@@ -618,7 +618,7 @@ const getStyles = (theme) => {
             color: theme.primary,
         },
         sectionHeader: {
-            paddingHorizontal: 20,
+            paddingHorizontal: 16,
             marginBottom: 16,
             marginTop: 10,
         },
@@ -628,7 +628,7 @@ const getStyles = (theme) => {
             color: theme.text,
         },
         addGraphButton: {
-            marginHorizontal: 20,
+            marginHorizontal: 16,
             marginBottom: 20,
             borderRadius: 16,
             ...SHADOWS.small,
@@ -693,7 +693,7 @@ const getStyles = (theme) => {
         },
         list: {
             flex: 1,
-            paddingHorizontal: 20,
+            paddingHorizontal: 16,
             paddingBottom: 100,
         },
         listContent: {
@@ -733,7 +733,7 @@ const getStyles = (theme) => {
             fontSize: 16,
             fontFamily: FONTS.semiBold,
             color: theme.text,
-            marginLeft: 20,
+            marginLeft: 16,
             marginTop: 10,
             marginBottom: 10,
         },
