@@ -420,7 +420,7 @@ const BodyweightGraphCard = ({ theme, refreshTrigger }) => {
                             <Text style={[styles.trendArrow, { color: trendData.direction === 'up' ? '#22c55e' : trendData.direction === 'down' ? '#ef4444' : theme.textSecondary }]}>
                                 {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
                             </Text>
-                            <Text style={[styles.trendText, { color: trendData.direction === 'up' ? '#22c55e' : trendData.direction === 'down' ? '#ef4444' : theme.textSecondary }]}>
+                            <Text style={[styles.trendText, { color: trendData.direction === 'up' ? '#22c55e' : trendData.direction === 'down' ? '#ef4444' : theme.textSecondary, fontFamily: FONTS.bold }]}>
                                 {trendData.label}
                             </Text>
                             <Text style={styles.trendPeriod}>· {trendData.period}</Text>
