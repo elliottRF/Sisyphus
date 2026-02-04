@@ -350,13 +350,15 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 28,
         fontFamily: FONTS.bold,
         color: theme.text,
+
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
+        paddingHorizontal: 16,
+        paddingTop: 20,
+        paddingBottom: 10,
     },
     calendarButton: {
         padding: 10,
