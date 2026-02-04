@@ -501,8 +501,7 @@ const getStyles = (theme) => {
             alignItems: 'center',
             paddingHorizontal: 12,
             paddingVertical: 4,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.overlayMedium,
+            borderBottomWidth: 0, // Remove border
             overflow: 'hidden',
         },
         completionOverlay: {
