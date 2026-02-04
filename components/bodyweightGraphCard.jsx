@@ -199,7 +199,16 @@ const BodyweightGraphCard = ({ theme, refreshTrigger }) => {
             }
         }
 
+        // **FIX: Ensure the last actual data point is always included**
         const finalPoints = densePoints.length > 0 ? densePoints : parsed;
+        const lastParsedPoint = parsed[parsed.length - 1];
+        const lastDensePoint = finalPoints[finalPoints.length - 1];
+
+        // If the last dense point doesn't match the last actual point, add it
+        if (!lastDensePoint || Math.abs(lastDensePoint.date.getTime() - lastParsedPoint.date.getTime()) > 1000) {
+            finalPoints.push(lastParsedPoint);
+        }
+
         const values = finalPoints.map(p => p.value);
         const minVal = Math.min(...values);
         const maxVal = Math.max(...values);
