@@ -311,13 +311,19 @@ const ExerciseHistory = (props) => {
 
     const handleMuscleStrings = (targetSelected, accessorySelected) => {
         const sluggedTargets = targetSelected.map(target => ({
-            slug: typeof target === 'string' ? target.toLowerCase() : '',
+            slug: typeof target === 'string'
+                ? target.trim().toLowerCase()
+                : '',
             intensity: 1
         }));
+
         const sluggedAccessories = accessorySelected.map(accessory => ({
-            slug: typeof accessory === 'string' ? accessory.toLowerCase() : '',
+            slug: typeof accessory === 'string'
+                ? accessory.trim().toLowerCase()
+                : '',
             intensity: 2
         }));
+
         setFormattedTargets([...sluggedTargets, ...sluggedAccessories]);
     };
 
