@@ -11,10 +11,13 @@ Sisyphus is an Android app for tracking workouts and monitoring long-term streng
 ## Screenshots
 
 <p align="center">
-  <img src="assets/screenshots/1.png" height="500"/>
-  <img src="assets/screenshots/3.png" height="500"/>
-  <img src="assets/screenshots/4.png" height="500"/>
-  <img src="assets/screenshots/5.png" height="500"/>
+  <img src="assets/screenshots/1.png" width="250"/>
+  <img src="assets/screenshots/3.png" width="250"/>
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/4.png" width="250"/>
+  <img src="assets/screenshots/5.png" width="250"/>
 </p>
 
 ---
