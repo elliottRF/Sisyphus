@@ -221,7 +221,7 @@ const EditWorkout = () => {
                     const maxVolumeForExercise = maxVolumesInWorkout.get(exercise.exerciseID);
                     const maxWeightInfo = maxWeightsInWorkout.get(exercise.exerciseID);
 
-                    const historicalPRs = await getExercisePRs(exercise.exerciseID);
+                    const historicalPRs = await getExercisePRs(exercise.exerciseID, WORKOUT_SESSION_NUMBER);
 
                     const isOverall1rmPR = maxOneRMForExercise > historicalPRs.maxOneRM;
                     const isOverallVolumePR = maxVolumeForExercise > historicalPRs.maxVolume;

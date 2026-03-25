@@ -348,8 +348,16 @@ export const fetchLastWorkoutSets = async (exerciseID) => {
 };
 
 // Get current PRs for an exercise
-export const getExercisePRs = async (exerciseID) => {
+export const getExercisePRs = async (exerciseID, excludeSessionNumber = null) => {
   const database = await getDb();
+
+  let queryCond = `WHERE exerciseID = ? AND reps > 0`;
+  let params = [exerciseID];
+
+  if (excludeSessionNumber != null) {
+    queryCond += ` AND workoutSession != ?`;
+    params.push(excludeSessionNumber);
+  }
 
   // Get max values
   const result = await database.getFirstAsync(
@@ -358,17 +366,26 @@ export const getExercisePRs = async (exerciseID) => {
       MAX(weight * reps) as maxVolume,
       MAX(weight) as maxWeight
      FROM workoutHistory
-     WHERE exerciseID = ? AND reps > 0;`,
-    [exerciseID]
+     ${queryCond};`,
+    params
   );
 
   // Get the max reps at the max weight
   const maxWeight = result?.maxWeight || 0;
+
+  let repsQueryCond = `WHERE exerciseID = ? AND weight = ?`;
+  let repsParams = [exerciseID, maxWeight];
+
+  if (excludeSessionNumber != null) {
+    repsQueryCond += ` AND workoutSession != ?`;
+    repsParams.push(excludeSessionNumber);
+  }
+
   const repsAtMaxWeight = maxWeight > 0 ? await database.getFirstAsync(
     `SELECT MAX(reps) as maxReps
      FROM workoutHistory
-     WHERE exerciseID = ? AND weight = ?;`,
-    [exerciseID, maxWeight]
+     ${repsQueryCond};`,
+    repsParams
   ) : null;
 
   return {
