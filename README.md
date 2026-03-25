@@ -1,54 +1,88 @@
-# **Sisyphus** 💪📊
+# Sisyphus – Gym Progress Tracker
 
-**Sisyphus** is an Android fitness tracking app focused on **strength progression**, **muscle growth**, and **recovery**.  
+Sisyphus is an Android app for tracking workouts and monitoring long-term strength progression.
+> Android only – no iOS build currently available.
 
----
-
-## **Features**
-
-### 🧠 **Recovery Status**
-- Front & back muscle maps  
-- Highlights muscles trained in the **last 3 days**
-- Quick visual fatigue check
-
-### ⚖️ **Muscle Balance**
-- Radar chart per muscle group  
-- Time filters: **1M / 6M / 1Y / ALL**
-- Spot overuse and neglected muscles instantly
-
-### 📈 **Progress Tracking**
-- Exercise-specific strength graphs  
-- **1RM estimation**
-- Track PRs and % growth over time  
-
-### 🏋️ **Exercise History**
-- Log exercises and sessions  
-- View historical performance per lift  
+![Platform](https://img.shields.io/badge/platform-android-green)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
-
-## **Tech Stack**
-
-- **React Native / Expo**
-- **JavaScript**
-
 
 ## Screenshots
 
-<p align="center" style="display: flex; flex-wrap: nowrap; justify-content: center; gap: 12px; overflow-x: auto;">
-  <img src="assets/screenshots/Home.png" height="700" style="object-fit: cover;" />
-  <img src="assets/screenshots/Current.jpg" height="700" style="object-fit: cover;" />
-  <img src="assets/screenshots/History.jpg" height="700" style="object-fit: cover;" />
-  <img src="assets/screenshots/Session_History.jpg" height="700" style="object-fit: cover;" />
-  <img src="assets/screenshots/Exercise_History.png" height="700" style="object-fit: cover;" />
+<p align="center">
+  <img src="assets/screenshots/1.png" height="500"/>
+  <img src="assets/screenshots/3.png" height="500"/>
+  <img src="assets/screenshots/4.png" height="500"/>
+  <img src="assets/screenshots/5.png" height="500"/>
 </p>
 
 ---
 
-## **Getting Started**
+## Features
+
+* Log workouts quickly during a session
+* Automatic rest timers, with alert when ended
+* Unlimited templates
+* View progress graphs over time
+* See which muscle groups are being trained with visual heatmaps
+* Identify lacking muscle groups via muscle radar
+* Track body weight
+* Import data directly from Strong
+* Customise secondary volume contributions, theme, and default rest timer.
+
+---
+
+## Built with
+
+* React Native
+* JavaScript
+* Native Android build (Gradle)
+* Local storage for offline tracking
+
+---
+
+## Why I built it
+
+I wanted an uncluttered gym tracking app, with free advanced features such as strength graphs and unlimited templates.
+
+---
+
+## Building and installing
+
+This project now runs as a standalone Android build rather than through Expo Go.
+
+### Build release APK
 
 ```bash
-git clone https://github.com/elliottRF/Sisyphus.git
-cd Sisyphus
-npm install
-npm start
+cd android
+./gradlew assembleRelease
+```
+
+### Install on a connected device
+
+```bash
+adb install android/app/build/outputs/apk/release/app-release.apk
+```
+
+Make sure:
+
+* USB debugging is enabled on your device
+* `adb` is available in your system PATH
+
+---
+
+## Planned improvements
+
+* Cloud sync for backups and social features
+* Automatic progression suggestions
+
+---
+
+## License
+
+MIT
+
+
+
+
