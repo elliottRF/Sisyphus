@@ -95,7 +95,7 @@ const BodyweightGraphCard = ({ theme, refreshTrigger }) => {
             const timePart = now.toISOString().split('T')[1];
             const fullIso = `${logDate}T${timePart}`;
 
-            if (editingEntry && editingEntry.datetime.split('T')[0] !== logDate) {
+            if (editingEntry) {
                 await deleteBodyWeight(editingEntry.datetime);
             }
 
@@ -271,10 +271,7 @@ const BodyweightGraphCard = ({ theme, refreshTrigger }) => {
                 <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
                     <View style={styles.modalOverlay}>
                         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                            <KeyboardAvoidingView
-                                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                                style={styles.modalContent}
-                            >
+                            <View style={styles.modalContent}>
                                 <View style={[styles.modalCard, { backgroundColor: theme.surface }]}>
                                     <Text style={[styles.modalTitle, { color: theme.text }]}>Log Body Weight</Text>
                                     <View style={[styles.inputContainer, { borderColor: theme.border }]}>
@@ -325,7 +322,7 @@ const BodyweightGraphCard = ({ theme, refreshTrigger }) => {
                                         </TouchableOpacity>
                                     </View>
                                 </View>
-                            </KeyboardAvoidingView>
+                            </View>
                         </TouchableWithoutFeedback>
                     </View>
                 </TouchableWithoutFeedback>

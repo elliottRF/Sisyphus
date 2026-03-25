@@ -220,7 +220,7 @@ const TITANIUM = {
     primary: "#0A84FF",      // Apple San Francisco Blue
     primaryDark: "#0066CC",
     secondary: "#0A84FF",    // iOS System Gray
-    background: "#000000",   // Pure Black (OLED optimized) - FIXED from #080808ff
+    background: "#080808ff",   // Pure Black (OLED optimized) - FIXED from #080808ff
     surface: "#121214",      // iOS Secondary System Background
     text: "#FFFFFF",         // Primary Label
     textSecondary: "#8E8E93",// Secondary Label

@@ -355,7 +355,7 @@ const getStyles = (theme) => StyleSheet.create({
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         paddingHorizontal: 16,
         paddingTop: 20,
         paddingBottom: 10,

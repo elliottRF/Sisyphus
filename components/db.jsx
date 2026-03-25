@@ -901,6 +901,7 @@ export const exportWorkoutData = async () => {
         wh.reps as Reps,
         wh.distance as Distance,
         wh.seconds as Seconds,
+        wh.duration as Duration,
         wh.notes as Notes,
         wh.setType as SetType
       FROM workoutHistory wh
@@ -922,6 +923,7 @@ export const exportWorkoutData = async () => {
         'Weight (kg)': row['Weight (kg)'],
         'Reps': row.Reps,
         'Distance (km)': row.Distance,
+        'Duration (sec)': (row.Duration || 0) * 60,
         'Seconds': row.Seconds,
         'Notes': row.Notes
       };

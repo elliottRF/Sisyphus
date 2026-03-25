@@ -33,7 +33,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                         const weight = parseFloat(row['Weight (kg)']) || 0;
                         const reps = parseInt(row['Reps'], 10) || 0;
                         const distance = parseFloat(row['Distance']) || parseFloat(row['Distance (km)']) || 0; // Handle common CSV headers
-                        const durationSeconds = parseInt(row['Duration (sec)']) || parseInt(row['Seconds']) || 0;
+                        const durationSeconds = parseInt(row['Duration (sec)'], 10) || parseInt(row['Seconds'], 10) || 0;
                         const durationMinutes = Math.floor(durationSeconds / 60);
                         const workoutTitle = row['Workout Name'] || 'Strong Import';
                         const workoutSession = new Date(row['Date']).getTime();
