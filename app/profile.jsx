@@ -119,7 +119,9 @@ const Profile = () => {
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-            <Text style={styles.title}>Exercises</Text>
+            <View style={styles.header}>
+                <Text style={styles.title}>Exercises</Text>
+            </View>
 
             <View style={styles.searchContainer}>
                 <View style={styles.searchBar}>
@@ -195,16 +197,17 @@ const getStyles = (theme) => StyleSheet.create({
         backgroundColor: theme.background,
     },
     header: {
-        paddingHorizontal: 20,
-        paddingTop: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        paddingHorizontal: 16,
+        paddingTop: 20,
         paddingBottom: 10,
     },
     title: {
         fontSize: 28,
         fontFamily: FONTS.bold,
         color: theme.text,
-        paddingVertical: 20,
-        paddingHorizontal: 16,
     },
     searchContainer: {
         flexDirection: 'row',

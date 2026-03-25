@@ -508,7 +508,7 @@ const getStyles = (theme) => {
             paddingBottom: 10,
             flexDirection: 'row',
             justifyContent: 'space-between',
-            alignItems: 'center',
+            alignItems: 'flex-start',
         },
         headerButtons: {
             flexDirection: 'row',
