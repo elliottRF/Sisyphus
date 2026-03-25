@@ -670,7 +670,7 @@ const Current = () => {
                                     </View>
 
                                     <View style={styles.templatesGrid}>
-                                        {templates.map((template) => (
+                                        {[...templates].reverse().map((template) => (
                                             <TouchableOpacity
                                                 key={template.id}
                                                 style={styles.templateCard}
