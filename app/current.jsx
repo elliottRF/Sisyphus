@@ -854,7 +854,7 @@ const getStyles = (theme) => {
         },
         emptyStateScrollContent: {
             padding: padding,
-            paddingBottom: 160, // Increased space to clear the floating button + tab bar
+            paddingBottom: 240, // Increased space to clear the floating button + tab bar
         },
         emptyStateHeader: {
             alignItems: 'center',
