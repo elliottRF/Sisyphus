@@ -56,7 +56,7 @@
   {
     "exerciseID": 10,
     "name": "Romanian Deadlift (Barbell)",
-    "targetMuscle": "Hamstring, Gluteal",
+    "targetMuscle": "Hamstring,Gluteal",
     "accessoryMuscles": "Lower-Back"
   },
   {
