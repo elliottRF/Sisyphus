@@ -7,7 +7,7 @@ import { FONTS, SHADOWS, THEMES } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { importStrongData, exportWorkoutData, importBodyWeightData } from '../components/db';
+import { importStrongData, exportWorkoutData, importBodyWeightData, exportBodyWeightData } from '../components/db';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TextInput } from 'react-native';
@@ -187,6 +187,36 @@ const Settings = () => {
         } catch (error) {
             console.error("Export error:", error);
             Alert.alert("Export Failed", "An error occurred while exporting your data.");
+        }
+    };
+
+    const handleExportBodyWeight = async () => {
+        try {
+            const isSharingAvailable = await Sharing.isAvailableAsync().catch(() => false);
+            if (!isSharingAvailable) {
+                Alert.alert("Feature Unavailable", "Sharing is not available on this device.");
+                return;
+            }
+
+            const csv = await exportBodyWeightData();
+            if (!csv) {
+                Alert.alert("No Data", "There is no body weight data to export.");
+                return;
+            }
+
+            const fileName = `sisyphus_weight_data_${new Date().toISOString().split('T')[0]}.csv`;
+            const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+            await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+
+            await Sharing.shareAsync(fileUri, {
+                mimeType: 'text/csv',
+                dialogTitle: 'Export Body Weight Data',
+                UTI: 'public.comma-separated-values-text'
+            });
+        } catch (error) {
+            console.error("Export error:", error);
+            Alert.alert("Export Failed", "An error occurred while exporting your body weight data.");
         }
     };
 
@@ -380,6 +410,14 @@ const Settings = () => {
                         </TouchableOpacity>
 
                         <TouchableOpacity
+                            style={styles.importButton}
+                            onPress={handleExportBodyWeight}
+                        >
+                            <Feather name="upload" size={18} color={theme.surface} />
+                            <Text style={styles.importButtonText}>Export Body Weight Data</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
                             style={[styles.importButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary }]}
                             onPress={handleImportData}
                             disabled={importingWorkouts || importingBodyWeight}
@@ -394,20 +432,29 @@ const Settings = () => {
                             )}
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={[styles.importButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary }]}
-                            onPress={handleImportBodyWeight}
-                            disabled={importingWorkouts || importingBodyWeight}
-                        >
-                            {importingBodyWeight ? (
-                                <ActivityIndicator color={theme.primary} />
-                            ) : (
-                                <>
-                                    <Feather name="download" size={18} color={theme.primary} />
-                                    <Text style={[styles.importButtonText, { color: theme.primary }]}>Import Body Weight Data</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
+                        <View style={styles.buttonRow}>
+                            <TouchableOpacity
+                                style={[styles.importButton, { flex: 1, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary }]}
+                                onPress={handleImportBodyWeight}
+                                disabled={importingWorkouts || importingBodyWeight}
+                            >
+                                {importingBodyWeight ? (
+                                    <ActivityIndicator color={theme.primary} />
+                                ) : (
+                                    <>
+                                        <Feather name="download" size={18} color={theme.primary} />
+                                        <Text style={[styles.importButtonText, { color: theme.primary }]}>Import Body Weight Data</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => Alert.alert("Weight Import", "Extract Strong measurements ZIP file for weight.csv")}
+                                style={styles.infoButton}
+                            >
+                                <Feather name="help-circle" size={20} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                        </View>
+
                     </View>
 
                     {(importingWorkouts || importingBodyWeight) && importProgress && (
@@ -646,6 +693,14 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 12,
         fontFamily: FONTS.bold,
         color: theme.text,
+    },
+    buttonRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    infoButton: {
+        padding: 4,
     },
 });
 
