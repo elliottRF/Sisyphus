@@ -16,6 +16,11 @@ const CARD_PADDING = 40;
 const CARD_MARGIN = 32;
 const Y_AXIS_WIDTH = 40;
 
+// 🐛 Debug flag: set to true to enable linear interpolation between data points
+// (fills in daily intermediate values for a smoother gradient), false to use
+// the original bucket-aggregation approach.
+const DEBUG_INTERPOLATE = true;
+
 const CustomSelectionDot = ({ isActive, color }) => (
     <View style={{
         width: 12,
@@ -97,6 +102,8 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
         };
     }, [exerciseID]);
 
+
+
     const loadData = async () => {
         try {
             setLoading(true);
@@ -112,13 +119,8 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                 const date = new Date(entry.time);
                 if (isNaN(date.getTime())) return;
 
-                // --- FIX STARTS HERE ---
-                // 1. Get the rep count
                 const reps = Number(entry.reps) || 0;
-
-                // 2. If reps are 0 (failed set), skip this entry entirely
                 if (reps <= 0) return;
-                // --- FIX ENDS HERE ---
 
                 const dateKey = date.toISOString().split('T')[0];
                 const oneRM = Number(entry.oneRM) || 0;
@@ -186,9 +188,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
         if (filtered.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
 
         let processed = [];
-
-        let useValue = (p) => graphMode === 'maxWeight' ? p.maxWeight : p.max1RM;
-
+        const useValue = (p) => graphMode === 'maxWeight' ? p.maxWeight : p.max1RM;
         let tempProcessed = filtered.map(p => ({ date: p.date, value: useValue(p) })).filter(p => p.value > 0);
 
         if (graphMode === 'truePR') {
@@ -201,10 +201,8 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                 return false;
             });
         } else if (graphMode === 'maxWeight') {
-            // For max weight, show PRs only when they actually occurred
             let maxVal = 0;
             processed = [];
-
             tempProcessed.forEach(p => {
                 if (p.value > maxVal) {
                     maxVal = p.value;
@@ -221,20 +219,61 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
 
         if (processed.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
 
-        if (processed.length >= 5) {
+        if (DEBUG_INTERPOLATE && processed.length >= 2) {
+            // --- Linear interpolation (same approach as BodyweightGraphCard) ---
+            // Fill in a point for every calendar day between the first and last
+            // actual data point, linearly interpolating the value in between.
+            const interpolated = [];
+            const oneDay = 24 * 60 * 60 * 1000;
+            const start = processed[0].date;
+            const end = processed[processed.length - 1].date;
+
+            for (let d = start.getTime(); d <= end.getTime(); d += oneDay) {
+                const currentDate = new Date(d);
+                const exactMatch = processed.find(
+                    p => Math.abs(p.date.getTime() - d) < oneDay / 2
+                );
+
+                if (exactMatch) {
+                    interpolated.push({ date: currentDate, value: exactMatch.value });
+                } else {
+                    const nextIndex = processed.findIndex(p => p.date.getTime() > d);
+                    if (nextIndex > 0) {
+                        const prevPt = processed[nextIndex - 1];
+                        const nextPt = processed[nextIndex];
+                        const ratio =
+                            (d - prevPt.date.getTime()) /
+                            (nextPt.date.getTime() - prevPt.date.getTime());
+                        interpolated.push({
+                            date: currentDate,
+                            value: prevPt.value + (nextPt.value - prevPt.value) * ratio,
+                        });
+                    }
+                }
+            }
+
+            // Ensure the final actual data point is always present at the end
+            const lastActual = processed[processed.length - 1];
+            const lastInterp = interpolated[interpolated.length - 1];
+            if (!lastInterp || Math.abs(lastInterp.date.getTime() - lastActual.date.getTime()) > 1000) {
+                interpolated.push(lastActual);
+            }
+
+            processed = interpolated;
+        } else if (!DEBUG_INTERPOLATE && processed.length >= 5) {
+            // --- Original bucket-aggregation path (used when interpolation is off) ---
             const firstDate = processed[0].date;
             const lastDate = processed[processed.length - 1].date;
             const totalDurationMs = lastDate - firstDate;
             const years = totalDurationMs / (1000 * 60 * 60 * 24 * 365);
 
-            // Determine interval based on time range
             let intervalMs;
             if (timeRange === '3M') {
-                intervalMs = 1000 * 60 * 60 * 24 * 3; // 3 days for 3-month view
+                intervalMs = 1000 * 60 * 60 * 24 * 3;
             } else if (years > 3) {
-                intervalMs = 1000 * 60 * 60 * 24 * 30; // 30 days for long periods
+                intervalMs = 1000 * 60 * 60 * 24 * 30;
             } else {
-                intervalMs = 1000 * 60 * 60 * 24 * 7; // 7 days for 1-year view
+                intervalMs = 1000 * 60 * 60 * 24 * 7;
             }
 
             const aggregated = [];
@@ -262,10 +301,36 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
 
         const minVal = Math.min(...values);
         const maxVal = Math.max(...values);
-        const rangeVal = maxVal - minVal || 10;
-        const padding = rangeVal * 0.2;
-        const yMin = Math.max(0, minVal - padding);
-        const yMax = maxVal + padding;
+        const rawRange = maxVal - minVal;
+
+        let yMin, yMax;
+
+        // "Factor of 5" snapping logic for non-minimal ranges
+        if (rawRange > 6) {
+            // Give 20% padding initially as per PR graph defaults
+            const padding = rawRange * 0.2;
+            yMin = Math.floor((minVal - padding) / 5) * 5;
+            yMax = Math.ceil((maxVal + padding) / 5) * 5;
+
+            // Ensure the range (yMax - yMin) is a multiple of 10 so the mid label is also a factor of 5
+            while ((yMax - yMin) % 10 !== 0) {
+                // Expand the side that is closer to the raw values to keep it balanced
+                if (Math.abs(yMax - maxVal) < Math.abs(minVal - yMin)) {
+                    yMax += 5;
+                } else {
+                    yMin -= 5;
+                }
+            }
+        } else {
+            // Minimal range logic: basic padding, no snapping to 5s
+            const rangeVal = rawRange || 10;
+            const padding = Math.max(1, rangeVal * 0.25);
+            yMin = minVal - padding;
+            yMax = maxVal + padding;
+        }
+
+        // Apply floor of 0 for weights
+        yMin = Math.max(0, yMin);
 
         return {
             points: processed,
@@ -279,7 +344,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
         if (points.length < 2) return { direction: 'flat', label: '0%', period: 'all time' };
 
         const now = new Date();
-        let pastDate = new Date(0); // Default to start for 'ALL'
+        let pastDate = new Date(0);
         let periodLabel = 'all time';
 
         if (timeRange === '3M') {
@@ -300,7 +365,6 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
             }
         }
 
-        // If no point is older than the range, use the earliest available point
         if (!pastPoint) {
             pastPoint = points[0];
             periodLabel = 'since start';
@@ -309,8 +373,6 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
         const current = points[points.length - 1].value;
         const past = pastPoint.value;
         const diff = current - past;
-
-        // Calculate percentage change
         const percentChange = past > 0 ? (diff / past) * 100 : 0;
         const formattedPercent = percentChange === 0 ? '0%' : `${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%`;
 
@@ -539,14 +601,14 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                         <View style={[styles.tooltipContainer, isCompact && { height: 44, marginBottom: 4 }]}>
                             {selectedPoint?.date ? (
                                 <View style={styles.activeTooltip}>
-                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{selectedPoint.value} kg</Text>
+                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{selectedPoint.value.toFixed(1)} kg</Text>
                                     <Text style={styles.tooltipDate}>
                                         {selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                     </Text>
                                 </View>
                             ) : (
                                 <View style={styles.placeholderTooltip}>
-                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{currentValue} kg</Text>
+                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{currentValue.toFixed(1)} kg</Text>
                                     <Text style={styles.tooltipDate}>
                                         {graphMode === 'maxWeight' ? 'Heaviest Lift' : 'Current PR'}
                                     </Text>
@@ -556,12 +618,37 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
 
                         <View style={[styles.graphRow, { height: graphHeight + 30 }]}>
                             <View style={[styles.yAxis, { height: graphHeight }]}>
-                                <Text style={styles.yAxisText}>{yRange[1].toFixed(0)}</Text>
-                                <Text style={styles.yAxisText}>{Math.round((yRange[0] + yRange[1]) / 2)}</Text>
-                                <Text style={styles.yAxisText}>{yRange[0].toFixed(0)}</Text>
+                                {(() => {
+                                    const diff = yRange[1] - yRange[0];
+                                    const precision = diff < 3 ? 1 : 0;
+                                    return (
+                                        <>
+                                            <Text style={[styles.yAxisText, { transform: [{ translateY: -6 }] }]}>{yRange[1].toFixed(precision)}</Text>
+                                            <Text style={styles.yAxisText}>{((yRange[0] + yRange[1]) / 2).toFixed(precision)}</Text>
+                                            <Text style={[styles.yAxisText, { transform: [{ translateY: 6 }] }]}>{yRange[0].toFixed(precision)}</Text>
+                                        </>
+                                    );
+                                })()}
                             </View>
 
                             <View style={styles.graphCol}>
+                                {/* Horizontal grid lines at top, mid, bottom — matching y-axis labels */}
+                                <View pointerEvents="none" style={[StyleSheet.absoluteFill, { height: graphHeight }]}>
+                                    {[0, 0.5, 1].map(fraction => (
+                                        <View
+                                            key={fraction}
+                                            style={{
+                                                position: 'absolute',
+                                                top: fraction * (graphHeight - 1),
+                                                left: 0,
+                                                right: 0,
+                                                height: 1,
+                                                backgroundColor: 'rgba(255,255,255,0.06)',
+                                            }}
+                                        />
+                                    ))}
+                                </View>
+
                                 <LineGraph
                                     points={points}
                                     animated={true}
@@ -654,6 +741,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         height: isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT,
         justifyContent: 'space-between',
         paddingRight: 8,
+        overflow: 'visible',
     },
     yAxisText: {
         color: theme.textSecondary,
