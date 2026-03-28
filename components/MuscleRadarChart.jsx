@@ -13,8 +13,8 @@ import Svg, {
 import { FONTS, SHADOWS } from '../constants/theme';
 import { fetchRecentMuscleUsage } from './db';
 import { useTheme } from '../context/ThemeContext';
-import { useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { AppEvents, on, off } from '../utils/events';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_MARGIN = 32;
@@ -52,7 +52,7 @@ const TimeRangeSelector = ({ selectedRange, onSelect, styles }) => {
     );
 };
 
-const MuscleRadarChart = ({ refreshTrigger }) => {
+const MuscleRadarChart = () => {
     const { theme, accessoryWeight } = useTheme();
     const styles = getStyles(theme);
     const [radarData, setRadarData] = useState({});
@@ -95,7 +95,21 @@ const MuscleRadarChart = ({ refreshTrigger }) => {
         } catch (error) { console.error(error); } finally { setLoading(false); }
     }, [timeRange, accessoryWeight]);
 
-    useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+    // Load on mount and whenever accessoryWeight or timeRange changes
+    useEffect(() => { loadData(); }, [loadData]);
+
+    // Subscribe to targeted refresh events
+    useEffect(() => {
+        const handler = () => loadData();
+        on(AppEvents.REFRESH_HOME, handler);
+        on(AppEvents.WORKOUT_COMPLETED, handler);
+        on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        return () => {
+            off(AppEvents.REFRESH_HOME, handler);
+            off(AppEvents.WORKOUT_COMPLETED, handler);
+            off(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        };
+    }, [loadData]);
 
     const values = Object.values(radarData);
     const maxGraphValue = Math.max(...values, 5);

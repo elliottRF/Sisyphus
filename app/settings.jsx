@@ -12,6 +12,7 @@ import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TextInput } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { AppEvents, emit } from '../utils/events';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -57,6 +58,7 @@ const Settings = () => {
             const weight = Math.max(0, Math.min(1, locationX / SLIDER_WIDTH));
             const steppedWeight = Math.round(weight / 0.05) * 0.05;
             updateAccessoryWeight(parseFloat(steppedWeight.toFixed(2)));
+            emit(AppEvents.WORKOUT_DATA_IMPORTED);
         }
     }), [updateAccessoryWeight]);
 
@@ -113,6 +115,7 @@ const Settings = () => {
                 `Successfully imported ${count} workout sets.`,
                 [{ text: "OK" }]
             );
+            emit(AppEvents.WORKOUT_DATA_IMPORTED);
 
         } catch (error) {
             console.error("Import error:", error);
@@ -145,6 +148,7 @@ const Settings = () => {
                 `Successfully imported ${count} body weight entries.`,
                 [{ text: "OK" }]
             );
+            emit(AppEvents.BODYWEIGHT_DATA_IMPORTED);
 
         } catch (error) {
             console.error("Import error:", error);
@@ -304,7 +308,10 @@ const Settings = () => {
                                         styles.weightOption,
                                         accessoryWeight === val && { backgroundColor: theme.primary, borderColor: theme.primary }
                                     ]}
-                                    onPress={() => updateAccessoryWeight(val)}
+                                    onPress={() => {
+                                        updateAccessoryWeight(val);
+                                        emit(AppEvents.WORKOUT_DATA_IMPORTED);
+                                    }}
                                 >
                                     <Text style={[
                                         styles.weightOptionText,
