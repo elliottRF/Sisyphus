@@ -137,6 +137,9 @@ const ThemeConsumer = () => {
                     name="settings"
                     options={{
                         title: "Settings",
+                        tabBarStyle: {
+                            display: 'none',
+                        },
                     }}
                 />
             </Tabs>

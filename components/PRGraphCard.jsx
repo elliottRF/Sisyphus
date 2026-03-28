@@ -7,6 +7,7 @@ import { fetchExerciseProgress, unpinExercise } from './db';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { AppEvents, on, off } from '../utils/events';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DEFAULT_GRAPH_HEIGHT = 100;
@@ -65,7 +66,7 @@ const GradientOrView = ({ colors, style, theme, children }) => {
     return <LinearGradient colors={colors} style={style}>{children}</LinearGradient>;
 };
 
-const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCompact = false }) => {
+const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) => {
     const { theme } = useTheme();
     const styles = getStyles(theme, isCompact);
 
@@ -82,17 +83,19 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, refreshTrigger, isCom
 
     const isTouching = useRef(false);
 
-    useFocusEffect(
-        useCallback(() => {
-            loadData();
-        }, [exerciseID])
-    );
-
+    // Subscribe to targeted refresh events
     useEffect(() => {
-        if (refreshTrigger !== undefined) {
-            loadData();
-        }
-    }, [refreshTrigger]);
+        loadData(); // Initial load on mount/ID change
+        const handler = () => loadData();
+        on(AppEvents.REFRESH_HOME, handler);
+        on(AppEvents.WORKOUT_COMPLETED, handler);
+        on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        return () => {
+            off(AppEvents.REFRESH_HOME, handler);
+            off(AppEvents.WORKOUT_COMPLETED, handler);
+            off(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        };
+    }, [exerciseID]);
 
     const loadData = async () => {
         try {
