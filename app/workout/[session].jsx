@@ -169,7 +169,7 @@ const WorkoutDetail = () => {
                 <ExerciseHistory
                     exerciseID={selectedExerciseId}
                     exerciseName={currentExerciseName}
-                    onLinkPress={() => actionSheetRef.current?.hide()}
+                    onClose={() => actionSheetRef.current?.hide()}
                 />
             </ActionSheet>
         </View>

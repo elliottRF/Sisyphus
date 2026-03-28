@@ -389,6 +389,7 @@ const EditTemplate = () => {
                     actionSheetRef={actionSheetRef}
                     setCurrentWorkout={setCurrentWorkout}
                     inputExercise={inputExercise}
+                    onExerciseCreated={() => fetchExercises().then(data => setExercises(data))}
                 />
 
                 <ActionSheet
@@ -400,6 +401,7 @@ const EditTemplate = () => {
                     <ExerciseHistory
                         exerciseID={selectedExerciseId}
                         exerciseName={currentExerciseName}
+                        onClose={() => exerciseInfoActionSheetRef.current?.hide()}
                     />
                 </ActionSheet>
             </View>

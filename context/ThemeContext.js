@@ -5,8 +5,8 @@ import { COLORS as DEFAULT_COLORS, THEMES } from '../constants/theme';
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-    const [themeID, setThemeID] = useState('TITANIUM');
-    const [theme, setTheme] = useState(THEMES.TITANIUM);
+    const [themeID, setThemeID] = useState('DEFAULT');
+    const [theme, setTheme] = useState(THEMES.DEFAULT);
 
     const [gender, setGender] = useState('male');
     const [accessoryWeight, setAccessoryWeight] = useState(0.5);
