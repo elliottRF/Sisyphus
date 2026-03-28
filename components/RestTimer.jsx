@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, runOnJS } from 'react-native-reanimated';
@@ -250,11 +250,17 @@ const RestTimer = forwardRef((props, ref) => {
     return (
         <GestureDetector gesture={composed}>
             <Animated.View style={[styles.container, rStyle]}>
+                <View style={styles.arrowHint}>
+                    {timeLeft > 0 && <MaterialIcons name="keyboard-arrow-up" size={11} color={COLORS.primary} />}
+                </View>
                 {timeLeft > 0 ? (
                     <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
                 ) : (
-                    <MaterialIcons name="timer" size={20} color={COLORS.primary} />
+                    <MaterialIcons name="timer" size={18} color={COLORS.primary} />
                 )}
+                <View style={styles.arrowHint}>
+                    {timeLeft > 0 && <MaterialIcons name="keyboard-arrow-down" size={11} color={COLORS.primary} />}
+                </View>
             </Animated.View>
         </GestureDetector>
     );
@@ -262,19 +268,25 @@ const RestTimer = forwardRef((props, ref) => {
 
 const styles = StyleSheet.create({
     container: {
-        width: 48,
+        width: 50,
         height: 36,
-        borderRadius: 18,
+        borderRadius: 14,
         backgroundColor: 'rgba(64, 186, 173, 0.1)',
         alignItems: 'center',
-        justifyContent: 'center',
         overflow: 'hidden',
     },
     timerText: {
-        fontSize: 14,
+        fontSize: 13,
+        lineHeight: 13,
         fontFamily: FONTS.bold,
         color: COLORS.primary,
-    }
+        includeFontPadding: false,
+    },
+    arrowHint: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 });
 
 export default RestTimer;

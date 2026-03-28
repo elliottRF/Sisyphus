@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/db';
 import { FONTS } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import WorkoutSessionView from '../../components/WorkoutSessionView';
 import { useTheme } from '../../context/ThemeContext';
 
 const WorkoutDetail = () => {
+    const insets = useSafeAreaInsets();
     const { session, initialData } = useLocalSearchParams();
     const router = useRouter();
     const { theme } = useTheme();
@@ -115,27 +116,27 @@ const WorkoutDetail = () => {
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+            <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
                 <ActivityIndicator size="large" color={theme.primary} />
-            </SafeAreaView>
+            </View>
         );
     }
 
     if (!effectiveWorkoutDetails || effectiveWorkoutDetails.length === 0) {
         return (
-            <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+            <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButtonOver}>
                     <Ionicons name="arrow-back" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <View style={[styles.header, { justifyContent: 'center', marginTop: 60 }]}>
                     <Text style={styles.title}>Workout Not Found</Text>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 
     return (
-        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <Stack.Screen options={{ headerShown: false }} />
 
             {effectiveWorkoutDetails && (
@@ -171,7 +172,7 @@ const WorkoutDetail = () => {
                     onLinkPress={() => actionSheetRef.current?.hide()}
                 />
             </ActionSheet>
-        </SafeAreaView>
+        </View>
     );
 };
 

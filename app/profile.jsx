@@ -2,7 +2,7 @@ import { View, Text, ScrollView, StyleSheet, TextInput, Keyboard, FlatList, Touc
 import React, { useState, useEffect, useRef } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR } from '../components/db';
 import ActionSheet from "react-native-actions-sheet";
 
@@ -16,6 +16,7 @@ import { useFocusEffect } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
 
 const Profile = () => {
+    const insets = useSafeAreaInsets();
     const { theme } = useTheme();
     const styles = getStyles(theme);
 
@@ -29,6 +30,13 @@ const Profile = () => {
     // New ref for create exercise action sheet
     const createExerciseActionSheetRef = useRef(null);
     const actionSheetRef = useRef(null);
+
+    // Pre-load on mount
+    useEffect(() => {
+        fetchExercises()
+            .then(data => setExercises(data))
+            .catch(err => console.error(err));
+    }, []);
 
     useFocusEffect(
         React.useCallback(() => {
@@ -118,7 +126,7 @@ const Profile = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <View style={styles.header}>
                 <Text style={styles.title}>Exercises</Text>
             </View>
@@ -187,7 +195,7 @@ const Profile = () => {
 
                 <NewExercise close={handleCloseCreateExerciseSheet} />
             </ActionSheet>
-        </SafeAreaView>
+        </View>
     )
 }
 

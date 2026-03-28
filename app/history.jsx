@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native'
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession } from '../components/db';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
@@ -173,6 +173,7 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
 
 
 const History = () => {
+    const insets = useSafeAreaInsets();
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
@@ -210,6 +211,14 @@ const History = () => {
         }
     };
 
+    // Pre-load data on component mount (works with lazy: false to load in background)
+    useEffect(() => {
+        fetchExercises()
+            .then(data => setExercises(data))
+            .catch(err => console.error(err));
+        loadWorkoutHistory();
+    }, []);
+
     useFocusEffect(
         React.useCallback(() => {
             fetchExercises()
@@ -238,15 +247,14 @@ const History = () => {
     }, [workoutHistory, theme.primary]);
 
     if (loading) {
+        // Return blank view instead of ActivityIndicator so it loads silently in background
         return (
-            <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-                <ActivityIndicator size="large" color={theme.primary} />
-            </SafeAreaView>
+            <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]} />
         );
     }
 
     return (
-        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <View style={styles.header}>
                 <Text style={styles.title}>Workout History</Text>
                 <TouchableOpacity
@@ -274,6 +282,17 @@ const History = () => {
                         router={router}
                     />
                 )}
+                ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                        <View style={styles.emptyIconContainer}>
+                            <MaterialCommunityIcons name="clipboard-text-outline" size={48} color={theme.primary} />
+                        </View>
+                        <Text style={styles.emptyTitle}>No Workouts Found</Text>
+                        <Text style={styles.emptySubtitle}>
+                            Finish a workout and your history will appear here.
+                        </Text>
+                    </View>
+                }
                 initialNumToRender={10}
                 maxToRenderPerBatch={10}
                 windowSize={10}
@@ -316,7 +335,7 @@ const History = () => {
                     />
                 </View>
             </ActionSheet>
-        </SafeAreaView>
+        </View>
     );
 };
 
@@ -468,6 +487,36 @@ const getStyles = (theme) => StyleSheet.create({
     },
     calendarContainer: {
         padding: 10,
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 40,
+        paddingTop: 100,
+    },
+    emptyIconContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: `${theme.primary}15`,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    emptyTitle: {
+        fontSize: 20,
+        fontFamily: FONTS.bold,
+        color: theme.text,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    emptySubtitle: {
+        fontSize: 16,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+        textAlign: 'center',
+        lineHeight: 24,
     },
 });
 
