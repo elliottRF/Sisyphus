@@ -106,6 +106,8 @@ const NewExercise = (props) => {
     const createExercise = async () => {
         if (!exerciseName.trim()) return;
 
+        let newExerciseObj = null;
+
         if (isEditMode && props.exerciseID) {
             await updateExercise(
                 props.exerciseID,
@@ -115,10 +117,19 @@ const NewExercise = (props) => {
                 isCardio ? 1 : 0
             );
         } else {
-            await insertExercise(exerciseName, formatListToString(targetSelected), formatListToString(accessorySelected), isCardio ? 1 : 0);
+            const newExerciseId = await insertExercise(exerciseName, formatListToString(targetSelected), formatListToString(accessorySelected), isCardio ? 1 : 0);
+            
+            // Construct the exercise object to be passed back
+            newExerciseObj = {
+                exerciseID: newExerciseId,
+                name: exerciseName,
+                targetMuscle: formatListToString(targetSelected),
+                accessoryMuscles: formatListToString(accessorySelected),
+                isCardio: isCardio ? 1 : 0
+            };
         }
 
-        props.close();
+        props.close(newExerciseObj);
     };
 
     const muscleOptions = [

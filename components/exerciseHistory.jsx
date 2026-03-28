@@ -247,7 +247,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
 
 const ExerciseHistory = (props) => {
     const { theme, gender } = useTheme();
-    // const router = useRouter();
+    const router = useRouter();
     const styles = getStyles(theme);
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -423,6 +423,9 @@ const ExerciseHistory = (props) => {
                     <View>
                         <View style={[styles.headerGradient, { backgroundColor: theme.surface }]}>
                             <View style={styles.titleRow}>
+                                <TouchableOpacity style={styles.backButton} onPress={() => props.onClose?.()}>
+                                    <Feather name="chevron-left" size={28} color={theme.text} />
+                                </TouchableOpacity>
                                 <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
                                 <TouchableOpacity
                                     onPress={() => showEditSheet()}
@@ -627,6 +630,10 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.text,
         textAlign: 'center',
         flex: 1,
+    },
+    backButton: {
+        padding: 8,
+        marginRight: 16,
     },
     editButton: {
         padding: 8,

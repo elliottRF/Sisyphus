@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import ActionSheet from "react-native-actions-sheet";
@@ -7,10 +7,36 @@ import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
-const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) => {
+import NewExercise from './NewExercise';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, onExerciseCreated }) => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
     const [searchQuery, setSearchQuery] = useState('');
+    const createExerciseActionSheetRef = useRef(null);
+
+    const isDynamic = theme.type === 'dynamic';
+    const safeBackground = isDynamic ? '#121212' : theme.background;
+    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
+
+    const openCreateExerciseSheet = () => {
+        createExerciseActionSheetRef.current?.show();
+    };
+
+    const handleCloseCreateExerciseSheet = (newExercise) => {
+        createExerciseActionSheetRef.current?.hide();
+        if (onExerciseCreated) {
+            onExerciseCreated();
+        }
+
+        if (newExercise && typeof newExercise === 'object') {
+            // Close the main selection sheet too
+            actionSheetRef.current?.hide();
+            // Automatically add to workout
+            inputExercise(newExercise);
+        }
+    };
 
     // Sort exercises alphabetically and then filter based on search
     const sortedAndFilteredExercises = exercises
@@ -101,7 +127,24 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
                             returnKeyType="done"
                             onSubmitEditing={Keyboard.dismiss}
                         />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity
+                                onPress={() => setSearchQuery('')}
+                                style={styles.clearButton}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                <Feather name="x" size={20} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                        )}
                     </View>
+                    <TouchableOpacity
+                        style={styles.addButton}
+                        onPress={openCreateExerciseSheet}
+                    >
+                        <ButtonBackground style={styles.addButtonGradient} theme={theme}>
+                            <Feather name="plus" size={24} color="#fff" />
+                        </ButtonBackground>
+                    </TouchableOpacity>
                 </View>
                 <FlatList
                     data={sortedAndFilteredExercises}
@@ -115,7 +158,42 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout }) 
                     bounces={false}
                 />
             </View>
+
+            {/* New Create Exercise ActionSheet */}
+            <ActionSheet
+                ref={createExerciseActionSheetRef}
+                containerStyle={[styles.subActionSheetContainer, { backgroundColor: safeBackground }]}
+            >
+                <View style={styles.closeIconContainerUpperPosition}>
+                    <TouchableOpacity onPress={handleCloseCreateExerciseSheet} style={styles.closeIcon}>
+                        <Feather name="x" size={24} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+
+                <NewExercise close={handleCloseCreateExerciseSheet} />
+            </ActionSheet>
         </ActionSheet>
+    );
+};
+
+const ButtonBackground = ({ children, style, theme }) => {
+    const isDynamic = theme.type === 'dynamic';
+    if (isDynamic) {
+        return (
+            <View style={[style, { backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' }]}>
+                {children}
+            </View>
+        );
+    }
+    return (
+        <LinearGradient
+            colors={[theme.primary, theme.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={style}
+        >
+            {children}
+        </LinearGradient>
     );
 };
 
@@ -135,6 +213,11 @@ const getStyles = (theme) => {
             borderTopRightRadius: 24,
             height: '85%',
         },
+        subActionSheetContainer: {
+            height: '100%',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+        },
         indicator: {
             backgroundColor: safeTextSecondary,
         },
@@ -146,12 +229,15 @@ const getStyles = (theme) => {
             overflow: 'hidden',
         },
         searchContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
             padding: 16,
             backgroundColor: theme.surface,
             borderBottomWidth: 1,
             borderBottomColor: safeBorder,
         },
         searchBar: {
+            flex: 1,
             flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: safeBackground,
@@ -160,6 +246,7 @@ const getStyles = (theme) => {
             height: 44,
             borderWidth: 1,
             borderColor: safeBorder,
+            marginRight: 12,
         },
         searchIcon: {
             marginRight: 10,
@@ -170,6 +257,31 @@ const getStyles = (theme) => {
             fontFamily: FONTS.medium,
             fontSize: 16,
             height: '100%',
+        },
+        clearButton: {
+            padding: 4,
+            marginLeft: 8,
+        },
+        addButton: {
+            ...SHADOWS.medium,
+        },
+        addButtonGradient: {
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        closeIconContainerUpperPosition: {
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            zIndex: 1,
+        },
+        closeIcon: {
+            backgroundColor: theme.surface,
+            padding: 8,
+            borderRadius: 20,
         },
         list: {
             flex: 1,
