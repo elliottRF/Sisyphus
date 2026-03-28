@@ -382,15 +382,11 @@ const Home = () => {
             <ActionSheet
                 ref={actionSheetRef}
                 gestureEnabled={true}
-                useDeviceHeight={true}
-                overdrawSize={50}
-                snapPoints={[85]}
-                initialSnapIndex={0}
                 containerStyle={styles.actionSheetContainer}
                 indicatorStyle={styles.indicator}
                 onClose={() => setSearchQuery('')}
             >
-                <View style={[styles.contentContainer, { paddingBottom: 20 }]}>
+                <View style={styles.contentContainer}>
                     <View style={styles.actionSheetHeader}>
                         <Text style={styles.actionSheetTitle}>Add Module</Text>
                     </View>
@@ -656,6 +652,7 @@ const getStyles = (theme) => {
             backgroundColor: 'transparent', // Transparent container
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
+            height: '85%',
         },
         indicator: {
             backgroundColor: safeIndicator,

@@ -67,15 +67,15 @@ const BodyweightGraphCard = ({ theme }) => {
 
 
 
-    const loadData = async () => {
+    const loadData = async (silent = false) => {
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             const history = await getBodyWeightHistory();
             setAllData(history);
         } catch (error) {
             console.error("Error loading body weight data:", error);
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
@@ -92,6 +92,8 @@ const BodyweightGraphCard = ({ theme }) => {
             off(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler);
         };
     }, []);
+
+
 
     const handleLogWeight = async () => {
         if (!newWeight) return;
@@ -137,7 +139,7 @@ const BodyweightGraphCard = ({ theme }) => {
                     onPress: async () => {
                         try {
                             await deleteBodyWeight(entry.datetime);
-                            await loadData();
+                            await loadData(true);
                         } catch (e) {
                             console.error(e);
                         }
@@ -223,11 +225,36 @@ const BodyweightGraphCard = ({ theme }) => {
         const values = finalPoints.map(p => p.value);
         const minVal = Math.min(...values);
         const maxVal = Math.max(...values);
-        const padding = Math.max(0.5, (maxVal - minVal) * 0.1);
+        const rawRange = maxVal - minVal;
+
+        let minY, maxY;
+
+        // "Factor of 5" snapping logic for non-minimal ranges
+        if (rawRange > 6) {
+            // Give 10% padding initially
+            const padding = rawRange * 0.1;
+            minY = Math.floor((minVal - padding) / 5) * 5;
+            maxY = Math.ceil((maxVal + padding) / 5) * 5;
+
+            // Ensure the range (maxY - minY) is a multiple of 10 so the mid label is also a factor of 5
+            while ((maxY - minY) % 10 !== 0) {
+                // Expand the side that is closer to the raw values to keep it balanced
+                if (Math.abs(maxY - maxVal) < Math.abs(minVal - minY)) {
+                    maxY += 5;
+                } else {
+                    minY -= 5;
+                }
+            }
+        } else {
+            // Minimal range logic: basic padding, no snapping to 5s
+            const padding = Math.max(0.6, rawRange * 0.15);
+            minY = minVal - padding;
+            maxY = maxVal + padding;
+        }
 
         return {
             points: finalPoints,
-            yRange: [minVal - padding, maxVal + padding]
+            yRange: [minY, maxY]
         };
     }, [allData, timeRange]);
 
@@ -406,134 +433,132 @@ const BodyweightGraphCard = ({ theme }) => {
         </>
     );
 
-    if (loading) {
-        return (
-            <View style={styles.container}>
-                <ActivityIndicator color={theme.primary} style={{ marginTop: 50 }} />
-            </View>
-        );
-    }
-
-    // --- RENDER EMPTY STATE ---
-    if (points.length < 2) {
-        return (
-            <View style={styles.container}>
-                <GradientOrView colors={[theme.surface, theme.surface]} style={styles.content} theme={theme}>
-                    <View style={styles.header}>
-                        <View>
-                            <Text style={styles.title}>Body Weight</Text>
-                            <Text style={styles.subtitle}>No logs yet</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity
-                                style={[styles.logButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
-                                onPress={() => historySheetRef.current?.show()}
-                            >
-                                <Feather name="list" size={16} color={theme.text} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.logButton}
-                                onPress={() => {
-                                    setEditingEntry(null);
-                                    setNewWeight('');
-                                    setLogDate(new Date().toISOString().split('T')[0]);
-                                    setModalVisible(true);
-                                }}
-                            >
-                                <Feather name="plus" size={16} color={theme.surface} />
-                                <Text style={styles.logButtonText}>Log</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                    <View style={[styles.emptyState, { height: GRAPH_HEIGHT + 60, justifyContent: 'center', alignItems: 'center' }]}>
-                        <Feather name="activity" size={40} color={theme.textSecondary} style={{ opacity: 0.2, marginBottom: 10 }} />
-                        <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Log weight to see your progress graph</Text>
-                    </View>
-                </GradientOrView>
-                {renderModalsAndSheets()}
-            </View>
-        );
-    }
-
-    // --- RENDER FULL STATE ---
     return (
         <View style={styles.container}>
-            <GradientOrView colors={[theme.surface, theme.surface]} style={styles.content} theme={theme}>
-                <View style={styles.header}>
-                    <View>
-                        <Text style={styles.title}>Body Weight</Text>
-                        <Text style={styles.subtitle}>Current: {points.at(-1)?.value.toFixed(1)} kg</Text>
-                        <View style={[styles.trendBadge, { backgroundColor: trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.15)' : trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100, 100, 100, 0.1)' }]}>
-                            <Text style={[styles.trendArrow, { color: trendData.direction === 'up' ? '#22c55e' : trendData.direction === 'down' ? '#ef4444' : theme.textSecondary }]}>
-                                {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
+            {loading ? (
+                <View style={{ height: 260, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator color={theme.primary} />
+                </View>
+            ) : (
+                <GradientOrView colors={[theme.surface, theme.surface]} style={styles.content} theme={theme}>
+                    <View style={styles.header}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                            <Text style={styles.title}>Body Weight</Text>
+                            <Text style={styles.subtitle}>
+                                {allData.length > 0 && points.length >= 1 
+                                    ? `Current: ${points.at(-1)?.value.toFixed(1)} kg` 
+                                    : 'No logs for this period'}
                             </Text>
-                            <Text style={[styles.trendText, { color: trendData.direction === 'up' ? '#22c55e' : trendData.direction === 'down' ? '#ef4444' : theme.textSecondary, fontFamily: FONTS.bold }]}>
-                                {trendData.label}
-                            </Text>
-                            <Text style={styles.trendPeriod}>· {trendData.period}</Text>
-                        </View>
-                    </View>
 
-                    <View style={{ gap: 8, alignItems: 'flex-end' }}>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity style={[styles.logButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]} onPress={() => historySheetRef.current?.show()}>
-                                <Feather name="list" size={16} color={theme.text} />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.logButton} onPress={() => { setEditingEntry(null); setNewWeight(''); setLogDate(new Date().toISOString().split('T')[0]); setModalVisible(true); }}>
-                                <Feather name="plus" size={16} color={theme.surface} />
-                                <Text style={styles.logButtonText}>Log</Text>
-                            </TouchableOpacity>
+                            {allData.length >= 2 && points.length >= 2 && (
+                                <View style={[styles.trendBadge, { backgroundColor: trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.15)' : trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100, 100, 100, 0.1)' }]}>
+                                    <Text style={[styles.trendArrow, { color: trendData.direction === 'up' ? '#22c55e' : trendData.direction === 'down' ? '#ef4444' : theme.textSecondary }]}>
+                                        {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
+                                    </Text>
+                                    <Text style={[styles.trendText, { color: trendData.direction === 'up' ? '#22c55e' : trendData.direction === 'down' ? '#ef4444' : theme.textSecondary, fontFamily: FONTS.bold }]}>
+                                        {trendData.label}
+                                    </Text>
+                                    <Text style={styles.trendPeriod}>· {trendData.period}</Text>
+                                </View>
+                            )}
                         </View>
-                        <View style={styles.rangeSelector}>
-                            {['1M', '3M', '1Y', 'ALL'].map(r => (
-                                <TouchableOpacity key={r} onPress={() => setTimeRange(r)} style={[styles.rangeButton, timeRange === r && styles.rangeButtonActive]}>
-                                    <Text style={[styles.rangeText, timeRange === r && styles.rangeTextActive]}>{r}</Text>
+
+                        <View style={{ gap: 8, alignItems: 'flex-end' }}>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <TouchableOpacity style={[styles.logButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]} onPress={() => historySheetRef.current?.show()}>
+                                    <Feather name="list" size={16} color={theme.text} />
                                 </TouchableOpacity>
-                            ))}
+                                <TouchableOpacity style={styles.logButton} onPress={() => { setEditingEntry(null); setNewWeight(''); setLogDate(new Date().toISOString().split('T')[0]); setModalVisible(true); }}>
+                                    <Feather name="plus" size={16} color={theme.surface} />
+                                    <Text style={styles.logButtonText}>Log</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <View style={styles.rangeSelector}>
+                                {['1M', '3M', '1Y', 'ALL'].map(r => (
+                                    <TouchableOpacity key={r} onPress={() => setTimeRange(r)} style={[styles.rangeButton, timeRange === r && styles.rangeButtonActive]}>
+                                        <Text style={[styles.rangeText, timeRange === r && styles.rangeTextActive]}>{r}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
                         </View>
                     </View>
-                </View>
 
-                <View style={styles.tooltipContainer}>
-                    <View style={styles.activeTooltip}>
-                        <Text style={styles.tooltipValue}>{(selectedPoint?.value ?? points.at(-1)?.value).toFixed(1)} kg</Text>
-                        <Text style={styles.tooltipDate}>
-                            {selectedPoint ? selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Current'}
-                        </Text>
-                    </View>
-                </View>
-
-                <View style={styles.graphRow}>
-                    <View style={styles.yAxis}>
-                        <Text style={styles.yAxisText}>{yRange[1].toFixed(0)}</Text>
-                        <Text style={styles.yAxisText}>{((yRange[0] + yRange[1]) / 2).toFixed(0)}</Text>
-                        <Text style={styles.yAxisText}>{yRange[0].toFixed(0)}</Text>
-                    </View>
-                    <View>
-                        <LineGraph
-                            points={points}
-                            animated
-                            color={accentColor}
-                            gradientFillColors={isDynamic ? ['#2DC4B6CC', '#2DC4B600'] : [`${theme.primary}CC`, `${theme.primary}00`]}
-                            enablePanGesture
-                            enableIndicator
-                            SelectionDot={CustomSelectionDot}
-                            onPointSelected={onPointSelected}
-                            onGestureStart={onGestureStart}
-                            onGestureEnd={onGestureEnd}
-                            range={{ y: { min: yRange[0], max: yRange[1] } }}
-                            style={{ width: graphWidth, height: GRAPH_HEIGHT }}
-                        />
-                        <View style={[styles.xAxisRow, { width: graphWidth }]}>
-                            {xAxisLabels.map((date, index) => (
-                                <Text key={index} style={[styles.xAxisText, { textAlign: index === 0 ? 'left' : index === xAxisLabels.length - 1 ? 'right' : 'center' }]}>
-                                    {formatXAxisDate(date)}
-                                </Text>
-                            ))}
+                    {points.length < 2 ? (
+                        <View style={[styles.emptyState, { height: GRAPH_HEIGHT + 60, justifyContent: 'center', alignItems: 'center' }]}>
+                            <Feather name="activity" size={40} color={theme.textSecondary} style={{ opacity: 0.2, marginBottom: 10 }} />
+                            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                                {allData.length === 0 ? 'Log weight to see your progress graph' : 'No logs found for this period'}
+                            </Text>
                         </View>
-                    </View>
-                </View>
-            </GradientOrView>
+                    ) : (
+                        <>
+                            <View style={styles.tooltipContainer}>
+                                <View style={styles.activeTooltip}>
+                                    <Text style={styles.tooltipValue}>{(selectedPoint?.value ?? points.at(-1)?.value).toFixed(1)} kg</Text>
+                                    <Text style={styles.tooltipDate}>
+                                        {selectedPoint ? selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Current'}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.graphRow}>
+                                <View style={styles.yAxis}>
+                                    {(() => {
+                                        const diff = yRange[1] - yRange[0];
+                                        const precision = diff < 3 ? 1 : 0;
+                                        return (
+                                            <>
+                                                <Text style={[styles.yAxisText, { transform: [{ translateY: -6 }] }]}>{yRange[1].toFixed(precision)}</Text>
+                                                <Text style={styles.yAxisText}>{((yRange[0] + yRange[1]) / 2).toFixed(precision)}</Text>
+                                                <Text style={[styles.yAxisText, { transform: [{ translateY: 6 }] }]}>{yRange[0].toFixed(precision)}</Text>
+                                            </>
+                                        );
+                                    })()}
+                                </View>
+                                <View>
+                                    {/* Horizontal grid lines at top, mid, bottom — matching y-axis labels */}
+                                    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: GRAPH_HEIGHT }}>
+                                        {[0, 0.5, 1].map(fraction => (
+                                            <View
+                                                key={fraction}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: fraction * (GRAPH_HEIGHT - 1),
+                                                    left: 0,
+                                                    right: 0,
+                                                    height: 1,
+                                                    backgroundColor: 'rgba(255,255,255,0.06)',
+                                                }}
+                                            />
+                                        ))}
+                                    </View>
+                                    <LineGraph
+                                        points={points}
+                                        animated
+                                        color={accentColor}
+                                        gradientFillColors={isDynamic ? ['#2DC4B6CC', '#2DC4B600'] : [`${theme.primary}CC`, `${theme.primary}00`]}
+                                        enablePanGesture
+                                        enableIndicator
+                                        SelectionDot={CustomSelectionDot}
+                                        onPointSelected={onPointSelected}
+                                        onGestureStart={onGestureStart}
+                                        onGestureEnd={onGestureEnd}
+                                        range={{ y: { min: yRange[0], max: yRange[1] } }}
+                                        style={{ width: graphWidth, height: GRAPH_HEIGHT }}
+                                    />
+                                    <View style={[styles.xAxisRow, { width: graphWidth }]}>
+                                        {xAxisLabels.map((date, index) => (
+                                            <Text key={index} style={[styles.xAxisText, { textAlign: index === 0 ? 'left' : index === xAxisLabels.length - 1 ? 'right' : 'center' }]}>
+                                                {formatXAxisDate(date)}
+                                            </Text>
+                                        ))}
+                                    </View>
+                                </View>
+                            </View>
+                        </>
+                    )}
+                </GradientOrView>
+            )}
             {renderModalsAndSheets()}
         </View>
     );
@@ -623,7 +648,7 @@ const getStyles = (theme) => StyleSheet.create({
         width: Y_AXIS_WIDTH,
         justifyContent: 'space-between',
         paddingRight: 8,
-        paddingVertical: 5,
+        overflow: 'visible',
         // Match height of graph only; X-axis is separate below
         height: GRAPH_HEIGHT,
     },
