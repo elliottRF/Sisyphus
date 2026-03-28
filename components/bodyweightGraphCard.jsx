@@ -1,14 +1,14 @@
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Alert } from 'react-native';
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { LineGraph } from 'react-native-graph';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
 import { getBodyWeightHistory, insertBodyWeight, deleteBodyWeight } from './db';
 import ActionSheet from "react-native-actions-sheet";
 import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar } from 'react-native-calendars';
 import HistoryList from './HistoryList';
+import { AppEvents, on, off } from '../utils/events';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRAPH_HEIGHT = 100;
@@ -40,7 +40,7 @@ const GradientOrView = ({ colors, style, theme, children }) => {
     return <LinearGradient colors={colors} style={style}>{children}</LinearGradient>;
 };
 
-const BodyweightGraphCard = ({ theme, refreshTrigger }) => {
+const BodyweightGraphCard = ({ theme }) => {
     const styles = getStyles(theme);
     const isDynamic = theme.type === 'dynamic';
     const accentColor = isDynamic ? '#2DC4B6' : theme.primary;
@@ -64,12 +64,6 @@ const BodyweightGraphCard = ({ theme, refreshTrigger }) => {
     const historySheetRef = useRef(null);
     const [editingEntry, setEditingEntry] = useState(null);
 
-    useFocusEffect(
-        useCallback(() => {
-            loadData();
-        }, [])
-    );
-
     const loadData = async () => {
         try {
             setLoading(true);
@@ -81,6 +75,20 @@ const BodyweightGraphCard = ({ theme, refreshTrigger }) => {
             setLoading(false);
         }
     };
+
+    // Load on mount
+    useEffect(() => { loadData(); }, []);
+
+    // Subscribe to targeted refresh events
+    useEffect(() => {
+        const handler = () => loadData();
+        on(AppEvents.REFRESH_HOME, handler);
+        on(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler);
+        return () => {
+            off(AppEvents.REFRESH_HOME, handler);
+            off(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler);
+        };
+    }, []);
 
     const handleLogWeight = async () => {
         if (!newWeight) return;
