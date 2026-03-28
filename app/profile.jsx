@@ -179,7 +179,11 @@ const Profile = () => {
                 containerStyle={[styles.actionSheetContainer, { backgroundColor: safeBackground }]}
                 gestureEnabled={false}
             >
-                <ExerciseHistory exerciseID={selectedExerciseId} exerciseName={currentExerciseName} />
+                <ExerciseHistory 
+                    exerciseID={selectedExerciseId} 
+                    exerciseName={currentExerciseName} 
+                    onClose={() => actionSheetRef.current?.hide()}
+                />
             </ActionSheet>
 
             {/* New Create Exercise ActionSheet */}

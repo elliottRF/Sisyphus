@@ -139,12 +139,12 @@ export const fetchExercises = async () => {
 export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscles, isCardio = 0) => {
   const database = await getDb();
   try {
-    await database.runAsync(
+    const result = await database.runAsync(
       `INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio) 
        VALUES (?, ?, ?, ?);`,
       [exerciseName, targetMuscles, accessoryMuscles, isCardio]
     );
-    return "Exercise inserted successfully!";
+    return result.lastInsertRowId;
   } catch (error) {
     if (error.message && error.message.includes("UNIQUE constraint failed")) {
       throw new Error("Exercise name must be unique.");
