@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Text, StyleSheet, View } from 'react-native';
-import { COLORS, FONTS } from '../constants/theme';
+import { FONTS } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 const Timer = ({ startTime, style, textStyle }) => {
+    const { theme } = useTheme();
     const [elapsed, setElapsed] = useState(0);
 
     useEffect(() => {
@@ -23,8 +25,19 @@ const Timer = ({ startTime, style, textStyle }) => {
     };
 
     return (
-        <View style={[styles.container, style]}>
-            <Text style={[styles.timerText, textStyle]}>{formatTime(elapsed)}</Text>
+        <View style={[
+            styles.container,
+            {
+                backgroundColor: theme.overlayMedium,
+                borderColor: theme.overlayBorder,
+            },
+            style
+        ]}>
+            <Text style={[
+                styles.timerText,
+                { color: theme.text },
+                textStyle
+            ]}>{formatTime(elapsed)}</Text>
         </View>
     );
 };
@@ -33,11 +46,14 @@ const styles = StyleSheet.create({
     container: {
         alignItems: 'center',
         justifyContent: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 14,
+        borderWidth: 1,
     },
     timerText: {
         fontSize: 16,
         fontFamily: FONTS.medium,
-        color: COLORS.text,
         fontVariant: ['tabular-nums'],
     },
 });

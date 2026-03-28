@@ -6,11 +6,13 @@ import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, r
 
 import { MaterialIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import { COLORS, FONTS } from '../constants/theme';
+import { FONTS } from '../constants/theme';
 import { useFocusEffect } from 'expo-router';
 import Timer from '../app/timer/androidTimerModule';
+import { useTheme } from '../context/ThemeContext';
 
 const RestTimer = forwardRef((props, ref) => {
+    const { theme } = useTheme();
     const [timeLeft, setTimeLeft] = useState(0);
     const [defaultDuration, setDefaultDuration] = useState(180);
     const targetEndTimeRef = useRef(null); // The absolute timestamp when the timer should end
@@ -249,17 +251,24 @@ const RestTimer = forwardRef((props, ref) => {
 
     return (
         <GestureDetector gesture={composed}>
-            <Animated.View style={[styles.container, rStyle]}>
+            <Animated.View style={[
+                styles.container,
+                {
+                    backgroundColor: theme.overlayMedium,
+                    borderColor: theme.overlayBorder,
+                },
+                rStyle
+            ]}>
                 <View style={styles.arrowHint}>
-                    {timeLeft > 0 && <MaterialIcons name="keyboard-arrow-up" size={11} color={COLORS.primary} />}
+                    {timeLeft > 0 && <MaterialIcons name="keyboard-arrow-up" size={11} color={theme.primary} />}
                 </View>
                 {timeLeft > 0 ? (
-                    <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
+                    <Text style={[styles.timerText, { color: theme.primary }]}>{formatTime(timeLeft)}</Text>
                 ) : (
-                    <MaterialIcons name="timer" size={18} color={COLORS.primary} />
+                    <MaterialIcons name="timer" size={18} color={theme.primary} />
                 )}
                 <View style={styles.arrowHint}>
-                    {timeLeft > 0 && <MaterialIcons name="keyboard-arrow-down" size={11} color={COLORS.primary} />}
+                    {timeLeft > 0 && <MaterialIcons name="keyboard-arrow-down" size={11} color={theme.primary} />}
                 </View>
             </Animated.View>
         </GestureDetector>
@@ -271,15 +280,14 @@ const styles = StyleSheet.create({
         width: 50,
         height: 36,
         borderRadius: 14,
-        backgroundColor: 'rgba(64, 186, 173, 0.1)',
         alignItems: 'center',
         overflow: 'hidden',
+        borderWidth: 1,
     },
     timerText: {
         fontSize: 13,
         lineHeight: 13,
         fontFamily: FONTS.bold,
-        color: COLORS.primary,
         includeFontPadding: false,
     },
     arrowHint: {

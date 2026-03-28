@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Alert } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Alert, ScrollView, Pressable } from 'react-native';
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { LineGraph } from 'react-native-graph';
 import { FONTS, SHADOWS } from '../constants/theme';
@@ -62,7 +62,10 @@ const BodyweightGraphCard = ({ theme }) => {
 
     // History Sheet Ref
     const historySheetRef = useRef(null);
+    const inputRef = useRef(null);
     const [editingEntry, setEditingEntry] = useState(null);
+
+
 
     const loadData = async () => {
         try {
@@ -275,65 +278,104 @@ const BodyweightGraphCard = ({ theme }) => {
                 transparent={true}
                 visible={modalVisible}
                 onRequestClose={() => setModalVisible(false)}
+                onShow={() => {
+                    if (!showCalendar) {
+                        setTimeout(() => {
+                            inputRef.current?.focus();
+                            inputRef.current?.setNativeProps({ selection: { start: 0, end: 0 } });
+                        }, 180);
+                    }
+                }}
             >
-                <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
-                    <View style={styles.modalOverlay}>
-                        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                            <View style={styles.modalContent}>
-                                <View style={[styles.modalCard, { backgroundColor: theme.surface }]}>
-                                    <Text style={[styles.modalTitle, { color: theme.text }]}>Log Body Weight</Text>
-                                    <View style={[styles.inputContainer, { borderColor: theme.border }]}>
-                                        <TextInput
-                                            style={[styles.input, { color: theme.text }]}
-                                            keyboardType="numeric"
-                                            value={newWeight}
-                                            onChangeText={setNewWeight}
-                                            autoFocus={!showCalendar}
-                                        />
-                                        <Text style={[styles.unitText, { color: theme.textSecondary }]}>kg</Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={[styles.dateButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                                        onPress={() => { Keyboard.dismiss(); setShowCalendar(!showCalendar); }}
-                                    >
-                                        <Feather name="calendar" size={16} color={theme.text} />
-                                        <Text style={[styles.dateButtonText, { color: theme.text }]}>
-                                            {logDate === new Date().toISOString().split('T')[0] ? 'Today' : logDate}
-                                        </Text>
-                                    </TouchableOpacity>
-                                    {showCalendar && (
-                                        <View style={{ width: '100%', marginBottom: 20 }}>
-                                            <Calendar
-                                                current={logDate}
-                                                onDayPress={day => { setLogDate(day.dateString); setShowCalendar(false); }}
-                                                markedDates={{ [logDate]: { selected: true, selectedColor: theme.primary } }}
-                                                theme={{
-                                                    backgroundColor: theme.surface,
-                                                    calendarBackground: theme.surface,
-                                                    textSectionTitleColor: theme.textSecondary,
-                                                    selectedDayBackgroundColor: theme.primary,
-                                                    selectedDayTextColor: theme.surface,
-                                                    todayTextColor: theme.primary,
-                                                    dayTextColor: theme.text,
-                                                    arrowColor: theme.primary,
-                                                    monthTextColor: theme.text,
-                                                }}
-                                            />
-                                        </View>
-                                    )}
-                                    <View style={styles.modalButtons}>
-                                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: theme.background }]} onPress={() => setModalVisible(false)}>
-                                            <Text style={[styles.modalButtonText, { color: theme.textSecondary }]}>Cancel</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: theme.primary }]} onPress={handleLogWeight}>
-                                            {saving ? <ActivityIndicator color={theme.surface} size="small" /> : <Text style={[styles.modalButtonText, { color: theme.surface }]}>Save</Text>}
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
+                <ScrollView
+                    contentContainerStyle={{ flex: 1 }}
+                    keyboardShouldPersistTaps="always"
+                    scrollEnabled={false}
+                >
+                    <Pressable
+                        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+                        onPress={() => setModalVisible(false)}
+                    />
+
+                    <View
+                        style={{ flex: 1, justifyContent: 'flex-start', alignItems: 'center', paddingTop: 80 }}
+                        pointerEvents="box-none"
+                    >
+                        <Pressable
+                            onPress={() => { }}
+                            style={[styles.modalCard, { backgroundColor: theme.surface }]}
+                        >
+                            <Text style={[styles.modalTitle, { color: theme.text }]}>Log Body Weight</Text>
+                            <View style={[styles.inputContainer, { borderColor: theme.border }]}>
+                                <TextInput
+                                    ref={inputRef}
+                                    style={[styles.input, { color: theme.text }]}
+                                    keyboardType="decimal-pad"
+                                    value={newWeight}
+                                    onChangeText={setNewWeight}
+                                    placeholder="0.0"
+                                    placeholderTextColor={theme.textSecondary + '40'}
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleLogWeight}
+                                />
+                                <Text style={[styles.unitText, { color: theme.textSecondary }]}>kg</Text>
                             </View>
-                        </TouchableWithoutFeedback>
+                            <Pressable
+                                style={[styles.dateButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                                onPress={() => { Keyboard.dismiss(); setShowCalendar(!showCalendar); }}
+                            >
+                                <Feather name="calendar" size={16} color={theme.text} />
+                                <Text style={[styles.dateButtonText, { color: theme.text }]}>
+                                    {logDate === new Date().toISOString().split('T')[0] ? 'Today' : logDate}
+                                </Text>
+                            </Pressable>
+                            {showCalendar && (
+                                <View style={{ width: '100%', marginBottom: 20 }}>
+                                    <Calendar
+                                        current={logDate}
+                                        onDayPress={day => {
+                                            setLogDate(day.dateString);
+                                            setShowCalendar(false);
+                                            setTimeout(() => {
+                                                inputRef.current?.focus();
+                                                inputRef.current?.setNativeProps({ selection: { start: 0, end: 0 } });
+                                            }, 180);
+                                        }}
+                                        markedDates={{ [logDate]: { selected: true, selectedColor: theme.primary } }}
+                                        theme={{
+                                            backgroundColor: theme.surface,
+                                            calendarBackground: theme.surface,
+                                            textSectionTitleColor: theme.textSecondary,
+                                            selectedDayBackgroundColor: theme.primary,
+                                            selectedDayTextColor: theme.surface,
+                                            todayTextColor: theme.primary,
+                                            dayTextColor: theme.text,
+                                            arrowColor: theme.primary,
+                                            monthTextColor: theme.text,
+                                        }}
+                                    />
+                                </View>
+                            )}
+                            <View style={styles.modalButtons}>
+                                <Pressable
+                                    style={[styles.modalButton, { backgroundColor: theme.background }]}
+                                    onPress={() => setModalVisible(false)}
+                                >
+                                    <Text style={[styles.modalButtonText, { color: theme.textSecondary }]}>Cancel</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={[styles.modalButton, { backgroundColor: theme.primary }]}
+                                    onPress={handleLogWeight}
+                                >
+                                    {saving
+                                        ? <ActivityIndicator color={theme.surface} size="small" />
+                                        : <Text style={[styles.modalButtonText, { color: theme.surface }]}>Save</Text>
+                                    }
+                                </Pressable>
+                            </View>
+                        </Pressable>
                     </View>
-                </TouchableWithoutFeedback>
+                </ScrollView>
             </Modal>
 
             <ActionSheet
@@ -660,8 +702,6 @@ const getStyles = (theme) => StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
     },
     modalContent: {
         width: '100%',
