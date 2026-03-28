@@ -1,17 +1,18 @@
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import React from 'react';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ExerciseHistory from '../../components/exerciseHistory';
 import { COLORS, FONTS } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 const ExerciseDetail = () => {
+    const insets = useSafeAreaInsets();
     const { id, name } = useLocalSearchParams();
     const router = useRouter();
 
     return (
-        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <Stack.Screen options={{ headerShown: false }} />
 
             <View style={styles.header}>
@@ -23,7 +24,7 @@ const ExerciseDetail = () => {
             </View>
 
             <ExerciseHistory exerciseID={parseInt(id)} exerciseName={name} />
-        </SafeAreaView>
+        </View>
     );
 };
 

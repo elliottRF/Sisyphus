@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, ActivityIndicator } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, Gesture } from 'react-native-gesture-handler';
 import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
 import * as Haptics from 'expo-haptics';
@@ -28,6 +28,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 
 const EditTemplate = () => {
+    const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const TEMPLATE_ID = params.id; // 'new' or a numeric ID
 
@@ -256,6 +257,11 @@ const EditTemplate = () => {
                 const exercisesData = await fetchExercises();
                 setExercises(exercisesData);
 
+                if (!TEMPLATE_ID) {
+                    setIsLoading(false);
+                    return;
+                }
+
                 if (TEMPLATE_ID !== 'new') {
                     const template = await getTemplate(TEMPLATE_ID);
                     if (template) {
@@ -311,7 +317,7 @@ const EditTemplate = () => {
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
-            <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+            <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
                 <Stack.Screen options={{ title: TEMPLATE_ID === 'new' ? 'New Template' : 'Edit Template' }} />
 
                 <View style={styles.headerContainer}>
@@ -396,7 +402,7 @@ const EditTemplate = () => {
                         exerciseName={currentExerciseName}
                     />
                 </ActionSheet>
-            </SafeAreaView>
+            </View>
         </GestureHandlerRootView>
     );
 };
