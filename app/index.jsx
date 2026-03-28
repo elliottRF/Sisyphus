@@ -248,7 +248,6 @@ const Home = () => {
             const newState = !showBodyWeight;
             setShowBodyWeight(newState);
             await AsyncStorage.setItem('settings_showBodyWeight', String(newState));
-            actionSheetRef.current?.hide();
         } catch (e) {
             console.error("Error saving body weight pref", e);
         }
@@ -259,7 +258,6 @@ const Home = () => {
             const newState = !showMuscleRadar;
             setShowMuscleRadar(newState);
             await AsyncStorage.setItem('settings_showMuscleRadar', String(newState));
-            actionSheetRef.current?.hide();
         } catch (e) {
             console.error("Error saving muscle radar pref", e);
         }
@@ -289,6 +287,8 @@ const Home = () => {
                 ref={scrollRef}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollViewContent}
+                keyboardShouldPersistTaps="handled"
+
             >
                 <View style={styles.header}>
                     <View>
@@ -324,7 +324,7 @@ const Home = () => {
                             border={safeBorder}
                             colors={bodyColors}
                             bg={theme.surface}
-                            defaultFill={theme.bodyFill}
+                            defaultFill={'theme.bodyFill'}
                         />
                     </View>
 
@@ -396,43 +396,47 @@ const Home = () => {
 
                     <View style={styles.modulesContainer}>
                         <TouchableOpacity
-                            style={[styles.moduleCard, { borderColor: showBodyWeight ? theme.primary : theme.border }]}
+                            style={[
+                                styles.moduleCard,
+                                {
+                                    borderColor: showBodyWeight ? theme.primary : theme.overlayBorder,
+                                    backgroundColor: showBodyWeight ? theme.overlayMedium : theme.overlaySubtle,
+                                }
+                            ]}
                             onPress={toggleBodyWeightGraph}
+                            activeOpacity={0.8}
                         >
-                            <LinearGradient
-                                colors={showBodyWeight ? ['rgba(45, 196, 182, 0.2)', 'rgba(45, 196, 182, 0.05)'] : [theme.surface, theme.surface]}
-                                style={styles.moduleGradient}
-                            >
-                                <Feather name="activity" size={32} color={showBodyWeight ? theme.primary : theme.textSecondary} />
-                                <Text style={[styles.moduleText, showBodyWeight && { color: theme.primary, fontFamily: FONTS.bold }]}>
-                                    Body Weight
-                                </Text>
-                                {showBodyWeight && (
-                                    <View style={styles.checkBadge}>
-                                        <Feather name="check" size={12} color="white" />
-                                    </View>
-                                )}
-                            </LinearGradient>
+                            <Feather name="activity" size={28} color={showBodyWeight ? theme.primary : theme.textSecondary} />
+                            <Text style={[styles.moduleText, showBodyWeight && { color: theme.primary, fontFamily: FONTS.bold }]}>
+                                Body Weight
+                            </Text>
+                            {showBodyWeight && (
+                                <View style={styles.checkBadge}>
+                                    <Feather name="check" size={10} color="white" />
+                                </View>
+                            )}
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.moduleCard, { borderColor: showMuscleRadar ? theme.primary : theme.border }]}
+                            style={[
+                                styles.moduleCard,
+                                {
+                                    borderColor: showMuscleRadar ? theme.primary : theme.overlayBorder,
+                                    backgroundColor: showMuscleRadar ? theme.overlayMedium : theme.overlaySubtle,
+                                }
+                            ]}
                             onPress={toggleMuscleRadar}
+                            activeOpacity={0.8}
                         >
-                            <LinearGradient
-                                colors={showMuscleRadar ? ['rgba(45, 196, 182, 0.2)', 'rgba(45, 196, 182, 0.05)'] : [theme.surface, theme.surface]}
-                                style={styles.moduleGradient}
-                            >
-                                <Feather name="pie-chart" size={32} color={showMuscleRadar ? theme.primary : theme.textSecondary} />
-                                <Text style={[styles.moduleText, showMuscleRadar && { color: theme.primary, fontFamily: FONTS.bold }]}>
-                                    Muscle Balance
-                                </Text>
-                                {showMuscleRadar && (
-                                    <View style={styles.checkBadge}>
-                                        <Feather name="check" size={12} color="white" />
-                                    </View>
-                                )}
-                            </LinearGradient>
+                            <Feather name="pie-chart" size={28} color={showMuscleRadar ? theme.primary : theme.textSecondary} />
+                            <Text style={[styles.moduleText, showMuscleRadar && { color: theme.primary, fontFamily: FONTS.bold }]}>
+                                Muscle Balance
+                            </Text>
+                            {showMuscleRadar && (
+                                <View style={styles.checkBadge}>
+                                    <Feather name="check" size={10} color="white" />
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
 
@@ -743,18 +747,12 @@ const getStyles = (theme) => {
         },
         moduleCard: {
             flex: 1,
-            height: 100,
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: theme.border,
-            overflow: 'hidden',
-            ...SHADOWS.small,
-        },
-        moduleGradient: {
-            flex: 1,
+            height: 110,
+            borderRadius: 24,
+            borderWidth: 1.5,
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 8,
+            gap: 10,
         },
         moduleText: {
             fontSize: 14,
@@ -763,12 +761,12 @@ const getStyles = (theme) => {
         },
         checkBadge: {
             position: 'absolute',
-            top: 8,
-            right: 8,
+            top: 10,
+            right: 10,
             backgroundColor: theme.primary,
-            width: 20,
-            height: 20,
-            borderRadius: 10,
+            width: 18,
+            height: 18,
+            borderRadius: 9,
             alignItems: 'center',
             justifyContent: 'center',
         },
