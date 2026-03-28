@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS as DEFAULT_COLORS, THEMES } from '../constants/theme';
 
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-    const [themeID, setThemeID] = useState('DEFAULT');
-    const [theme, setTheme] = useState(THEMES.DEFAULT);
+    const defaultThemeID = Appearance.getColorScheme() === 'light' ? 'LIGHT' : 'DEFAULT';
+    const [themeID, setThemeID] = useState(defaultThemeID);
+    const [theme, setTheme] = useState(THEMES[defaultThemeID]);
 
     const [gender, setGender] = useState('male');
     const [accessoryWeight, setAccessoryWeight] = useState(0.5);
