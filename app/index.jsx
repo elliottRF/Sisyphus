@@ -381,13 +381,14 @@ const Home = () => {
 
             <ActionSheet
                 ref={actionSheetRef}
-                enableGestureBack={true}
-                closeOnPressBack={true}
-                androidCloseOnBackPress={true}
+                gestureEnabled={true}
+                useDeviceHeight={true}
+                overdrawSize={50}
+                snapPoints={[85]}
+                initialSnapIndex={0}
                 containerStyle={styles.actionSheetContainer}
                 indicatorStyle={styles.indicator}
-                snapPoints={[100]}
-                initialSnapIndex={0}
+                onClose={() => setSearchQuery('')}
             >
                 <View style={[styles.contentContainer, { paddingBottom: 20 }]}>
                     <View style={styles.actionSheetHeader}>
@@ -652,17 +653,16 @@ const getStyles = (theme) => {
             color: theme.primary,
         },
         actionSheetContainer: {
-            backgroundColor: 'transparent',
+            backgroundColor: 'transparent', // Transparent container
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
-            height: '85%',
         },
         indicator: {
             backgroundColor: safeIndicator,
         },
         contentContainer: {
             height: '100%',
-            backgroundColor: theme.surface, // Use dynamic surface color here
+            backgroundColor: theme.surface, // Surface background restored to inner view
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             overflow: 'hidden',

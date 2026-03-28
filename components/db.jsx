@@ -1068,3 +1068,15 @@ export const deleteBodyWeight = async (date) => {
     throw error;
   }
 };
+
+export const exportBodyWeightData = async () => {
+    const database = await getDb();
+    try {
+        const rows = await database.getAllAsync('SELECT datetime as Date, weight as [Weight (kg)] FROM bodyWeight ORDER BY datetime ASC;');
+        const csv = Papa.unparse(rows);
+        return csv;
+    } catch (error) {
+        console.error('Body weight export error:', error);
+        throw error;
+    }
+};
