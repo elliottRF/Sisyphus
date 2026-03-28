@@ -16,6 +16,7 @@ import PRGraphCard from '../components/PRGraphCard';
 import BodyweightGraphCard from '../components/bodyweightGraphCard';
 import MuscleRadarChart from '../components/MuscleRadarChart';
 import { useTheme } from '../context/ThemeContext';
+import { AppEvents, emit, on, off } from '../utils/events';
 
 
 const muscleMapping = {
@@ -99,14 +100,26 @@ const Home = () => {
         loadModulePrefs();
     }, [accessoryWeight]);
 
-    // Load data on focus to ensure it's always fresh
+    // Reload module prefs on focus (toggles can change from action sheet)
     useFocusEffect(
         React.useCallback(() => {
+            loadModulePrefs();
+        }, [])
+    );
+
+    // Subscribe to workout completion to refresh body highlighter + pinned exercises
+    useEffect(() => {
+        const handler = () => {
             loadMuscleData();
             loadPinnedExercises();
-            loadModulePrefs();
-        }, [accessoryWeight])
-    );
+        };
+        on(AppEvents.WORKOUT_COMPLETED, handler);
+        on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        return () => {
+            off(AppEvents.WORKOUT_COMPLETED, handler);
+            off(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        };
+    }, [accessoryWeight]);
 
     const loadModulePrefs = async () => {
         try {
@@ -120,31 +133,6 @@ const Home = () => {
     };
 
 
-    // Listen for workout completion events
-    useEffect(() => {
-        const checkForWorkoutCompletion = async () => {
-            try {
-                const workoutCompleted = await AsyncStorage.getItem('@workoutCompleted');
-                if (workoutCompleted === 'true') {
-                    console.log('Workout completed, refreshing home screen data...');
-                    await loadMuscleData();
-                    await loadPinnedExercises();
-                    // Clear the flag
-                    await AsyncStorage.removeItem('@workoutCompleted');
-                }
-            } catch (error) {
-                console.error('Error checking workout completion:', error);
-            }
-        };
-
-        // Check immediately
-        checkForWorkoutCompletion();
-
-        // Set up interval to check periodically (every 2 seconds)
-        const interval = setInterval(checkForWorkoutCompletion, 2000);
-
-        return () => clearInterval(interval);
-    }, []);
 
     const loadMuscleData = async () => {
         try {
@@ -219,6 +207,8 @@ const Home = () => {
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
+            // Emit event so graph components refresh themselves
+            emit(AppEvents.REFRESH_HOME);
             await Promise.all([
                 loadMuscleData(),
                 loadPinnedExercises()
@@ -312,7 +302,7 @@ const Home = () => {
                             disabled={isRefreshing}
                         >
                             {isRefreshing ? (
-                                <ActivityIndicator size="small" color={theme.primary} />
+                                <></>
                             ) : (
                                 <Feather name="refresh-cw" size={24} color={theme.text} />
                             )}
@@ -358,11 +348,11 @@ const Home = () => {
                 </View>
 
                 {showMuscleRadar && (
-                    <MuscleRadarChart refreshTrigger={isRefreshing} />
+                    <MuscleRadarChart />
                 )}
 
                 {showBodyWeight && (
-                    <BodyweightGraphCard theme={theme} refreshTrigger={isRefreshing} />
+                    <BodyweightGraphCard theme={theme} />
                 )}
 
 

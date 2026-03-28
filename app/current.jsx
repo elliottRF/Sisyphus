@@ -33,6 +33,7 @@ import TestSoundButton from '../components/TestSoundButton';
 import TestNotificationButton from '../components/TestNotificationButton';
 import { useTheme } from '../context/ThemeContext';
 import { ActivityIndicator } from 'react-native';
+import { AppEvents, emit } from '../utils/events';
 
 const { width } = Dimensions.get('window');
 
@@ -369,8 +370,10 @@ const Current = () => {
             const startTimeMs = startTime ? new Date(startTime).getTime() : endTime;
             const durationMs = endTime - startTimeMs;
             const durationMinutes = Math.floor(durationMs / 60000);
-
             await insertWorkoutHistory(workoutEntries, workoutTitle, durationMinutes);
+
+            // Emit event so Home screen graphs refresh
+            emit(AppEvents.WORKOUT_COMPLETED);
 
             // Clear AsyncStorage and state
             await AsyncStorage.removeItem('@currentWorkout');
