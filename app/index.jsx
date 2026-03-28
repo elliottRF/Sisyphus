@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ActionSheet from "react-native-actions-sheet";
 import { FlatList } from 'react-native-gesture-handler';
 
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Body from "react-native-body-highlighter";
 import { fetchRecentMuscleUsage, getPinnedExercises, pinExercise, fetchExercises } from '../components/db';
 import { FONTS, SHADOWS } from '../constants/theme';
@@ -76,6 +76,7 @@ const TimeRangeSelector = ({ selectedRange, onSelect, theme, styles }) => {
 };
 
 const Home = () => {
+    const insets = useSafeAreaInsets();
     const { theme, gender, accessoryWeight } = useTheme();
     const styles = getStyles(theme);
     const [bodyData, setBodyData] = useState([]);
@@ -90,6 +91,13 @@ const Home = () => {
 
     const scrollRef = useRef(null);
     useScrollToTop(scrollRef);
+
+    // Pre-load data on component mount (works with lazy: false to load in background)
+    useEffect(() => {
+        loadMuscleData();
+        loadPinnedExercises();
+        loadModulePrefs();
+    }, [accessoryWeight]);
 
     // Load data on focus to ensure it's always fresh
     useFocusEffect(
@@ -286,7 +294,7 @@ const Home = () => {
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
 
     return (
-        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <ScrollView
                 ref={scrollRef}
                 showsVerticalScrollIndicator={false}
@@ -485,7 +493,7 @@ const Home = () => {
                     />
                 </View>
             </ActionSheet>
-        </SafeAreaView >
+        </View>
     )
 }
 
