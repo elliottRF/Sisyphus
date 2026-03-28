@@ -1,4 +1,4 @@
-import { Dimensions, Platform, PlatformColor } from "react-native";
+import { Dimensions, Platform, PlatformColor, Appearance } from "react-native";
 const { height, width } = Dimensions.get("window");
 
 // Base Fonts (Shared across themes usually, but can be customized)
@@ -43,7 +43,7 @@ export const SIZES = {
 const NOIR = {
     primary: "#ffffff",
     primaryDark: "#b2bec3",
-    secondary: "#ffffff",
+    secondary: "#ffffff7e",
     background: "#0d0d0d",
     surface: "#1a1a1a",
     text: "#ffffff",
@@ -270,7 +270,38 @@ const THRIVE = {
     overlayInput: "rgba(0,0,0,0.2)",
     overlayInputFocused: "rgba(0,0,0,0.4)",
 };
+const LIGHT = {
+    // Brand Colors
+    primary: "#3B82F6",           // Vibrant Blue (Trustworthy & Standard)
+    primaryDark: "#2563EB",       // Richer Blue (Hover/Active States)
+    secondary: "#6366F1",         // Indigo (Complementary for Charts)
 
+    // Neutrals & Surfaces
+    background: "#F8FAFC",        // Cool Slate Grey (Modern App Background)
+    surface: "#FFFFFF",           // Pure White
+    border: "#E2E8F0",            // Subtle Slate Border
+
+    // Typography
+    text: "#0F172A",              // Deep Navy/Slate (Maximum Contrast)
+    textSecondary: "#64748B",     // Medium Slate (Muted Info)
+
+    // Feedback & Semantic
+    success: "#10B981",           // Emerald Green
+    danger: "#EF4444",            // Standard Red
+    warning: "#F59E0B",           // Amber
+    info: "#0EA5E9",              // Sky Blue
+
+    // Heatmap & Charting
+    bodyFill: "#E2E8F0",          // Neutral Slate for unworked areas
+    chartFill: "rgba(59, 130, 246, 0.15)", // Transparent Blue for Radar
+
+    // Adaptive Overlays
+    overlaySubtle: "rgba(15, 23, 42, 0.02)",
+    overlayMedium: "rgba(15, 23, 42, 0.04)",
+    overlayBorder: "rgba(15, 23, 42, 0.06)",
+    overlayInput: "rgba(15, 23, 42, 0.03)",
+    overlayInputFocused: "rgba(59, 130, 246, 0.1)",
+};
 
 const SYSTEM = Platform.OS === 'android' ? {
     type: 'dynamic', // Flag to indicate special handling needed (no gradients etc)
@@ -299,6 +330,7 @@ const SYSTEM = Platform.OS === 'android' ? {
 export const THEMES = {
     ...(Platform.OS === 'android' ? { SYSTEM } : {}),
     DEFAULT,
+    LIGHT,
     NOIR,
     ARCTIC,
     NOTHING,
@@ -311,5 +343,6 @@ export const THEMES = {
 };
 
 // Deprecated: Backwards compatibility for now, will be removed
-export const COLORS = DEFAULT;
+// Default to LIGHT if system is light mode, otherwise DEFAULT (dark)
+export const COLORS = Appearance.getColorScheme() === 'light' ? LIGHT : DEFAULT;
 
