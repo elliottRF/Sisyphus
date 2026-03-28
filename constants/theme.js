@@ -173,32 +173,43 @@ const CALIPER = {
 };
 
 const BLOSSOM = {
-    primary: "#ff85a1",      // Soft Pink
-    primaryDark: "#f75c81",
-    secondary: "#ff85a1",    // Soft Pink
-    background: "#ffeaeeff",   // Very light pink tint
-    surface: "#ffffff",
-    text: "#4a2c33",         // Dark berry for readability
-    textSecondary: "#a38089",
-    border: "#f2d5da",
-    success: "#4ade80",
-    danger: "#f87171",
-    warning: "#fbbf24",
-    info: "#60a5fa",
-    bodyFill: "#e0e0e0",
-    // Adaptive overlays (black for light themes)
-    overlaySubtle: "rgba(0,0,0,0.02)",
-    overlayMedium: "rgba(0,0,0,0.03)",
-    overlayBorder: "rgba(0,0,0,0.05)",
-    overlayInput: "rgba(0,0,0,0.05)",
-    overlayInputFocused: "rgba(0,0,0,0.1)",
+    // Brand Colors
+    primary: "#FF85A1",           // Soft Pink (Main Accent)
+    primaryDark: "#E06A86",       // Deeper Pink (Active States/Buttons)
+    secondary: "#ff85a1",         // Soft Periwinkle (Complementary for Data/Charts)
+
+    // Neutrals & Surfaces
+    background: "#FFF5F7",        // Very Light Pink Tint (Lifts white cards)
+    surface: "#FFFFFF",           // Pure White (Cards & Modals)
+    border: "#F7DCE1",            // Soft Pinkish Border
+
+    // Typography
+    text: "#2D1A1E",              // Deep Berry (High Contrast for Readability)
+    textSecondary: "#8A6A72",     // Muted Rose-Grey (Subtle info)
+
+    // Feedback & Semantic
+    success: "#7CD9A3",           // Sage Green (Softened for the theme)
+    danger: "#F28D8D",            // Coral Red
+    warning: "#F7C97E",           // Muted Amber
+    info: "#89CFF0",              // Baby Blue
+
+    // Heatmap & Charting
+    bodyFill: "#F2E2E5",          // Base color for unworked muscles
+    chartFill: "rgba(255, 133, 161, 0.25)", // Transparent Primary for Radar fill
+
+    // Adaptive Overlays
+    overlaySubtle: "rgba(45, 26, 30, 0.02)",
+    overlayMedium: "rgba(45, 26, 30, 0.04)",
+    overlayBorder: "rgba(45, 26, 30, 0.06)",
+    overlayInput: "rgba(45, 26, 30, 0.03)",
+    overlayInputFocused: "rgba(255, 133, 161, 0.1)",
 };
 
 const BLACK_PINK = {
     primary: "#ff007f",      // Neon Magenta
     primaryDark: "#c70063",
     secondary: "#ff007f",    // Neon Magenta
-    background: "#0d0108",   // Near-black with pink tint
+    background: "#13010dff",   // Near-black with pink tint
     surface: "#1a0212",      // Deep wine/black
     text: "#ffe0f0",
     textSecondary: "#b37795",
@@ -220,7 +231,7 @@ const DEFAULT = {
     primary: "#0A84FF",      // Apple San Francisco Blue
     primaryDark: "#0066CC",
     secondary: "#0A84FF",    // iOS System Gray
-    background: "#080808ff",   // Pure Black (OLED optimized) - FIXED from #080808ff
+    background: "#080808ff",
     surface: "#121214",      // iOS Secondary System Background
     text: "#FFFFFF",         // Primary Label
     textSecondary: "#8E8E93",// Secondary Label
