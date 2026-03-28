@@ -40,7 +40,7 @@ export const SIZES = {
 // --- THEME DEFINITIONS ---
 
 
-const MONO = {
+const NOIR = {
     primary: "#ffffff",
     primaryDark: "#b2bec3",
     secondary: "#ffffff",
@@ -172,7 +172,7 @@ const CALIPER = {
     overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
-const CHERRY_BLOSSOM = {
+const BLOSSOM = {
     primary: "#ff85a1",      // Soft Pink
     primaryDark: "#f75c81",
     secondary: "#ff85a1",    // Soft Pink
@@ -194,7 +194,7 @@ const CHERRY_BLOSSOM = {
     overlayInputFocused: "rgba(0,0,0,0.1)",
 };
 
-const CYBER_PINK = {
+const BLACK_PINK = {
     primary: "#ff007f",      // Neon Magenta
     primaryDark: "#c70063",
     secondary: "#ff007f",    // Neon Magenta
@@ -216,7 +216,7 @@ const CYBER_PINK = {
     overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
-const TITANIUM = {
+const DEFAULT = {
     primary: "#0A84FF",      // Apple San Francisco Blue
     primaryDark: "#0066CC",
     secondary: "#0A84FF",    // iOS System Gray
@@ -281,24 +281,24 @@ const SYSTEM = Platform.OS === 'android' ? {
     overlayBorder: "rgba(255,255,255,0.05)",
     overlayInput: "rgba(0,0,0,0.2)",
     overlayInputFocused: "rgba(0,0,0,0.4)",
-} : TITANIUM; // Fallback for non-android
+} : DEFAULT; // Fallback for non-android
 
 
 // Export the dictionary
 export const THEMES = {
     ...(Platform.OS === 'android' ? { SYSTEM } : {}),
-    TITANIUM,
-    MONO,
+    DEFAULT,
+    NOIR,
     ARCTIC,
     NOTHING,
     TERMINAL,
-    CYBER_PINK,
-    CHERRY_BLOSSOM,
+    BLACK_PINK,
+    BLOSSOM,
     SCHEMATIC,
     CALIPER,
     THRIVE
 };
 
 // Deprecated: Backwards compatibility for now, will be removed
-export const COLORS = TITANIUM;
+export const COLORS = DEFAULT;
 

@@ -233,7 +233,7 @@ const Settings = () => {
                                         <View style={[styles.themePreviewCircle, { backgroundColor: itemTheme.primary }]} />
                                     </View>
                                     <Text style={[styles.themeName, { color: isActive ? theme.primary : theme.textSecondary }]}>
-                                        {key.charAt(0) + key.slice(1).toLowerCase()}
+                                        {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')}
                                     </Text>
                                 </TouchableOpacity>
                             );
