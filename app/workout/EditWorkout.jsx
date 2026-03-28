@@ -3,7 +3,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, Gesture } from 'react-native-gesture-handler';
 import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
 import * as Haptics from 'expo-haptics';
@@ -36,6 +36,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 // FIXED: Component now uses route params instead of props
 const EditWorkout = () => {
+    const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const WORKOUT_SESSION_NUMBER = params.session ? parseInt(params.session) : null;
 
@@ -350,7 +351,7 @@ const EditWorkout = () => {
             console.log("Loading workout for session:", WORKOUT_SESSION_NUMBER);
 
             if (!WORKOUT_SESSION_NUMBER) {
-                Alert.alert("Error", "No session number provided");
+                // Return silently. If eagerly mounted by Tabs lazy: false, session is missing.
                 setIsLoading(false);
                 return;
             }
@@ -460,17 +461,17 @@ const EditWorkout = () => {
 
     if (isLoading) {
         return (
-            <SafeAreaView style={styles.container}>
+            <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={theme.primary} />
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
-            <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+            <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
                 <View style={styles.headerContainer}>
                     <View style={styles.headerTopRow}>
                         <TextInput
@@ -567,7 +568,7 @@ const EditWorkout = () => {
                         exerciseName={currentExerciseName}
                     />
                 </ActionSheet>
-            </SafeAreaView>
+            </View>
         </GestureHandlerRootView>
     );
 };

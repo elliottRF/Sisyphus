@@ -2,7 +2,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, Dimensions } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, Gesture } from 'react-native-gesture-handler';
 import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
 import * as Haptics from 'expo-haptics';
@@ -37,6 +37,7 @@ import { ActivityIndicator } from 'react-native';
 const { width } = Dimensions.get('window');
 
 const Current = () => {
+    const insets = useSafeAreaInsets();
     const { theme } = useTheme();
     const styles = getStyles(theme);
 
@@ -653,11 +654,9 @@ const Current = () => {
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
-            <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+            <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
                 {!isReady ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={theme.primary} />
-                    </View>
+                    <View style={styles.loadingContainer} />
                 ) : (
                     <>
                         {!startTime && currentWorkout.length === 0 && (
@@ -818,7 +817,7 @@ const Current = () => {
                         </ActionSheet>
                     </>
                 )}
-            </SafeAreaView>
+            </View>
         </GestureHandlerRootView>
     );
 };

@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, PanResponder, Dimensions } from 'react-native';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 // import { COLORS, FONTS, SHADOWS } from '../constants/theme'; // Removed static import
 import { FONTS, SHADOWS, THEMES } from '../constants/theme';
@@ -16,6 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const Settings = () => {
+    const insets = useSafeAreaInsets();
     const router = useRouter();
     const {
         theme,
@@ -186,7 +187,7 @@ const Settings = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
                     <Feather name="chevron-left" size={28} color={theme.text} />
@@ -407,7 +408,7 @@ const Settings = () => {
                     )}
                 </View>
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 };
 

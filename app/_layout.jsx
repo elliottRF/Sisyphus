@@ -73,6 +73,7 @@ const ThemeConsumer = () => {
                 tabBar={props => <TabBar {...props} />}
                 screenOptions={{
                     headerShown: false,
+                    lazy: false,
                     tabBarStyle: {
                         position: 'absolute',
                         backgroundColor: 'transparent',
