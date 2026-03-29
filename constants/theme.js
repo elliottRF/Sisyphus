@@ -37,6 +37,40 @@ export const SIZES = {
     width,
 };
 
+// --- THEME UTILS ---
+
+const isLight = (color) => {
+    if (typeof color !== 'string') return false; // Default to dark background (light status bar)
+
+    let r, g, b;
+    if (color.startsWith('#')) {
+        const hex = color.replace('#', '');
+        if (hex.length === 3) {
+            r = parseInt(hex[0] + hex[0], 16);
+            g = parseInt(hex[1] + hex[1], 16);
+            b = parseInt(hex[2] + hex[2], 16);
+        } else if (hex.length === 6 || hex.length === 8) {
+            r = parseInt(hex.substring(0, 2), 16);
+            g = parseInt(hex.substring(2, 4), 16);
+            b = parseInt(hex.substring(4, 6), 16);
+        }
+    } else if (color.startsWith('rgba') || color.startsWith('rgb')) {
+        const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (match) {
+            r = parseInt(match[1]);
+            g = parseInt(match[2]);
+            b = parseInt(match[3]);
+        }
+    } else {
+        return false; // PlatformColor or unknown
+    }
+
+    // YIQ brightness formula
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness > 128;
+};
+
+
 // --- THEME DEFINITIONS ---
 
 
@@ -54,6 +88,7 @@ const NOIR = {
     warning: "#f1c40f",
     info: "#3498db",
     bodyFill: "#333333",
+    statusBar: isLight("#0d0d0d") ? "dark" : "light",
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
     overlayMedium: "rgba(255,255,255,0.03)",
@@ -76,6 +111,7 @@ const ARCTIC = {
     warning: "#ffeaa7",
     info: "#54a0ff",
     bodyFill: "#333333",
+    statusBar: isLight("#0a141a") ? "dark" : "light",
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
     overlayMedium: "rgba(255,255,255,0.03)",
@@ -98,6 +134,7 @@ const NOTHING = {
     warning: "#ffcc00",
     info: "#ffffff",
     bodyFill: "#333333",
+    statusBar: isLight("#000000") ? "dark" : "light",
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
     overlayMedium: "rgba(255,255,255,0.03)",
@@ -120,6 +157,7 @@ const TERMINAL = {
     warning: "#ffd166",
     info: "#4ddcff",
     bodyFill: "#333333",
+    statusBar: isLight("#050807") ? "dark" : "light",
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
     overlayMedium: "rgba(255,255,255,0.03)",
@@ -142,6 +180,7 @@ const SCHEMATIC = {
     warning: "#ffb300",
     info: "#00e5ff",
     bodyFill: "#333333",
+    statusBar: isLight("#0a0f14") ? "dark" : "light",
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
     overlayMedium: "rgba(255,255,255,0.03)",
@@ -164,6 +203,7 @@ const CALIPER = {
     warning: "#eab308",
     info: "#38bdf8",
     bodyFill: "#333333",
+    statusBar: isLight("#0f172a") ? "dark" : "light",
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
     overlayMedium: "rgba(255,255,255,0.03)",
@@ -197,6 +237,7 @@ const BLOSSOM = {
     bodyFill: "#F2E2E5",          // Base color for unworked muscles
     chartFill: "rgba(255, 133, 161, 0.25)", // Transparent Primary for Radar fill
 
+    statusBar: isLight("#FFF5F7") ? "dark" : "light",
     // Adaptive Overlays
     overlaySubtle: "rgba(45, 26, 30, 0.02)",
     overlayMedium: "rgba(45, 26, 30, 0.04)",
@@ -219,6 +260,7 @@ const BLACK_PINK = {
     warning: "#fee440",
     info: "#00bbf9",
     bodyFill: "#333333",
+    statusBar: isLight("#13010dff") ? "dark" : "light",
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
     overlayMedium: "rgba(255,255,255,0.03)",
@@ -241,6 +283,7 @@ const DEFAULT = {
     warning: "#FF9F0A",      // iOS System Orange
     info: "#64D2FF",         // iOS System Cyan
     bodyFill: "#333333",
+    statusBar: isLight("#080808ff") ? "dark" : "light",
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
     overlayMedium: "rgba(255,255,255,0.03)",
@@ -263,6 +306,7 @@ const THRIVE = {
     warning: "#FF9F0A",      // iOS System Orange
     info: "#64D2FF",         // iOS System Cyan
     bodyFill: "#333333",
+    statusBar: isLight("#000000") ? "dark" : "light",
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
     overlayMedium: "rgba(255,255,255,0.03)",
@@ -295,6 +339,7 @@ const LIGHT = {
     bodyFill: "#E2E8F0",          // Neutral Slate for unworked areas
     chartFill: "rgba(59, 130, 246, 0.15)", // Transparent Blue for Radar
 
+    statusBar: isLight("#F8FAFC") ? "dark" : "light",
     // Adaptive Overlays
     overlaySubtle: "rgba(15, 23, 42, 0.02)",
     overlayMedium: "rgba(15, 23, 42, 0.04)",
@@ -317,6 +362,7 @@ const SYSTEM = Platform.OS === 'android' ? {
     warning: '#f59e0b',
     info: '#3b82f6',
     bodyFill: '#333333',
+    statusBar: 'light', // Native dark background
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
     overlayMedium: "rgba(255,255,255,0.03)",

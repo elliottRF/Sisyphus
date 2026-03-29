@@ -37,6 +37,17 @@ const WorkoutDetail = () => {
     const dataSessionId = workoutDetails[0]?.workoutSession;
     const isDataMismatch = workoutDetails.length > 0 && dataSessionId !== currentSessionId;
 
+    // Sync state if params change but component is already mounted (pre-loaded)
+    useEffect(() => {
+        if (syncedInitialData && syncedInitialData.length > 0) {
+            const dataSessionIdSynced = syncedInitialData[0]?.workoutSession;
+            if (dataSessionIdSynced === currentSessionId) {
+                setWorkoutDetails(syncedInitialData);
+                setLoading(false);
+            }
+        }
+    }, [syncedInitialData, currentSessionId]);
+
     // If mismatch, fall back to synced data (if it matches) or empty
     const effectiveWorkoutDetails = isDataMismatch
         ? (syncedInitialData && syncedInitialData[0]?.workoutSession === currentSessionId ? syncedInitialData : [])
@@ -44,7 +55,7 @@ const WorkoutDetail = () => {
 
     // Loading if we have no data for this session
     const [loading, setLoading] = useState(!effectiveWorkoutDetails.length);
-
+    const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
 
     const actionSheetRef = useRef(null);
     const sessionViewRef = useRef(null);
@@ -58,14 +69,8 @@ const WorkoutDetail = () => {
                     // Update exercises list in background or parallel
                     const exPromise = fetchExercises();
 
-                    // If we don't have valid details, or just to refresh:
-                    let historyPromise;
-                    if (!effectiveWorkoutDetails.length) {
-                        historyPromise = fetchWorkoutHistoryBySession(session);
-                    } else {
-                        // We have data (maybe from initialData), but let's refresh to be safe, quietly
-                        historyPromise = fetchWorkoutHistoryBySession(session);
-                    }
+                    // Always refresh history for the current session to ensure latest data
+                    const historyPromise = fetchWorkoutHistoryBySession(session);
 
                     const [historyData, exercisesData] = await Promise.all([
                         historyPromise,
@@ -79,11 +84,12 @@ const WorkoutDetail = () => {
                     console.error("Error loading workout details:", error);
                 } finally {
                     setLoading(false);
+                    setHasAttemptedFetch(true);
                 }
             };
 
             // If we have synced data, we are "loaded" immediately, but still want to fetch fresh
-            if (syncedInitialData) {
+            if (syncedInitialData && syncedInitialData.length > 0 && syncedInitialData[0]?.workoutSession === currentSessionId) {
                 setLoading(false);
             } else {
                 setLoading(true);
@@ -114,41 +120,47 @@ const WorkoutDetail = () => {
         }
     }, [session, router]);
 
-    if (loading) {
+    // 4. Strict data gating for Zero-Flash transitions
+    const isDataMatching = effectiveWorkoutDetails.length > 0 && effectiveWorkoutDetails[0]?.workoutSession === currentSessionId;
+    const isReadyToShow = isDataMatching;
+
+    if (!isReadyToShow) {
+        // If we confirmed it's truly not found, show the error
+        if (hasAttemptedFetch && effectiveWorkoutDetails.length === 0) {
+            return (
+                <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButtonOver}>
+                        <Ionicons name="arrow-back" size={24} color={theme.text} />
+                    </TouchableOpacity>
+                    <View style={[styles.header, { justifyContent: 'center', marginTop: 60 }]}>
+                        <Text style={styles.title}>Workout Not Found</Text>
+                    </View>
+                </View>
+            );
+        }
+
+        // Otherwise, render a completely blank themed background to hide the "Pre-load" transition
         return (
-            <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-                <ActivityIndicator size="large" color={theme.primary} />
-            </View>
+            <View style={[styles.container, { backgroundColor: theme.background }]} />
         );
     }
 
-    if (!effectiveWorkoutDetails || effectiveWorkoutDetails.length === 0) {
-        return (
-            <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButtonOver}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <View style={[styles.header, { justifyContent: 'center', marginTop: 60 }]}>
-                    <Text style={styles.title}>Workout Not Found</Text>
-                </View>
-            </View>
-        );
-    }
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <Stack.Screen options={{ headerShown: false }} />
 
+
             {effectiveWorkoutDetails && (
                 <WorkoutSessionView
                     ref={sessionViewRef}
-                    key={session}
                     workoutDetails={effectiveWorkoutDetails}
                     exercisesList={exercisesList}
                     onEdit={showEditPage}
                     onExerciseInfo={showExerciseInfo}
                 />
             )}
+
 
             {loading && (
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', zIndex: 20 }]}>
