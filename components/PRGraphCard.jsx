@@ -226,9 +226,12 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
             const interpolated = [];
             const oneDay = 24 * 60 * 60 * 1000;
             const start = processed[0].date;
-            const end = processed[processed.length - 1].date;
+            const lastActual = processed[processed.length - 1];
+            
+            // Extend the range to 'now' if the user requested it
+            const endLimit = now.getTime();
 
-            for (let d = start.getTime(); d <= end.getTime(); d += oneDay) {
+            for (let d = start.getTime(); d <= lastActual.date.getTime(); d += oneDay) {
                 const currentDate = new Date(d);
                 const exactMatch = processed.find(
                     p => Math.abs(p.date.getTime() - d) < oneDay / 2
@@ -252,18 +255,29 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                 }
             }
 
-            // Ensure the final actual data point is always present at the end
-            const lastActual = processed[processed.length - 1];
-            const lastInterp = interpolated[interpolated.length - 1];
-            if (!lastInterp || Math.abs(lastInterp.date.getTime() - lastActual.date.getTime()) > 1000) {
-                interpolated.push(lastActual);
+            // Carry on the last value until current date
+            if (now.getTime() > lastActual.date.getTime()) {
+                const oneDay = 24 * 60 * 60 * 1000;
+                // Start from the day after the last actual workout
+                for (let d = lastActual.date.getTime() + oneDay; d < now.getTime(); d += oneDay) {
+                    interpolated.push({ date: new Date(d), value: lastActual.value });
+                }
+                // Add the final point for exactly 'now'
+                interpolated.push({ date: now, value: lastActual.value });
+            } else {
+                // Ensure the final actual data point is always present at the end
+                const lastInterp = interpolated[interpolated.length - 1];
+                if (!lastInterp || Math.abs(lastInterp.date.getTime() - lastActual.date.getTime()) > 1000) {
+                    interpolated.push(lastActual);
+                }
             }
 
             processed = interpolated;
         } else if (!DEBUG_INTERPOLATE && processed.length >= 5) {
             // --- Original bucket-aggregation path (used when interpolation is off) ---
             const firstDate = processed[0].date;
-            const lastDate = processed[processed.length - 1].date;
+            const lastActualDate = processed[processed.length - 1].date;
+            const lastDate = now > lastActualDate ? now : lastActualDate;
             const totalDurationMs = lastDate - firstDate;
             const years = totalDurationMs / (1000 * 60 * 60 * 24 * 365);
 

@@ -120,26 +120,19 @@ const WorkoutDetail = () => {
         }
     }, [session, router]);
 
+    useEffect(() => {
+        if (hasAttemptedFetch && effectiveWorkoutDetails.length === 0) {
+            router.replace('/history');
+        }
+    }, [hasAttemptedFetch, effectiveWorkoutDetails.length, router]);
+
     // 4. Strict data gating for Zero-Flash transitions
     const isDataMatching = effectiveWorkoutDetails.length > 0 && effectiveWorkoutDetails[0]?.workoutSession === currentSessionId;
     const isReadyToShow = isDataMatching;
 
     if (!isReadyToShow) {
-        // If we confirmed it's truly not found, show the error
-        if (hasAttemptedFetch && effectiveWorkoutDetails.length === 0) {
-            return (
-                <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButtonOver}>
-                        <Ionicons name="arrow-back" size={24} color={theme.text} />
-                    </TouchableOpacity>
-                    <View style={[styles.header, { justifyContent: 'center', marginTop: 60 }]}>
-                        <Text style={styles.title}>Workout Not Found</Text>
-                    </View>
-                </View>
-            );
-        }
-
-        // Otherwise, render a completely blank themed background to hide the "Pre-load" transition
+        // Render a completely blank themed background to hide the "Pre-load" transition
+        // If it's not found, the useEffect above will redirect
         return (
             <View style={[styles.container, { backgroundColor: theme.background }]} />
         );
