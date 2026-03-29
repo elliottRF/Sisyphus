@@ -574,7 +574,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     // Theme Selector Styles
     themeScroll: {
-        paddingHorizontal: 20,
+        paddingHorizontal: 0,
         paddingBottom: 4,
         gap: 12,
     },

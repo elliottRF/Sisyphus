@@ -148,11 +148,11 @@ const MuscleRadarChart = () => {
 
                         {/* 1. Background Grid (Lowest Layer) */}
                         {[0.25, 0.5, 0.75, 1].map((t, i) => (
-                            <Circle key={i} cx={CENTER_X} cy={CENTER_Y} r={RADIUS * t} fill="none" stroke={borderColor} strokeDasharray="4,4" opacity={0.15} />
+                            <Circle key={i} cx={CENTER_X} cy={CENTER_Y} r={RADIUS * t} fill="none" stroke={accentColor} strokeDasharray="4,4" opacity={0.15} />
                         ))}
                         {axes.map((_, i) => {
                             const maxP = getCoordinates(i, maxGraphValue);
-                            return <Line key={i} x1={CENTER_X} y1={CENTER_Y} x2={maxP.x} y2={maxP.y} stroke={borderColor} opacity={0.2} />;
+                            return <Line key={i} x1={CENTER_X} y1={CENTER_Y} x2={maxP.x} y2={maxP.y} stroke={accentColor} opacity={0.2} />;
                         })}
 
                         {/* 2. Data Polygon (Middle Layer) */}
@@ -199,8 +199,8 @@ const MuscleRadarChart = () => {
                                     {val > 0 && (
                                         <Circle
                                             cx={p.x} cy={p.y}
-                                            r={isLagging ? 4.5 : 3}
-                                            fill={isLagging ? '#FF4B4B' : accentColor}
+                                            r={isLagging ? 3 : 3}
+                                            fill={isLagging ? theme.danger : accentColor}
                                             stroke={theme.surface}
                                             strokeWidth={isLagging ? 1 : 0.5}
                                         />
