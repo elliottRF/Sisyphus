@@ -144,27 +144,15 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
     };
 
     const isEmpty = !workoutDetails || workoutDetails.length === 0;
-    if (isEmpty) {
-        return (
-            <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
-                <ScrollView
-                    {...handlers}
-                    ref={ref}
-                    contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
-                    showsVerticalScrollIndicator={false}
-                />
-            </NativeViewGestureHandler>
-        );
-    }
 
-    const workoutName = workoutDetails[0].name;
-    const workoutDate = workoutDetails[0].time;
-    const workoutDuration = workoutDetails[0].duration;
-    const groupedExercises = groupExercisesByName(workoutDetails);
+    const workoutName = !isEmpty ? workoutDetails[0].name : '';
+    const workoutDate = !isEmpty ? workoutDetails[0].time : null;
+    const workoutDuration = !isEmpty ? workoutDetails[0].duration : null;
+    const groupedExercises = !isEmpty ? groupExercisesByName(workoutDetails) : [];
 
-    const totalPRs = workoutDetails.reduce((acc, ex) => {
+    const totalPRs = !isEmpty ? workoutDetails.reduce((acc, ex) => {
         return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
-    }, 0);
+    }, 0) : 0;
 
     return (
         <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
@@ -181,21 +169,40 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                             style={styles.editIcon}
                             onPress={onEdit}
                             activeOpacity={0.7}
+                            disabled={isEmpty}
                         >
-                            <Feather name="edit" size={24} color={theme.text} />
+                            <Feather name="edit" size={24} color={isEmpty ? 'transparent' : theme.text} />
                         </TouchableOpacity>
                     )}
 
-                    <Text style={styles.workoutDateDisplay}>{formatDate(workoutDate)}</Text>
-                    <Text style={styles.workoutNameHuge}>{workoutName}</Text>
+                    <View style={{ minHeight: 80 }}>
+                        {isEmpty ? (
+                            <View style={{ opacity: 0 }}>
+                                <Text style={styles.workoutDateDisplay}>Loading...</Text>
+                                <Text style={styles.workoutNameHuge}>Workout</Text>
+                            </View>
+                        ) : (
+                            <>
+                                <Text style={styles.workoutDateDisplay}>{formatDate(workoutDate)}</Text>
+                                <Text style={styles.workoutNameHuge}>{workoutName}</Text>
+                            </>
+                        )}
+                    </View>
 
                     <View style={styles.metaDataRow}>
-                        <View style={styles.metaItem}>
-                            <Feather name="clock" size={14} color={theme.text} />
-                            <Text style={styles.metaText}>{formatDuration(workoutDuration)}</Text>
-                        </View>
+                        {isEmpty ? (
+                            <View style={[styles.metaItem, { opacity: 0 }]}>
+                                <Feather name="clock" size={14} color={theme.text} />
+                                <Text style={styles.metaText}>0m</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.metaItem}>
+                                <Feather name="clock" size={14} color={theme.text} />
+                                <Text style={styles.metaText}>{formatDuration(workoutDuration)}</Text>
+                            </View>
+                        )}
 
-                        {totalPRs > 0 && (
+                        {!isEmpty && totalPRs > 0 && (
                             <View style={[
                                 styles.metaItem,
                                 { borderColor: `${lightenColor(theme.primary, 20)}66`, backgroundColor: `${lightenColor(theme.primary, 20)}40` }
@@ -210,7 +217,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                 </View>
 
                 <View style={styles.exercisesList}>
-                    {groupedExercises.map((exerciseGroup, index) => {
+                    {!isEmpty && groupedExercises.map((exerciseGroup, index) => {
                         const exerciseId = exerciseGroup[0].exerciseID;
                         const exerciseDetails = exercisesList?.find(ex => ex.exerciseID === exerciseId);
                         const exerciseName = exerciseDetails ? exerciseDetails.name : `Exercise ${exerciseId}`;

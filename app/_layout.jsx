@@ -60,14 +60,14 @@ const ThemeConsumer = () => {
 
     useEffect(() => {
         if (Platform.OS === 'android') {
-            NavigationBar.setButtonStyleAsync(themeID === 'CHERRY_BLOSSOM' ? 'dark' : 'light');
+            NavigationBar.setButtonStyleAsync(theme.statusBar);
         }
-    }, [themeID]);
+    }, [theme]);
 
     // We need to pass the theme down to the Tabs or use it here for the background
     return (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
-            <StatusBar style={themeID === 'CHERRY_BLOSSOM' ? 'dark' : 'light'} />
+            <StatusBar style={theme.statusBar} />
             <Tabs
                 backBehavior="history"
                 tabBar={props => <TabBar {...props} />}
