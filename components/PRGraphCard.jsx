@@ -194,7 +194,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
         if (graphMode === 'truePR') {
             let maxVal = 0;
             processed = tempProcessed.filter(p => {
-                if (p.value >= maxVal) {
+                if (p.value > maxVal) {
                     maxVal = p.value;
                     return true;
                 }
@@ -426,7 +426,16 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
     }, [points, minDate, maxDate, timeRange]);
 
     const onPointSelected = useCallback((point) => {
-        if (isTouching.current) setSelectedPoint(point);
+        if (!isTouching.current) return;
+        setSelectedPoint(prev => {
+            if (!prev && !point) return null;
+            if (!prev || !point) return point;
+            // Only update if the date or value actually changed to prevent render loops
+            if (prev.date.getTime() === point.date.getTime() && prev.value === point.value) {
+                return prev;
+            }
+            return point;
+        });
     }, []);
 
     const onGestureStart = useCallback(() => {
@@ -438,6 +447,18 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
         setSelectedPoint(null);
     }, []);
 
+    const { graphColor, maxWeightColor, gradientFill, maxWeightGradient } = useMemo(() => {
+        const primary = theme.type === 'dynamic' ? '#2DC4B6' : theme.primary;
+        const secondary = theme.type === 'dynamic' ? '#A29BFE' : theme.secondary;
+
+        return {
+            graphColor: primary,
+            maxWeightColor: secondary,
+            gradientFill: [`${primary}CC`, `${primary}00`],
+            maxWeightGradient: [`${secondary}CC`, `${secondary}00`]
+        };
+    }, [theme]);
+
     if (loading) {
         return (
             <View style={styles.container}>
@@ -448,17 +469,6 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
 
     const hasEnoughData = allData.length >= 2 && points.length >= 2;
     const currentValue = points[points.length - 1]?.value || 0;
-
-    const graphColor = theme.type === 'dynamic' ? '#2DC4B6' : theme.primary;
-    const maxWeightColor = theme.type === 'dynamic' ? '#A29BFE' : theme.secondary;
-
-    const gradientFill = theme.type === 'dynamic'
-        ? ['#2DC4B6CC', '#2DC4B600']
-        : [`${theme.primary}CC`, `${theme.primary}00`];
-
-    const maxWeightGradient = theme.type === 'dynamic'
-        ? ['#A29BFECC', '#A29BFE00']
-        : [`${theme.secondary}CC`, `${theme.secondary}00`];
 
     return (
         <View style={styles.container}>
@@ -658,7 +668,6 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                                     }
                                     enablePanGesture={true}
                                     enableIndicator={true}
-                                    indicatorPulsating={true}
                                     SelectionDot={CustomSelectionDot}
                                     onPointSelected={onPointSelected}
                                     onGestureStart={onGestureStart}
