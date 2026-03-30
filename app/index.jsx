@@ -81,6 +81,7 @@ const Home = () => {
     const { theme, gender, accessoryWeight } = useTheme();
     const styles = getStyles(theme);
     const [bodyData, setBodyData] = useState([]);
+    const [recoveryGroups, setRecoveryGroups] = useState({ rest: [], recovering: [], ready: [] });
     const [pinnedExercises, setPinnedExercises] = useState([]);
     const [allExercises, setAllExercises] = useState([]);
     const [showBodyWeight, setShowBodyWeight] = useState(false);
@@ -183,12 +184,51 @@ const Home = () => {
                 }
 
                 if (intensity > 0) {
-                    return { slug, intensity };
+                    return { slug, intensity, weightedScore };
                 }
                 return null;
             }).filter(item => item !== null);
 
             setBodyData(newBodyData);
+
+            // Categorize muscles for the list
+            const majorMuscles = [
+                { label: 'Chest', slugs: ['chest'] },
+                { label: 'Upper Back', slugs: ['upper-back', 'trapezius'] },
+                { label: 'Lower Back', slugs: ['lower-back'] },
+                { label: 'Shoulders', slugs: ['deltoids'] },
+                { label: 'Biceps', slugs: ['biceps'] },
+                { label: 'Triceps', slugs: ['triceps'] },
+                { label: 'Forearms', slugs: ['forearm'] },
+                { label: 'Quads', slugs: ['quadriceps'] },
+                { label: 'Hamstrings', slugs: ['hamstring'] },
+                { label: 'Glutes', slugs: ['gluteal'] },
+                { label: 'Calves', slugs: ['calves'] },
+                { label: 'Abs', slugs: ['abs', 'obliques'] },
+            ];
+
+            const categories = { rest: [], recovering: [], ready: [] };
+
+            majorMuscles.forEach(muscle => {
+                let maxScore = 0;
+                muscle.slugs.forEach(slug => {
+                    const stats = muscleStats[slug];
+                    if (stats) {
+                        const score = Math.round((stats.primarySets + (stats.accessorySets * accessoryWeight)) * 10) / 10;
+                        if (score > maxScore) maxScore = score;
+                    }
+                });
+
+                if (maxScore >= 3) {
+                    categories.rest.push(muscle.label);
+                } else if (maxScore > 0) {
+                    categories.recovering.push(muscle.label);
+                } else {
+                    categories.ready.push(muscle.label);
+                }
+            });
+
+            setRecoveryGroups(categories);
 
         } catch (error) {
             console.error("Failed to load muscle usage data:", error);
@@ -340,6 +380,69 @@ const Home = () => {
                             bg={theme.surface}
                             defaultFill={theme.bodyFill}
                         />
+                    </View>
+                </View>
+
+                {/* New Unified Recovery Widget */}
+                <View style={styles.recoveryWidget}>
+                    <View style={styles.recoveryWidgetHeader}>
+                        <Feather name="activity" size={18} color={theme.textSecondary} />
+                        <Text style={styles.recoveryWidgetTitle}>Muscle Readiness</Text>
+                    </View>
+
+                    <View style={styles.recoveryWidgetContent}>
+                        {/* Rest Category */}
+                        {recoveryGroups.rest.length > 0 && (
+                            <View style={styles.recoveryCategoryItem}>
+                                <View style={[styles.categoryHeader, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                                    <Feather name="alert-circle" size={14} color="#ef4444" />
+                                    <Text style={[styles.categoryTitle, { color: '#ef4444' }]}>Rest Required</Text>
+                                </View>
+                                <View style={styles.muscleTags}>
+                                    {recoveryGroups.rest.map(muscle => (
+                                        <View key={muscle} style={[styles.muscleTag, { borderColor: 'rgba(239, 68, 68, 0.2)' }]}>
+                                            <Text style={[styles.muscleTagText, { color: '#ef4444' }]}>{muscle}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Recovering Category */}
+                        {recoveryGroups.recovering.length > 0 && (
+                            <View style={[styles.recoveryCategoryItem, recoveryGroups.rest.length > 0 && styles.categorySeparator]}>
+                                <View style={[styles.categoryHeader, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
+                                    <Feather name="clock" size={14} color="#f59e0b" />
+                                    <Text style={[styles.categoryTitle, { color: '#f59e0b' }]}>Recovering</Text>
+                                </View>
+                                <View style={styles.muscleTags}>
+                                    {recoveryGroups.recovering.map(muscle => (
+                                        <View key={muscle} style={[styles.muscleTag, { borderColor: 'rgba(245, 158, 11, 0.2)' }]}>
+                                            <Text style={[styles.muscleTagText, { color: '#f59e0b' }]}>{muscle}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Ready Category */}
+                        <View style={[styles.recoveryCategoryItem, (recoveryGroups.rest.length > 0 || recoveryGroups.recovering.length > 0) && styles.categorySeparator]}>
+                            <View style={[styles.categoryHeader, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
+                                <Feather name="check-circle" size={14} color="#22c55e" />
+                                <Text style={[styles.categoryTitle, { color: '#22c55e' }]}>Ready to Train</Text>
+                            </View>
+                            <View style={styles.muscleTags}>
+                                {recoveryGroups.ready.length > 0 ? (
+                                    recoveryGroups.ready.map(muscle => (
+                                        <View key={muscle} style={[styles.muscleTag, { borderColor: 'rgba(34, 197, 94, 0.2)' }]}>
+                                            <Text style={[styles.muscleTagText, { color: '#22c55e' }]}>{muscle}</Text>
+                                        </View>
+                                    ))
+                                ) : (
+                                    <Text style={styles.emptyReadyText}>No major muscles fully rested</Text>
+                                )}
+                            </View>
+                        </View>
                     </View>
                 </View>
 
@@ -766,6 +869,83 @@ const getStyles = (theme) => {
             borderRadius: 9,
             alignItems: 'center',
             justifyContent: 'center',
+        },
+        // Unified Recovery Widget Styles
+        recoveryWidget: {
+            backgroundColor: theme.surface,
+            marginHorizontal: 16,
+            marginBottom: 24,
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: theme.border,
+            ...SHADOWS.medium,
+            overflow: 'hidden',
+        },
+        recoveryWidgetHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.border,
+            backgroundColor: 'rgba(255,255,255,0.02)',
+        },
+        recoveryWidgetTitle: {
+            fontSize: 18,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+        },
+        recoveryWidgetContent: {
+            padding: 12,
+            gap: 12,
+        },
+        recoveryCategoryItem: {
+            gap: 8,
+        },
+        categorySeparator: {
+            paddingTop: 16,
+            borderTopWidth: 1,
+            borderTopColor: theme.border,
+        },
+        categoryHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            borderRadius: 8,
+            alignSelf: 'flex-start',
+        },
+        categoryTitle: {
+            fontSize: 11,
+            fontFamily: FONTS.bold,
+            textTransform: 'uppercase',
+            letterSpacing: 0.8,
+        },
+        muscleTags: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 6,
+            paddingLeft: 4,
+        },
+        muscleTag: {
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            borderRadius: 8,
+            borderWidth: 1,
+            backgroundColor: 'rgba(255,255,255,0.03)',
+        },
+        muscleTagText: {
+            fontSize: 13,
+            fontFamily: FONTS.semiBold,
+        },
+        emptyReadyText: {
+            fontSize: 13,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            fontStyle: 'italic',
+            marginLeft: 4,
         },
     });
 };
