@@ -447,7 +447,7 @@ export const getPinnedExercises = async () => {
 export const fetchExerciseProgress = async (exerciseID) => {
   const database = await getDb();
   return await database.getAllAsync(
-    `SELECT time, oneRM, weight, reps 
+    `SELECT time, oneRM, weight, reps, setType 
      FROM workoutHistory 
      WHERE exerciseID = ? 
      ORDER BY time ASC;`,

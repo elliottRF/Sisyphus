@@ -10,8 +10,8 @@ import { useTheme } from '../context/ThemeContext';
 import { AppEvents, on, off } from '../utils/events';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const DEFAULT_GRAPH_HEIGHT = 100;
-const COMPACT_GRAPH_HEIGHT = 100;
+const DEFAULT_GRAPH_HEIGHT = 130;
+const COMPACT_GRAPH_HEIGHT = 130;
 const CARD_PADDING = 40;
 const CARD_MARGIN = 32;
 const Y_AXIS_WIDTH = 40;
@@ -118,6 +118,9 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
             history.forEach(entry => {
                 const date = new Date(entry.time);
                 if (isNaN(date.getTime())) return;
+
+                // Skip warm-up sets
+                if (entry.setType === 'W') return;
 
                 const reps = Number(entry.reps) || 0;
                 if (reps <= 0) return;
@@ -227,7 +230,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
             const oneDay = 24 * 60 * 60 * 1000;
             const start = processed[0].date;
             const lastActual = processed[processed.length - 1];
-            
+
             // Extend the range to 'now' if the user requested it
             const endLimit = now.getTime();
 
