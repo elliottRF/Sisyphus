@@ -754,7 +754,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     },
     unpinButton: {
         padding: 8,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: theme.overlayBorder,
         borderRadius: 12,
     },
     graphRow: {
@@ -808,7 +808,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     },
     rangeSelector: {
         flexDirection: 'row',
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: theme.overlayBorder,
         borderRadius: 8,
         padding: 2,
     },
@@ -818,7 +818,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         borderRadius: 6,
     },
     rangeButtonActive: {
-        backgroundColor: 'rgba(255,255,255,0.15)',
+        backgroundColor: theme.overlayInputFocused,
     },
     rangeText: {
         fontSize: 10,

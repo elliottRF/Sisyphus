@@ -308,23 +308,32 @@ const ExerciseHistory = (props) => {
         const accessoryMuscles = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',') : [];
         return { targetMuscles, accessoryMuscles };
     };
-
+    const ALL_MUSCLE_SLUGS = [
+        'chest', 'quadriceps', 'triceps', 'biceps', 'hamstring',
+        'upper-back', 'lower-back', 'deltoids', 'gluteal', 'forearm',
+        'trapezius', 'calves', 'abs', 'adductors', 'obliques',
+        'tibialis', 'abductors', 'neck', 'hands', 'feet', 'knees', 'ankles'
+    ];
     const handleMuscleStrings = (targetSelected, accessorySelected) => {
-        const sluggedTargets = targetSelected.map(target => ({
-            slug: typeof target === 'string'
-                ? target.trim().toLowerCase()
-                : '',
-            intensity: 1
-        }));
+        const workedSlugs = new Set();
 
-        const sluggedAccessories = accessorySelected.map(accessory => ({
-            slug: typeof accessory === 'string'
-                ? accessory.trim().toLowerCase()
-                : '',
-            intensity: 2
-        }));
+        const sluggedTargets = targetSelected.map(target => {
+            const slug = typeof target === 'string' ? target.trim().toLowerCase() : '';
+            workedSlugs.add(slug);
+            return { slug, intensity: 3 }; // bright primary
+        });
 
-        setFormattedTargets([...sluggedTargets, ...sluggedAccessories]);
+        const sluggedAccessories = accessorySelected.map(accessory => {
+            const slug = typeof accessory === 'string' ? accessory.trim().toLowerCase() : '';
+            workedSlugs.add(slug);
+            return { slug, intensity: 2 }; // dim primary
+        });
+
+        const unworked = ALL_MUSCLE_SLUGS
+            .filter(slug => !workedSlugs.has(slug))
+            .map(slug => ({ slug, intensity: 1 })); // bodyFill colour
+
+        setFormattedTargets([...sluggedTargets, ...sluggedAccessories, ...unworked]);
     };
 
     useEffect(() => {
@@ -392,8 +401,8 @@ const ExerciseHistory = (props) => {
 
     const isDynamic = theme.type === 'dynamic';
     const bodyColors = isDynamic
-        ? ['#2DC4B6', '#2DC4B680']
-        : [theme.primary, `${theme.primary}60`];
+        ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
+        : [theme.bodyFill, `${theme.primary}60`, theme.primary];
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
 

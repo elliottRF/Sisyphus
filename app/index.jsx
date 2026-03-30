@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Keyboard, ActivityIndicator } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Keyboard, ActivityIndicator, Dimensions } from 'react-native'
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { useScrollToTop } from '@react-navigation/native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -18,6 +18,7 @@ import MuscleRadarChart from '../components/MuscleRadarChart';
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, emit, on, off } from '../utils/events';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const muscleMapping = {
     "Chest": "chest",
@@ -81,6 +82,7 @@ const Home = () => {
     const { theme, gender, accessoryWeight } = useTheme();
     const styles = getStyles(theme);
     const [bodyData, setBodyData] = useState([]);
+    const [bodySide, setBodySide] = useState('front');
     const [recoveryGroups, setRecoveryGroups] = useState({ rest: [], recovering: [], ready: [] });
     const [pinnedExercises, setPinnedExercises] = useState([]);
     const [allExercises, setAllExercises] = useState([]);
@@ -88,27 +90,30 @@ const Home = () => {
     const [showMuscleRadar, setShowMuscleRadar] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [cardBodyHeight, setCardBodyHeight] = useState(0);
+
+    const [cardBodyWidth, setCardBodyWidth] = useState(0);
     const actionSheetRef = useRef(null);
     const router = useRouter();
 
     const scrollRef = useRef(null);
     useScrollToTop(scrollRef);
 
-    // Pre-load data on component mount (works with lazy: false to load in background)
+    // Pre-load data on component mount
     useEffect(() => {
         loadMuscleData();
         loadPinnedExercises();
         loadModulePrefs();
     }, [accessoryWeight]);
 
-    // Reload module prefs on focus (toggles can change from action sheet)
+    // Reload module prefs on focus
     useFocusEffect(
         React.useCallback(() => {
             loadModulePrefs();
         }, [])
     );
 
-    // Subscribe to workout completion to refresh body highlighter + pinned exercises
+    // Subscribe to events
     useEffect(() => {
         const handler = () => {
             loadMuscleData();
@@ -133,8 +138,6 @@ const Home = () => {
         }
     };
 
-
-
     const loadMuscleData = async () => {
         try {
             const usageData = await fetchRecentMuscleUsage(3);
@@ -143,7 +146,6 @@ const Home = () => {
             usageData.forEach(exercise => {
                 const sets = parseInt(exercise.sets, 10) || 0;
 
-                // Process Target Muscles (Primary)
                 if (exercise.targetMuscle) {
                     const targetMuscles = exercise.targetMuscle.split(',').map(m => m.trim());
                     targetMuscles.forEach(targetMuscle => {
@@ -155,7 +157,6 @@ const Home = () => {
                     });
                 }
 
-                // Process Accessory Muscles
                 if (exercise.accessoryMuscles) {
                     const accessories = exercise.accessoryMuscles.split(',').map(m => m.trim());
                     accessories.forEach(acc => {
@@ -168,30 +169,31 @@ const Home = () => {
                 }
             });
 
-            // Convert stats to body highlighter data
-            const newBodyData = Object.keys(muscleStats).map(slug => {
-                const { primarySets, accessorySets } = muscleStats[slug];
+            const ALL_MUSCLE_SLUGS = [
+                'chest', 'quadriceps', 'triceps', 'biceps', 'hamstring',
+                'upper-back', 'lower-back', 'deltoids', 'gluteal', 'forearm',
+                'trapezius', 'calves', 'abs', 'adductors', 'obliques',
+                'tibialis', 'abductors', 'neck', 'hands', 'feet', 'knees', 'ankles'
+            ];
 
-                // Calculate weighted score: Primary = 1, Accessory = user setting
-                const weightedScore = Math.round((primarySets + (accessorySets * accessoryWeight)) * 10) / 10;
-
-                let intensity = 0;
+            const newBodyData = ALL_MUSCLE_SLUGS.map(slug => {
+                const stats = muscleStats[slug];
+                if (!stats) {
+                    return { slug, intensity: 1 }; // green — fresh
+                }
+                const weightedScore = Math.round(
+                    (stats.primarySets + (stats.accessorySets * accessoryWeight)) * 10
+                ) / 10;
 
                 if (weightedScore >= 3) {
-                    intensity = 2; // Deep Blue or Theme Primary
-                } else if (weightedScore > 0) {
-                    intensity = 1; // Light Blue or Theme Secondary
+                    return { slug, intensity: 3 }; // red — rest
+                } else {
+                    return { slug, intensity: 2 }; // amber — recovering
                 }
-
-                if (intensity > 0) {
-                    return { slug, intensity, weightedScore };
-                }
-                return null;
-            }).filter(item => item !== null);
+            });
 
             setBodyData(newBodyData);
 
-            // Categorize muscles for the list
             const majorMuscles = [
                 { label: 'Chest', slugs: ['chest'] },
                 { label: 'Upper Back', slugs: ['upper-back', 'trapezius'] },
@@ -208,7 +210,6 @@ const Home = () => {
             ];
 
             const categories = { rest: [], recovering: [], ready: [] };
-
             majorMuscles.forEach(muscle => {
                 let maxScore = 0;
                 muscle.slugs.forEach(slug => {
@@ -219,17 +220,12 @@ const Home = () => {
                     }
                 });
 
-                if (maxScore >= 3) {
-                    categories.rest.push(muscle.label);
-                } else if (maxScore > 0) {
-                    categories.recovering.push(muscle.label);
-                } else {
-                    categories.ready.push(muscle.label);
-                }
+                if (maxScore >= 3) categories.rest.push(muscle.label);
+                else if (maxScore > 0) categories.recovering.push(muscle.label);
+                else categories.ready.push(muscle.label);
             });
 
             setRecoveryGroups(categories);
-
         } catch (error) {
             console.error("Failed to load muscle usage data:", error);
         }
@@ -247,12 +243,8 @@ const Home = () => {
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
-            // Emit event so graph components refresh themselves
             emit(AppEvents.REFRESH_HOME);
-            await Promise.all([
-                loadMuscleData(),
-                loadPinnedExercises()
-            ]);
+            await Promise.all([loadMuscleData(), loadPinnedExercises()]);
         } catch (error) {
             console.error("Error refreshing data:", error);
         } finally {
@@ -303,23 +295,18 @@ const Home = () => {
         }
     };
 
-
     const filteredExercises = allExercises
         .filter(ex => ex.name.toLowerCase().includes(searchQuery.toLowerCase()))
         .sort((a, b) => a.name.localeCompare(b.name));
 
-    // Dynamic Body Colors based on theme
-    // Fallback for Dynamic Theme: Body highlighter usually expects hex strings.
-    // PlatformColor cannot be converted to Hex easily.
-    // We will use a safe fallback for System theme.
-    // Dynamic Body Colors based on theme
-    // Fallback for Dynamic Theme
     const isDynamic = theme.type === 'dynamic';
-    // User requested "Accessory similar to main one, just lighter".
     const bodyColors = isDynamic
-        ? ['#2DC4B680', '#2DC4B6'] // Light Teal (Accessory) and Teal (Target)
-        : [`${theme.primary}60`, theme.primary];
+        ? ['#2DC4B699', '#f59e0bbb', '#bd2121cc']
+        : [`${theme.primary}99`, '#f59e0bbb', '#bd2121cc'];
+
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
+    const cardWidth = (SCREEN_WIDTH - 32 - 12) / 2;
+    const bodyHeight = cardBodyHeight > 0 ? cardBodyHeight - 37 : 280;
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
@@ -328,7 +315,6 @@ const Home = () => {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollViewContent}
                 keyboardShouldPersistTaps="handled"
-
             >
                 <View style={styles.header}>
                     <View>
@@ -336,16 +322,8 @@ const Home = () => {
                         <Text style={styles.subGreeting}>Last 3 Days Activity</Text>
                     </View>
                     <View style={styles.headerButtons}>
-                        <TouchableOpacity
-                            onPress={handleRefresh}
-                            style={styles.refreshButton}
-                            disabled={isRefreshing}
-                        >
-                            {isRefreshing ? (
-                                <></>
-                            ) : (
-                                <Feather name="refresh-cw" size={24} color={theme.text} />
-                            )}
+                        <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton} disabled={isRefreshing}>
+                            {isRefreshing ? <ActivityIndicator size="small" color={theme.text} /> : <Feather name="refresh-cw" size={24} color={theme.text} />}
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => router.push('/settings')} style={styles.settingsButton}>
                             <Feather name="settings" size={24} color={theme.text} />
@@ -353,111 +331,132 @@ const Home = () => {
                     </View>
                 </View>
 
-                <View style={styles.recoveryContainer}>
-                    <View style={styles.cardContainer}>
-                        <Text style={styles.cardTitle}>Front</Text>
-                        <Body
-                            data={bodyData}
-                            gender={gender}
-                            side="front"
-                            scale={1}
-                            border={safeBorder}
-                            colors={bodyColors}
-                            bg={theme.surface}
-                            defaultFill={'theme.bodyFill'}
-                        />
+                <View style={styles.recoverySideBySide}>
+                    {/* Left Column: Swipeable Body Highlighter */}
+                    <View
+                        style={[styles.highlighterCard, { width: cardWidth }]}
+                        onLayout={(e) => {
+                            setCardBodyWidth(e.nativeEvent.layout.width);
+                            setCardBodyHeight(e.nativeEvent.layout.height);
+                        }}
+                    >
+                        <View style={styles.highlighterHeader}>
+                            <Text style={styles.highlighterTitle}>{bodySide === 'front' ? 'Front' : 'Back'}</Text>
+                            <View style={styles.sideIndicators}>
+                                <View style={[styles.indicatorDot, bodySide === 'front' && styles.indicatorDotActive]} />
+                                <View style={[styles.indicatorDot, bodySide === 'back' && styles.indicatorDotActive]} />
+                            </View>
+                        </View>
+
+                        <ScrollView
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            onMomentumScrollEnd={(e) => {
+                                const side = e.nativeEvent.contentOffset.x > (cardBodyWidth * 0.5) ? 'back' : 'front';
+                                setBodySide(side);
+                            }}
+                            scrollEventThrottle={8}
+                            style={styles.bodyScrollView}
+                        >
+                            <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
+                                <Body
+                                    data={bodyData}
+                                    gender={gender}
+                                    side="front"
+                                    scale={0.9}
+                                    border={safeBorder}
+                                    colors={bodyColors}
+                                    bg="transparent"
+                                    width={cardBodyWidth || cardWidth}
+                                    height={bodyHeight}
+                                />
+                            </View>
+                            <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
+                                <Body
+                                    data={bodyData}
+                                    gender={gender}
+                                    side="back"
+                                    scale={0.9}
+                                    border={safeBorder}
+                                    colors={bodyColors}
+                                    bg="transparent"
+                                    width={cardBodyWidth || cardWidth}
+                                    height={bodyHeight}
+                                />
+                            </View>
+                        </ScrollView>
                     </View>
 
-                    <View style={styles.cardContainer}>
-                        <Text style={styles.cardTitle}>Back</Text>
-                        <Body
-                            data={bodyData}
-                            gender={gender}
-                            side="back"
-                            scale={1}
-                            border={safeBorder}
-                            colors={bodyColors}
-                            bg={theme.surface}
-                            defaultFill={theme.bodyFill}
-                        />
-                    </View>
-                </View>
+                    {/* Right Column: Compact Muscle Readiness Widget */}
+                    <View style={[styles.readinessStickyCard, { width: cardWidth }]}>
+                        <View style={styles.readinessHeader}>
+                            <Feather name="activity" size={14} color={theme.primary} />
+                            <Text style={styles.readinessTitle}>Readiness</Text>
+                        </View>
 
-                {/* New Unified Recovery Widget */}
-                <View style={styles.recoveryWidget}>
-                    <View style={styles.recoveryWidgetHeader}>
-                        <Feather name="activity" size={18} color={theme.textSecondary} />
-                        <Text style={styles.recoveryWidgetTitle}>Muscle Readiness</Text>
-                    </View>
-
-                    <View style={styles.recoveryWidgetContent}>
-                        {/* Rest Category */}
-                        {recoveryGroups.rest.length > 0 && (
-                            <View style={styles.recoveryCategoryItem}>
-                                <View style={[styles.categoryHeader, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
-                                    <Feather name="alert-circle" size={14} color="#ef4444" />
-                                    <Text style={[styles.categoryTitle, { color: '#ef4444' }]}>Rest Required</Text>
+                        <View style={styles.readinessContent}>
+                            {/* READY first — most actionable */}
+                            <View style={styles.compactGroup}>
+                                <View style={[styles.compactBadge, { backgroundColor: `${theme.primary}10` }]}>
+                                    <Text style={[styles.compactBadgeText, { color: theme.primary }]}>READY</Text>
                                 </View>
-                                <View style={styles.muscleTags}>
-                                    {recoveryGroups.rest.map(muscle => (
-                                        <View key={muscle} style={[styles.muscleTag, { borderColor: 'rgba(239, 68, 68, 0.2)' }]}>
-                                            <Text style={[styles.muscleTagText, { color: '#ef4444' }]}>{muscle}</Text>
-                                        </View>
-                                    ))}
+                                <View style={styles.muscleTagsRow}>
+                                    {recoveryGroups.ready.length > 0 ? (
+                                        recoveryGroups.ready.map(muscle => (
+                                            <View key={muscle} style={styles.muscleTag}>
+                                                <Text style={[styles.compactTagText, { color: theme.primary }]}>{muscle}</Text>
+                                            </View>
+                                        ))
+                                    ) : (
+                                        <Text style={styles.emptyReadyText}>None</Text>
+                                    )}
                                 </View>
                             </View>
-                        )}
 
-                        {/* Recovering Category */}
-                        {recoveryGroups.recovering.length > 0 && (
-                            <View style={[styles.recoveryCategoryItem, recoveryGroups.rest.length > 0 && styles.categorySeparator]}>
-                                <View style={[styles.categoryHeader, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-                                    <Feather name="clock" size={14} color="#f59e0b" />
-                                    <Text style={[styles.categoryTitle, { color: '#f59e0b' }]}>Recovering</Text>
+                            {recoveryGroups.recovering.length > 0 && (
+                                <View style={styles.compactGroup}>
+                                    <View style={[styles.compactBadge, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
+                                        <Text style={[styles.compactBadgeText, { color: '#f59e0b' }]}>RECOV.</Text>
+                                    </View>
+                                    <View style={styles.muscleTagsRow}>
+                                        {recoveryGroups.recovering.map(muscle => (
+                                            <View key={muscle} style={styles.muscleTag}>
+                                                <Text style={[styles.compactTagText, { color: '#f59e0b' }]}>{muscle}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
                                 </View>
-                                <View style={styles.muscleTags}>
-                                    {recoveryGroups.recovering.map(muscle => (
-                                        <View key={muscle} style={[styles.muscleTag, { borderColor: 'rgba(245, 158, 11, 0.2)' }]}>
-                                            <Text style={[styles.muscleTagText, { color: '#f59e0b' }]}>{muscle}</Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            </View>
-                        )}
+                            )}
 
-                        {/* Ready Category */}
-                        <View style={[styles.recoveryCategoryItem, (recoveryGroups.rest.length > 0 || recoveryGroups.recovering.length > 0) && styles.categorySeparator]}>
-                            <View style={[styles.categoryHeader, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
-                                <Feather name="check-circle" size={14} color="#22c55e" />
-                                <Text style={[styles.categoryTitle, { color: '#22c55e' }]}>Ready to Train</Text>
-                            </View>
-                            <View style={styles.muscleTags}>
-                                {recoveryGroups.ready.length > 0 ? (
-                                    recoveryGroups.ready.map(muscle => (
-                                        <View key={muscle} style={[styles.muscleTag, { borderColor: 'rgba(34, 197, 94, 0.2)' }]}>
-                                            <Text style={[styles.muscleTagText, { color: '#22c55e' }]}>{muscle}</Text>
-                                        </View>
-                                    ))
-                                ) : (
-                                    <Text style={styles.emptyReadyText}>No major muscles fully rested</Text>
-                                )}
-                            </View>
+                            {recoveryGroups.rest.length > 0 && (
+                                <View style={styles.compactGroup}>
+                                    <View style={[styles.compactBadge, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                                        <Text style={[styles.compactBadgeText, { color: '#ef4444' }]}>REST</Text>
+                                    </View>
+                                    <View style={styles.muscleTagsRow}>
+                                        {recoveryGroups.rest.map(muscle => (
+                                            <View key={muscle} style={styles.muscleTag}>
+                                                <Text style={[styles.compactTagText, { color: '#ef4444' }]}>{muscle}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
                         </View>
                     </View>
                 </View>
+                <View style={styles.divider} />
 
                 <View style={[styles.sectionHeader, { marginTop: 0 }]}>
-                    <Text style={styles.sectionTitle}>Progress Tracker</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Feather name="trending-up" size={16} color={theme.primary} />
+                        <Text style={styles.sectionTitle}>Progress Tracker</Text>
+                    </View>
                 </View>
 
-                {showMuscleRadar && (
-                    <MuscleRadarChart />
-                )}
-
-                {showBodyWeight && (
-                    <BodyweightGraphCard theme={theme} />
-                )}
-
+                {showMuscleRadar && <MuscleRadarChart />}
+                {showBodyWeight && <BodyweightGraphCard theme={theme} />}
 
                 {pinnedExercises.map((exercise) => (
                     <PRGraphCard
@@ -470,25 +469,14 @@ const Home = () => {
                 ))}
 
                 <TouchableOpacity onPress={handleAddGraph} style={styles.addGraphButton}>
-                    <GradientOrView
-                        colors={[theme.surface, theme.surface]}
-                        style={styles.addGraphGradient}
-                        theme={theme}
-                    >
+                    <GradientOrView colors={[theme.surface, theme.surface]} style={styles.addGraphGradient} theme={theme}>
                         <Feather name="plus-circle" size={24} color={theme.primary} />
                         <Text style={styles.addGraphText}>Add Tracker</Text>
                     </GradientOrView>
                 </TouchableOpacity>
-
             </ScrollView>
 
-            <ActionSheet
-                ref={actionSheetRef}
-                gestureEnabled={true}
-                containerStyle={styles.actionSheetContainer}
-                indicatorStyle={styles.indicator}
-                onClose={() => setSearchQuery('')}
-            >
+            <ActionSheet ref={actionSheetRef} gestureEnabled={true} containerStyle={styles.actionSheetContainer} indicatorStyle={styles.indicator} onClose={() => setSearchQuery('')}>
                 <View style={styles.contentContainer}>
                     <View style={styles.actionSheetHeader}>
                         <Text style={styles.actionSheetTitle}>Add Module</Text>
@@ -507,9 +495,7 @@ const Home = () => {
                             activeOpacity={0.8}
                         >
                             <Feather name="activity" size={28} color={showBodyWeight ? theme.primary : theme.textSecondary} />
-                            <Text style={[styles.moduleText, showBodyWeight && { color: theme.primary, fontFamily: FONTS.bold }]}>
-                                Body Weight
-                            </Text>
+                            <Text style={[styles.moduleText, showBodyWeight && { color: theme.primary, fontFamily: FONTS.bold }]}>Body Weight</Text>
                             {showBodyWeight && (
                                 <View style={styles.checkBadge}>
                                     <Feather name="check" size={10} color="white" />
@@ -529,9 +515,7 @@ const Home = () => {
                             activeOpacity={0.8}
                         >
                             <Feather name="pie-chart" size={28} color={showMuscleRadar ? theme.primary : theme.textSecondary} />
-                            <Text style={[styles.moduleText, showMuscleRadar && { color: theme.primary, fontFamily: FONTS.bold }]}>
-                                Muscle Balance
-                            </Text>
+                            <Text style={[styles.moduleText, showMuscleRadar && { color: theme.primary, fontFamily: FONTS.bold }]}>Muscle Balance</Text>
                             {showMuscleRadar && (
                                 <View style={styles.checkBadge}>
                                     <Feather name="check" size={10} color="white" />
@@ -541,7 +525,6 @@ const Home = () => {
                     </View>
 
                     <Text style={styles.subHeader}>Exercises</Text>
-
                     <View style={styles.searchContainer}>
                         <View style={styles.searchBar}>
                             <Feather name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
@@ -551,8 +534,6 @@ const Home = () => {
                                 placeholderTextColor={theme.textSecondary}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
-                                returnKeyType="done"
-                                onSubmitEditing={Keyboard.dismiss}
                             />
                         </View>
                     </View>
@@ -592,7 +573,6 @@ const Home = () => {
 }
 
 const getStyles = (theme) => {
-    // Safe Colors for Reanimated (ActionSheet)
     const isDynamic = theme.type === 'dynamic';
     const safeIndicator = isDynamic ? '#aaaaaa' : theme.textSecondary;
 
@@ -622,10 +602,6 @@ const getStyles = (theme) => {
             borderRadius: 12,
             borderWidth: 1,
             borderColor: theme.border,
-            minWidth: 40,
-            minHeight: 40,
-            alignItems: 'center',
-            justifyContent: 'center',
             ...SHADOWS.small,
         },
         settingsButton: {
@@ -646,78 +622,6 @@ const getStyles = (theme) => {
             fontFamily: FONTS.medium,
             color: theme.textSecondary,
             marginTop: 4,
-        },
-        recoveryContainer: {
-            flexDirection: 'row',
-            paddingHorizontal: 16,
-            marginBottom: 20,
-            gap: 12,
-        },
-        cardContainer: {
-            backgroundColor: theme.surface,
-            borderRadius: 24,
-            padding: 16,
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: 380,
-            borderWidth: 1,
-            borderColor: theme.border,
-            ...SHADOWS.medium,
-        },
-        cardTitle: {
-            fontSize: 14,
-            fontFamily: FONTS.semiBold,
-            color: theme.textSecondary,
-            position: 'absolute',
-            top: 16,
-            left: 16,
-        },
-        radarSection: {
-            backgroundColor: theme.surface,
-            marginHorizontal: 20,
-            marginBottom: 16,
-            borderRadius: 20,
-            paddingVertical: 20,
-            borderWidth: 1,
-            borderColor: theme.border,
-            ...SHADOWS.medium,
-            alignItems: 'center',
-        },
-        radarHeader: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            width: '100%',
-            marginBottom: 10,
-            paddingHorizontal: 16,
-        },
-        radarTitle: {
-            fontSize: 18,
-            fontFamily: FONTS.bold,
-            color: theme.text,
-        },
-        rangeSelector: {
-            flexDirection: 'row',
-            backgroundColor: 'rgba(255,255,255,0.05)',
-            borderRadius: 8,
-            padding: 2,
-        },
-        rangeButton: {
-            paddingVertical: 4,
-            paddingHorizontal: 8,
-            borderRadius: 6,
-        },
-        rangeButtonActive: {
-            backgroundColor: 'rgba(255,255,255,0.15)',
-        },
-        rangeText: {
-            fontSize: 10,
-            fontFamily: FONTS.bold,
-            color: theme.textSecondary,
-        },
-        rangeTextActive: {
-            color: theme.primary,
         },
         sectionHeader: {
             paddingHorizontal: 16,
@@ -752,9 +656,7 @@ const getStyles = (theme) => {
             color: theme.primary,
         },
         actionSheetContainer: {
-            backgroundColor: 'transparent', // Transparent container
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
+            backgroundColor: 'transparent',
             height: '85%',
         },
         indicator: {
@@ -762,14 +664,13 @@ const getStyles = (theme) => {
         },
         contentContainer: {
             height: '100%',
-            backgroundColor: theme.surface, // Surface background restored to inner view
+            backgroundColor: theme.surface,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             overflow: 'hidden',
         },
         searchContainer: {
             padding: 16,
-            backgroundColor: theme.surface,
             borderBottomWidth: 1,
             borderBottomColor: theme.border,
         },
@@ -791,16 +692,10 @@ const getStyles = (theme) => {
             color: theme.text,
             fontFamily: FONTS.medium,
             fontSize: 16,
-            height: '100%',
-        },
-        list: {
-            flex: 1,
-            paddingHorizontal: 16,
-            paddingBottom: 100,
         },
         listContent: {
+            padding: 16,
             paddingBottom: 40,
-            paddingTop: 20,
         },
         exerciseCard: {
             backgroundColor: theme.surface,
@@ -821,7 +716,6 @@ const getStyles = (theme) => {
             fontSize: 16,
             fontFamily: FONTS.semiBold,
         },
-        // Action Sheet New Styles
         actionSheetHeader: {
             padding: 20,
             paddingBottom: 10,
@@ -870,73 +764,115 @@ const getStyles = (theme) => {
             alignItems: 'center',
             justifyContent: 'center',
         },
-        // Unified Recovery Widget Styles
-        recoveryWidget: {
-            backgroundColor: theme.surface,
-            marginHorizontal: 16,
+        recoverySideBySide: {
+            flexDirection: 'row',
+            paddingHorizontal: 16,
             marginBottom: 24,
+            gap: 12,
+            alignItems: 'stretch', // both cards match the taller one's height
+        },
+        highlighterCard: {
+            // Removed flex: 1 to use fixed width for exact equality
+            width: 0, // placeholder, overridden by inline style
+            minHeight: 300, // body highlighter needs a minimum
+            backgroundColor: theme.surface,
             borderRadius: 24,
             borderWidth: 1,
             borderColor: theme.border,
             ...SHADOWS.medium,
             overflow: 'hidden',
         },
-        recoveryWidgetHeader: {
+        highlighterHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderBottomWidth: 1,
+            borderBottomColor: 'rgba(255,255,255,0.05)',
+        },
+        highlighterTitle: {
+            fontSize: 14,
+            fontFamily: FONTS.bold,
+            color: theme.textSecondary,
+        },
+        sideIndicators: {
+            flexDirection: 'row',
+            gap: 4,
+        },
+        indicatorDot: {
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: 'rgba(255,255,255,0.1)',
+        },
+        indicatorDotActive: {
+            backgroundColor: theme.primary,
+        },
+        bodyScrollView: {
+            flex: 1,
+        },
+        bodyViewWrapper: {
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        readinessStickyCard: {
+            // Removed flex: 1 to use fixed width for exact equality
+            width: 0, // placeholder, overridden by inline style
+            backgroundColor: theme.surface,
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: theme.border,
+            ...SHADOWS.medium,
+            padding: 12,
+            overflow: 'hidden',
+        },
+        readinessHeader: {
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 10,
-            paddingHorizontal: 20,
-            paddingVertical: 16,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
-            backgroundColor: 'rgba(255,255,255,0.02)',
+            gap: 8,
+            marginBottom: 10,
         },
-        recoveryWidgetTitle: {
-            fontSize: 18,
+        readinessTitle: {
+            fontSize: 16,
             fontFamily: FONTS.bold,
             color: theme.text,
         },
-        recoveryWidgetContent: {
-            padding: 12,
-            gap: 12,
+        readinessContent: {
+            flex: 1,
         },
-        recoveryCategoryItem: {
-            gap: 8,
+        compactGroup: {
+            flexDirection: 'column',
+            marginBottom: 10,
+            gap: 5,
         },
-        categorySeparator: {
-            paddingTop: 16,
-            borderTopWidth: 1,
-            borderTopColor: theme.border,
-        },
-        categoryHeader: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 6,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: 8,
-            alignSelf: 'flex-start',
-        },
-        categoryTitle: {
-            fontSize: 11,
-            fontFamily: FONTS.bold,
-            textTransform: 'uppercase',
-            letterSpacing: 0.8,
-        },
-        muscleTags: {
+        muscleTagsRow: {
             flexDirection: 'row',
             flexWrap: 'wrap',
-            gap: 6,
-            paddingLeft: 4,
+            gap: 4,
+        },
+        compactBadge: {
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+            borderRadius: 4,
+            alignSelf: 'flex-start',
+            height: 20,
+            justifyContent: 'center',
+        },
+        compactBadgeText: {
+            fontSize: 10,
+            fontFamily: FONTS.bold,
+            letterSpacing: 0.5,
         },
         muscleTag: {
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: 8,
+            backgroundColor: theme.overlayInputFocused,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+            borderRadius: 6,
             borderWidth: 1,
-            backgroundColor: 'rgba(255,255,255,0.03)',
+            borderColor: theme.border,
         },
-        muscleTagText: {
+        compactTagText: {
             fontSize: 13,
             fontFamily: FONTS.semiBold,
         },
@@ -945,8 +881,15 @@ const getStyles = (theme) => {
             fontFamily: FONTS.medium,
             color: theme.textSecondary,
             fontStyle: 'italic',
-            marginLeft: 4,
+        },
+        divider: {
+            height: 1,
+            backgroundColor: theme.border,
+            marginHorizontal: 16,
+            marginBottom: 20,
+            opacity: 0.5,
         },
     });
 };
+
 export default Home
