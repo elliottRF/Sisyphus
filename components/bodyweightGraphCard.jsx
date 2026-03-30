@@ -445,8 +445,8 @@ const BodyweightGraphCard = ({ theme }) => {
                         <View style={{ flex: 1, marginRight: 8 }}>
                             <Text style={styles.title}>Body Weight</Text>
                             <Text style={styles.subtitle}>
-                                {allData.length > 0 && points.length >= 1 
-                                    ? `Current: ${points.at(-1)?.value.toFixed(1)} kg` 
+                                {allData.length > 0 && points.length >= 1
+                                    ? `Current: ${points.at(-1)?.value.toFixed(1)} kg`
                                     : 'No logs for this period'}
                             </Text>
 
@@ -620,7 +620,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     rangeSelector: {
         flexDirection: 'row',
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: theme.overlayBorder,
         borderRadius: 8,
         padding: 2,
     },
@@ -630,7 +630,7 @@ const getStyles = (theme) => StyleSheet.create({
         borderRadius: 6,
     },
     rangeButtonActive: {
-        backgroundColor: 'rgba(255,255,255,0.15)',
+        backgroundColor: theme.overlayInputFocused,
     },
     rangeText: {
         fontSize: 10,

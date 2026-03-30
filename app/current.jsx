@@ -832,7 +832,7 @@ const getStyles = (theme) => {
     const isDynamic = theme.type === 'dynamic';
     const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
     const safeText = isDynamic ? '#FFFFFF' : theme.text;
-    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
+    const safeBorder = isDynamic ? theme.overlayInput : theme.border;
     const safeDanger = isDynamic ? '#FF4444' : theme.danger;
 
     // Grid sizing
@@ -918,7 +918,7 @@ const getStyles = (theme) => {
             width: 32,
             height: 32,
             borderRadius: 8,
-            backgroundColor: 'rgba(255,255,255,0.1)',
+            backgroundColor: theme.overlayInput,
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10,
@@ -995,7 +995,7 @@ const getStyles = (theme) => {
             marginBottom: 0,
         },
         addExerciseButton: {
-            backgroundColor: 'rgba(255,255,255,0.05)',
+            backgroundColor: theme.overlayBorder,
             paddingVertical: 16,
             borderRadius: 12,
             alignItems: 'center',
@@ -1046,7 +1046,7 @@ const getStyles = (theme) => {
             width: 36,
             height: 36,
             borderRadius: 18,
-            backgroundColor: 'rgba(64, 186, 173, 0.1)',
+            backgroundColor: theme.overlayInput,
             alignItems: 'center',
             justifyContent: 'center',
         }
