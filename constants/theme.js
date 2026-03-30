@@ -234,7 +234,7 @@ const BLOSSOM = {
     info: "#89CFF0",              // Baby Blue
 
     // Heatmap & Charting
-    bodyFill: "#F2E2E5",          // Base color for unworked muscles
+    bodyFill: "#ddced1ff",          // Base color for unworked muscles
     chartFill: "rgba(255, 133, 161, 0.25)", // Transparent Primary for Radar fill
 
     statusBar: isLight("#FFF5F7") ? "dark" : "light",
@@ -336,7 +336,7 @@ const LIGHT = {
     info: "#0EA5E9",              // Sky Blue
 
     // Heatmap & Charting
-    bodyFill: "#E2E8F0",          // Neutral Slate for unworked areas
+    bodyFill: "#b4b9c0ff",          // Neutral Slate for unworked areas
     chartFill: "rgba(59, 130, 246, 0.15)", // Transparent Blue for Radar
 
     statusBar: isLight("#F8FAFC") ? "dark" : "light",

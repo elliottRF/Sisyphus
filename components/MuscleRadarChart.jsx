@@ -236,9 +236,9 @@ const getStyles = (theme) => StyleSheet.create({
     },
     title: { fontSize: 18, fontFamily: FONTS.bold, color: theme.text },
     chartWrapper: { width: '100%', alignItems: 'center', marginTop: -5 },
-    rangeSelector: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 2 },
+    rangeSelector: { flexDirection: 'row', backgroundColor: theme.overlayBorder, borderRadius: 8, padding: 2 },
     rangeButton: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
-    rangeButtonActive: { backgroundColor: 'rgba(255,255,255,0.12)' },
+    rangeButtonActive: { backgroundColor: theme.overlayInputFocused },
     rangeText: { fontSize: 10, fontFamily: FONTS.bold, color: theme.textSecondary },
     rangeTextActive: { color: theme.primary },
 });
