@@ -90,8 +90,6 @@ const Home = () => {
     const [showMuscleRadar, setShowMuscleRadar] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [cardBodyHeight, setCardBodyHeight] = useState(0);
-
     const [cardBodyWidth, setCardBodyWidth] = useState(0);
     const actionSheetRef = useRef(null);
     const router = useRouter();
@@ -301,12 +299,29 @@ const Home = () => {
 
     const isDynamic = theme.type === 'dynamic';
     const bodyColors = isDynamic
-        ? ['#2DC4B699', '#f59e0bbb', '#bd2121cc']
-        : [`${theme.primary}99`, '#f59e0bbb', '#bd2121cc'];
+        ? ['#2DC4B6CC', '#2DC4B655', theme.bodyFill]
+        : [theme.bodyFill, `${theme.primary}55`, `${theme.primary}CC`];
+
+
+
+    const readinessColors = {
+        ready: {
+            bg: `${theme.success}10`,   // green
+            text: theme.success,
+        },
+        recovering: {
+            bg: `${theme.primaryDark ?? theme.primary}15`, // darker blue
+            text: theme.primaryDark ?? theme.primary,
+        },
+        rest: {
+            bg: `${theme.primaryDark ?? theme.primary}15`, // darker blue
+            text: theme.primaryDark ?? theme.primary,
+        },
+    };
+
 
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
     const cardWidth = (SCREEN_WIDTH - 32 - 12) / 2;
-    const bodyHeight = cardBodyHeight > 0 ? cardBodyHeight - 37 : 280;
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
@@ -337,7 +352,6 @@ const Home = () => {
                         style={[styles.highlighterCard, { width: cardWidth }]}
                         onLayout={(e) => {
                             setCardBodyWidth(e.nativeEvent.layout.width);
-                            setCardBodyHeight(e.nativeEvent.layout.height);
                         }}
                     >
                         <View style={styles.highlighterHeader}>
@@ -364,12 +378,11 @@ const Home = () => {
                                     data={bodyData}
                                     gender={gender}
                                     side="front"
-                                    scale={0.9}
+                                    scale={0.8}
                                     border={safeBorder}
                                     colors={bodyColors}
                                     bg="transparent"
                                     width={cardBodyWidth || cardWidth}
-                                    height={bodyHeight}
                                 />
                             </View>
                             <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
@@ -377,12 +390,11 @@ const Home = () => {
                                     data={bodyData}
                                     gender={gender}
                                     side="back"
-                                    scale={0.9}
+                                    scale={0.8}
                                     border={safeBorder}
                                     colors={bodyColors}
                                     bg="transparent"
                                     width={cardBodyWidth || cardWidth}
-                                    height={bodyHeight}
                                 />
                             </View>
                         </ScrollView>
@@ -397,15 +409,39 @@ const Home = () => {
 
                         <View style={styles.readinessContent}>
                             {/* READY first — most actionable */}
+                            {/* READY */}
                             <View style={styles.compactGroup}>
-                                <View style={[styles.compactBadge, { backgroundColor: `${theme.primary}10` }]}>
-                                    <Text style={[styles.compactBadgeText, { color: theme.primary }]}>READY</Text>
+                                <View
+                                    style={[
+                                        styles.compactBadge,
+                                        { backgroundColor: readinessColors.ready.bg },
+                                    ]}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.compactBadgeText,
+                                            { color: readinessColors.ready.text },
+                                        ]}
+                                    >
+                                        READY
+                                    </Text>
                                 </View>
+
                                 <View style={styles.muscleTagsRow}>
                                     {recoveryGroups.ready.length > 0 ? (
-                                        recoveryGroups.ready.map(muscle => (
-                                            <View key={muscle} style={styles.muscleTag}>
-                                                <Text style={[styles.compactTagText, { color: theme.primary }]}>{muscle}</Text>
+                                        recoveryGroups.ready.map((muscle) => (
+                                            <View key={muscle} style={[
+                                                styles.muscleTag,
+                                                { backgroundColor: readinessColors.ready.bg, borderColor: readinessColors.ready.bg }
+                                            ]}>
+                                                <Text
+                                                    style={[
+                                                        styles.compactTagText,
+                                                        { color: readinessColors.ready.text },
+                                                    ]}
+                                                >
+                                                    {muscle}
+                                                </Text>
                                             </View>
                                         ))
                                     ) : (
@@ -414,30 +450,78 @@ const Home = () => {
                                 </View>
                             </View>
 
+                            {/* RECOVERING */}
                             {recoveryGroups.recovering.length > 0 && (
                                 <View style={styles.compactGroup}>
-                                    <View style={[styles.compactBadge, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-                                        <Text style={[styles.compactBadgeText, { color: '#f59e0b' }]}>RECOV.</Text>
+                                    <View
+                                        style={[
+                                            styles.compactBadge,
+                                            { backgroundColor: readinessColors.recovering.bg },
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.compactBadgeText,
+                                                { color: readinessColors.recovering.text },
+                                            ]}
+                                        >
+                                            RECOV.
+                                        </Text>
                                     </View>
+
                                     <View style={styles.muscleTagsRow}>
-                                        {recoveryGroups.recovering.map(muscle => (
-                                            <View key={muscle} style={styles.muscleTag}>
-                                                <Text style={[styles.compactTagText, { color: '#f59e0b' }]}>{muscle}</Text>
+                                        {recoveryGroups.recovering.map((muscle) => (
+                                            <View key={muscle} style={[
+                                                styles.muscleTag,
+                                                { backgroundColor: readinessColors.recovering.bg, borderColor: readinessColors.recovering.bg }
+                                            ]}>
+                                                <Text
+                                                    style={[
+                                                        styles.compactTagText,
+                                                        { color: readinessColors.recovering.text },
+                                                    ]}
+                                                >
+                                                    {muscle}
+                                                </Text>
                                             </View>
                                         ))}
                                     </View>
                                 </View>
                             )}
 
+                            {/* REST */}
                             {recoveryGroups.rest.length > 0 && (
                                 <View style={styles.compactGroup}>
-                                    <View style={[styles.compactBadge, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
-                                        <Text style={[styles.compactBadgeText, { color: '#ef4444' }]}>REST</Text>
+                                    <View
+                                        style={[
+                                            styles.compactBadge,
+                                            { backgroundColor: readinessColors.rest.bg },
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.compactBadgeText,
+                                                { color: readinessColors.rest.text },
+                                            ]}
+                                        >
+                                            REST
+                                        </Text>
                                     </View>
+
                                     <View style={styles.muscleTagsRow}>
-                                        {recoveryGroups.rest.map(muscle => (
-                                            <View key={muscle} style={styles.muscleTag}>
-                                                <Text style={[styles.compactTagText, { color: '#ef4444' }]}>{muscle}</Text>
+                                        {recoveryGroups.rest.map((muscle) => (
+                                            <View key={muscle} style={[
+                                                styles.muscleTag,
+                                                { backgroundColor: readinessColors.rest.bg, borderColor: readinessColors.rest.bg }
+                                            ]}>
+                                                <Text
+                                                    style={[
+                                                        styles.compactTagText,
+                                                        { color: readinessColors.rest.text },
+                                                    ]}
+                                                >
+                                                    {muscle}
+                                                </Text>
                                             </View>
                                         ))}
                                     </View>
@@ -774,7 +858,7 @@ const getStyles = (theme) => {
         highlighterCard: {
             // Removed flex: 1 to use fixed width for exact equality
             width: 0, // placeholder, overridden by inline style
-            minHeight: 300, // body highlighter needs a minimum
+            minHeight: 320, // Reduced to allow Readiness content to drive height
             backgroundColor: theme.surface,
             borderRadius: 24,
             borderWidth: 1,
@@ -787,7 +871,7 @@ const getStyles = (theme) => {
             justifyContent: 'space-between',
             alignItems: 'center',
             paddingHorizontal: 16,
-            paddingVertical: 8,
+            paddingVertical: 6,
             borderBottomWidth: 1,
             borderBottomColor: 'rgba(255,255,255,0.05)',
         },
@@ -811,27 +895,31 @@ const getStyles = (theme) => {
         },
         bodyScrollView: {
             flex: 1,
+            marginLeft: -0.5,
         },
         bodyViewWrapper: {
             alignItems: 'center',
             justifyContent: 'center',
+            marginVertical: -60,
+            overflow: 'hidden',
         },
         readinessStickyCard: {
             // Removed flex: 1 to use fixed width for exact equality
             width: 0, // placeholder, overridden by inline style
+            minHeight: 220, // Match highlighter
             backgroundColor: theme.surface,
             borderRadius: 24,
             borderWidth: 1,
             borderColor: theme.border,
             ...SHADOWS.medium,
-            padding: 12,
+            padding: 10,
             overflow: 'hidden',
         },
         readinessHeader: {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
-            marginBottom: 10,
+            marginBottom: 8,
         },
         readinessTitle: {
             fontSize: 16,
@@ -843,7 +931,7 @@ const getStyles = (theme) => {
         },
         compactGroup: {
             flexDirection: 'column',
-            marginBottom: 10,
+            marginBottom: 6,
             gap: 5,
         },
         muscleTagsRow: {

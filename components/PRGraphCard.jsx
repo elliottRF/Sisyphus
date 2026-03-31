@@ -830,12 +830,12 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     },
     modeToggleContainer: {
         flexDirection: 'row',
-        backgroundColor: 'rgba(255,255,255,0.03)',
+        backgroundColor: theme.overlayMedium,
         borderRadius: 14,
         padding: 4,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.02)',
+        borderColor: theme.overlaySubtle,
     },
     modeButton: {
         flex: 1,
@@ -847,7 +847,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         gap: 8,
     },
     modeButtonActive: {
-        backgroundColor: 'rgba(255,255,255,0.08)',
+        backgroundColor: theme.overlayInput,
     },
     modeButtonText: {
         fontSize: 12,
