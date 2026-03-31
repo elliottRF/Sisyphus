@@ -34,7 +34,7 @@ import TestNotificationButton from '../components/TestNotificationButton';
 import { useTheme } from '../context/ThemeContext';
 import { ActivityIndicator } from 'react-native';
 import { AppEvents, emit } from '../utils/events';
-
+import { useLocalSearchParams } from 'expo-router';
 const { width } = Dimensions.get('window');
 
 const Current = () => {
@@ -204,6 +204,21 @@ const Current = () => {
     const [currentExerciseName, setCurrentExerciseName] = useState(null);
 
     console.log("Render Current. Workout length:", currentWorkout.length);
+
+
+    const params = useLocalSearchParams();
+
+    useEffect(() => {
+        if (params.template) {
+            try {
+                const parsed = JSON.parse(params.template);
+                loadTemplate(parsed);
+            } catch (e) {
+                console.error("Invalid template passed:", e);
+            }
+        }
+    }, [params.template]);
+
 
     const endWorkout = useCallback(async () => {
         console.log("endWorkout called. State length:", currentWorkout.length);
@@ -383,6 +398,13 @@ const Current = () => {
             setWorkoutTitle("New Workout");
             restTimerRef.current?.stopTimer();
             console.log("Workout saved successfully");
+            router.push({
+                pathname: `/workout/${nextSessionNumber}`,
+                params: {
+                    session: nextSessionNumber,
+                    initialData: JSON.stringify(workoutEntries) // This is the "bridge" that prevents the kick-out
+                }
+            });
         }
         catch (error) {
             console.error("Error saving workout:", error);
