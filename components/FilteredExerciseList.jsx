@@ -177,17 +177,30 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
 };
 
 const ButtonBackground = ({ children, style, theme }) => {
-    const isDynamic = theme.type === 'dynamic';
+    // 1. Safety check: Fallback to a default hex if theme or colors are missing
+    const primary = theme?.primary || '#444444';
+    const secondary = theme?.secondary || '#222222';
+    const isDynamic = theme?.type === 'dynamic';
+
     if (isDynamic) {
         return (
-            <View style={[style, { backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' }]}>
+            <View style={[
+                style,
+                {
+                    backgroundColor: primary,
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                }
+            ]}>
                 {children}
             </View>
         );
     }
+
     return (
         <LinearGradient
-            colors={[theme.primary, theme.secondary]}
+            // 2. Ensure colors is ALWAYS an array of valid strings
+            colors={[primary, secondary]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={style}

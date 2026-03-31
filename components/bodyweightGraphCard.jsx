@@ -34,10 +34,24 @@ const CustomSelectionDot = ({ isActive, color }) => (
 );
 
 const GradientOrView = ({ colors, style, theme, children }) => {
-    if (theme.type === 'dynamic') {
-        return <View style={[style, { backgroundColor: theme.surface }]}>{children}</View>;
+    if (theme?.type === 'dynamic') {
+        return (
+            <View style={[style, { backgroundColor: theme.surface || '#ffffff' }]}>
+                {children}
+            </View>
+        );
     }
-    return <LinearGradient colors={colors} style={style}>{children}</LinearGradient>;
+
+    // Ensure colors is an array of strings and never contains null/undefined
+    const safeColors = Array.isArray(colors) && colors.every(c => !!c)
+        ? colors
+        : ['#transparent', '#transparent']; // Or a theme default
+
+    return (
+        <LinearGradient colors={safeColors} style={style}>
+            {children}
+        </LinearGradient>
+    );
 };
 
 const BodyweightGraphCard = ({ theme }) => {
