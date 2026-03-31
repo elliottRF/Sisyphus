@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import ActionSheet from "react-native-actions-sheet";
 import ExerciseHistory from '../../components/exerciseHistory';
 import WorkoutSessionView from '../../components/WorkoutSessionView';
 import { useTheme } from '../../context/ThemeContext';
+import { setPreloadedData } from '../../constants/preloader';
 
 const WorkoutDetail = () => {
     const insets = useSafeAreaInsets();
@@ -17,7 +18,6 @@ const WorkoutDetail = () => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
 
-    // 1. Synchronously derive initial data from params to ensure first-frame correctness
     const syncedInitialData = React.useMemo(() => {
         if (initialData) {
             try {
@@ -32,12 +32,10 @@ const WorkoutDetail = () => {
     const [workoutDetails, setWorkoutDetails] = useState(syncedInitialData || []);
     const [exercisesList, setExercises] = useState([]);
 
-    // 2. Determine if we have valid data for THIS session
     const currentSessionId = parseInt(session);
     const dataSessionId = workoutDetails[0]?.workoutSession;
     const isDataMismatch = workoutDetails.length > 0 && dataSessionId !== currentSessionId;
 
-    // Sync state if params change but component is already mounted (pre-loaded)
     useEffect(() => {
         if (syncedInitialData && syncedInitialData.length > 0) {
             const dataSessionIdSynced = syncedInitialData[0]?.workoutSession;
@@ -48,14 +46,13 @@ const WorkoutDetail = () => {
         }
     }, [syncedInitialData, currentSessionId]);
 
-    // If mismatch, fall back to synced data (if it matches) or empty
     const effectiveWorkoutDetails = isDataMismatch
         ? (syncedInitialData && syncedInitialData[0]?.workoutSession === currentSessionId ? syncedInitialData : [])
         : workoutDetails;
 
-    // Loading if we have no data for this session
     const [loading, setLoading] = useState(!effectiveWorkoutDetails.length);
     const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
+    const [isActionLoading, setIsActionLoading] = useState(false);
 
     const actionSheetRef = useRef(null);
     const sessionViewRef = useRef(null);
@@ -66,10 +63,7 @@ const WorkoutDetail = () => {
         React.useCallback(() => {
             const loadData = async () => {
                 try {
-                    // Update exercises list in background or parallel
                     const exPromise = fetchExercises();
-
-                    // Always refresh history for the current session to ensure latest data
                     const historyPromise = fetchWorkoutHistoryBySession(session);
 
                     const [historyData, exercisesData] = await Promise.all([
@@ -88,7 +82,6 @@ const WorkoutDetail = () => {
                 }
             };
 
-            // If we have synced data, we are "loaded" immediately, but still want to fetch fresh
             if (syncedInitialData && syncedInitialData.length > 0 && syncedInitialData[0]?.workoutSession === currentSessionId) {
                 setLoading(false);
             } else {
@@ -96,12 +89,11 @@ const WorkoutDetail = () => {
             }
 
             loadData();
-        }, [session, syncedInitialData]) // Re-run if session changes
+        }, [session, syncedInitialData])
     );
 
     useFocusEffect(
         React.useCallback(() => {
-            // Immediate scroll to top when focused
             sessionViewRef.current?.scrollTo({ y: 0, animated: false });
         }, [])
     );
@@ -120,7 +112,102 @@ const WorkoutDetail = () => {
         }
     }, [session, router]);
 
+    const handleRepeat = useCallback(async () => {
+        if (isActionLoading) return;
+        setIsActionLoading(true);
+        try {
+            const sessionData = await fetchWorkoutHistoryBySession(session);
 
+            const grouped = {};
+            const exerciseOrder = [];
+
+            sessionData.forEach(set => {
+                if (!grouped[set.exerciseID]) {
+                    grouped[set.exerciseID] = [];
+                    exerciseOrder.push(set.exerciseID);
+                }
+                grouped[set.exerciseID].push(set);
+            });
+
+            const template = {
+                name: effectiveWorkoutDetails[0]?.name || "Repeated Workout",
+                data: exerciseOrder.map(exerciseID => ({
+                    id: Date.now().toString() + Math.random(),
+                    exercises: [{
+                        exerciseID: Number(exerciseID),
+                        notes: '',
+                        sets: grouped[exerciseID].map(s => ({
+                            id: Date.now().toString() + Math.random(),
+                            weight: s.weight?.toString() || null,
+                            reps: s.reps?.toString() || null,
+                            distance: s.distance?.toString() || null,
+                            minutes: s.seconds
+                                ? (s.seconds / 60).toFixed(1).replace(/\.0$/, '')
+                                : null,
+                            setType: s.setType || 'N',
+                            completed: false
+                        }))
+                    }]
+                }))
+            };
+
+            router.push({
+                pathname: "/current",
+                params: { template: JSON.stringify(template) }
+            });
+        } catch (err) {
+            console.error("Failed to repeat workout:", err);
+        } finally {
+            setIsActionLoading(false);
+        }
+    }, [session, effectiveWorkoutDetails, isActionLoading, router]);
+
+    const handleSaveAsTemplate = useCallback(async () => {
+        if (isActionLoading) return;
+        setIsActionLoading(true);
+        try {
+            const rows = await fetchWorkoutHistoryBySession(session);
+
+            const grouped = new Map();
+
+            rows.forEach(row => {
+                if (!grouped.has(row.exerciseNum)) {
+                    grouped.set(row.exerciseNum, {
+                        id: `${Date.now()}_${row.exerciseNum}_${Math.random().toString(36).substr(2, 6)}`,
+                        exercises: [{
+                            exerciseID: row.exerciseID,
+                            notes: row.notes || '',
+                            sets: []
+                        }]
+                    });
+                }
+
+                grouped.get(row.exerciseNum).exercises[0].sets.push({
+                    id: `${Date.now()}_${row.setNum}_${Math.random().toString(36).substr(2, 6)}`,
+                    weight: row.weight,
+                    reps: row.reps,
+                    minutes: row.minutes,
+                    distance: row.distance,
+                    setType: row.setType || 'N',
+                    completed: false,
+                });
+            });
+
+            const workoutData = Array.from(grouped.values());
+
+            setPreloadedData({
+                template: { name: '', data: workoutData },
+                exercises: []
+            });
+
+            router.push(`/template/new?v=${Date.now()}`);
+        } catch (err) {
+            console.error('handleSaveAsTemplate error:', err);
+            Alert.alert('Error', 'Could not load workout data.');
+        } finally {
+            setIsActionLoading(false);
+        }
+    }, [session, isActionLoading, router]);
 
     useFocusEffect(
         React.useCallback(() => {
@@ -130,23 +217,18 @@ const WorkoutDetail = () => {
         }, [hasAttemptedFetch, effectiveWorkoutDetails.length, router])
     );
 
-    // 4. Strict data gating for Zero-Flash transitions
     const isDataMatching = effectiveWorkoutDetails.length > 0 && effectiveWorkoutDetails[0]?.workoutSession === currentSessionId;
     const isReadyToShow = isDataMatching;
 
     if (!isReadyToShow) {
-        // Render a completely blank themed background to hide the "Pre-load" transition
-        // If it's not found, the useEffect above will redirect
         return (
             <View style={[styles.container, { backgroundColor: theme.background }]} />
         );
     }
 
-
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <Stack.Screen options={{ headerShown: false }} />
-
 
             {effectiveWorkoutDetails && (
                 <WorkoutSessionView
@@ -154,12 +236,13 @@ const WorkoutDetail = () => {
                     workoutDetails={effectiveWorkoutDetails}
                     exercisesList={exercisesList}
                     onEdit={showEditPage}
+                    onRepeat={handleRepeat}
+                    onSaveAsTemplate={handleSaveAsTemplate}
                     onExerciseInfo={showExerciseInfo}
                 />
             )}
 
-
-            {loading && (
+            {(loading || isActionLoading) && (
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', zIndex: 20 }]}>
                     <ActivityIndicator size="large" color={theme.primary} />
                 </View>
@@ -194,24 +277,6 @@ const getStyles = (theme) => {
         container: {
             flex: 1,
             backgroundColor: theme.background,
-        },
-        backButtonOver: {
-            position: 'absolute',
-            top: 10,
-            left: 16,
-            zIndex: 10,
-            padding: 8,
-            backgroundColor: 'rgba(0,0,0,0.3)',
-            borderRadius: 20,
-        },
-        header: {
-            paddingHorizontal: 20,
-            paddingVertical: 12,
-        },
-        title: {
-            fontSize: 20,
-            fontFamily: FONTS.bold,
-            color: theme.text,
         },
         actionSheetContainer: {
             backgroundColor: safeSurface,

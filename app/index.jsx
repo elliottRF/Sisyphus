@@ -390,7 +390,7 @@ const Home = () => {
                     </View>
 
                     {/* Readiness - Single sorted list */}
-                    <View style={[styles.readinessStickyCard, { width: cardWidth, minHeight: 340 }]}>
+                    <View style={[styles.readinessStickyCard, { width: cardWidth, minHeight: 400 }]}>
                         <View style={styles.readinessHeader}>
                             <Feather name="activity" size={14} color={theme.primary} />
                             <Text style={styles.readinessTitle}>Readiness</Text>
@@ -593,7 +593,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     highlighterCard: {
         width: 0, // Placeholder for inline override
-        minHeight: 400,
+        minHeight: 405,
         backgroundColor: theme.surface,
         borderRadius: 24,
         borderWidth: 1,
@@ -640,7 +640,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     readinessStickyCard: {
         width: 0, // Placeholder for inline override
-        minHeight: 340,
+        minHeight: 410,
         backgroundColor: theme.surface,
         borderRadius: 24,
         borderWidth: 1,
