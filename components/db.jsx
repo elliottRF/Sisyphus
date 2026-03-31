@@ -465,11 +465,12 @@ export const fetchRecentMuscleUsage = async (days) => {
     `SELECT 
       e.targetMuscle,
       e.accessoryMuscles,
-      COUNT(*) as sets
+      COUNT(*) as sets,
+      MAX(wh.time) as date
      FROM workoutHistory wh
      JOIN exercises e ON wh.exerciseID = e.exerciseID
      WHERE wh.time >= ? AND (wh.setType IS NULL OR wh.setType != 'W')
-     GROUP BY wh.exerciseID, e.targetMuscle, e.accessoryMuscles;`,
+     GROUP BY wh.workoutSession, wh.exerciseID, e.targetMuscle, e.accessoryMuscles;`,
     [cutoffDate.toISOString()]
   );
 };
@@ -1070,13 +1071,13 @@ export const deleteBodyWeight = async (date) => {
 };
 
 export const exportBodyWeightData = async () => {
-    const database = await getDb();
-    try {
-        const rows = await database.getAllAsync('SELECT datetime as Date, weight as [Weight (kg)] FROM bodyWeight ORDER BY datetime ASC;');
-        const csv = Papa.unparse(rows);
-        return csv;
-    } catch (error) {
-        console.error('Body weight export error:', error);
-        throw error;
-    }
+  const database = await getDb();
+  try {
+    const rows = await database.getAllAsync('SELECT datetime as Date, weight as [Weight (kg)] FROM bodyWeight ORDER BY datetime ASC;');
+    const csv = Papa.unparse(rows);
+    return csv;
+  } catch (error) {
+    console.error('Body weight export error:', error);
+    throw error;
+  }
 };

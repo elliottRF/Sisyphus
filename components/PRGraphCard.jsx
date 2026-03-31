@@ -5,7 +5,7 @@ import { LineGraph } from 'react-native-graph';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { fetchExerciseProgress, unpinExercise } from './db';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, on, off } from '../utils/events';
 
@@ -65,10 +65,24 @@ const TimeRangeSelector = ({ selectedRange, onSelect, theme, styles }) => {
 
 // Reusable Gradient or Solid View Component
 const GradientOrView = ({ colors, style, theme, children }) => {
-    if (theme.type === 'dynamic') {
-        return <View style={[style, { backgroundColor: theme.surface }]}>{children}</View>;
+    if (theme?.type === 'dynamic') {
+        return (
+            <View style={[style, { backgroundColor: theme.surface || '#ffffff' }]}>
+                {children}
+            </View>
+        );
     }
-    return <LinearGradient colors={colors} style={style}>{children}</LinearGradient>;
+
+    // Ensure colors is an array of strings and never contains null/undefined
+    const safeColors = Array.isArray(colors) && colors.every(c => !!c)
+        ? colors
+        : ['#transparent', '#transparent']; // Or a theme default
+
+    return (
+        <LinearGradient colors={safeColors} style={style}>
+            {children}
+        </LinearGradient>
+    );
 };
 
 const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) => {
@@ -102,7 +116,15 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
         };
     }, [exerciseID]);
 
-
+    const downsample = (arr, maxPoints) => {
+        if (arr.length <= maxPoints) return arr;
+        const result = [];
+        const step = (arr.length - 1) / (maxPoints - 1);
+        for (let i = 0; i < maxPoints; i++) {
+            result.push(arr[Math.round(i * step)]);
+        }
+        return result;
+    };
 
     const loadData = async () => {
         try {
@@ -275,7 +297,8 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                 }
             }
 
-            processed = interpolated;
+            const maxPts = timeRange === '3M' ? Infinity : 200;
+            processed = downsample(interpolated, maxPts);
         } else if (!DEBUG_INTERPOLATE && processed.length >= 5) {
             // --- Original bucket-aggregation path (used when interpolation is off) ---
             const firstDate = processed[0].date;
@@ -596,9 +619,9 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
 
                 <View style={[styles.modeToggleContainer, isCompact && { marginBottom: 8 }]}>
                     {[
-                        { key: 'history', label: '1RM', icon: 'activity' },
+                        { key: 'history', label: '1RM', icon: 'chart-timeline-variant' },
                         { key: 'truePR', label: 'True PR', icon: 'trending-up' },
-                        { key: 'maxWeight', label: 'Max Wt', icon: 'package' },
+                        { key: 'maxWeight', label: 'Max Wt', icon: 'weight' },
                     ].map(mode => (
                         <TouchableOpacity
                             key={mode.key}
@@ -608,7 +631,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                                 graphMode === mode.key && styles.modeButtonActive
                             ]}
                         >
-                            <Feather
+                            <MaterialCommunityIcons
                                 name={mode.icon}
                                 size={14}
                                 color={graphMode === mode.key ? theme.primary : theme.textSecondary}

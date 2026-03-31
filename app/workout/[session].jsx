@@ -120,11 +120,15 @@ const WorkoutDetail = () => {
         }
     }, [session, router]);
 
-    useEffect(() => {
-        if (hasAttemptedFetch && effectiveWorkoutDetails.length === 0) {
-            router.replace('/history');
-        }
-    }, [hasAttemptedFetch, effectiveWorkoutDetails.length, router]);
+
+
+    useFocusEffect(
+        React.useCallback(() => {
+            if (hasAttemptedFetch && effectiveWorkoutDetails.length === 0) {
+                router.replace('/history');
+            }
+        }, [hasAttemptedFetch, effectiveWorkoutDetails.length, router])
+    );
 
     // 4. Strict data gating for Zero-Flash transitions
     const isDataMatching = effectiveWorkoutDetails.length > 0 && effectiveWorkoutDetails[0]?.workoutSession === currentSessionId;

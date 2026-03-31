@@ -57,10 +57,10 @@ const EditTemplate = () => {
     };
 
     const initialState = useMemo(() => {
+        const preloaded = getPreloadedData();
+        const hadPreloadedData = !!(preloaded.template || preloaded.exercises?.length);
         const state = getInitialState();
-        // Clear preloader after first use to ensure it doesn't leak into next mount
-        // Only if we actually had data to begin with
-        if (state.name || state.workout.length > 0) {
+        if (hadPreloadedData) {
             clearPreloadedData();
         }
         return state;
@@ -74,12 +74,10 @@ const EditTemplate = () => {
     // Synchronous state reset when version/session changes
     if (prevVersion !== params.v) {
         setPrevVersion(params.v);
-        const freshState = getInitialState();
-        setTemplateName(freshState.name);
-        setCurrentWorkout(freshState.workout);
-        setExercises(freshState.exercises);
-        setIsLoading(freshState.loading);
-        clearPreloadedData();
+        setTemplateName(initialState.name);
+        setCurrentWorkout(initialState.workout);
+        setExercises(initialState.exercises);
+        setIsLoading(initialState.loading);
     }
 
     const [selectedExerciseId, setSelectedExerciseId] = useState(null);
@@ -269,9 +267,10 @@ const EditTemplate = () => {
                         setCurrentWorkout(template.data);
                     }
                 } else {
-                    // Reset state for new template
-                    setTemplateName("");
-                    setCurrentWorkout([]);
+                    if (!templateName && currentWorkout.length === 0) {
+                        setTemplateName("");
+                        setCurrentWorkout([]);
+                    }
                 }
             } catch (error) {
                 console.error("Error loading template editor:", error);

@@ -11,10 +11,24 @@ import { ScrollView as RNScrollView } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
 const GradientOrView = ({ colors, style, theme, children }) => {
-    if (theme.type === 'dynamic') {
-        return <View style={[style, { backgroundColor: theme.primary }]}>{children}</View>;
+    if (theme?.type === 'dynamic') {
+        return (
+            <View style={[style, { backgroundColor: theme.surface || '#ffffff' }]}>
+                {children}
+            </View>
+        );
     }
-    return <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={style}>{children}</LinearGradient>;
+
+    // Ensure colors is an array of strings and never contains null/undefined
+    const safeColors = Array.isArray(colors) && colors.every(c => !!c)
+        ? colors
+        : ['#transparent', '#transparent']; // Or a theme default
+
+    return (
+        <LinearGradient colors={safeColors} style={style}>
+            {children}
+        </LinearGradient>
+    );
 };
 
 const NewExercise = (props) => {
@@ -118,7 +132,7 @@ const NewExercise = (props) => {
             );
         } else {
             const newExerciseId = await insertExercise(exerciseName, formatListToString(targetSelected), formatListToString(accessorySelected), isCardio ? 1 : 0);
-            
+
             // Construct the exercise object to be passed back
             newExerciseObj = {
                 exerciseID: newExerciseId,

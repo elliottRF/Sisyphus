@@ -361,7 +361,7 @@ const SYSTEM = Platform.OS === 'android' ? {
     danger: '#ef4444', // Keep standard dangers/warnings for safety visibility
     warning: '#f59e0b',
     info: '#3b82f6',
-    bodyFill: '#333333',
+    bodyFill: '#494949ff',
     statusBar: 'light', // Native dark background
     // Adaptive overlays (white for dark themes)
     overlaySubtle: "rgba(255,255,255,0.02)",
