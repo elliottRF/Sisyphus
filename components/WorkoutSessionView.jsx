@@ -88,15 +88,13 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
     );
 });
 
-const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, onExerciseInfo, contentContainerStyle }, ref) => {
+const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, onRepeat, onSaveAsTemplate, onExerciseInfo, contentContainerStyle }, ref) => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
     const [expandedWarmups, setExpandedWarmups] = useState({});
     const handlers = useScrollHandlers();
 
     useLayoutEffect(() => {
-        // Reset scroll position when workout details change (e.g. entering a new session)
-        // useLayoutEffect runs before paint to eliminate visual "jump"
         if (ref && typeof ref === 'object') {
             ref.current?.scrollTo({ y: 0, animated: false });
         }
@@ -164,16 +162,39 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                 showsHorizontalScrollIndicator={false}
             >
                 <View style={styles.sleekHeaderContainer}>
-                    {onEdit && (
-                        <TouchableOpacity
-                            style={styles.editIcon}
-                            onPress={onEdit}
-                            activeOpacity={0.7}
-                            disabled={isEmpty}
-                        >
-                            <Feather name="edit" size={24} color={isEmpty ? 'transparent' : theme.text} />
-                        </TouchableOpacity>
-                    )}
+                    {/* Action buttons — top right */}
+                    <View style={styles.headerActions}>
+                        {onRepeat && (
+                            <TouchableOpacity
+                                style={styles.headerActionButton}
+                                onPress={onRepeat}
+                                activeOpacity={0.7}
+                                disabled={isEmpty}
+                            >
+                                <Feather name="refresh-cw" size={18} color={isEmpty ? 'transparent' : theme.text} />
+                            </TouchableOpacity>
+                        )}
+                        {onSaveAsTemplate && (
+                            <TouchableOpacity
+                                style={styles.headerActionButton}
+                                onPress={onSaveAsTemplate}
+                                activeOpacity={0.7}
+                                disabled={isEmpty}
+                            >
+                                <Feather name="save" size={18} color={isEmpty ? 'transparent' : theme.text} />
+                            </TouchableOpacity>
+                        )}
+                        {onEdit && (
+                            <TouchableOpacity
+                                style={styles.headerActionButton}
+                                onPress={onEdit}
+                                activeOpacity={0.7}
+                                disabled={isEmpty}
+                            >
+                                <Feather name="edit" size={18} color={isEmpty ? 'transparent' : theme.text} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
 
                     <View style={{ minHeight: 80 }}>
                         {isEmpty ? (
@@ -352,12 +373,17 @@ const getStyles = (theme) => {
             paddingVertical: 12,
             marginBottom: 16,
         },
-        editIcon: {
+        headerActions: {
             position: 'absolute',
             top: 10,
             right: 20,
             zIndex: 10,
-            padding: 5,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+        },
+        headerActionButton: {
+            padding: 6,
         },
         workoutDateDisplay: {
             fontSize: 12,
