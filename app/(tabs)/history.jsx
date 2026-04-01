@@ -1,14 +1,14 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Animated } from 'react-native'
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession } from '../components/db';
+import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession } from '../../components/db';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import ActionSheet from "react-native-actions-sheet";
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, SHADOWS } from '../../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -67,10 +67,32 @@ const groupBySession = (history) => {
     return Object.entries(grouped).sort((a, b) => b[0] - a[0]);
 };
 
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
 const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styles, formatDate, formatDuration, router }) => {
     const groupedExercises = groupExercisesByName(exercises);
     const duration = exercises[0].duration;
     const [isLoading, setIsLoading] = useState(false);
+
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const handlePressIn = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 0.98,
+            useNativeDriver: true,
+            speed: 20,
+            bounciness: 4,
+        }).start();
+    };
+
+    const handlePressOut = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 1,
+            useNativeDriver: true,
+            speed: 20,
+            bounciness: 4,
+        }).start();
+    };
 
     const totalPRs = exercises.reduce((acc, ex) => {
         return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
@@ -90,14 +112,23 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
             router.push(`/workout/${session}`);
         } finally {
             setIsLoading(false);
+            // Ensure card scales back up when Returning to the page even if interaction was interrupted
+            Animated.spring(scaleAnim, {
+                toValue: 1,
+                useNativeDriver: true,
+                speed: 20,
+                bounciness: 4,
+            }).start();
         }
     };
 
     return (
-        <TouchableOpacity
-            activeOpacity={0.7}
+        <AnimatedTouchableOpacity
+            activeOpacity={0.8}
             onPress={handlePress}
-            style={styles.cardContainer}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
             disabled={isLoading}
         >
             <View style={[styles.cardContent, { backgroundColor: theme.surface }]}>
@@ -148,7 +179,7 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
                     )}
                 </View>
             </View>
-        </TouchableOpacity>
+        </AnimatedTouchableOpacity>
     );
 });
 
