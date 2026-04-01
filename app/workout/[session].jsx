@@ -54,13 +54,15 @@ const WorkoutDetail = () => {
     const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
     const [isActionLoading, setIsActionLoading] = useState(false);
 
-    const actionSheetRef = useRef(null);
-    const sessionViewRef = useRef(null);
     const [selectedExerciseId, setSelectedExerciseId] = useState(null);
     const [currentExerciseName, setCurrentExerciseName] = useState(null);
 
+    const actionSheetRef = useRef(null);
+    const sessionViewRef = useRef(null);
     useFocusEffect(
         React.useCallback(() => {
+            let isActive = true;
+
             const loadData = async () => {
                 try {
                     const exPromise = fetchExercises();
@@ -77,8 +79,10 @@ const WorkoutDetail = () => {
                 } catch (error) {
                     console.error("Error loading workout details:", error);
                 } finally {
-                    setLoading(false);
-                    setHasAttemptedFetch(true);
+                    if (isActive) {
+                        setLoading(false);
+                        setHasAttemptedFetch(true);
+                    }
                 }
             };
 
@@ -88,7 +92,15 @@ const WorkoutDetail = () => {
                 setLoading(true);
             }
 
-            loadData();
+            // Defer heavy fetching to ensure the screen transition starts completely smoothly
+            const timer = setTimeout(() => {
+                if (isActive) loadData();
+            }, 50);
+
+            return () => {
+                isActive = false;
+                clearTimeout(timer);
+            };
         }, [session, syncedInitialData])
     );
 
@@ -230,17 +242,19 @@ const WorkoutDetail = () => {
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <Stack.Screen options={{ headerShown: false }} />
 
-            {effectiveWorkoutDetails && (
-                <WorkoutSessionView
-                    ref={sessionViewRef}
-                    workoutDetails={effectiveWorkoutDetails}
-                    exercisesList={exercisesList}
-                    onEdit={showEditPage}
-                    onRepeat={handleRepeat}
-                    onSaveAsTemplate={handleSaveAsTemplate}
-                    onExerciseInfo={showExerciseInfo}
-                />
-            )}
+            <View style={{ flex: 1 }}>
+                {effectiveWorkoutDetails && (
+                    <WorkoutSessionView
+                        ref={sessionViewRef}
+                        workoutDetails={effectiveWorkoutDetails}
+                        exercisesList={exercisesList}
+                        onEdit={showEditPage}
+                        onRepeat={handleRepeat}
+                        onSaveAsTemplate={handleSaveAsTemplate}
+                        onExerciseInfo={showExerciseInfo}
+                    />
+                )}
+            </View>
 
             {(loading || isActionLoading) && (
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', zIndex: 20 }]}>

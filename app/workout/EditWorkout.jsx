@@ -57,7 +57,6 @@ const EditWorkout = () => {
     const exerciseInfoActionSheetRef = useRef(null);
     const listRef = useRef(null);
 
-
     // --- Utility Functions ---
     const calculateOneRepMax = (weight, reps) => {
         let oneRepMax;
@@ -470,7 +469,7 @@ const EditWorkout = () => {
     }
 
     return (
-        <GestureHandlerRootView style={{ flex: 1 }}>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
             <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
                 <View style={styles.headerContainer}>
                     <View style={styles.headerTopRow}>

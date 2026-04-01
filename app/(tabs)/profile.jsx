@@ -3,17 +3,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR } from '../components/db';
+import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR } from '../../components/db';
 import ActionSheet from "react-native-actions-sheet";
 
-import NewExercise from "../components/NewExercise"
+import NewExercise from "../../components/NewExercise"
 
-import ExerciseHistory from "../components/exerciseHistory"
+import ExerciseHistory from "../../components/exerciseHistory"
 import Feather from '@expo/vector-icons/Feather';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 
 const Profile = () => {
     const insets = useSafeAreaInsets();
