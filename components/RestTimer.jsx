@@ -83,7 +83,7 @@ const RestTimer = forwardRef((props, ref) => {
         try {
             const { sound } = await Audio.Sound.createAsync(
                 require('../assets/notifications/dingnoti.wav'),
-                { volume: 1.0 }
+                { volume: 1 }
             );
             await sound.playAsync();
 

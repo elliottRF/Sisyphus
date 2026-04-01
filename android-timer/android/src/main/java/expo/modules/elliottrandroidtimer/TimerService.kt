@@ -98,7 +98,7 @@ class TimerService : Service() {
         vibrator.vibrate(500)
       }
 
-      val mediaPlayer = MediaPlayer.create(applicationContext, R.raw.ding)
+      val mediaPlayer = MediaPlayer.create(applicationContext, R.raw.dingnoti)
       mediaPlayer.setAudioAttributes(
         AudioAttributes.Builder()
           .setUsage(AudioAttributes.USAGE_MEDIA)
