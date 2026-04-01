@@ -356,6 +356,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                         <TouchableOpacity
                                             style={[styles.checkButton, set.completed && styles.checkButtonCompleted]}
                                             onPress={() => toggleSetComplete(index)}
+                                            hitSlop={{ top: 20, bottom: 20, left: 5, right: 20 }}
                                         >
                                             <Feather name="check" size={14} color={set.completed ? '#fff' : 'transparent'} />
                                         </TouchableOpacity>

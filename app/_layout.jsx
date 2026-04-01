@@ -3,8 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
 import React, { useState, useEffect, useCallback } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Tabs } from 'expo-router'
-import TabBar from '../components/TabBar'
+import { Stack } from 'expo-router'
 import { setupDatabase } from '../components/db';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
@@ -64,85 +63,17 @@ const ThemeConsumer = () => {
         }
     }, [theme]);
 
-    // We need to pass the theme down to the Tabs or use it here for the background
+    // We need to pass the theme down to the Stack or use it here for the background
     return (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
             <StatusBar style={theme.statusBar} />
-            <Tabs
-                backBehavior="history"
-                tabBar={props => <TabBar {...props} />}
-                screenOptions={{
-                    headerShown: false,
-                    lazy: false,
-                    tabBarStyle: {
-                        position: 'absolute',
-                        backgroundColor: 'transparent',
-                        borderTopWidth: 0,
-                        elevation: 0,
-                    }
-                }}
-            >
-                <Tabs.Screen
-                    name="index"
-                    options={{
-                        title: "Home",
-                    }}
-                />
-                <Tabs.Screen
-                    name="current"
-                    options={{
-                        title: "Current",
-                    }}
-                />
-                <Tabs.Screen
-                    name="history"
-                    options={{
-                        title: "History",
-                    }}
-                />
-                <Tabs.Screen
-                    name="template/[id]"
-                    options={{
-                        href: null,
-                        tabBarStyle: {
-                            display: 'none',
-                        },
-                    }}
-                />
-                <Tabs.Screen
-                    name="profile"
-                    options={{
-                        title: "Exercises",
-                    }}
-                />
-                <Tabs.Screen
-                    name="workout/[session]"
-                    options={{
-                        href: null,
-                        tabBarStyle: {
-                            display: 'none',
-                        },
-                    }}
-                />
-                <Tabs.Screen
-                    name="workout/EditWorkout"
-                    options={{
-                        href: null,
-                        tabBarStyle: {
-                            display: 'none',
-                        },
-                    }}
-                />
-                <Tabs.Screen
-                    name="settings"
-                    options={{
-                        title: "Settings",
-                        tabBarStyle: {
-                            display: 'none',
-                        },
-                    }}
-                />
-            </Tabs>
+            <Stack screenOptions={{ headerShown: false, animation: 'flip' }}>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="workout/[session]" options={{ headerShown: false }} />
+                <Stack.Screen name="workout/EditWorkout" options={{ headerShown: false }} />
+                <Stack.Screen name="template/[id]" options={{ headerShown: false }} />
+                <Stack.Screen name="settings" options={{ headerShown: false }} />
+            </Stack>
         </View>
     );
 };

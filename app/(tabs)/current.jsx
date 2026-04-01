@@ -12,28 +12,28 @@ import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons'
 
 import * as NavigationBar from 'expo-navigation-bar';
 
-import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, fetchLastWorkoutSets, getTemplate } from '../components/db';
-import { setPreloadedData } from '../constants/preloader';
+import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, fetchLastWorkoutSets, getTemplate } from '../../components/db';
+import { setPreloadedData } from '../../constants/preloader';
 
 
-import ExerciseEditable from '../components/exerciseEditable'
+import ExerciseEditable from '../../components/exerciseEditable'
 
 import ActionSheet from "react-native-actions-sheet";
-import ExerciseHistory from "../components/exerciseHistory"
+import ExerciseHistory from "../../components/exerciseHistory"
 
 
-import FilteredExerciseList from '../components/FilteredExerciseList';
-import { FONTS, SHADOWS } from '../constants/theme';
+import FilteredExerciseList from '../../components/FilteredExerciseList';
+import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import Timer from '../components/Timer';
-import RestTimer from '../components/RestTimer';
+import Timer from '../../components/Timer';
+import RestTimer from '../../components/RestTimer';
 import { useFocusEffect, router } from 'expo-router';
 
-import TestSoundButton from '../components/TestSoundButton';
-import TestNotificationButton from '../components/TestNotificationButton';
-import { useTheme } from '../context/ThemeContext';
+import TestSoundButton from '../../components/TestSoundButton';
+import TestNotificationButton from '../../components/TestNotificationButton';
+import { useTheme } from '../../context/ThemeContext';
 import { ActivityIndicator } from 'react-native';
-import { AppEvents, emit } from '../utils/events';
+import { AppEvents, emit } from '../../utils/events';
 import { useLocalSearchParams } from 'expo-router';
 const { width } = Dimensions.get('window');
 
@@ -556,6 +556,8 @@ const Current = () => {
         loadWorkout();
     }, []);
 
+    const autoTimerEnabledRef = useRef(true);
+
     useFocusEffect(
         React.useCallback(() => {
             fetchExercises()
@@ -563,6 +565,10 @@ const Current = () => {
                 .catch(err => console.error(err));
             loadTemplates(); // Refresh templates when focusing
             setLoadingTemplateId(null);
+
+            AsyncStorage.getItem('settings_auto_timer').then(val => {
+                if (val !== null) autoTimerEnabledRef.current = val === 'true';
+            });
         }, [])
     );
 
@@ -610,7 +616,9 @@ const Current = () => {
 
     const handleSetComplete = useCallback(() => {
         console.log("Set completed, checking timer...");
-        restTimerRef.current?.startIfStopped();
+        if (autoTimerEnabledRef.current) {
+            restTimerRef.current?.startIfStopped();
+        }
     }, []);
 
     // Render function for each item

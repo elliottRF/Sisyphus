@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, PanResponder, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, PanResponder, Dimensions, Animated } from 'react-native';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -15,6 +15,38 @@ import { useTheme } from '../context/ThemeContext';
 import { AppEvents, emit } from '../utils/events';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const AnimatedSwitch = ({ value, onValueChange, activeColor, inactiveColor, thumbColor }) => {
+    const animation = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+    useEffect(() => {
+        Animated.spring(animation, {
+            toValue: value ? 1 : 0,
+            useNativeDriver: false,
+            bounciness: 8,
+            speed: 14
+        }).start();
+    }, [value]);
+
+    const translateX = animation.interpolate({
+        inputRange: [0, 1],
+        outputRange: [3, 25],
+    });
+
+    return (
+        <TouchableOpacity activeOpacity={0.8} onPress={() => onValueChange(!value)}>
+            <View style={{
+                width: 50, height: 28, borderRadius: 14, backgroundColor: value ? activeColor : inactiveColor, justifyContent: 'center'
+            }}>
+                <Animated.View style={{
+                    width: 22, height: 22, borderRadius: 11, backgroundColor: thumbColor,
+                    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2,
+                    transform: [{ translateX }]
+                }} />
+            </View>
+        </TouchableOpacity>
+    );
+};
 
 const Settings = () => {
     const insets = useSafeAreaInsets();
@@ -34,6 +66,7 @@ const Settings = () => {
     const [importingBodyWeight, setImportingBodyWeight] = useState(false);
     const [importProgress, setImportProgress] = useState('');
     const [defaultTimer, setDefaultTimer] = useState('180');
+    const [isAutoTimerEnabled, setIsAutoTimerEnabled] = useState(true);
     const scrollRef = useRef(null);
 
     useFocusEffect(
@@ -70,6 +103,8 @@ const Settings = () => {
         try {
             const saved = await AsyncStorage.getItem('settings_default_timer');
             if (saved) setDefaultTimer(saved);
+            const savedAuto = await AsyncStorage.getItem('settings_auto_timer');
+            if (savedAuto !== null) setIsAutoTimerEnabled(savedAuto === 'true');
         } catch (e) {
             console.error("Failed to load settings", e);
         }
@@ -273,9 +308,24 @@ const Settings = () => {
 
                 {/* Timer Settings */}
                 <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Feather name="clock" size={20} color={theme.primary} />
-                        <Text style={styles.cardTitle}>Rest Timer</Text>
+                    <View style={[styles.cardHeader, { justifyContent: 'space-between' }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <Feather name="clock" size={20} color={theme.primary} />
+                            <Text style={styles.cardTitle}>Rest Timer</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={{ color: theme.textSecondary, fontFamily: FONTS.medium, fontSize: 13 }}>Auto-Start</Text>
+                            <AnimatedSwitch
+                                value={isAutoTimerEnabled}
+                                onValueChange={async (value) => {
+                                    setIsAutoTimerEnabled(value);
+                                    await AsyncStorage.setItem('settings_auto_timer', value.toString());
+                                }}
+                                activeColor={theme.primary}
+                                inactiveColor={theme.type === 'dynamic' ? '#555555' : theme.overlayInputFocused}
+                                thumbColor={theme.surface}
+                            />
+                        </View>
                     </View>
                     <Text style={styles.cardDescription}>
                         Default duration for the rest timer in between sets.

@@ -315,7 +315,7 @@ const EditTemplate = () => {
     }
 
     return (
-        <GestureHandlerRootView style={{ flex: 1 }}>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
             <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
                 <Stack.Screen options={{ title: TEMPLATE_ID === 'new' ? 'New Template' : 'Edit Template' }} />
 

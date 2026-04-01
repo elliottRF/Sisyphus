@@ -8,15 +8,15 @@ import { FlatList } from 'react-native-gesture-handler';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Body from "react-native-body-highlighter";
-import { fetchRecentMuscleUsage, getPinnedExercises, pinExercise, fetchExercises } from '../components/db';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { fetchRecentMuscleUsage, getPinnedExercises, pinExercise, fetchExercises } from '../../components/db';
+import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
-import PRGraphCard from '../components/PRGraphCard';
-import BodyweightGraphCard from '../components/bodyweightGraphCard';
-import MuscleRadarChart from '../components/MuscleRadarChart';
-import { useTheme } from '../context/ThemeContext';
-import { AppEvents, emit, on, off } from '../utils/events';
+import PRGraphCard from '../../components/PRGraphCard';
+import BodyweightGraphCard from '../../components/bodyweightGraphCard';
+import MuscleRadarChart from '../../components/MuscleRadarChart';
+import { useTheme } from '../../context/ThemeContext';
+import { AppEvents, emit, on, off } from '../../utils/events';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
