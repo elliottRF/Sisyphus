@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
 import Svg, {
     Polygon,
@@ -13,13 +13,11 @@ import Svg, {
 import { FONTS, SHADOWS } from '../constants/theme';
 import { fetchRecentMuscleUsage } from './db';
 import { useTheme } from '../context/ThemeContext';
-import { Feather } from '@expo/vector-icons';
 import { AppEvents, on, off } from '../utils/events';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_MARGIN = 32;
 const CHART_SIZE = SCREEN_WIDTH - CARD_MARGIN;
-
 const SVG_HEIGHT = CHART_SIZE * 0.82;
 const CENTER_X = CHART_SIZE / 2;
 const CENTER_Y = SVG_HEIGHT / 2 + 5;
@@ -62,10 +60,35 @@ const MuscleRadarChart = () => {
     const isDynamic = theme.type === 'dynamic';
     const accentColor = isDynamic ? '#2DC4B6' : theme.primary;
     const textColor = isDynamic ? '#FFFFFF' : theme.text;
-    const borderColor = isDynamic ? 'rgba(255,255,255,0.2)' : theme.border;
 
     const axes = ['Chest', 'Delts', 'Back', 'Biceps', 'Triceps', 'Quads', 'Hams', 'Glutes', 'Abs'];
     const angleStep = (Math.PI * 2) / axes.length;
+
+    // --- Balance Calculation Logic ---
+    const balanceScore = useMemo(() => {
+        const vals = Object.values(radarData);
+        const totalVolume = vals.reduce((a, b) => a + b, 0);
+
+        if (totalVolume === 0) return 0;
+
+        const mean = totalVolume / axes.length;
+        // Calculate Standard Deviation
+        const variance = vals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / axes.length;
+        const stdDev = Math.sqrt(variance);
+
+        // Coefficient of Variation (CV). Lower is better.
+        // We normalize it so a CV of 1.0 (or higher) is 0% balance.
+        const cv = stdDev / (mean || 1);
+        const score = Math.max(0, 100 - (cv * 100));
+
+        return Math.round(score);
+    }, [radarData]);
+
+    const getScoreColor = (score) => {
+        if (score >= 70) return theme.success; // Balanced
+        if (score >= 50) return '#FF9800'; // Moderate
+        return theme.danger; // Unbalanced
+    };
 
     const loadData = useCallback(async (range = timeRange) => {
         try {
@@ -85,7 +108,7 @@ const MuscleRadarChart = () => {
 
                 if (ex.accessoryMuscles) ex.accessoryMuscles.split(',').forEach(m => {
                     const cat = muscleMapping[m.trim()];
-                    if (cat && !primary.has(cat)) stats[cat] += (sets * accessoryWeight);
+                    if (cat && !primary.has(cat)) stats[cat] += (sets * (accessoryWeight || 0.5));
                 });
             });
 
@@ -95,10 +118,8 @@ const MuscleRadarChart = () => {
         } catch (error) { console.error(error); } finally { setLoading(false); }
     }, [timeRange, accessoryWeight]);
 
-    // Load on mount and whenever accessoryWeight or timeRange changes
     useEffect(() => { loadData(); }, [loadData]);
 
-    // Subscribe to targeted refresh events
     useEffect(() => {
         const handler = () => loadData();
         on(AppEvents.REFRESH_HOME, handler);
@@ -114,7 +135,7 @@ const MuscleRadarChart = () => {
     const values = Object.values(radarData);
     const maxGraphValue = Math.max(...values, 5);
     const averageVolume = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-    const laggingThreshold = averageVolume * 0.8;
+    const laggingThreshold = averageVolume * 0.7;
 
     const getCoordinates = (index, value, extraRadius = 0) => {
         const angle = index * angleStep - Math.PI / 2;
@@ -130,7 +151,16 @@ const MuscleRadarChart = () => {
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Muscle Balance</Text>
+                <View>
+                    <Text style={styles.title}>Muscle Balance</Text>
+                    {!loading && (
+                        <View style={[styles.balanceBadge, { backgroundColor: getScoreColor(balanceScore) + '20' }]}>
+                            <Text style={[styles.balanceText, { color: getScoreColor(balanceScore) }]}>
+                                {balanceScore}% Balanced
+                            </Text>
+                        </View>
+                    )}
+                </View>
                 <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} styles={styles} />
             </View>
 
@@ -146,7 +176,7 @@ const MuscleRadarChart = () => {
                             </LinearGradient>
                         </Defs>
 
-                        {/* 1. Background Grid (Lowest Layer) */}
+                        {/* Background Grid */}
                         {[0.25, 0.5, 0.75, 1].map((t, i) => (
                             <Circle key={i} cx={CENTER_X} cy={CENTER_Y} r={RADIUS * t} fill="none" stroke={accentColor} strokeDasharray="4,4" opacity={0.15} />
                         ))}
@@ -155,16 +185,13 @@ const MuscleRadarChart = () => {
                             return <Line key={i} x1={CENTER_X} y1={CENTER_Y} x2={maxP.x} y2={maxP.y} stroke={accentColor} opacity={0.2} />;
                         })}
 
-                        {/* 2. Data Polygon (Middle Layer) */}
                         <Polygon points={points} fill="url(#grad)" stroke={accentColor} strokeWidth="2" strokeLinejoin="round" />
 
-                        {/* 3. Interactive Elements (Top Layer) */}
                         {axes.map((axis, i) => {
                             const maxP = getCoordinates(i, maxGraphValue);
                             const val = radarData[axis] || 0;
                             const p = getCoordinates(i, val);
                             const isLagging = val < laggingThreshold && val > 0;
-
                             const valuePos = getCoordinates(i, val, -12);
                             const labelPos = getCoordinates(i, maxGraphValue, 16);
 
@@ -173,7 +200,6 @@ const MuscleRadarChart = () => {
 
                             return (
                                 <G key={i}>
-                                    {/* Numbers inside the chart area */}
                                     {val > 0 && (
                                         <SvgText
                                             x={valuePos.x} y={valuePos.y}
@@ -184,8 +210,6 @@ const MuscleRadarChart = () => {
                                             {Math.round(val)}
                                         </SvgText>
                                     )}
-
-                                    {/* Muscle Labels outside the chart area */}
                                     <SvgText
                                         x={labelPos.x} y={labelPos.y}
                                         fill={textColor} fontSize="11"
@@ -194,12 +218,10 @@ const MuscleRadarChart = () => {
                                     >
                                         {axis}
                                     </SvgText>
-
-                                    {/* Dots sitting on top of the Polygon line */}
                                     {val > 0 && (
                                         <Circle
                                             cx={p.x} cy={p.y}
-                                            r={isLagging ? 3 : 3}
+                                            r={3}
                                             fill={isLagging ? theme.danger : accentColor}
                                             stroke={theme.surface}
                                             strokeWidth={isLagging ? 1 : 0.5}
@@ -230,11 +252,24 @@ const getStyles = (theme) => StyleSheet.create({
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         paddingHorizontal: 20,
         marginBottom: 5,
     },
     title: { fontSize: 18, fontFamily: FONTS.bold, color: theme.text },
+    balanceBadge: {
+        marginTop: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        alignSelf: 'flex-start'
+    },
+    balanceText: {
+        fontSize: 10,
+        fontFamily: FONTS.bold,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5
+    },
     chartWrapper: { width: '100%', alignItems: 'center', marginTop: -5 },
     rangeSelector: { flexDirection: 'row', backgroundColor: theme.overlayBorder, borderRadius: 8, padding: 2 },
     rangeButton: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
