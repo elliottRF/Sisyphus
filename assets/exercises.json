@@ -51,7 +51,7 @@
     "exerciseID": 9,
     "name": "Seated Row (Cable)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Forearm"
+    "accessoryMuscles": "Biceps,Forearm,Trapezius"
   },
   {
     "exerciseID": 10,
@@ -93,7 +93,7 @@
     "exerciseID": 16,
     "name": "Bent Over Row (Smith Machine)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Lower-Back"
+    "accessoryMuscles": "Biceps,Lower-Back,Trapezius"
   },
   {
     "exerciseID": 17,
@@ -111,7 +111,7 @@
     "exerciseID": 19,
     "name": "Pull Up (Assisted)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Abs"
+    "accessoryMuscles": "Biceps,Abs,Forearm,Trapezius"
   },
   {
     "exerciseID": 20,
@@ -122,8 +122,8 @@
   {
     "exerciseID": 21,
     "name": "Squat (Barbell)",
-    "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Hamstring,Lower-Back"
+    "targetMuscle": "Quadriceps,Gluteal",
+    "accessoryMuscles": "Hamstring,Lower-Back"
   },
   {
     "exerciseID": 22,
@@ -147,7 +147,7 @@
     "exerciseID": 25,
     "name": "Iso-Lateral Row (Machine)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Forearm"
+    "accessoryMuscles": "Biceps,Forearm,Trapezius"
   },
   {
     "exerciseID": 26,
@@ -171,7 +171,7 @@
     "exerciseID": 29,
     "name": "Shoulder Press (Plate Loaded)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps"
+    "accessoryMuscles": "Triceps,Trapezius"
   },
   {
     "exerciseID": 30,
@@ -207,7 +207,7 @@
     "exerciseID": 35,
     "name": "Strict Military Press (Barbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps,Abs"
+    "accessoryMuscles": "Triceps,Abs,Trapezius"
   },
   {
     "exerciseID": 36,
@@ -225,13 +225,13 @@
     "exerciseID": 38,
     "name": "Bent Over Row (Barbell)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Lower-Back"
+    "accessoryMuscles": "Biceps,Lower-Back,Trapezius"
   },
   {
     "exerciseID": 39,
     "name": "Pull Up",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Abs"
+    "accessoryMuscles": "Biceps,Abs,Forearm,Trapezius"
   },
   {
     "exerciseID": 40,
@@ -254,8 +254,8 @@
   {
     "exerciseID": 43,
     "name": "Wide Grip Seated Row (Cable)",
-    "targetMuscle": "Upper-Back, Trapezius",
-    "accessoryMuscles": "Biceps"
+    "targetMuscle": "Upper-Back,Trapezius",
+    "accessoryMuscles": "Biceps,Forearm"
   },
   {
     "exerciseID": 44,
@@ -279,7 +279,7 @@
     "exerciseID": 47,
     "name": "Neutral Grip Pull Up (Assisted)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Abs"
+    "accessoryMuscles": "Biceps,Abs,Forearm,Trapezius"
   },
   {
     "exerciseID": 48,
@@ -351,7 +351,7 @@
     "exerciseID": 59,
     "name": "Neutral Grip Pull Up",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Abs"
+    "accessoryMuscles": "Biceps,Abs,Forearm,Trapezius"
   },
   {
     "exerciseID": 60,
@@ -380,14 +380,14 @@
   {
     "exerciseID": 64,
     "name": "Face Pull (Cable)",
-    "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Trapezius,Upper-Back"
+    "targetMuscle": "Trapezius,Deltoids",
+    "accessoryMuscles": "Upper-Back"
   },
   {
     "exerciseID": 65,
     "name": "T Bar Row",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Lower-Back"
+    "accessoryMuscles": "Biceps,Lower-Back,Trapezius"
   },
   {
     "exerciseID": 66,
@@ -398,8 +398,8 @@
   {
     "exerciseID": 67,
     "name": "Deadlift (Barbell)",
-    "targetMuscle": "Lower-Back",
-    "accessoryMuscles": "Hamstring,Gluteal,Quadriceps,Trapezius"
+    "targetMuscle": "Lower-Back,Gluteal,Hamstring",
+    "accessoryMuscles": "Quadriceps,Trapezius,Upper-Back,Abs,Forearm"
   },
   {
     "exerciseID": 68,
@@ -445,86 +445,86 @@
   },
   {
     "exerciseID": 75,
-    "name": "Seated Wide-Grip Row (Cable)",
-    "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Trapezius"
+    "name": "Shoulder Press (Machine)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": "Triceps,Trapezius"
   },
   {
     "exerciseID": 76,
-    "name": "Shoulder Press (Machine)",
-    "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps"
+    "name": "Lat Pulldown (Single Arm)",
+    "targetMuscle": "Upper-Back",
+    "accessoryMuscles": "Biceps,Abs,Forearm"
   },
   {
     "exerciseID": 77,
-    "name": "Lat Pulldown (Single Arm)",
-    "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Abs"
-  },
-  {
-    "exerciseID": 78,
     "name": "Leg Press",
     "targetMuscle": "Quadriceps",
     "accessoryMuscles": "Gluteal,Hamstring"
   },
   {
-    "exerciseID": 79,
+    "exerciseID": 78,
     "name": "Sit Up",
     "targetMuscle": "Abs",
     "accessoryMuscles": "Obliques"
   },
   {
-    "exerciseID": 80,
+    "exerciseID": 79,
     "name": "Triceps Dip",
     "targetMuscle": "Triceps",
     "accessoryMuscles": "Chest,Deltoids"
   },
   {
-    "exerciseID": 81,
+    "exerciseID": 80,
     "name": "Calf Press on Seated Leg Press",
     "targetMuscle": "Calves",
     "accessoryMuscles": ""
   },
   {
-    "exerciseID": 82,
+    "exerciseID": 81,
     "name": "Crunch (Machine)",
     "targetMuscle": "Abs",
     "accessoryMuscles": "Obliques"
   },
   {
-    "exerciseID": 83,
+    "exerciseID": 82,
     "name": "Goblet Squat (Kettlebell)",
-    "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Lower-Back"
+    "targetMuscle": "Quadriceps,Gluteal",
+    "accessoryMuscles": "Lower-Back"
   },
   {
-    "exerciseID": 84,
+    "exerciseID": 83,
     "name": "Hanging Knee Raise",
     "targetMuscle": "Abs",
     "accessoryMuscles": "Obliques"
   },
   {
-    "exerciseID": 85,
+    "exerciseID": 84,
     "name": "Iso-Lateral Chest Press (Machine)",
     "targetMuscle": "Chest",
     "accessoryMuscles": "Triceps,Deltoids"
   },
   {
-    "exerciseID": 86,
+    "exerciseID": 85,
     "name": "Pec Deck (Machine)",
     "targetMuscle": "Chest",
     "accessoryMuscles": ""
   },
   {
-    "exerciseID": 87,
+    "exerciseID": 86,
     "name": "Bicep Curl (Dumbbell)",
     "targetMuscle": "Biceps",
     "accessoryMuscles": "Forearm"
   },
   {
-    "exerciseID": 88,
+    "exerciseID": 87,
     "name": "Preacher Curl (Dumbbell)",
     "targetMuscle": "Biceps",
     "accessoryMuscles": "Forearm"
+  },
+  {
+    "exerciseID": 88,
+    "name": "Overhead Press (Barbell)",
+    "targetMuscle": "Deltoids",
+    "accessoryMuscles": "Triceps,Abs,Trapezius"
   }
 ]
