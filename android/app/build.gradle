@@ -106,9 +106,9 @@ android {
         }
         release {
             storeFile file('release.keystore')
-            storePassword 'REMOVED'
+            storePassword 'password'
             keyAlias 'release'
-            keyPassword 'REMOVED'
+            keyPassword 'password'
         }
     }
     buildTypes {
