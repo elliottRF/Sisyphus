@@ -10,6 +10,7 @@ import Body from "react-native-body-highlighter";
 import PRGraphCard from "./PRGraphCard";
 import WorkoutSessionView from './WorkoutSessionView';
 import { useTheme } from '../context/ThemeContext';
+import ActionSheet from "react-native-actions-sheet";
 
 const { width } = Dimensions.get('window');
 
@@ -554,7 +555,25 @@ const ExerciseHistory = (props) => {
                 scrollEventThrottle={16}
             />
 
-
+            <ActionSheet
+                ref={sessionActionSheetRef}
+                enableGestureBack={true}
+                closeOnPressBack={true}
+                androidCloseOnBackPress={true}
+                containerStyle={{ height: '100%', backgroundColor: safeSurface }}
+                indicatorStyle={{ backgroundColor: theme.textSecondary }}
+                snapPoints={[100]}
+                initialSnapIndex={0}
+            >
+                {selectedSessionData && (
+                    <WorkoutSessionView
+                        workoutDetails={selectedSessionData}
+                        exercisesList={exercisesList}
+                    // Optional: onEdit={...} if we want to allow editing from here
+                    // Optional: onExerciseInfo={...} if we want recursion
+                    />
+                )}
+            </ActionSheet>
         </View>
     );
 };
