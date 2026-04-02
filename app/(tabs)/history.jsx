@@ -191,7 +191,39 @@ const History = () => {
     const [exercisesList, setExercises] = useState([]);
     const router = useRouter();
     const { theme } = useTheme();
+
+
+
+
+    const isDynamic = theme.type === 'dynamic';
+
+    // Only used for ActionSheet/Calendar — PlatformColor crashes there
+    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
+    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
+    const safeText = isDynamic ? '#FFFFFF' : theme.text;
+    const safeTextSecondary = isDynamic ? '#9E9E9E' : theme.textSecondary;
+    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
+    const safePrimaryFaint = isDynamic ? 'rgba(45, 196, 182, 0.12)' : `${theme.primary}20`;
+
+
+
+
+
+
+
     const styles = getStyles(theme);
+
+
+
+
+
+
+
+
+
+
+
+
 
     const scrollRef = useRef(null);
     const calendarActionSheetRef = useRef(null);
@@ -246,16 +278,16 @@ const History = () => {
                 const dateStr = new Date(exercises[0].time).toISOString().split('T')[0];
                 marked[dateStr] = {
                     marked: true,
-                    dotColor: theme.primary,
+                    dotColor: safePrimary,
                     customStyles: {
-                        container: { backgroundColor: `${theme.primary}20`, borderRadius: 8 },
-                        text: { color: theme.primary, fontWeight: 'bold' },
+                        container: { backgroundColor: safePrimaryFaint, borderRadius: 8 },
+                        text: { color: safePrimary, fontWeight: 'bold' },
                     },
                 };
             } catch (e) { }
         });
         return marked;
-    }, [workoutHistory, theme.primary]);
+    }, [workoutHistory, safePrimary, safePrimaryFaint]);
 
     if (loading) {
         return (
@@ -311,33 +343,34 @@ const History = () => {
 
             <ActionSheet
                 ref={calendarActionSheetRef}
-                containerStyle={styles.actionSheetContainer}
-                indicatorStyle={styles.indicator}
+                containerStyle={{ ...styles.actionSheetContainer, backgroundColor: safeSurface }}
+                indicatorStyle={{ ...styles.indicator, backgroundColor: safeTextSecondary }}
                 gestureEnabled={true}
             >
-                <View style={styles.calendarContainer}>
+                <View style={[styles.calendarContainer, { backgroundColor: safeSurface }]}>
                     <Calendar
                         theme={{
-                            backgroundColor: theme.surface,
-                            calendarBackground: theme.surface,
-                            textSectionTitleColor: theme.textSecondary,
-                            selectedDayBackgroundColor: theme.primary,
-                            selectedDayTextColor: theme.surface,
-                            todayTextColor: theme.primary,
-                            dayTextColor: theme.text,
-                            textDisabledColor: `${theme.text}40`,
-                            dotColor: theme.primary,
-                            selectedDotColor: theme.surface,
-                            arrowColor: theme.primary,
-                            disabledArrowColor: `${theme.text}20`,
-                            monthTextColor: theme.text,
-                            indicatorColor: theme.primary,
+                            backgroundColor: safeSurface,
+                            calendarBackground: safeSurface,
+                            textSectionTitleColor: safeTextSecondary,
+                            selectedDayBackgroundColor: safePrimary,
+                            selectedDayTextColor: safeSurface,
+                            todayTextColor: safePrimary,
+                            dayTextColor: safeText,
+                            textDisabledColor: `${safeText}40`,
+                            dotColor: safePrimary,
+                            selectedDotColor: safeSurface,
+                            arrowColor: safePrimary,
+                            disabledArrowColor: `${safeText}20`,
+                            monthTextColor: safeText,
+                            indicatorColor: safePrimary,
                             textDayFontFamily: FONTS.medium,
                             textMonthFontFamily: FONTS.bold,
                             textDayHeaderFontFamily: FONTS.semiBold,
                             textDayFontSize: 14,
                             textMonthFontSize: 18,
-                            textDayHeaderFontSize: 12
+                            textDayHeaderFontSize: 12,
+                            scrollEnabled: false,
                         }}
                         markedDates={markedDates}
                         onDayPress={handleDatePress}
@@ -497,6 +530,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     calendarContainer: {
         padding: 10,
+        height: 380
     },
     emptyContainer: {
         flex: 1,
