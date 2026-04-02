@@ -97,8 +97,8 @@ const Home = () => {
     useFocusEffect(
         React.useCallback(() => {
             loadModulePrefs();
-            loadMuscleData();        // reload data when screen comes into focus
-        }, [])
+            loadMuscleData();
+        }, [accessoryWeight]) // 👈 was []
     );
 
     // Event listeners
@@ -182,7 +182,7 @@ const Home = () => {
                         if (acc) {
                             const accTarget = muscleMapping[acc] || acc.toLowerCase();
                             if (!muscleStats[accTarget]) muscleStats[accTarget] = 0;
-                            muscleStats[accTarget] = Math.min(SETS_CAP, muscleStats[accTarget] + sets * decayFactor);
+                            muscleStats[accTarget] = Math.min(SETS_CAP, muscleStats[accTarget] + sets * decayFactor * accessoryWeight);
                         }
                     });
                 }

@@ -32,14 +32,12 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                         const exerciseName = row['Exercise Name'].trim();
                         const weight = parseFloat(row['Weight (kg)']) || 0;
                         const reps = parseInt(row['Reps'], 10) || 0;
-                        const distance = parseFloat(row['Distance']) || parseFloat(row['Distance (km)']) || 0; // Handle common CSV headers
+                        const distance = parseFloat(row['Distance']) || parseFloat(row['Distance (km)']) || 0;
                         const durationSeconds = parseInt(row['Duration (sec)'], 10) || parseInt(row['Seconds'], 10) || 0;
                         const durationMinutes = Math.floor(durationSeconds / 60);
                         const workoutTitle = row['Workout Name'] || 'Strong Import';
                         const workoutSession = new Date(row['Date']).getTime();
-
-                        let setNum = parseInt(row['Set Order'], 10);
-                        if (isNaN(setNum)) setNum = 1;
+                        const isWarmup = row['Set Order'] === 'W';
 
                         // Calculate 1RM
                         let oneRM;
@@ -57,7 +55,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                             weight,
                             reps,
                             oneRM,
-                            setNum,
+                            isWarmup,
                             date,
                             workoutTitle,
                             durationMinutes,
@@ -109,22 +107,18 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                                 } else {
                                     const result = await database.runAsync(
                                         'INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio) VALUES (?, ?, ?, ?)',
-                                        [exerciseName, '', '', 0] // Default to non-cardio for unknown, unless we detect stats?
+                                        [exerciseName, '', '', 0]
                                     );
-                                    // TODO: Could infer cardio here if ALL sets have distance/time and 0 weight?
-                                    // For now, default to 0. User can edit later.
-                                    // Actually user asked: "if an exercise set contains something in the seconds or distance tab, it should be marked as cardio."
                                     exerciseID = result.lastInsertRowId;
                                 }
 
-                                // Check for Cardio inference (if not already known or if we want to update it)
+                                // Check for Cardio inference
                                 let isCardioInferred = false;
                                 sets.forEach(s => {
                                     if (s.distance > 0 || s.durationSeconds > 0) isCardioInferred = true;
                                 });
 
                                 if (isCardioInferred) {
-                                    // Update exercise to be cardio if not already
                                     await database.runAsync('UPDATE exercises SET isCardio = 1 WHERE exerciseID = ?', [exerciseID]);
                                 }
 
@@ -147,10 +141,12 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                                     exerciseBestOneRM.set(exerciseID, maxOneRMInWorkout);
                                 }
 
-                                // Insert all sets, marking only the best one as PR if applicable
+                                // Insert all sets — use array index for setNum (format-agnostic)
                                 for (let i = 0; i < sets.length; i++) {
                                     const set = sets[i];
                                     const isThisSetPR = (isPR && i === bestSetIndex) ? 1 : 0;
+                                    const setType = set.isWarmup ? 'W' : 'N';
+                                    const setNum = i + 1;
 
                                     await database.runAsync(
                                         `INSERT INTO workoutHistory 
@@ -159,7 +155,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                                         [
                                             workoutSession,
                                             1,
-                                            set.setNum,
+                                            setNum,
                                             exerciseID,
                                             set.weight,
                                             set.reps,
@@ -168,9 +164,9 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                                             set.workoutTitle,
                                             isThisSetPR,
                                             set.durationMinutes,
-                                            'N', // setType default
-                                            '',  // notes default
-                                            0, 0, 0, // PR flags default
+                                            setType,
+                                            '',
+                                            0, 0, 0,
                                             set.distance || null,
                                             set.durationSeconds || null
                                         ]
