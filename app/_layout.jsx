@@ -73,6 +73,8 @@ const ThemeConsumer = () => {
                 <Stack.Screen name="workout/EditWorkout" options={{ headerShown: false }} />
                 <Stack.Screen name="template/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
+                <Stack.Screen name="exercise/[id]" options={{ headerShown: false }} />
+                <Stack.Screen name="exercise/new" />
             </Stack>
         </View>
     );

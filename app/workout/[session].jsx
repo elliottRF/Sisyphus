@@ -1,12 +1,8 @@
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useRef, useCallback } from 'react';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/db';
-import { FONTS } from '../../constants/theme';
-import { Ionicons } from '@expo/vector-icons';
-import ActionSheet from "react-native-actions-sheet";
-import ExerciseHistory from '../../components/exerciseHistory';
 import WorkoutSessionView from '../../components/WorkoutSessionView';
 import { useTheme } from '../../context/ThemeContext';
 import { setPreloadedData } from '../../constants/preloader';
@@ -36,16 +32,6 @@ const WorkoutDetail = () => {
     const dataSessionId = workoutDetails[0]?.workoutSession;
     const isDataMismatch = workoutDetails.length > 0 && dataSessionId !== currentSessionId;
 
-    useEffect(() => {
-        if (syncedInitialData && syncedInitialData.length > 0) {
-            const dataSessionIdSynced = syncedInitialData[0]?.workoutSession;
-            if (dataSessionIdSynced === currentSessionId) {
-                setWorkoutDetails(syncedInitialData);
-                setLoading(false);
-            }
-        }
-    }, [syncedInitialData, currentSessionId]);
-
     const effectiveWorkoutDetails = isDataMismatch
         ? (syncedInitialData && syncedInitialData[0]?.workoutSession === currentSessionId ? syncedInitialData : [])
         : workoutDetails;
@@ -54,28 +40,23 @@ const WorkoutDetail = () => {
     const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
     const [isActionLoading, setIsActionLoading] = useState(false);
 
-    const [selectedExerciseId, setSelectedExerciseId] = useState(null);
-    const [currentExerciseName, setCurrentExerciseName] = useState(null);
-
-    const actionSheetRef = useRef(null);
     const sessionViewRef = useRef(null);
+
     useFocusEffect(
         React.useCallback(() => {
             let isActive = true;
 
             const loadData = async () => {
                 try {
-                    const exPromise = fetchExercises();
-                    const historyPromise = fetchWorkoutHistoryBySession(session);
-
                     const [historyData, exercisesData] = await Promise.all([
-                        historyPromise,
-                        exPromise
+                        fetchWorkoutHistoryBySession(session),
+                        fetchExercises()
                     ]);
 
-                    if (historyData) setWorkoutDetails(historyData);
-                    if (exercisesData) setExercises(exercisesData);
-
+                    if (isActive) {
+                        if (historyData) setWorkoutDetails(historyData);
+                        if (exercisesData) setExercises(exercisesData);
+                    }
                 } catch (error) {
                     console.error("Error loading workout details:", error);
                 } finally {
@@ -92,7 +73,6 @@ const WorkoutDetail = () => {
                 setLoading(true);
             }
 
-            // Defer heavy fetching to ensure the screen transition starts completely smoothly
             const timer = setTimeout(() => {
                 if (isActive) loadData();
             }, 50);
@@ -110,17 +90,25 @@ const WorkoutDetail = () => {
         }, [])
     );
 
-    const showExerciseInfo = (exerciseId, exerciseName) => {
-        setSelectedExerciseId(exerciseId);
-        setCurrentExerciseName(exerciseName);
-        actionSheetRef.current?.show();
-    };
+    const isDataMatching = effectiveWorkoutDetails.length > 0 && effectiveWorkoutDetails[0]?.workoutSession === currentSessionId;
+    const isReadyToShow = isDataMatching;
+
+    useFocusEffect(
+        React.useCallback(() => {
+            if (hasAttemptedFetch && effectiveWorkoutDetails.length === 0) {
+                router.replace('/history');
+            }
+        }, [hasAttemptedFetch, effectiveWorkoutDetails.length, router])
+    );
+
+    const showExerciseInfo = useCallback((exerciseId, exerciseName) => {
+        if (!exerciseId || !isReadyToShow) return;
+        router.push(`/exercise/${exerciseId}?name=${encodeURIComponent(exerciseName || '')}`);
+    }, [router, isReadyToShow]);
 
     const showEditPage = useCallback(() => {
         if (session) {
             router.push(`/workout/EditWorkout?session=${session}`);
-        } else {
-            console.warn("Cannot navigate to edit page: Session ID is missing.");
         }
     }, [session, router]);
 
@@ -129,7 +117,6 @@ const WorkoutDetail = () => {
         setIsActionLoading(true);
         try {
             const sessionData = await fetchWorkoutHistoryBySession(session);
-
             const grouped = {};
             const exerciseOrder = [];
 
@@ -179,7 +166,6 @@ const WorkoutDetail = () => {
         setIsActionLoading(true);
         try {
             const rows = await fetchWorkoutHistoryBySession(session);
-
             const grouped = new Map();
 
             rows.forEach(row => {
@@ -193,7 +179,6 @@ const WorkoutDetail = () => {
                         }]
                     });
                 }
-
                 grouped.get(row.exerciseNum).exercises[0].sets.push({
                     id: `${Date.now()}_${row.setNum}_${Math.random().toString(36).substr(2, 6)}`,
                     weight: row.weight,
@@ -205,10 +190,8 @@ const WorkoutDetail = () => {
                 });
             });
 
-            const workoutData = Array.from(grouped.values());
-
             setPreloadedData({
-                template: { name: '', data: workoutData },
+                template: { name: '', data: Array.from(grouped.values()) },
                 exercises: []
             });
 
@@ -221,21 +204,8 @@ const WorkoutDetail = () => {
         }
     }, [session, isActionLoading, router]);
 
-    useFocusEffect(
-        React.useCallback(() => {
-            if (hasAttemptedFetch && effectiveWorkoutDetails.length === 0) {
-                router.replace('/history');
-            }
-        }, [hasAttemptedFetch, effectiveWorkoutDetails.length, router])
-    );
-
-    const isDataMatching = effectiveWorkoutDetails.length > 0 && effectiveWorkoutDetails[0]?.workoutSession === currentSessionId;
-    const isReadyToShow = isDataMatching;
-
     if (!isReadyToShow) {
-        return (
-            <View style={[styles.container, { backgroundColor: theme.background }]} />
-        );
+        return <View style={[styles.container, { backgroundColor: theme.background }]} />;
     }
 
     return (
@@ -243,41 +213,27 @@ const WorkoutDetail = () => {
             <Stack.Screen options={{ headerShown: false }} />
 
             <View style={{ flex: 1 }}>
-                {effectiveWorkoutDetails && (
-                    <WorkoutSessionView
-                        ref={sessionViewRef}
-                        workoutDetails={effectiveWorkoutDetails}
-                        exercisesList={exercisesList}
-                        onEdit={showEditPage}
-                        onRepeat={handleRepeat}
-                        onSaveAsTemplate={handleSaveAsTemplate}
-                        onExerciseInfo={showExerciseInfo}
-                    />
-                )}
+                <WorkoutSessionView
+                    ref={sessionViewRef}
+                    workoutDetails={effectiveWorkoutDetails}
+                    exercisesList={exercisesList}
+                    onEdit={showEditPage}
+                    onRepeat={handleRepeat}
+                    onSaveAsTemplate={handleSaveAsTemplate}
+                    onExerciseInfo={showExerciseInfo}
+                />
             </View>
 
             {(loading || isActionLoading) && (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', zIndex: 20 }]}>
+                <View style={[StyleSheet.absoluteFill, {
+                    backgroundColor: theme.background,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 20
+                }]}>
                     <ActivityIndicator size="large" color={theme.primary} />
                 </View>
             )}
-
-            <ActionSheet
-                ref={actionSheetRef}
-                enableGestureBack={true}
-                closeOnPressBack={true}
-                androidCloseOnBackPress={true}
-                containerStyle={styles.actionSheetContainer}
-                indicatorStyle={styles.indicator}
-                snapPoints={[100]}
-                initialSnapIndex={0}
-            >
-                <ExerciseHistory
-                    exerciseID={selectedExerciseId}
-                    exerciseName={currentExerciseName}
-                    onClose={() => actionSheetRef.current?.hide()}
-                />
-            </ActionSheet>
         </View>
     );
 };

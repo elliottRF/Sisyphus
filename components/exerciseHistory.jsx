@@ -7,8 +7,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import Body from "react-native-body-highlighter";
-import ActionSheet from "react-native-actions-sheet";
-import NewExercise from "./NewExercise"
 import PRGraphCard from "./PRGraphCard";
 import WorkoutSessionView from './WorkoutSessionView';
 import { useTheme } from '../context/ThemeContext';
@@ -275,19 +273,12 @@ const ExerciseHistory = (props) => {
             .filter(Boolean);
     }, [workoutHistory, showOnlyPRs]);
 
-    const actionSheetRef = useRef(null);
     const sessionActionSheetRef = useRef(null);
 
     const showEditSheet = () => {
-        actionSheetRef.current?.show();
+        router.push(`/exercise/new?id=${props.exerciseID}`);
     };
 
-    const handleCloseEditSheet = () => {
-        fetchExercises()
-            .then(data => setExercises(data))
-            .catch(err => console.error(err));
-        actionSheetRef.current?.hide();
-    };
 
     const handleSessionSelect = (data) => {
         setSelectedSessionData(data);
@@ -432,9 +423,6 @@ const ExerciseHistory = (props) => {
                     <View>
                         <View style={[styles.headerGradient, { backgroundColor: theme.surface }]}>
                             <View style={styles.titleRow}>
-                                <TouchableOpacity style={styles.backButton} onPress={() => props.onClose?.()}>
-                                    <Feather name="chevron-left" size={28} color={theme.text} />
-                                </TouchableOpacity>
                                 <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
                                 <TouchableOpacity
                                     onPress={() => showEditSheet()}
@@ -448,18 +436,7 @@ const ExerciseHistory = (props) => {
                                 </TouchableOpacity>
                             </View>
 
-                            <ActionSheet
-                                ref={actionSheetRef}
-                                enableGestureBack={true}
-                                closeOnPressBack={true}
-                                androidCloseOnBackPress={true}
-                                containerStyle={{ height: '100%', backgroundColor: safeSurface }}
-                                indicatorStyle={{ backgroundColor: theme.textSecondary }}
-                                snapPoints={[100]}
-                                initialSnapIndex={0}
-                            >
-                                <NewExercise exerciseID={props.exerciseID} close={handleCloseEditSheet} />
-                            </ActionSheet>
+
 
                             {/* Conditionally render stats based on exercise type */}
                             {isCardioHeader ? (
@@ -577,25 +554,7 @@ const ExerciseHistory = (props) => {
                 scrollEventThrottle={16}
             />
 
-            <ActionSheet
-                ref={sessionActionSheetRef}
-                enableGestureBack={true}
-                closeOnPressBack={true}
-                androidCloseOnBackPress={true}
-                containerStyle={{ height: '100%', backgroundColor: safeSurface }}
-                indicatorStyle={{ backgroundColor: theme.textSecondary }}
-                snapPoints={[100]}
-                initialSnapIndex={0}
-            >
-                {selectedSessionData && (
-                    <WorkoutSessionView
-                        workoutDetails={selectedSessionData}
-                        exercisesList={exercisesList}
-                    // Optional: onEdit={...} if we want to allow editing from here
-                    // Optional: onExerciseInfo={...} if we want recursion
-                    />
-                )}
-            </ActionSheet>
+
         </View>
     );
 };
@@ -640,12 +599,6 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.text,
         textAlign: 'center',
         paddingHorizontal: 40,
-    },
-    backButton: {
-        position: 'absolute',
-        left: 12,
-        padding: 8,
-        zIndex: 1,
     },
     editButton: {
         position: 'absolute',

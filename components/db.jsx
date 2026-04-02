@@ -325,6 +325,23 @@ export const fetchExerciseHistory = async (exerciseID) => {
   );
 };
 
+// Get workout session count per exercise (number of distinct sessions)
+export const fetchExerciseWorkoutCounts = async () => {
+  const database = await getDb();
+  const rows = await database.getAllAsync(
+    `SELECT exerciseID, COUNT(DISTINCT workoutSession) as workoutCount
+     FROM workoutHistory
+     GROUP BY exerciseID;`
+  );
+  // Return as a map for O(1) lookup
+  const countMap = new Map();
+  for (const row of rows) {
+    countMap.set(row.exerciseID, row.workoutCount);
+  }
+  return countMap;
+};
+
+
 // Fetch the last workout sets for a specific exercise
 export const fetchLastWorkoutSets = async (exerciseID) => {
   const database = await getDb();

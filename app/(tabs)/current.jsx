@@ -19,7 +19,6 @@ import { setPreloadedData } from '../../constants/preloader';
 import ExerciseEditable from '../../components/exerciseEditable'
 
 import ActionSheet from "react-native-actions-sheet";
-import ExerciseHistory from "../../components/exerciseHistory"
 
 
 import FilteredExerciseList from '../../components/FilteredExerciseList';
@@ -196,12 +195,9 @@ const Current = () => {
         return Math.round(oneRepMax * 100) / 100; // Truncates to 2 decimal places
     };
 
-    const exerciseInfoActionSheetRef = useRef(null);
 
     const [currentWorkout, setCurrentWorkout] = useState([]);
     const [workoutTitle, setWorkoutTitle] = useState("New Workout");
-    const [selectedExerciseId, setSelectedExerciseId] = useState(null);
-    const [currentExerciseName, setCurrentExerciseName] = useState(null);
 
     console.log("Render Current. Workout length:", currentWorkout.length);
 
@@ -421,14 +417,8 @@ const Current = () => {
 
     const showExerciseInfo = (exerciseDetails) => {
         if (exerciseDetails) {
-            setSelectedExerciseId(exerciseDetails.exerciseID);
-            setCurrentExerciseName(exerciseDetails.name);
-            exerciseInfoActionSheetRef.current?.show();
+            router.push(`/exercise/${exerciseDetails.exerciseID}?name=${encodeURIComponent(exerciseDetails.name || '')}`);
         }
-    };
-
-    const handleCloseExerciseInfo = () => {
-        exerciseInfoActionSheetRef.current?.hide();
     };
 
     const saveWorkoutToAsyncStorage = async (workout) => {
@@ -833,23 +823,6 @@ const Current = () => {
                             setCurrentWorkout={setCurrentWorkout}
                             onExerciseCreated={() => fetchExercises().then(data => setExercises(data))}
                         />
-
-                        <ActionSheet
-                            ref={exerciseInfoActionSheetRef}
-                            enableGestureBack={true}
-                            closeOnPressBack={true}
-                            androidCloseOnBackPress={true}
-                            containerStyle={{ height: '100%', backgroundColor: safeSurface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
-                            indicatorStyle={{ backgroundColor: isDynamic ? '#aaaaaa' : theme.textSecondary }}
-                            snapPoints={[100]}
-                            initialSnapIndex={0}
-                        >
-                            <ExerciseHistory
-                                exerciseID={selectedExerciseId}
-                                exerciseName={currentExerciseName}
-                                onClose={() => exerciseInfoActionSheetRef.current?.hide()}
-                            />
-                        </ActionSheet>
                     </>
                 )}
             </View>

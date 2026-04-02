@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR } from '../../components/db';
+import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, fetchExerciseWorkoutCounts } from '../../components/db';
 import ActionSheet from "react-native-actions-sheet";
 
 import NewExercise from "../../components/NewExercise"
@@ -14,6 +14,7 @@ import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
+import { useRouter } from 'expo-router';
 
 const Profile = () => {
     const insets = useSafeAreaInsets();
@@ -24,27 +25,32 @@ const Profile = () => {
     useScrollToTop(scrollRef);
     const [searchQuery, setSearchQuery] = useState('');
     const [exercises, setExercises] = useState([]);
-    const [selectedExerciseId, setSelectedExerciseId] = useState(null);
-    const [currentExerciseName, setCurrentExerciseName] = useState(null)
+    const [workoutCounts, setWorkoutCounts] = useState(new Map());
 
     // New ref for create exercise action sheet
     const createExerciseActionSheetRef = useRef(null);
     const actionSheetRef = useRef(null);
+    const router = useRouter();
 
     // Pre-load on mount
     useEffect(() => {
-        fetchExercises()
-            .then(data => setExercises(data))
+        Promise.all([fetchExercises(), fetchExerciseWorkoutCounts()])
+            .then(([data, counts]) => {
+                setExercises(data);
+                setWorkoutCounts(counts);
+            })
             .catch(err => console.error(err));
     }, []);
 
     useFocusEffect(
         React.useCallback(() => {
-            fetchExercises()
-                .then(data => setExercises(data))
+            Promise.all([fetchExercises(), fetchExerciseWorkoutCounts()])
+                .then(([data, counts]) => {
+                    setExercises(data);
+                    setWorkoutCounts(counts);
+                })
                 .catch(err => console.error(err));
 
-            // Cleanup: clear search query when leaving the page
             return () => {
                 setSearchQuery('');
             };
@@ -55,9 +61,8 @@ const Profile = () => {
 
 
 
-    // New function to handle exercise creation action sheet
     const openCreateExerciseSheet = () => {
-        createExerciseActionSheetRef.current?.show();
+        router.push('/exercise/new');
     };
 
 
@@ -65,41 +70,52 @@ const Profile = () => {
     const handleCloseCreateExerciseSheet = () => {
         createExerciseActionSheetRef.current?.hide();
 
-        fetchExercises()
-            .then(data => setExercises(data))
+        Promise.all([fetchExercises(), fetchExerciseWorkoutCounts()])
+            .then(([data, counts]) => {
+                setExercises(data);
+                setWorkoutCounts(counts);
+            })
             .catch(err => console.error(err));
-
     };
 
     const sortedAndFilteredExercises = exercises
-        .sort((a, b) => a.name.localeCompare(b.name))
         .filter(exercise =>
             exercise.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        )
+        .sort((a, b) => {
+            const countDiff = (workoutCounts.get(b.exerciseID) ?? 0) - (workoutCounts.get(a.exerciseID) ?? 0);
+            if (countDiff !== 0) return countDiff;
+            return a.name.localeCompare(b.name); // alphabetical tiebreak
+        });
 
     const showExerciseInfo = (item) => {
-        actionSheetRef.current?.show();
-        setSelectedExerciseId(item.exerciseID);
-        setCurrentExerciseName(item.name);
-        console.log("open exercise actionsheet");
+        router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
     };
 
-    const handleClose = () => {
-        actionSheetRef.current?.hide();
-    };
 
-    const renderItem = ({ item }) => (
-        <TouchableOpacity
-            style={styles.exerciseCard}
-            onPress={() => showExerciseInfo(item)}
-            activeOpacity={0.7}
-        >
-            <View style={styles.exerciseContent}>
-                <Text style={styles.exerciseName}>{item.name}</Text>
-                <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-            </View>
-        </TouchableOpacity>
-    );
+
+    const renderItem = ({ item }) => {
+        const count = workoutCounts.get(item.exerciseID) ?? 0;
+        return (
+            <TouchableOpacity
+                style={styles.exerciseCard}
+                onPress={() => showExerciseInfo(item)}
+                activeOpacity={0.7}
+            >
+                <View style={styles.exerciseContent}>
+                    <Text style={styles.exerciseName} numberOfLines={1} ellipsizeMode="tail">
+                        {item.name}
+                    </Text>
+                    <View style={styles.exerciseRight}>
+                        {count > 0 && (
+                            <Text style={styles.workoutCount}>{count}×</Text>
+                        )}
+                        <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+                    </View>
+                </View>
+            </TouchableOpacity>
+        );
+    };
 
     // Safe Colors for Reanimated / Linear Gradient fallbacks
     const isDynamic = theme.type === 'dynamic';
@@ -173,18 +189,7 @@ const Profile = () => {
                 showsVerticalScrollIndicator={false}
             />
 
-            {/* Existing Exercise History ActionSheet */}
-            <ActionSheet
-                ref={actionSheetRef}
-                containerStyle={[styles.actionSheetContainer, { backgroundColor: safeBackground }]}
-                gestureEnabled={false}
-            >
-                <ExerciseHistory 
-                    exerciseID={selectedExerciseId} 
-                    exerciseName={currentExerciseName} 
-                    onClose={() => actionSheetRef.current?.hide()}
-                />
-            </ActionSheet>
+
 
             {/* New Create Exercise ActionSheet */}
             <ActionSheet
@@ -285,6 +290,8 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.text,
         fontSize: 16,
         fontFamily: FONTS.semiBold,
+        flex: 1,           // takes all available space
+        marginRight: 8,
     },
     actionSheetContainer: {
         height: '100%',
@@ -302,6 +309,17 @@ const getStyles = (theme) => StyleSheet.create({
         backgroundColor: theme.surface,
         padding: 8,
         borderRadius: 20,
+    },
+    exerciseRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flexShrink: 0,
+    },
+    workoutCount: {
+        color: theme.textSecondary,
+        fontFamily: FONTS.medium,
+        fontSize: 14,
     },
 });
 

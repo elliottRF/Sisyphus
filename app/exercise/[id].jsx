@@ -15,14 +15,6 @@ const ExerciseDetail = () => {
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <Stack.Screen options={{ headerShown: false }} />
 
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Exercise History</Text>
-                <View style={{ width: 24 }} />
-            </View>
-
             <ExerciseHistory exerciseID={parseInt(id)} exerciseName={name} />
         </View>
     );

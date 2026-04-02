@@ -1,5 +1,8 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, FlatList } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+    View, Text, StyleSheet, TextInput, TouchableOpacity,
+    ScrollView as RNScrollView
+} from 'react-native';
 import Body from 'react-native-body-highlighter';
 import { insertExercise, updateExercise, fetchExercises } from '../components/db';
 import { FONTS, SHADOWS } from '../constants/theme';
@@ -7,8 +10,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
-import { ScrollView as RNScrollView } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Added this import
+
+const MUSCLE_OPTIONS = [
+    'Chest', 'Triceps', 'Deltoids', 'Trapezius', 'Upper-Back', 'Lower-Back',
+    'Biceps', 'Forearm', 'Abs', 'Quadriceps', 'Hamstring', 'Gluteal',
+    'Calves', 'Adductors', 'Neck', 'Obliques'
+];
 
 const GradientOrView = ({ colors, style, theme, children }) => {
     if (theme?.type === 'dynamic') {
@@ -19,10 +28,9 @@ const GradientOrView = ({ colors, style, theme, children }) => {
         );
     }
 
-    // Ensure colors is an array of strings and never contains null/undefined
     const safeColors = Array.isArray(colors) && colors.every(c => !!c)
         ? colors
-        : ['#transparent', '#transparent']; // Or a theme default
+        : ['transparent', 'transparent'];
 
     return (
         <LinearGradient colors={safeColors} style={style}>
@@ -34,14 +42,14 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 const NewExercise = (props) => {
     const { theme, gender } = useTheme();
     const styles = getStyles(theme);
+    const handlers = useScrollHandlers();
+    const insets = useSafeAreaInsets(); // <-- Initialize safe area insets
+
     const [exerciseName, setExerciseName] = useState('');
     const [targetSelected, setTargetSelected] = useState([]);
     const [accessorySelected, setAccessorySelected] = useState([]);
-    const [formattedTargets, setFormattedTargets] = useState([]);
-    const [isEditMode, setIsEditMode] = useState(false);
-    const [targetModalVisible, setTargetModalVisible] = useState(false);
-    const [accessoryModalVisible, setAccessoryModalVisible] = useState(false);
     const [isCardio, setIsCardio] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
 
     // Load exercise data if exerciseID is provided
     useEffect(() => {
@@ -55,145 +63,128 @@ const NewExercise = (props) => {
                     setExerciseName(exercise.name);
                     setIsCardio(!!exercise.isCardio);
 
-                    // Parse target muscles
                     const targets = exercise.targetMuscle ? exercise.targetMuscle.split(',').map((m) => m.trim()) : [];
-                    setTargetSelected(targets);
-
-                    // Parse accessory muscles
                     const accessories = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',').map((m) => m.trim()) : [];
+
+                    setTargetSelected(targets);
                     setAccessorySelected(accessories);
-
-                    // Format targets for body visualization
-                    const sluggedTargets = targets.map((target) => ({
-                        slug: target.toLowerCase(),
-                        intensity: 1,
-                    }));
-
-                    const sluggedAccessories = accessories.map((accessory) => ({
-                        slug: accessory.toLowerCase(),
-                        intensity: 2,
-                    }));
-
-                    setFormattedTargets([...sluggedTargets, ...sluggedAccessories]);
                 }
             }
         };
-
         loadExercise();
     }, [props.exerciseID]);
 
-    const toggleTargetSelection = (value) => {
-        setTargetSelected((prev) => {
-            const newSelected = prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value];
-            // Remove from accessory if added to target
-            setAccessorySelected((acc) => acc.filter((a) => a !== value));
-            setFormattedTargets([
-                ...newSelected.map((target) => ({ slug: target.toLowerCase(), intensity: 1 })),
-                ...accessorySelected.filter((a) => a !== value).map((accessory) => ({ slug: accessory.toLowerCase(), intensity: 2 })),
-            ]);
-            return newSelected;
-        });
-    };
+    // Derive formatted targets for the Body Highlighter automatically
+    const formattedTargets = useMemo(() => {
+        const targets = targetSelected.map(t => ({ slug: t.toLowerCase(), intensity: 1 }));
+        const accessories = accessorySelected.map(a => ({ slug: a.toLowerCase(), intensity: 2 }));
+        return [...targets, ...accessories];
+    }, [targetSelected, accessorySelected]);
 
-    const toggleAccessorySelection = (value) => {
-        setAccessorySelected((prev) => {
-            const newSelected = prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value];
-            // Remove from target if added to accessory
-            setTargetSelected((targ) => targ.filter((t) => t !== value));
-            setFormattedTargets([
-                ...targetSelected.filter((t) => t !== value).map((target) => ({ slug: target.toLowerCase(), intensity: 1 })),
-                ...newSelected.map((accessory) => ({ slug: accessory.toLowerCase(), intensity: 2 })),
-            ]);
-            return newSelected;
-        });
-    };
-
-    function formatListToString(list) {
-        if (!Array.isArray(list)) {
-            throw new Error('Input must be an array');
+    const handleMuscleToggle = (muscle, type) => {
+        if (type === 'target') {
+            setTargetSelected(prev =>
+                prev.includes(muscle) ? prev.filter(m => m !== muscle) : [...prev, muscle]
+            );
+            setAccessorySelected(prev => prev.filter(m => m !== muscle)); // Ensure mutually exclusive
+        } else {
+            setAccessorySelected(prev =>
+                prev.includes(muscle) ? prev.filter(m => m !== muscle) : [...prev, muscle]
+            );
+            setTargetSelected(prev => prev.filter(m => m !== muscle)); // Ensure mutually exclusive
         }
+    };
 
-        // Preserve exact format from dropdown (e.g., "Chest", "Upper-Back")
+    const formatListToString = (list) => {
+        if (!Array.isArray(list)) throw new Error('Input must be an array');
         return list.map((item) => String(item).trim()).filter((item) => item.length > 0).join(',');
-    }
+    };
 
-    const createExercise = async () => {
+    const handleSave = async () => {
         if (!exerciseName.trim()) return;
 
-        let newExerciseObj = null;
+        let newExerciseObj = {
+            name: exerciseName,
+            targetMuscle: formatListToString(targetSelected),
+            accessoryMuscles: formatListToString(accessorySelected),
+            isCardio: isCardio ? 1 : 0
+        };
 
         if (isEditMode && props.exerciseID) {
             await updateExercise(
                 props.exerciseID,
-                exerciseName,
-                formatListToString(targetSelected),
-                formatListToString(accessorySelected),
-                isCardio ? 1 : 0
+                newExerciseObj.name,
+                newExerciseObj.targetMuscle,
+                newExerciseObj.accessoryMuscles,
+                newExerciseObj.isCardio
             );
+            newExerciseObj.exerciseID = props.exerciseID;
         } else {
-            const newExerciseId = await insertExercise(exerciseName, formatListToString(targetSelected), formatListToString(accessorySelected), isCardio ? 1 : 0);
-
-            // Construct the exercise object to be passed back
-            newExerciseObj = {
-                exerciseID: newExerciseId,
-                name: exerciseName,
-                targetMuscle: formatListToString(targetSelected),
-                accessoryMuscles: formatListToString(accessorySelected),
-                isCardio: isCardio ? 1 : 0
-            };
+            const newId = await insertExercise(
+                newExerciseObj.name,
+                newExerciseObj.targetMuscle,
+                newExerciseObj.accessoryMuscles,
+                newExerciseObj.isCardio
+            );
+            newExerciseObj.exerciseID = newId;
         }
 
         props.close(newExerciseObj);
     };
 
-    const muscleOptions = [
-        { key: '1', value: 'Chest' },
-        { key: '2', value: 'Triceps' },
-        { key: '3', value: 'Deltoids' },
-        { key: '4', value: 'Trapezius' },
-        { key: '5', value: 'Upper-Back' },
-        { key: '6', value: 'Lower-Back' },
-        { key: '7', value: 'Biceps' },
-        { key: '8', value: 'Forearm' },
-        { key: '9', value: 'Abs' },
-        { key: '10', value: 'Quadriceps' },
-        { key: '11', value: 'Hamstring' },
-        { key: '12', value: 'Gluteal' },
-        { key: '13', value: 'Calves' },
-        { key: '14', value: 'Adductors' },
-        { key: '15', value: 'Neck' },
-        { key: '16', value: 'Obliques' },
-    ];
-
-    const getFilteredOptions = (selected) => {
-        return muscleOptions.filter((option) => !selected.includes(option.value));
-    };
-
-    const handlers = useScrollHandlers();
-
-    // Safe fallbacks for Body
-    const safeBorder = theme.type === 'dynamic' ? '#4d4d4dff' : theme.border;
-    // Monochromatic: [Primary 50% (Accessory), Primary 100% (Target)]
+    const safeBorder = theme.type === 'dynamic' ? '#4d4d4d' : theme.border;
     const safeBodyColors = theme.type === 'dynamic'
         ? ['#2DC4B6', '#2DC4B680']
         : [theme.primary, `${theme.primary}60`];
 
+    // Helper component to render inline muscle chips
+    const MuscleChips = ({ type, selectedData }) => (
+        <View style={styles.chipContainer}>
+            {MUSCLE_OPTIONS.map((muscle) => {
+                const isSelected = selectedData.includes(muscle);
+                const isDisabled = type === 'target'
+                    ? accessorySelected.includes(muscle)
+                    : targetSelected.includes(muscle);
+
+                return (
+                    <TouchableOpacity
+                        key={muscle}
+                        activeOpacity={0.7}
+                        onPress={() => handleMuscleToggle(muscle, type)}
+                        style={[
+                            styles.chip,
+                            isSelected && styles.chipActive,
+                            isDisabled && styles.chipDisabled
+                        ]}
+                    >
+                        <Text style={[
+                            styles.chipText,
+                            isSelected && styles.chipTextActive,
+                            isDisabled && styles.chipTextDisabled
+                        ]}>
+                            {muscle}
+                        </Text>
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
+    );
+
     return (
-        <View style={styles.container}>
+        < View style={[styles.container, { paddingTop: insets.top }]} >
             <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
                 <RNScrollView
                     {...handlers}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
-                    showsHorizontalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
-                    <View style={styles.bodyContainer}>
+                    <View style={styles.bodyWrapper}>
                         <Body
                             data={formattedTargets}
                             gender={gender}
                             side="front"
-                            scale={1}
+                            scale={0.9}
                             border={safeBorder}
                             colors={safeBodyColors}
                             defaultFill={theme.bodyFill}
@@ -202,140 +193,69 @@ const NewExercise = (props) => {
                             data={formattedTargets}
                             gender={gender}
                             side="back"
-                            scale={1}
+                            scale={0.9}
                             border={safeBorder}
                             colors={safeBodyColors}
                             defaultFill={theme.bodyFill}
                         />
                     </View>
 
-                    <TextInput
-                        style={styles.input}
-                        onChangeText={setExerciseName}
-                        value={exerciseName}
-                        placeholder="Add Name"
-                        placeholderTextColor={theme.textSecondary}
-                        keyboardType="default"
-                    />
-
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                        <Text style={styles.label}>Cardio Exercise</Text>
-                        <TouchableOpacity onPress={() => setIsCardio(!isCardio)}>
-                            <Feather name={isCardio ? "check-square" : "square"} size={24} color={theme.text} />
-                        </TouchableOpacity>
+                    <View style={styles.inputContainer}>
+                        <Feather name="edit-2" size={20} color={theme.textSecondary} style={styles.inputIcon} />
+                        <TextInput
+                            style={styles.input}
+                            onChangeText={setExerciseName}
+                            value={exerciseName}
+                            placeholder="Exercise Name"
+                            placeholderTextColor={theme.textSecondary}
+                            keyboardType="default"
+                        />
                     </View>
+
+                    <TouchableOpacity
+                        style={styles.cardioToggleCard}
+                        activeOpacity={0.8}
+                        onPress={() => setIsCardio(!isCardio)}
+                    >
+                        <View style={styles.cardioTextWrapper}>
+                            <Text style={styles.label}>Cardio Exercise</Text>
+                            <Text style={styles.subtext}>Does not target specific muscles</Text>
+                        </View>
+                        <Feather
+                            name={isCardio ? "check-circle" : "circle"}
+                            size={26}
+                            color={isCardio ? theme.primary : theme.textSecondary}
+                        />
+                    </TouchableOpacity>
 
                     {!isCardio && (
                         <>
-                            <View style={styles.dropdownContainer}>
-                                <Text style={styles.label}>Target Muscles</Text>
-                                <TouchableOpacity style={styles.dropdownBox} onPress={() => setTargetModalVisible(true)}>
-                                    <Text style={styles.dropdownInput}>
-                                        {targetSelected.length > 0 ? targetSelected.join(', ') : 'Select Target Muscles'}
-                                    </Text>
-                                    <Feather name="chevron-down" size={20} color={theme.textSecondary} />
-                                </TouchableOpacity>
+                            <View style={styles.sectionContainer}>
+                                <Text style={styles.sectionTitle}>Target Muscles</Text>
+                                <MuscleChips type="target" selectedData={targetSelected} />
                             </View>
 
-                            <View style={styles.dropdownContainer}>
-                                <Text style={styles.label}>Accessory Muscles</Text>
-                                <TouchableOpacity style={styles.dropdownBox} onPress={() => setAccessoryModalVisible(true)}>
-                                    <Text style={styles.dropdownInput}>
-                                        {accessorySelected.length > 0 ? accessorySelected.join(', ') : 'Select Accessory Muscles'}
-                                    </Text>
-                                    <Feather name="chevron-down" size={20} color={theme.textSecondary} />
-                                </TouchableOpacity>
+                            <View style={styles.sectionContainer}>
+                                <Text style={styles.sectionTitle}>Accessory Muscles</Text>
+                                <MuscleChips type="accessory" selectedData={accessorySelected} />
                             </View>
                         </>
                     )}
 
-                    <TouchableOpacity onPress={createExercise} activeOpacity={0.8}>
+                    <TouchableOpacity onPress={handleSave} activeOpacity={0.9}>
                         <GradientOrView
                             colors={[theme.primary, theme.secondary]}
                             theme={theme}
-                            style={styles.createButton}
+                            style={styles.saveButton}
                         >
-                            <Text style={styles.createButtonText}>{isEditMode ? 'Update Exercise' : 'Create Exercise'}</Text>
+                            <Text style={styles.saveButtonText}>
+                                {isEditMode ? 'Update Exercise' : 'Create Exercise'}
+                            </Text>
                         </GradientOrView>
                     </TouchableOpacity>
                 </RNScrollView>
             </NativeViewGestureHandler>
-
-            {/* Target Muscles Modal */}
-            <Modal
-                visible={targetModalVisible}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setTargetModalVisible(false)}
-            >
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Select Target Muscles</Text>
-                        <FlatList
-                            data={getFilteredOptions(accessorySelected)}  // ← Filter out accessory selected
-                            keyExtractor={(item) => item.key}
-                            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
-                            showsVerticalScrollIndicator={true}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity style={styles.listItem} onPress={() => toggleTargetSelection(item.value)}>
-                                    <Text style={styles.listText}>{item.value}</Text>
-                                    <Feather
-                                        name={targetSelected.includes(item.value) ? 'check-square' : 'square'}
-                                        size={20}
-                                        color={theme.text}
-                                    />
-                                </TouchableOpacity>
-                            )}
-                        />
-                        <TouchableOpacity
-                            style={styles.doneButton}
-                            onPress={() => setTargetModalVisible(false)}
-                        >
-                            <Text style={styles.doneText}>Done</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* Accessory Muscles Modal */}
-            <Modal
-                visible={accessoryModalVisible}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setAccessoryModalVisible(false)}
-            >
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Select Accessory Muscles</Text>
-                        <FlatList
-                            data={getFilteredOptions(targetSelected)}  // ← Filter out target selected
-                            keyExtractor={(item) => item.key}
-                            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
-                            showsVerticalScrollIndicator={true}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={styles.listItem}
-                                    onPress={() => toggleAccessorySelection(item.value)}
-                                >
-                                    <Text style={styles.listText}>{item.value}</Text>
-                                    <Feather
-                                        name={accessorySelected.includes(item.value) ? 'check-square' : 'square'}
-                                        size={20}
-                                        color={theme.text}
-                                    />
-                                </TouchableOpacity>
-                            )}
-                        />
-                        <TouchableOpacity
-                            style={styles.doneButton}
-                            onPress={() => setAccessoryModalVisible(false)}
-                        >
-                            <Text style={styles.doneText}>Done</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-        </View>
+        </View >
     );
 };
 
@@ -345,112 +265,117 @@ const getStyles = (theme) => StyleSheet.create({
         backgroundColor: theme.background,
     },
     scrollContent: {
-        paddingBottom: 100,
+        paddingBottom: 40,
         paddingHorizontal: 20,
     },
-    bodyContainer: {
+    bodyWrapper: {
         flexDirection: 'row',
-        justifyContent: 'center',
+        justifyContent: 'space-evenly',
         alignItems: 'center',
-        width: '100%',
-        marginBottom: 30,
-        marginTop: 20,
+        paddingVertical: 0,
+        backgroundColor: theme.surface,
+        borderRadius: 20,
+        marginBottom: 24,
+        ...SHADOWS.small,
+    },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: theme.surface,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: theme.border,
+        paddingHorizontal: 16,
+        marginBottom: 20,
+    },
+    inputIcon: {
+        marginRight: 10,
     },
     input: {
-        backgroundColor: theme.surface,
+        flex: 1,
         color: theme.text,
         fontFamily: FONTS.medium,
         fontSize: 16,
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        marginBottom: 20,
+        paddingVertical: 16,
+    },
+    cardioToggleCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: theme.surface,
+        padding: 18,
+        borderRadius: 14,
         borderWidth: 1,
         borderColor: theme.border,
+        marginBottom: 24,
     },
-    dropdownContainer: {
-        marginBottom: 20,
+    cardioTextWrapper: {
+        flex: 1,
     },
     label: {
         color: theme.text,
-        fontFamily: FONTS.medium,
-        marginBottom: 8,
+        fontFamily: FONTS.bold,
+        fontSize: 16,
+        marginBottom: 4,
     },
-    dropdownBox: {
-        backgroundColor: theme.surface,
-        borderColor: theme.border,
-        borderWidth: 1,
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
+    subtext: {
+        color: theme.textSecondary,
+        fontFamily: FONTS.regular,
+        fontSize: 13,
+    },
+    sectionContainer: {
+        marginBottom: 24,
+    },
+    sectionTitle: {
+        color: theme.text,
+        fontFamily: FONTS.bold,
+        fontSize: 16,
+        marginBottom: 12,
+    },
+    chipContainer: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        flexWrap: 'wrap',
+        marginHorizontal: -4,
     },
-    dropdownInput: {
+    chip: {
+        backgroundColor: theme.surface,
+        borderWidth: 1,
+        borderColor: theme.border,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 20,
+        margin: 4,
+    },
+    chipActive: {
+        backgroundColor: theme.primary,
+        borderColor: theme.primary,
+    },
+    chipDisabled: {
+        opacity: 0.4,
+    },
+    chipText: {
         color: theme.text,
         fontFamily: FONTS.medium,
-        fontSize: 16,
-        flex: 1,
-        numberOfLines: 2,
-        ellipsizeMode: 'tail',
+        fontSize: 14,
     },
-    createButton: {
+    chipTextActive: {
+        color: '#FFFFFF',
+    },
+    chipTextDisabled: {
+        color: theme.textSecondary,
+    },
+    saveButton: {
         paddingVertical: 18,
         borderRadius: 30,
         alignItems: 'center',
-        marginTop: 20,
+        marginTop: 10,
         ...SHADOWS.medium,
     },
-    createButtonText: {
-        color: '#FFFFFF', // Button text usually white on primary
-        fontSize: 18, // Fixed size
-        fontFamily: FONTS.bold,
-        letterSpacing: 1,
-    },
-    modalContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    },
-    modalContent: {
-        backgroundColor: theme.surface,
-        borderRadius: 12,
-        padding: 20,
-        width: '70%',
-        maxHeight: '50%',
-    },
-    modalTitle: {
-        fontFamily: FONTS.bold,
-        fontSize: 18,
-        color: theme.text,
-        marginBottom: 10,
-    },
-    listItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.border,
-    },
-    listText: {
-        fontFamily: FONTS.medium,
-        color: theme.text,
-        fontSize: 16,
-    },
-    doneButton: {
-        marginTop: 20,
-        backgroundColor: theme.primary,
-        paddingVertical: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    doneText: {
+    saveButtonText: {
         color: '#FFFFFF',
+        fontSize: 18,
         fontFamily: FONTS.bold,
-        fontSize: 16,
+        letterSpacing: 0.5,
     },
 });
 
