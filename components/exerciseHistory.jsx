@@ -1,17 +1,18 @@
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Switch } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Switch, ActivityIndicator, Animated } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
-import React, { useState, useEffect, useRef } from 'react';
-import { ActivityIndicator } from 'react-native';
-import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession } from './db';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import Body from "react-native-body-highlighter";
+import ActionSheet from "react-native-actions-sheet";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession } from './db';
+import { FONTS, SHADOWS } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import PRGraphCard from "./PRGraphCard";
 import WorkoutSessionView from './WorkoutSessionView';
-import { useTheme } from '../context/ThemeContext';
-import ActionSheet from "react-native-actions-sheet";
-import { useCallback } from 'react';
 
 const { width } = Dimensions.get('window');
 
@@ -38,56 +39,52 @@ const PRBadge = React.memo(({ type, theme }) => {
     if (type === 'KG') label = "Weight";
 
     const brightColor = lightenColor(theme.primary, 20);
-    const color = brightColor;
-    const bgColor = `${brightColor}40`; // 25% opacity
-    const borderColor = `${brightColor}66`; // 40% opacity
+    const bgColor = `${brightColor}25`; // Softer background
+    const borderColor = `${brightColor}50`;
 
     return (
         <View style={{
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 6,
-            paddingVertical: 1,
-            borderRadius: 4,
+            paddingVertical: 2,
+            borderRadius: 6,
             borderWidth: 1,
-            gap: 3,
+            gap: 4,
             marginRight: 6,
             backgroundColor: bgColor,
             borderColor: borderColor
         }}>
-            <MaterialCommunityIcons name={iconName} size={10} color={color} />
-            <Text style={{ fontSize: 9, fontFamily: FONTS.bold, color: color }}>{label}</Text>
+            <MaterialCommunityIcons name={iconName} size={10} color={brightColor} />
+            <Text style={{ fontSize: 9, fontFamily: FONTS.bold, color: brightColor }}>{label}</Text>
         </View>
     );
 });
 
 const SetNumberBadge = React.memo(({ type, number, theme }) => {
     let containerStyle = {
-        width: 22,
-        height: 18,
+        width: 24,
+        height: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 4,
-        marginRight: 8,
+        borderRadius: 6,
+        marginRight: 10,
     };
     let textStyle = {
         fontSize: 11,
-        fontFamily: FONTS.medium,
+        fontFamily: FONTS.bold,
     };
 
     if (type === 'W') {
-        containerStyle.backgroundColor = 'rgba(253, 203, 110, 0.25)';
+        containerStyle.backgroundColor = 'rgba(253, 203, 110, 0.2)';
         textStyle.color = theme.warning;
-        textStyle.fontFamily = FONTS.bold;
         textStyle.fontSize = 10;
     } else if (type === 'D') {
         containerStyle.backgroundColor = 'rgba(116, 185, 255, 0.15)';
         textStyle.color = theme.info;
-        textStyle.fontFamily = FONTS.semiBold;
     } else {
-        containerStyle.backgroundColor = 'rgba(255,255,255,0.05)';
-        textStyle.color = theme.text;
-        textStyle.fontFamily = FONTS.semiBold;
+        containerStyle.backgroundColor = theme.border; // Slightly more visible for normal sets
+        textStyle.color = theme.textSecondary;
     }
 
     return (
@@ -96,6 +93,7 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
         </View>
     );
 });
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect, exercisesList }) => {
     const [isLoading, setIsLoading] = useState(false);
@@ -104,9 +102,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
         if (isLoading) return;
         setIsLoading(true);
         try {
-            // Pre-fetch the data
             const sessionData = await fetchWorkoutHistoryBySession(session);
-            // Open ActionSheet instead of navigating
             onSessionSelect(sessionData);
         } catch (error) {
             console.error("Error pre-fetching workout:", error);
@@ -115,10 +111,30 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
         }
     };
 
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    const handlePressIn = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 0.98,
+            useNativeDriver: true,
+            speed: 20,
+            bounciness: 4,
+        }).start();
+    };
+
+    const handlePressOut = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 1,
+            useNativeDriver: true,
+            speed: 20,
+            bounciness: 4,
+        }).start();
+    };
+
+
     const sessionNote = exercises.find(e => e.notes)?.notes;
     const workoutName = exercises[0].name || "Workout";
 
-    // Calculate display numbers matching [session].jsx
     let workingSetCount = 0;
     const setsWithDisplayNumbers = exercises.map(set => {
         let displayNumber = set.setType;
@@ -129,22 +145,20 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
         return { ...set, displayNumber };
     });
 
-    // Check if cardio:
-    // 1. Check prop passed directly (if available) -> This would be ideal but not always passed
-    // 2. Check exercise list details (most reliable if list is populated)
-    // 3. Inference from data (fallback)
     const exerciseID = exercises[0]?.exerciseID;
     const exerciseDetails = exercisesList ? exercisesList.find(e => e.exerciseID === exerciseID) : null;
-
     const isCardio = exerciseDetails
         ? exerciseDetails.isCardio === 1
         : exercises.some(ex => ex.distance > 0 || ex.seconds > 0);
 
     return (
-        <TouchableOpacity
-            onPress={handlePress}
+        <AnimatedTouchableOpacity
             activeOpacity={0.8}
-            delayPressIn={50} // slight delay to prevent accidental triggers while scrolling
+            onPress={handlePress}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
+
             disabled={isLoading}
         >
             <View style={styles.sessionCard}>
@@ -160,21 +174,14 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                             <Text style={styles.sessionDate}>Session {session}</Text>
                         </View>
                     </View>
-                    {isLoading ? (
-                        <ActivityIndicator size="small" color={theme.primary} style={{ marginLeft: 8 }} />
-                    ) : (
-                        <Feather name="chevron-right" size={20} color={theme.textSecondary} style={{ opacity: 0.5 }} />
-                    )}
+                    <View style={styles.iconButton}>
+                        <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+                    </View>
                 </View>
 
                 {!!sessionNote && (
                     <View style={styles.noteContainer}>
-                        <MaterialCommunityIcons
-                            name="comment-text-outline"
-                            size={12}
-                            color={theme.textSecondary}
-                            style={{ marginTop: 2 }}
-                        />
+                        <MaterialCommunityIcons name="comment-text-outline" size={14} color={theme.textSecondary} style={{ marginTop: 2 }} />
                         <Text style={styles.noteText}>{sessionNote}</Text>
                     </View>
                 )}
@@ -198,8 +205,8 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                                 style={[
                                     styles.setRowContainer,
                                     setIndex % 2 === 1 && styles.setRowOdd,
-                                    isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
-                                    isDrop && { backgroundColor: 'rgba(116, 185, 255, 0.05)' },
+                                    isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.04)' },
+                                    isDrop && { backgroundColor: 'rgba(116, 185, 255, 0.04)' },
                                 ]}
                             >
                                 <View style={styles.setRow}>
@@ -230,7 +237,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
 
                                 {isPR && (
                                     <View style={styles.badgeRow}>
-                                        <View style={{ width: 32 }} />
+                                        <View style={{ width: 34 }} />
                                         {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
                                         {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
                                         {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
@@ -241,7 +248,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                     })}
                 </View>
             </View>
-        </TouchableOpacity>
+        </AnimatedTouchableOpacity>
     );
 });
 
@@ -249,6 +256,7 @@ const ExerciseHistory = (props) => {
     const { theme, gender } = useTheme();
     const router = useRouter();
     const styles = getStyles(theme);
+
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
@@ -261,8 +269,10 @@ const ExerciseHistory = (props) => {
     });
     const [showOnlyPRs, setShowOnlyPRs] = useState(false);
 
-    // Memoize filtered data to prevent re-computation on every render
-    const filteredWorkoutHistory = React.useMemo(() => {
+    const [exerciseName, setExerciseName] = useState(props.exerciseName);
+
+
+    const filteredWorkoutHistory = useMemo(() => {
         if (!showOnlyPRs) return workoutHistory;
 
         return workoutHistory
@@ -281,16 +291,16 @@ const ExerciseHistory = (props) => {
         router.push(`/exercise/new?id=${props.exerciseID}`);
     };
 
-
     const handleSessionSelect = (data) => {
         setSelectedSessionData(data);
         sessionActionSheetRef.current?.show();
     };
 
     useEffect(() => {
-        if (exercisesList) {
+        if (exercisesList.length > 0) {
             const { targetMuscles, accessoryMuscles } = getExerciseMuscles(props.exerciseID, exercisesList);
-            handleMuscleStrings(targetMuscles, accessoryMuscles)
+            handleMuscleStrings(targetMuscles, accessoryMuscles);
+            setExerciseName(currentExerciseDetails.name);
         }
     }, [exercisesList]);
 
@@ -301,40 +311,35 @@ const ExerciseHistory = (props) => {
         const accessoryMuscles = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',') : [];
         return { targetMuscles, accessoryMuscles };
     };
+
     const ALL_MUSCLE_SLUGS = [
         'chest', 'quadriceps', 'triceps', 'biceps', 'hamstring',
         'upper-back', 'lower-back', 'deltoids', 'gluteal', 'forearm',
         'trapezius', 'calves', 'abs', 'adductors', 'obliques',
         'tibialis', 'abductors', 'neck', 'hands', 'feet', 'knees', 'ankles'
     ];
+
     const handleMuscleStrings = (targetSelected, accessorySelected) => {
         const workedSlugs = new Set();
 
         const sluggedTargets = targetSelected.map(target => {
             const slug = typeof target === 'string' ? target.trim().toLowerCase() : '';
             workedSlugs.add(slug);
-            return { slug, intensity: 3 }; // bright primary
+            return { slug, intensity: 3 };
         });
 
         const sluggedAccessories = accessorySelected.map(accessory => {
             const slug = typeof accessory === 'string' ? accessory.trim().toLowerCase() : '';
             workedSlugs.add(slug);
-            return { slug, intensity: 2 }; // dim primary
+            return { slug, intensity: 2 };
         });
 
         const unworked = ALL_MUSCLE_SLUGS
             .filter(slug => !workedSlugs.has(slug))
-            .map(slug => ({ slug, intensity: 1 })); // bodyFill colour
+            .map(slug => ({ slug, intensity: 1 }));
 
         setFormattedTargets([...sluggedTargets, ...sluggedAccessories, ...unworked]);
     };
-
-    useEffect(() => {
-        fetchExercises()
-            .then(data => setExercises(data))
-            .catch(err => console.error(err));
-    }, []);
-
 
     useFocusEffect(
         useCallback(() => {
@@ -344,10 +349,8 @@ const ExerciseHistory = (props) => {
         }, [])
     );
 
-
-
     useFocusEffect(
-        React.useCallback(() => {
+        useCallback(() => {
             loadWorkoutHistory();
         }, [props.exerciseID])
     );
@@ -407,94 +410,79 @@ const ExerciseHistory = (props) => {
     const bodyColors = isDynamic
         ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
         : [theme.bodyFill, `${theme.primary}60`, theme.primary];
-    const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
+    const safeBorder = isDynamic ? '#4d4d4d' : theme.border;
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
 
     const currentExerciseDetails = exercisesList.find(e => e.exerciseID === props.exerciseID);
     const isCardioHeader = !!currentExerciseDetails?.isCardio;
 
-    if (loading) {
-        return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={theme.primary} />
-            </View>
-        );
-    }
+
+
 
     return (
         <View style={styles.container}>
             <FlatList
                 data={filteredWorkoutHistory}
                 style={styles.list}
-                contentContainerStyle={styles.listContentContainer}
+                contentContainerStyle={[styles.listContentContainer]}
                 keyExtractor={([session]) => session.toString()}
                 removeClippedSubviews={true}
                 maxToRenderPerBatch={5}
                 updateCellsBatchingPeriod={50}
                 windowSize={10}
                 ListHeaderComponent={
-                    <View>
-                        <View style={[styles.headerGradient, { backgroundColor: theme.surface }]}>
-                            <View style={styles.titleRow}>
-                                <Text style={styles.exerciseTitle}>{props.exerciseName}</Text>
-                                <TouchableOpacity
-                                    onPress={() => showEditSheet()}
-                                    style={styles.editButton}
-                                >
-                                    <MaterialIcons
-                                        name="edit"
-                                        size={20}
-                                        color={theme.primary}
-                                    />
-                                </TouchableOpacity>
-                            </View>
+                    <View style={styles.headerWrapper}>
+                        <View style={styles.titleRow}>
+                            <Text style={styles.exerciseTitle}>{exerciseName}</Text>
+                            <TouchableOpacity
+                                onPress={showEditSheet}
+                                style={styles.editButton}
+                                activeOpacity={0.7}
+                            >
+                                <MaterialIcons name="edit" size={20} color={theme.text} />
+                            </TouchableOpacity>
+                        </View>
 
-
-
-                            {/* Conditionally render stats based on exercise type */}
-                            {isCardioHeader ? (
-                                <View style={[styles.statsRow, { justifyContent: 'center' }]}>
-                                    <View style={styles.statItem}>
-                                        <Text style={styles.statLabel}>Total Sets</Text>
-                                        <Text style={styles.statValue}>{stats.totalSets}</Text>
-                                    </View>
+                        {/* Updated Stats Cards */}
+                        <View style={styles.statsRow}>
+                            {!isCardioHeader && (
+                                <View style={styles.statCard}>
+                                    <Feather name="award" size={16} color={theme.primary} style={styles.statIcon} />
+                                    <Text style={styles.statValue}>{stats.personalBest}kg</Text>
+                                    <Text style={styles.statLabel}>Best Lift</Text>
                                 </View>
-                            ) : (
-                                <View style={styles.statsRow}>
-                                    <View style={styles.statItem}>
-                                        <Text style={styles.statLabel}>Personal Best</Text>
-                                        <Text style={styles.statValue}>{stats.personalBest}kg</Text>
-                                    </View>
-                                    <View style={styles.statDivider} />
-                                    <View style={styles.statItem}>
-                                        <Text style={styles.statLabel}>Total Sets</Text>
-                                        <Text style={styles.statValue}>{stats.totalSets}</Text>
-                                    </View>
-                                    <View style={styles.statDivider} />
-                                    <View style={styles.statItem}>
-                                        <Text style={styles.statLabel}>Volume</Text>
-                                        <Text style={styles.statValue}>{(stats.totalVolume / 1000).toFixed(1)}k</Text>
-                                    </View>
+                            )}
+                            <View style={styles.statCard}>
+                                <Feather name="layers" size={16} color={theme.primary} style={styles.statIcon} />
+                                <Text style={styles.statValue}>{stats.totalSets}</Text>
+                                <Text style={styles.statLabel}>Total Sets</Text>
+                            </View>
+                            {!isCardioHeader && (
+                                <View style={styles.statCard}>
+                                    <Feather name="activity" size={16} color={theme.primary} style={styles.statIcon} />
+                                    <Text style={styles.statValue}>{(stats.totalVolume / 1000).toFixed(1)}k</Text>
+                                    <Text style={styles.statLabel}>Volume</Text>
                                 </View>
                             )}
                         </View>
 
                         {!isCardioHeader && (
-                            <View style={styles.bodyContainer}>
+                            <View style={styles.bodyWrapper}>
                                 <Body
                                     data={formattedTargets}
                                     gender={gender}
                                     side="front"
-                                    scale={0.7}
+                                    scale={0.75}
                                     border={safeBorder}
                                     colors={bodyColors}
                                     defaultFill={theme.bodyFill}
                                 />
+                                <View style={styles.bodyDivider} />
                                 <Body
                                     data={formattedTargets}
                                     gender={gender}
                                     side="back"
-                                    scale={0.7}
+                                    scale={0.75}
                                     border={safeBorder}
                                     colors={bodyColors}
                                     defaultFill={theme.bodyFill}
@@ -503,44 +491,34 @@ const ExerciseHistory = (props) => {
                         )}
 
                         {!isCardioHeader && (
-                            <>
-                                <PRGraphCard
-                                    exerciseID={props.exerciseID}
-                                    exerciseName={props.exerciseName}
-                                    isCompact={true}
-                                />
+                            <PRGraphCard
+                                exerciseID={props.exerciseID}
+                                exerciseName={exerciseName}
+                                isCompact={true}
+                            />
+                        )}
 
-                                <View style={styles.historyHeaderRow}>
-                                    <Text style={styles.sectionTitle}>History</Text>
-                                    <View style={styles.prFilterContainer}>
-                                        <MaterialCommunityIcons
-                                            name="trophy"
-                                            size={14}
-                                            color={showOnlyPRs ? lightenColor(theme.primary, 20) : theme.textSecondary}
-                                        />
-                                        <Text style={[
-                                            styles.prFilterText,
-                                            showOnlyPRs && { color: lightenColor(theme.primary, 20) }
-                                        ]}>
-                                            PRs Only
-                                        </Text>
-                                        <Switch
-                                            value={showOnlyPRs}
-                                            onValueChange={setShowOnlyPRs}
-                                            trackColor={{ false: theme.border, true: `${lightenColor(theme.primary, 20)}66` }}
-                                            thumbColor={showOnlyPRs ? lightenColor(theme.primary, 20) : theme.textSecondary}
-                                            ios_backgroundColor={theme.border}
-                                        />
-                                    </View>
+                        <View style={styles.historyHeaderRow}>
+                            <Text style={styles.sectionTitle}>History</Text>
+                            {!isCardioHeader && (
+                                <View style={styles.prFilterContainer}>
+                                    <Text style={[
+                                        styles.prFilterText,
+                                        showOnlyPRs && { color: theme.text }
+                                    ]}>
+                                        PRs Only
+                                    </Text>
+                                    <Switch
+                                        value={showOnlyPRs}
+                                        onValueChange={setShowOnlyPRs}
+                                        trackColor={{ false: theme.border, true: theme.primary }}
+                                        thumbColor={showOnlyPRs ? '#FFF' : theme.textSecondary}
+                                        ios_backgroundColor={theme.border}
+                                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                    />
                                 </View>
-                            </>
-                        )}
-
-                        {isCardioHeader && (
-                            <View style={styles.historyHeaderRow}>
-                                <Text style={styles.sectionTitle}>History</Text>
-                            </View>
-                        )}
+                            )}
+                        </View>
                     </View>
                 }
                 renderItem={({ item: [session, exercises] }) => (
@@ -556,15 +534,14 @@ const ExerciseHistory = (props) => {
                 )}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Feather name="activity" size={48} color={theme.textSecondary} style={{ opacity: 0.5 }} />
-                        <Text style={styles.emptyText}>No workout history yet</Text>
-                        <Text style={styles.emptySubtext}>Complete a workout to see your progress</Text>
+                        <View style={styles.emptyIconCircle}>
+                            <Feather name="activity" size={32} color={theme.textSecondary} />
+                        </View>
+                        <Text style={styles.emptyText}>No history yet</Text>
+                        <Text style={styles.emptySubtext}>Complete a workout to see your progress.</Text>
                     </View>
                 }
                 showsVerticalScrollIndicator={false}
-                nestedScrollEnabled={true}
-                bounces={true}
-                scrollEventThrottle={16}
             />
 
             <ActionSheet
@@ -581,8 +558,6 @@ const ExerciseHistory = (props) => {
                     <WorkoutSessionView
                         workoutDetails={selectedSessionData}
                         exercisesList={exercisesList}
-                    // Optional: onEdit={...} if we want to allow editing from here
-                    // Optional: onExerciseInfo={...} if we want recursion
                     />
                 )}
             </ActionSheet>
@@ -592,7 +567,7 @@ const ExerciseHistory = (props) => {
 
 const getStyles = (theme) => StyleSheet.create({
     container: {
-        height: '100%',
+        flex: 1,
         backgroundColor: theme.background,
     },
     loadingContainer: {
@@ -605,133 +580,146 @@ const getStyles = (theme) => StyleSheet.create({
         flex: 1,
     },
     listContentContainer: {
-        paddingBottom: 120,
+        paddingBottom: 100,
     },
-    headerGradient: {
-        paddingTop: 20,
-        paddingBottom: 24,
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.border,
+    headerWrapper: {
+        paddingTop: 10,
     },
     titleRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 20,
-        marginBottom: 24,
+        marginBottom: 20,
         position: 'relative',
         minHeight: 44,
+        paddingHorizontal: 12,
     },
     exerciseTitle: {
         fontSize: 24,
         fontFamily: FONTS.bold,
         color: theme.text,
         textAlign: 'center',
-        paddingHorizontal: 40,
+        paddingHorizontal: 50,
     },
     editButton: {
         position: 'absolute',
-        right: 12,
-        padding: 8,
+        right: 0,
+        padding: 10,
         backgroundColor: theme.surface,
-        borderRadius: 8,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.border,
-        zIndex: 1,
+        marginRight: 12,
+        ...SHADOWS.small,
     },
     statsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-evenly',
-        alignItems: 'center',
-        paddingHorizontal: 16,
+        justifyContent: 'space-between',
+        marginBottom: 24,
+        gap: 12,
+        paddingHorizontal: 12,
     },
-    statItem: {
+    statCard: {
+        flex: 1,
+        backgroundColor: theme.surface,
+        borderRadius: 16,
+        paddingVertical: 16,
+        paddingHorizontal: 8,
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: theme.border,
+        ...SHADOWS.small,
     },
-    statLabel: {
-        fontSize: 12,
-        fontFamily: FONTS.medium,
-        color: theme.textSecondary,
-        marginBottom: 4,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
+    statIcon: {
+        marginBottom: 8,
+        opacity: 0.8,
     },
     statValue: {
-        fontSize: 20,
-        fontFamily: FONTS.bold,
-        color: theme.primary,
-    },
-    statDivider: {
-        width: 1,
-        height: 30,
-        backgroundColor: theme.border,
-    },
-    bodyContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: '100%',
-        height: 240,
-        marginTop: 16,
-        marginBottom: 20,
-        gap: 12,
-    },
-    sectionTitle: {
         fontSize: 18,
         fontFamily: FONTS.bold,
         color: theme.text,
-        marginLeft: 20,
+        marginBottom: 2,
+    },
+    statLabel: {
+        fontSize: 11,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    bodyWrapper: {
+        flexDirection: 'row',
+        justifyContent: 'space-evenly',
+        alignItems: 'center',
+        backgroundColor: theme.surface,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: theme.border,
+        marginBottom: 24,
+        marginHorizontal: 12,
+        ...SHADOWS.small,
+    },
+    bodyDivider: {
+        width: 1,
+        height: '80%',
+        backgroundColor: theme.border,
+        opacity: 0.5,
     },
     historyHeaderRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 16,
+        marginTop: 10,
         marginBottom: 16,
-        paddingHorizontal: 20,
+        paddingHorizontal: 12,
+    },
+    sectionTitle: {
+        fontSize: 20,
+        fontFamily: FONTS.bold,
+        color: theme.text,
     },
     prFilterContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
         backgroundColor: theme.surface,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
+        paddingLeft: 12,
+        paddingRight: 4,
+        paddingVertical: 4,
+        borderRadius: 20,
         borderWidth: 1,
         borderColor: theme.border,
     },
     prFilterText: {
-        fontSize: 12,
-        fontFamily: FONTS.medium,
+        fontSize: 13,
+        fontFamily: FONTS.semiBold,
         color: theme.textSecondary,
+        marginRight: 6,
     },
     sessionCard: {
-        marginBottom: 12,
+        marginBottom: 16,
         marginHorizontal: 12,
         backgroundColor: theme.surface,
-        borderRadius: 12,
+        borderRadius: 16,
         borderWidth: 1,
         borderColor: theme.border,
         overflow: 'hidden',
+        ...SHADOWS.small,
     },
     sessionHeader: {
         paddingHorizontal: 12,
-        paddingVertical: 10,
-        backgroundColor: 'rgba(255,255,255,0.03)',
+        paddingVertical: 14,
+        backgroundColor: 'rgba(255,255,255,0.02)',
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.05)',
+        borderBottomColor: theme.border,
     },
     sessionTitle: {
-        fontSize: 15,
+        fontSize: 16,
         fontFamily: FONTS.bold,
         color: theme.text,
-        marginBottom: 2,
+        marginBottom: 4,
     },
     sessionDateContainer: {
         flexDirection: 'row',
@@ -739,49 +727,56 @@ const getStyles = (theme) => StyleSheet.create({
         gap: 6,
     },
     sessionDate: {
-        fontSize: 11,
+        fontSize: 12,
         fontFamily: FONTS.medium,
         color: theme.textSecondary,
     },
     dot: {
-        width: 2,
-        height: 2,
-        borderRadius: 1,
+        width: 3,
+        height: 3,
+        borderRadius: 1.5,
         backgroundColor: theme.textSecondary,
+        opacity: 0.5,
+    },
+    iconButton: {
+        padding: 6,
         opacity: 0.5,
     },
     noteContainer: {
         flexDirection: 'row',
         paddingHorizontal: 12,
-        paddingVertical: 6,
-        gap: 6,
+        paddingVertical: 10,
+        gap: 8,
         backgroundColor: 'rgba(255, 253, 203, 0.05)',
+        borderBottomWidth: 1,
+        borderBottomColor: theme.border,
     },
     noteText: {
         flex: 1,
-        fontSize: 14,
+        fontSize: 13,
         color: theme.textSecondary,
         fontFamily: FONTS.regular,
         fontStyle: 'italic',
-        lineHeight: 16,
+        lineHeight: 18,
     },
     setsContainer: {
-        paddingVertical: 2,
+        paddingVertical: 4,
+        paddingBottom: 8,
     },
     setsHeaderRow: {
         flexDirection: 'row',
-        paddingVertical: 6,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.05)',
+        paddingVertical: 8,
         paddingHorizontal: 12,
+        marginBottom: 4,
     },
     colHeader: {
-        fontSize: 9,
-        fontFamily: FONTS.medium,
+        fontSize: 10,
+        fontFamily: FONTS.bold,
         color: theme.textSecondary,
         textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
-    colHeaderSet: { width: 32 },
+    colHeaderSet: { width: 34 },
     colHeaderLift: {
         flex: 2,
         textAlign: 'left',
@@ -789,7 +784,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     colHeader1RM: { flex: 1, textAlign: 'center' },
     setRowContainer: {
-        paddingVertical: 3,
+        paddingVertical: 6,
         paddingHorizontal: 12,
     },
     setRow: {
@@ -798,12 +793,12 @@ const getStyles = (theme) => StyleSheet.create({
         minHeight: 28,
     },
     setRowOdd: {
-        backgroundColor: 'rgba(255,255,255,0.01)',
+        backgroundColor: 'rgba(255,255,255,0.015)',
     },
     badgeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 4,
+        marginTop: 6,
         flexWrap: 'wrap',
     },
     setLift: {
@@ -813,39 +808,48 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 15,
         fontFamily: FONTS.bold,
         color: theme.text,
-        letterSpacing: 0.3,
+        letterSpacing: 0.2,
     },
     setLiftWarmup: {
         color: theme.textSecondary,
-        opacity: 0.75,
     },
     setLiftDrop: {
         color: theme.info,
-        opacity: 0.8,
     },
     setOneRM: {
         flex: 1,
         textAlign: 'center',
-        fontSize: 12,
-        fontFamily: FONTS.medium,
+        fontSize: 13,
+        fontFamily: FONTS.semiBold,
         color: theme.textSecondary,
     },
     emptyContainer: {
         padding: 40,
         alignItems: 'center',
-        marginTop: 40,
+        marginTop: 20,
+    },
+    emptyIconCircle: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: theme.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: theme.border,
     },
     emptyText: {
         color: theme.text,
         fontFamily: FONTS.bold,
         fontSize: 18,
-        marginTop: 16,
         marginBottom: 8,
     },
     emptySubtext: {
         color: theme.textSecondary,
         fontFamily: FONTS.regular,
         fontSize: 14,
+        textAlign: 'center',
     },
 });
 

@@ -15,7 +15,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { useRouter } from 'expo-router';
-
+import { primeGraphData, computeGraphPoints } from '../../components/PRGraphCard';
+import { fetchExerciseProgress } from '../../components/db';
 const Profile = () => {
     const insets = useSafeAreaInsets();
     const { theme } = useTheme();
@@ -65,7 +66,7 @@ const Profile = () => {
         router.push('/exercise/new');
     };
 
-
+    const [loadingExerciseID, setLoadingExerciseID] = useState(null);
 
     const handleCloseCreateExerciseSheet = () => {
         createExerciseActionSheetRef.current?.hide();
@@ -88,10 +89,19 @@ const Profile = () => {
             return a.name.localeCompare(b.name); // alphabetical tiebreak
         });
 
-    const showExerciseInfo = (item) => {
-        router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
+    const showExerciseInfo = async (item) => {
+        if (loadingExerciseID) return;
+        setLoadingExerciseID(item.exerciseID);
+        try {
+            const history = await fetchExerciseProgress(item.exerciseID);
+            primeGraphData(computeGraphPoints(history));
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingExerciseID(null);
+            router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
+        }
     };
-
 
 
     const renderItem = ({ item }) => {

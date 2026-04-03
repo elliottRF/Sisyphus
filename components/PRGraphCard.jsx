@@ -16,10 +16,41 @@ const CARD_PADDING = 40;
 const CARD_MARGIN = 32;
 const Y_AXIS_WIDTH = 40;
 
-// 🐛 Debug flag: set to true to enable linear interpolation between data points
-// (fills in daily intermediate values for a smoother gradient), false to use
-// the original bucket-aggregation approach.
 const DEBUG_INTERPOLATE = true;
+
+// --- Cache ---
+let _cachedData = null;
+export const primeGraphData = (data) => { _cachedData = data; };
+
+export const computeGraphPoints = (history) => {
+    if (!history?.length) return [];
+
+    const dailyData = {};
+    history.forEach(entry => {
+        const date = new Date(entry.time);
+        if (isNaN(date.getTime())) return;
+        if (entry.setType === 'W') return;
+
+        const reps = Number(entry.reps) || 0;
+        if (reps <= 0) return;
+
+        const dateKey = date.toISOString().split('T')[0];
+        const oneRM = Number(entry.oneRM) || 0;
+        const weight = Number(entry.weight) || 0;
+
+        if (!dailyData[dateKey]) {
+            dailyData[dateKey] = { date: entry.time, max1RM: 0, maxWeight: 0 };
+        }
+        if (oneRM > dailyData[dateKey].max1RM) dailyData[dateKey].max1RM = Math.round(oneRM);
+        if (weight > dailyData[dateKey].maxWeight) dailyData[dateKey].maxWeight = Math.round(weight);
+    });
+
+    return Object.values(dailyData)
+        .filter(d => d.max1RM > 0 || d.maxWeight > 0)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+};
+
+// -------------
 
 const CustomSelectionDot = ({ isActive, color }) => (
     <View style={{
@@ -63,7 +94,6 @@ const TimeRangeSelector = ({ selectedRange, onSelect, theme, styles }) => {
     );
 };
 
-// Reusable Gradient or Solid View Component
 const GradientOrView = ({ colors, style, theme, children }) => {
     if (theme?.type === 'dynamic') {
         return (
@@ -73,10 +103,9 @@ const GradientOrView = ({ colors, style, theme, children }) => {
         );
     }
 
-    // Ensure colors is an array of strings and never contains null/undefined
     const safeColors = Array.isArray(colors) && colors.every(c => !!c)
         ? colors
-        : ['#transparent', '#transparent']; // Or a theme default
+        : ['#transparent', '#transparent'];
 
     return (
         <LinearGradient colors={safeColors} style={style}>
@@ -85,26 +114,25 @@ const GradientOrView = ({ colors, style, theme, children }) => {
     );
 };
 
-const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) => {
+const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, onReady }) => {
     const { theme } = useTheme();
     const styles = getStyles(theme, isCompact);
 
-    // Dynamic dimensions based on compact mode
     const graphWidth = isCompact
-        ? SCREEN_WIDTH - 24 - 16 - Y_AXIS_WIDTH // Smaller margins/padding
+        ? SCREEN_WIDTH - 24 - 16 - Y_AXIS_WIDTH
         : SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH;
     const graphHeight = isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT;
+
     const [allData, setAllData] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [graphMode, setGraphMode] = useState('history'); // 'history' | 'truePR' | 'maxWeight'
+    const [graphMode, setGraphMode] = useState('history');
     const [timeRange, setTimeRange] = useState('ALL');
     const [selectedPoint, setSelectedPoint] = useState(null);
 
     const isTouching = useRef(false);
 
-    // Subscribe to targeted refresh events
     useEffect(() => {
-        loadData(); // Initial load on mount/ID change
+        loadData();
         const handler = () => loadData();
         on(AppEvents.REFRESH_HOME, handler);
         on(AppEvents.WORKOUT_COMPLETED, handler);
@@ -129,55 +157,22 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
     const loadData = async () => {
         try {
             setLoading(true);
-            const history = await fetchExerciseProgress(exerciseID);
 
-            if (!history?.length) {
-                setAllData([]);
+            // Use primed cache if available (set by Profile before navigating)
+            if (_cachedData) {
+                setAllData(_cachedData);
+                _cachedData = null;
                 return;
             }
 
-            const dailyData = {};
-            history.forEach(entry => {
-                const date = new Date(entry.time);
-                if (isNaN(date.getTime())) return;
-
-                // Skip warm-up sets
-                if (entry.setType === 'W') return;
-
-                const reps = Number(entry.reps) || 0;
-                if (reps <= 0) return;
-
-                const dateKey = date.toISOString().split('T')[0];
-                const oneRM = Number(entry.oneRM) || 0;
-                const weight = Number(entry.weight) || 0;
-
-                if (!dailyData[dateKey]) {
-                    dailyData[dateKey] = {
-                        date: entry.time,
-                        max1RM: 0,
-                        maxWeight: 0
-                    };
-                }
-
-                if (oneRM > dailyData[dateKey].max1RM) {
-                    dailyData[dateKey].max1RM = Math.round(oneRM);
-                }
-
-                if (weight > dailyData[dateKey].maxWeight) {
-                    dailyData[dateKey].maxWeight = Math.round(weight);
-                }
-            });
-
-            const sortedData = Object.values(dailyData)
-                .filter(d => d.max1RM > 0 || d.maxWeight > 0)
-                .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-            setAllData(sortedData);
+            const history = await fetchExerciseProgress(exerciseID);
+            setAllData(computeGraphPoints(history));
         } catch (error) {
             console.error("Error loading graph data:", error);
             setAllData([]);
         } finally {
             setLoading(false);
+            onReady?.();
         }
     };
 
@@ -219,10 +214,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
         if (graphMode === 'truePR') {
             let maxVal = 0;
             processed = tempProcessed.filter(p => {
-                if (p.value > maxVal) {
-                    maxVal = p.value;
-                    return true;
-                }
+                if (p.value > maxVal) { maxVal = p.value; return true; }
                 return false;
             });
         } else if (graphMode === 'maxWeight') {
@@ -245,22 +237,14 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
         if (processed.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
 
         if (DEBUG_INTERPOLATE && processed.length >= 2) {
-            // --- Linear interpolation (same approach as BodyweightGraphCard) ---
-            // Fill in a point for every calendar day between the first and last
-            // actual data point, linearly interpolating the value in between.
             const interpolated = [];
             const oneDay = 24 * 60 * 60 * 1000;
             const start = processed[0].date;
             const lastActual = processed[processed.length - 1];
 
-            // Extend the range to 'now' if the user requested it
-            const endLimit = now.getTime();
-
             for (let d = start.getTime(); d <= lastActual.date.getTime(); d += oneDay) {
                 const currentDate = new Date(d);
-                const exactMatch = processed.find(
-                    p => Math.abs(p.date.getTime() - d) < oneDay / 2
-                );
+                const exactMatch = processed.find(p => Math.abs(p.date.getTime() - d) < oneDay / 2);
 
                 if (exactMatch) {
                     interpolated.push({ date: currentDate, value: exactMatch.value });
@@ -269,9 +253,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                     if (nextIndex > 0) {
                         const prevPt = processed[nextIndex - 1];
                         const nextPt = processed[nextIndex];
-                        const ratio =
-                            (d - prevPt.date.getTime()) /
-                            (nextPt.date.getTime() - prevPt.date.getTime());
+                        const ratio = (d - prevPt.date.getTime()) / (nextPt.date.getTime() - prevPt.date.getTime());
                         interpolated.push({
                             date: currentDate,
                             value: prevPt.value + (nextPt.value - prevPt.value) * ratio,
@@ -280,17 +262,12 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                 }
             }
 
-            // Carry on the last value until current date
             if (now.getTime() > lastActual.date.getTime()) {
-                const oneDay = 24 * 60 * 60 * 1000;
-                // Start from the day after the last actual workout
                 for (let d = lastActual.date.getTime() + oneDay; d < now.getTime(); d += oneDay) {
                     interpolated.push({ date: new Date(d), value: lastActual.value });
                 }
-                // Add the final point for exactly 'now'
                 interpolated.push({ date: now, value: lastActual.value });
             } else {
-                // Ensure the final actual data point is always present at the end
                 const lastInterp = interpolated[interpolated.length - 1];
                 if (!lastInterp || Math.abs(lastInterp.date.getTime() - lastActual.date.getTime()) > 1000) {
                     interpolated.push(lastActual);
@@ -300,7 +277,6 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
             const maxPts = timeRange === '3M' ? Infinity : 200;
             processed = downsample(interpolated, maxPts);
         } else if (!DEBUG_INTERPOLATE && processed.length >= 5) {
-            // --- Original bucket-aggregation path (used when interpolation is off) ---
             const firstDate = processed[0].date;
             const lastActualDate = processed[processed.length - 1].date;
             const lastDate = now > lastActualDate ? now : lastActualDate;
@@ -345,16 +321,12 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
 
         let yMin, yMax;
 
-        // "Factor of 5" snapping logic for non-minimal ranges
         if (rawRange > 6) {
-            // Give 20% padding initially as per PR graph defaults
             const padding = rawRange * 0.2;
             yMin = Math.floor((minVal - padding) / 5) * 5;
             yMax = Math.ceil((maxVal + padding) / 5) * 5;
 
-            // Ensure the range (yMax - yMin) is a multiple of 10 so the mid label is also a factor of 5
             while ((yMax - yMin) % 10 !== 0) {
-                // Expand the side that is closer to the raw values to keep it balanced
                 if (Math.abs(yMax - maxVal) < Math.abs(minVal - yMin)) {
                     yMax += 5;
                 } else {
@@ -362,14 +334,12 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                 }
             }
         } else {
-            // Minimal range logic: basic padding, no snapping to 5s
             const rangeVal = rawRange || 10;
             const padding = Math.max(1, rangeVal * 0.25);
             yMin = minVal - padding;
             yMax = maxVal + padding;
         }
 
-        // Apply floor of 0 for weights
         yMin = Math.max(0, yMin);
 
         return {
@@ -399,10 +369,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
 
         let pastPoint = null;
         for (let i = points.length - 1; i >= 0; i--) {
-            if (points[i].date <= pastDate) {
-                pastPoint = points[i];
-                break;
-            }
+            if (points[i].date <= pastDate) { pastPoint = points[i]; break; }
         }
 
         if (!pastPoint) {
@@ -470,27 +437,17 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
         setSelectedPoint(prev => {
             if (!prev && !point) return null;
             if (!prev || !point) return point;
-            // Only update if the date or value actually changed to prevent render loops
-            if (prev.date.getTime() === point.date.getTime() && prev.value === point.value) {
-                return prev;
-            }
+            if (prev.date.getTime() === point.date.getTime() && prev.value === point.value) return prev;
             return point;
         });
     }, []);
 
-    const onGestureStart = useCallback(() => {
-        isTouching.current = true;
-    }, []);
-
-    const onGestureEnd = useCallback(() => {
-        isTouching.current = false;
-        setSelectedPoint(null);
-    }, []);
+    const onGestureStart = useCallback(() => { isTouching.current = true; }, []);
+    const onGestureEnd = useCallback(() => { isTouching.current = false; setSelectedPoint(null); }, []);
 
     const { graphColor, maxWeightColor, gradientFill, maxWeightGradient } = useMemo(() => {
         const primary = theme.type === 'dynamic' ? '#2DC4B6' : theme.primary;
         const secondary = theme.type === 'dynamic' ? '#A29BFE' : theme.secondary;
-
         return {
             graphColor: primary,
             maxWeightColor: secondary,
@@ -533,7 +490,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                                         trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.15)' :
                                             trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.15)' :
                                                 'rgba(100, 100, 100, 0.1)'
-                                }]} >
+                                }]}>
                                     <Text style={[styles.trendArrow, {
                                         color: trendData.direction === 'up' ? '#22c55e' :
                                             trendData.direction === 'down' ? '#ef4444' :
@@ -682,7 +639,6 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                             </View>
 
                             <View style={styles.graphCol}>
-                                {/* Horizontal grid lines at top, mid, bottom — matching y-axis labels */}
                                 <View pointerEvents="none" style={[StyleSheet.absoluteFill, { height: graphHeight }]}>
                                     {[0, 0.5, 1].map(fraction => (
                                         <View
@@ -703,9 +659,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false }) 
                                     points={points}
                                     animated={true}
                                     color={graphMode === 'maxWeight' ? maxWeightColor : graphColor}
-                                    gradientFillColors={
-                                        graphMode === 'maxWeight' ? maxWeightGradient : gradientFill
-                                    }
+                                    gradientFillColors={graphMode === 'maxWeight' ? maxWeightGradient : gradientFill}
                                     enablePanGesture={true}
                                     enableIndicator={true}
                                     SelectionDot={CustomSelectionDot}
