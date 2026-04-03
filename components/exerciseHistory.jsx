@@ -11,6 +11,7 @@ import PRGraphCard from "./PRGraphCard";
 import WorkoutSessionView from './WorkoutSessionView';
 import { useTheme } from '../context/ThemeContext';
 import ActionSheet from "react-native-actions-sheet";
+import { useCallback } from 'react';
 
 const { width } = Dimensions.get('window');
 
@@ -333,6 +334,17 @@ const ExerciseHistory = (props) => {
             .then(data => setExercises(data))
             .catch(err => console.error(err));
     }, []);
+
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchExercises()
+                .then(data => setExercises(data))
+                .catch(err => console.error(err));
+        }, [])
+    );
+
+
 
     useFocusEffect(
         React.useCallback(() => {
