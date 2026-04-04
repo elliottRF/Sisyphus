@@ -9,11 +9,12 @@ class ElliottrAndroidTimerModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("AndroidTimerModule")
 
-    Function("startTimer") { seconds: Int ->
+    Function("startTimer") { seconds: Int, muted: Boolean ->
       val ctx = appContext.reactContext ?: return@Function null
       val intent = Intent(ctx, TimerService::class.java).apply {
         action = "start"
         putExtra("seconds", seconds)
+        putExtra("muted", muted)
       }
       ctx.startForegroundService(intent)
       null

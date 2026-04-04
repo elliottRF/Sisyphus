@@ -213,7 +213,12 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                     >
                         <MaterialIcons name="drag-indicator" size={20} color={theme.textSecondary} />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={onOpenDetails} style={{ flex: 1 }}>
+                    <TouchableOpacity 
+                        onPress={onOpenDetails} 
+                        onLongPress={drag}
+                        delayLongPress={100}
+                        style={{ flex: 1 }}
+                    >
                         <Text style={styles.exerciseName} numberOfLines={1}>{exerciseName}</Text>
                     </TouchableOpacity>
                 </View>

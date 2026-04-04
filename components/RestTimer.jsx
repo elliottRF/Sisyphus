@@ -18,6 +18,7 @@ const RestTimer = forwardRef((props, ref) => {
     const targetEndTimeRef = useRef(null); // The absolute timestamp when the timer should end
     const timerRunning = useRef(false); // Track if we consider the timer active
     const frameIdRef = useRef(null); // RAF ID for smooth UI updates
+    const [isMuted, setIsMuted] = useState(false);
 
 
     // Animation values
@@ -34,6 +35,8 @@ const RestTimer = forwardRef((props, ref) => {
         try {
             const saved = await AsyncStorage.getItem('settings_default_timer');
             if (saved) setDefaultDuration(parseInt(saved, 10));
+            const savedMuted = await AsyncStorage.getItem('settings_timer_muted');
+            if (savedMuted !== null) setIsMuted(savedMuted === 'true');
         } catch (e) {
             console.error("Failed to load timer settings", e);
         }
@@ -80,6 +83,8 @@ const RestTimer = forwardRef((props, ref) => {
 
     // Play "Ding" sound helper
     const playDing = async () => {
+        if (isMuted) return;
+
         try {
             const { sound } = await Audio.Sound.createAsync(
                 require('../assets/notifications/dingnoti.wav'),
@@ -116,7 +121,7 @@ const RestTimer = forwardRef((props, ref) => {
 
     const internalStop = (playAudio = false) => {
         // Clear Native Persistence (Hack: start with 0 to overwrite any lingering time)
-        Timer.startTimer(0);
+        Timer.startTimer(0, isMuted);
         Timer.stopTimer();
 
         targetEndTimeRef.current = null;
@@ -147,13 +152,13 @@ const RestTimer = forwardRef((props, ref) => {
         console.log("startTimer called (Tap)");
 
         if (timerRunning.current) {
-            // STOP (Manual Tap -> Play Sound)
-            internalStop(true);
+            // STOP (Manual Tap -> NO SOUND)
+            internalStop(false);
         } else {
             // START
             targetEndTimeRef.current = Date.now() + (defaultDuration * 1000);
             timerRunning.current = true;
-            Timer.startTimer(defaultDuration);
+            Timer.startTimer(defaultDuration, isMuted);
             updateUI(); // Start loop
 
             scale.value = withSequence(
@@ -181,7 +186,7 @@ const RestTimer = forwardRef((props, ref) => {
         // Optimistically update immediately
         setTimeLeft(newDuration);
 
-        Timer.startTimer(newDuration); // Sync native
+        Timer.startTimer(newDuration, isMuted); // Sync native
 
         // Ensure loop is running
         if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
@@ -200,11 +205,11 @@ const RestTimer = forwardRef((props, ref) => {
         const newDuration = Math.max(0, currentRemaining - 30);
 
         if (newDuration === 0) {
-            internalStop(true); // Manual Swipe to 0 -> Play Sound
+            internalStop(false); // Manual Swipe to 0 -> NO SOUND
         } else {
             targetEndTimeRef.current = Date.now() + (newDuration * 1000);
             setTimeLeft(newDuration);
-            Timer.startTimer(newDuration);
+            Timer.startTimer(newDuration, isMuted);
             // Ensure loop is running
             if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
             updateUI();

@@ -17,9 +17,17 @@ import { AppEvents, emit } from '../utils/events';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const AnimatedSwitch = ({ value, onValueChange, activeColor, inactiveColor, thumbColor }) => {
+    // 1. Initialize the value directly so it starts at the right spot
     const animation = useRef(new Animated.Value(value ? 1 : 0)).current;
+    const isFirstRender = useRef(true);
 
     useEffect(() => {
+        // 2. Skip the animation on the first render
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+
         Animated.spring(animation, {
             toValue: value ? 1 : 0,
             useNativeDriver: false,
@@ -36,7 +44,9 @@ const AnimatedSwitch = ({ value, onValueChange, activeColor, inactiveColor, thum
     return (
         <TouchableOpacity activeOpacity={0.8} onPress={() => onValueChange(!value)}>
             <View style={{
-                width: 50, height: 28, borderRadius: 14, backgroundColor: value ? activeColor : inactiveColor, justifyContent: 'center'
+                width: 50, height: 28, borderRadius: 14,
+                backgroundColor: value ? activeColor : inactiveColor,
+                justifyContent: 'center'
             }}>
                 <Animated.View style={{
                     width: 22, height: 22, borderRadius: 11, backgroundColor: thumbColor,
@@ -67,7 +77,11 @@ const Settings = () => {
     const [importProgress, setImportProgress] = useState('');
     const [defaultTimer, setDefaultTimer] = useState('180');
     const [isAutoTimerEnabled, setIsAutoTimerEnabled] = useState(true);
+    const [isTimerMuted, setIsTimerMuted] = useState(false);
     const scrollRef = useRef(null);
+
+    const [isReady, setIsReady] = useState(false); // New state
+
 
     useFocusEffect(
         React.useCallback(() => {
@@ -103,10 +117,18 @@ const Settings = () => {
         try {
             const saved = await AsyncStorage.getItem('settings_default_timer');
             if (saved) setDefaultTimer(saved);
+
             const savedAuto = await AsyncStorage.getItem('settings_auto_timer');
             if (savedAuto !== null) setIsAutoTimerEnabled(savedAuto === 'true');
+
+            const savedMuted = await AsyncStorage.getItem('settings_timer_muted');
+            if (savedMuted !== null) setIsTimerMuted(savedMuted === 'true');
+
+            // Settings are now loaded and accurate
+            setIsReady(true);
         } catch (e) {
             console.error("Failed to load settings", e);
+            setIsReady(true); // Set to true even on error so the UI shows up
         }
     };
 
@@ -308,25 +330,48 @@ const Settings = () => {
 
                 {/* Timer Settings */}
                 <View style={styles.card}>
-                    <View style={[styles.cardHeader, { justifyContent: 'space-between' }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={styles.timerHeader}>
+                        <View style={styles.timerTitleRow}>
                             <Feather name="clock" size={20} color={theme.primary} />
                             <Text style={styles.cardTitle}>Rest Timer</Text>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Text style={{ color: theme.textSecondary, fontFamily: FONTS.medium, fontSize: 13 }}>Auto-Start</Text>
-                            <AnimatedSwitch
-                                value={isAutoTimerEnabled}
-                                onValueChange={async (value) => {
-                                    setIsAutoTimerEnabled(value);
-                                    await AsyncStorage.setItem('settings_auto_timer', value.toString());
-                                }}
-                                activeColor={theme.primary}
-                                inactiveColor={theme.type === 'dynamic' ? '#555555' : theme.overlayInputFocused}
-                                thumbColor={theme.surface}
-                            />
+
+                        <View style={styles.switchRow}>
+                            {isReady ? (
+                                <>
+                                    <View style={styles.switchItem}>
+                                        <Text style={styles.switchLabel}>Auto-Start</Text>
+                                        <AnimatedSwitch
+                                            value={isAutoTimerEnabled}
+                                            onValueChange={async (value) => {
+                                                setIsAutoTimerEnabled(value);
+                                                await AsyncStorage.setItem('settings_auto_timer', value.toString());
+                                            }}
+                                            activeColor={theme.primary}
+                                            inactiveColor={theme.type === 'dynamic' ? '#555555' : theme.overlayInputFocused}
+                                            thumbColor={theme.surface}
+                                        />
+                                    </View>
+                                    <View style={styles.switchItem}>
+                                        <Text style={styles.switchLabel}>Mute Audio</Text>
+                                        <AnimatedSwitch
+                                            value={isTimerMuted}
+                                            onValueChange={async (value) => {
+                                                setIsTimerMuted(value);
+                                                await AsyncStorage.setItem('settings_timer_muted', value.toString());
+                                            }}
+                                            activeColor={theme.primary}
+                                            inactiveColor={theme.type === 'dynamic' ? '#555555' : theme.overlayInputFocused}
+                                            thumbColor={theme.surface}
+                                        />
+                                    </View>
+                                </>
+                            ) : (
+                                <ActivityIndicator size="small" color={theme.primary} />
+                            )}
                         </View>
                     </View>
+
                     <Text style={styles.cardDescription}>
                         Default duration for the rest timer in between sets.
                     </Text>
@@ -751,6 +796,32 @@ const getStyles = (theme) => StyleSheet.create({
     },
     infoButton: {
         padding: 4,
+    },
+    timerHeader: {
+        marginBottom: 16,
+        gap: 12,
+    },
+    timerTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    switchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        gap: 20, // Space between the two switch groups
+        marginTop: 4,
+    },
+    switchItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    switchLabel: {
+        color: theme.textSecondary,
+        fontFamily: FONTS.medium,
+        fontSize: 13,
     },
 });
 

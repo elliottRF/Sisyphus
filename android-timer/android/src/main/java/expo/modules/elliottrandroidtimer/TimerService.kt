@@ -19,6 +19,7 @@ class TimerService : Service() {
 
   private var timer: Timer? = null
   private var remaining = 0
+  private var isMuted = false
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -37,6 +38,7 @@ class TimerService : Service() {
     when (intent?.action) {
       "start" -> {
         remaining = intent.getIntExtra("seconds", 0)
+        isMuted = intent.getBooleanExtra("muted", false)
         getSharedPreferences("timer", MODE_PRIVATE)
           .edit()
           .putInt("remaining", remaining)
@@ -89,6 +91,7 @@ class TimerService : Service() {
   }
 
   private fun playAlert() {
+    if (isMuted) return
     try {
       val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

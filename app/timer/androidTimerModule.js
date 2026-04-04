@@ -6,7 +6,7 @@ function AndroidTimerModule() {
     return null;
 }
 
-AndroidTimerModule.startTimer = (s) => Native.startTimer(s);
+AndroidTimerModule.startTimer = (s, m) => Native.startTimer(s, m);
 AndroidTimerModule.stopTimer = () => Native.stopTimer();
 AndroidTimerModule.getRemaining = () => Native.getRemaining();
 
