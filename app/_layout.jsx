@@ -1,4 +1,5 @@
 import { View, Text, Platform } from 'react-native'
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -45,11 +46,13 @@ const _layout = () => {
     }
 
     return (
-        <ThemeProvider>
-            <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
-                <ThemeConsumer />
-            </GestureHandlerRootView>
-        </ThemeProvider>
+        <SafeAreaProvider>
+            <ThemeProvider>
+                <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+                    <ThemeConsumer />
+                </GestureHandlerRootView>
+            </ThemeProvider>
+        </SafeAreaProvider>
     )
 }
 

@@ -571,20 +571,20 @@ const getStyles = (theme) => StyleSheet.create({
         gap: 12
     },
     refreshButton: {
-        padding: 8,
+        padding: 10,
         backgroundColor: theme.surface,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.border,
-        ...SHADOWS.small
+        ...SHADOWS.small,
     },
     settingsButton: {
-        padding: 8,
+        padding: 10,
         backgroundColor: theme.surface,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.border,
-        ...SHADOWS.small
+        ...SHADOWS.small,
     },
     greeting: {
         fontSize: 28,

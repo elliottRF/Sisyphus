@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React from 'react'
 import { TouchableOpacity } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -10,6 +11,7 @@ import { useTheme } from '../context/ThemeContext';
 
 const TabBar = ({ state, descriptors, navigation }) => {
     const { theme, workoutInProgress } = useTheme();
+    const insets = useSafeAreaInsets();
     const styles = getStyles(theme);
 
     const focusedRoute = state.routes[state.index];
@@ -28,7 +30,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
     }
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 0) + 0 }]}>
             <View style={styles.tabBar}>
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
@@ -111,7 +113,6 @@ const getStyles = (theme) => StyleSheet.create({
         left: 0,
         right: 0,
         alignItems: 'center',
-        paddingBottom: 20, // Safe area padding simulation
     },
     tabBar: {
         flexDirection: 'row',
