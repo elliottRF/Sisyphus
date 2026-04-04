@@ -63,15 +63,23 @@ const ThemeConsumer = () => {
     useEffect(() => {
         if (Platform.OS === 'android') {
             NavigationBar.setButtonStyleAsync(theme.statusBar);
+            // setBackgroundColorAsync only accepts strings, so we check for PlatformColor
+            if (typeof theme.background === 'string') {
+                NavigationBar.setBackgroundColorAsync(theme.background);
+            }
         }
     }, [theme]);
 
-    // We need to pass the theme down to the Stack or use it here for the background
     return (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
-            {/* backgroundColor locks status bar colour to the app theme, preventing the system's
-                own light/dark preference from painting a conflicting background behind the icons */}
-            <StatusBar style={theme.statusBar} backgroundColor={theme.background} />
+            {/* backgroundColor locks status bar colour to THEME, preventing system override.
+                translucent={true} is the modern "premium" standard for Android apps, 
+                letting the background color of this View flow behind the icons. */}
+            <StatusBar
+                style={theme.statusBar}
+                backgroundColor="transparent"
+                translucent={true}
+            />
             <Stack screenOptions={{ headerShown: false, animation: 'flip' }}>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="workout/[session]" options={{ headerShown: false }} />
