@@ -74,11 +74,38 @@ const NewExercise = (props) => {
         loadExercise();
     }, [props.exerciseID]);
 
+
+    const ALL_MUSCLE_SLUGS = [
+        'chest', 'quadriceps', 'triceps', 'biceps', 'hamstring',
+        'upper-back', 'lower-back', 'deltoids', 'gluteal', 'forearm',
+        'trapezius', 'calves', 'abs', 'adductors', 'obliques',
+        'tibialis', 'abductors', 'neck', 'hands', 'feet', 'knees', 'ankles'
+    ];
+
+
+
+
+
+
     // Derive formatted targets for the Body Highlighter automatically
     const formattedTargets = useMemo(() => {
-        const targets = targetSelected.map(t => ({ slug: t.toLowerCase(), intensity: 1 }));
-        const accessories = accessorySelected.map(a => ({ slug: a.toLowerCase(), intensity: 2 }));
-        return [...targets, ...accessories];
+        const workedSlugs = new Set();
+
+        const targets = targetSelected.map(t => {
+            const slug = t.toLowerCase();
+            workedSlugs.add(slug);
+            return { slug, intensity: 2 };
+        });
+        const accessories = accessorySelected.map(a => {
+            const slug = a.toLowerCase();
+            workedSlugs.add(slug);
+            return { slug, intensity: 3 };
+        });
+        const unworked = ALL_MUSCLE_SLUGS
+            .filter(slug => !workedSlugs.has(slug))
+            .map(slug => ({ slug, intensity: 1 }));
+
+        return [...targets, ...accessories, ...unworked];
     }, [targetSelected, accessorySelected]);
 
     const handleMuscleToggle = (muscle, type) => {
@@ -134,9 +161,8 @@ const NewExercise = (props) => {
 
     const safeBorder = theme.type === 'dynamic' ? '#4d4d4d' : theme.border;
     const safeBodyColors = theme.type === 'dynamic'
-        ? ['#2DC4B6', '#2DC4B680']
-        : [theme.primary, `${theme.primary}60`];
-
+        ? [theme.bodyFill, '#2DC4B6', '#2DC4B680']
+        : [theme.bodyFill, theme.primary, `${theme.primary}60`];
     // Helper component to render inline muscle chips
     const MuscleChips = ({ type, selectedData }) => (
         <View style={styles.chipContainer}>
