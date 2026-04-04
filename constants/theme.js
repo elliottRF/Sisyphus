@@ -1,4 +1,4 @@
-import { Dimensions, Platform, PlatformColor, Appearance } from "react-native";
+import { Dimensions, Platform, PlatformColor } from "react-native";
 const { height, width } = Dimensions.get("window");
 
 // Base Fonts (Shared across themes usually, but can be customized)
@@ -389,6 +389,5 @@ export const THEMES = {
 };
 
 // Deprecated: Backwards compatibility for now, will be removed
-// Default to LIGHT if system is light mode, otherwise DEFAULT (dark)
-export const COLORS = Appearance.getColorScheme() === 'light' ? LIGHT : DEFAULT;
+export const COLORS = DEFAULT;
 

@@ -13,6 +13,9 @@ import { FONTS, SHADOWS } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import PRGraphCard from "./PRGraphCard";
 import WorkoutSessionView from './WorkoutSessionView';
+import { Stack } from 'expo-router';
+
+
 
 const { width } = Dimensions.get('window');
 

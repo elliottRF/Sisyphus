@@ -184,16 +184,17 @@ const NewExercise = (props) => {
                             data={formattedTargets}
                             gender={gender}
                             side="front"
-                            scale={0.9}
+                            scale={0.75}
                             border={safeBorder}
                             colors={safeBodyColors}
                             defaultFill={theme.bodyFill}
                         />
+                        <View style={styles.bodyDivider} />
                         <Body
                             data={formattedTargets}
                             gender={gender}
                             side="back"
-                            scale={0.9}
+                            scale={0.75}
                             border={safeBorder}
                             colors={safeBodyColors}
                             defaultFill={theme.bodyFill}
@@ -275,8 +276,16 @@ const getStyles = (theme) => StyleSheet.create({
         paddingVertical: 0,
         backgroundColor: theme.surface,
         borderRadius: 20,
+        borderWidth: 1,
+        borderColor: theme.border,
         marginBottom: 24,
         ...SHADOWS.small,
+    },
+    bodyDivider: {
+        width: 1,
+        height: '80%',
+        backgroundColor: theme.border,
+        opacity: 0.5,
     },
     inputContainer: {
         flexDirection: 'row',

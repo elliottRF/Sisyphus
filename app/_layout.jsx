@@ -66,7 +66,9 @@ const ThemeConsumer = () => {
     // We need to pass the theme down to the Stack or use it here for the background
     return (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
-            <StatusBar style={theme.statusBar} />
+            {/* backgroundColor locks status bar colour to the app theme, preventing the system's
+                own light/dark preference from painting a conflicting background behind the icons */}
+            <StatusBar style={theme.statusBar} backgroundColor={theme.background} />
             <Stack screenOptions={{ headerShown: false, animation: 'flip' }}>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="workout/[session]" options={{ headerShown: false }} />
@@ -74,7 +76,7 @@ const ThemeConsumer = () => {
                 <Stack.Screen name="template/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
                 <Stack.Screen name="exercise/[id]" options={{ headerShown: false }} />
-                <Stack.Screen name="exercise/new" />
+                <Stack.Screen name="exercise/new" options={{ headerShown: false }} />
             </Stack>
         </View>
     );

@@ -61,6 +61,16 @@ const GradientOrView = ({ colors, style, theme, children }) => {
     );
 };
 
+
+const chunkArray = (arr, size) => {
+    const result = [];
+    for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
+    return result;
+};
+
+
+
+
 const Home = () => {
     const insets = useSafeAreaInsets();
     const { theme, gender, accessoryWeight } = useTheme();
@@ -342,6 +352,9 @@ const Home = () => {
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
     const cardWidth = (SCREEN_WIDTH - 32 - 12) / 2;
 
+    const BODY_NATURAL_WIDTH = 170;
+    const bodyScale = Math.min(0.95, ((cardBodyWidth || cardWidth) - 16) / BODY_NATURAL_WIDTH);
+
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <ScrollView
@@ -381,10 +394,10 @@ const Home = () => {
                             scrollEventThrottle={8}
                             style={styles.bodyScrollView}>
                             <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
-                                <Body data={bodyData} gender={gender} side="front" scale={0.95} border={safeBorder} colors={bodyColors} bg="transparent" width={cardBodyWidth || cardWidth} />
+                                <Body data={bodyData} gender={gender} side="front" scale={bodyScale} border={safeBorder} colors={bodyColors} bg="transparent" width={(cardBodyWidth || cardWidth) - 8} />
                             </View>
                             <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
-                                <Body data={bodyData} gender={gender} side="back" scale={0.95} border={safeBorder} colors={bodyColors} bg="transparent" width={cardBodyWidth || cardWidth} />
+                                <Body data={bodyData} gender={gender} side="back" scale={bodyScale} border={safeBorder} colors={bodyColors} bg="transparent" width={(cardBodyWidth || cardWidth) - 8} />
                             </View>
                         </ScrollView>
                     </View>
@@ -398,12 +411,12 @@ const Home = () => {
 
                         <ScrollView style={styles.readinessScroll} showsVerticalScrollIndicator={false}>
                             <View style={styles.muscleGrid}>
-                                {allMusclesSorted.map((item) => (
-                                    <MuscleReadinessBox
-                                        key={item.label}
-                                        muscle={item.label}
-                                        percent={item.percent}
-                                    />
+                                {chunkArray(allMusclesSorted, 2).map((row, rowIndex) => (
+                                    <View key={rowIndex} style={styles.muscleRow}>
+                                        {row.map((item) => (
+                                            <MuscleReadinessBox key={item.label} muscle={item.label} percent={item.percent} />
+                                        ))}
+                                    </View>
                                 ))}
                             </View>
                         </ScrollView>
@@ -630,13 +643,13 @@ const getStyles = (theme) => StyleSheet.create({
     },
     bodyScrollView: {
         flex: 1,
-        marginLeft: -0.5
     },
     bodyViewWrapper: {
         alignItems: 'center',
         justifyContent: 'center',
         marginVertical: -60,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        marginLeft: -1,
     },
     readinessStickyCard: {
         width: 0, // Placeholder for inline override
@@ -664,13 +677,15 @@ const getStyles = (theme) => StyleSheet.create({
         flex: 1
     },
     muscleGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
+        flexDirection: 'column',
         gap: 6,
-        justifyContent: 'space-between'
+    },
+    muscleRow: {
+        flexDirection: 'row',
+        gap: 6,
     },
     muscleBox: {
-        width: '48%',
+        flex: 1,                              // was width: '48%'
         backgroundColor: theme.overlayInputFocused,
         borderRadius: 12,
         padding: 10,
