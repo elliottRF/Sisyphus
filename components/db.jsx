@@ -236,6 +236,12 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
   let setsOverwritten = 0;
 
   try {
+    const originalRows = await database.getAllAsync(
+      `SELECT DISTINCT exerciseID FROM workoutHistory WHERE workoutSession = ?;`,
+      [sessionNumber]
+    );
+    const originalExerciseIDs = originalRows.map(r => r.exerciseID);
+
     await database.withTransactionAsync(async () => {
       const deleteResult = await database.runAsync(
         `DELETE FROM workoutHistory WHERE workoutSession = ?;`,
@@ -275,6 +281,13 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
     });
 
     console.log(`Workout session ${sessionNumber} overwritten successfully with ${setsOverwritten} sets.`);
+    
+    const newExerciseIDs = workoutEntries.map(e => e.exerciseID);
+    const affectedExerciseIDs = [...new Set([...originalExerciseIDs, ...newExerciseIDs])];
+    for (const exerciseID of affectedExerciseIDs) {
+      await recalculateExercisePRs(exerciseID);
+    }
+
     return setsOverwritten;
   } catch (error) {
     console.error('Error in overwriteWorkoutSession:', error);
@@ -298,10 +311,21 @@ export const calculateSessionVolume = async (sessionNumber) => {
 // Delete a specific workout session
 export const deleteWorkoutSession = async (sessionNumber) => {
   const database = await getDb();
+  
+  const originalRows = await database.getAllAsync(
+    `SELECT DISTINCT exerciseID FROM workoutHistory WHERE workoutSession = ?;`,
+    [sessionNumber]
+  );
+  const affectedExerciseIDs = originalRows.map(r => r.exerciseID);
+
   await database.runAsync(
     `DELETE FROM workoutHistory WHERE workoutSession = ?;`,
     [sessionNumber]
   );
+
+  for (const exerciseID of affectedExerciseIDs) {
+    await recalculateExercisePRs(exerciseID);
+  }
 };
 
 // Fetch exercise history for a specific exerciseID
@@ -400,6 +424,118 @@ export const getExercisePRs = async (exerciseID, excludeSessionNumber = null) =>
 export const calculateIfPR = async (exerciseID, oneRM) => {
   const { maxOneRM } = await getExercisePRs(exerciseID);
   return oneRM > maxOneRM ? 1 : 0;
+};
+
+// Recalculate PRs for all sets of a given exercise
+export const recalculateExercisePRs = async (exerciseID) => {
+  const database = await getDb();
+  
+  const sets = await database.getAllAsync(
+    `SELECT rowid, * FROM workoutHistory WHERE exerciseID = ? ORDER BY time ASC, workoutSession ASC, exerciseNum ASC, setNum ASC;`,
+    [exerciseID]
+  );
+  
+  const sessions = [];
+  let currentKey = null;
+  let currentSets = [];
+  
+  for (const set of sets) {
+    const key = `${set.workoutSession}-${set.exerciseNum}`;
+    if (key !== currentKey) {
+      if (currentSets.length > 0) sessions.push(currentSets);
+      currentKey = key;
+      currentSets = [];
+    }
+    currentSets.push(set);
+  }
+  if (currentSets.length > 0) sessions.push(currentSets);
+  
+  let historicalBestOneRM = 0;
+  let historicalBestVolume = 0;
+  let historicalBestWeight = 0;
+  let historicalBestRepsAtMaxWeight = 0;
+  
+  const updates = [];
+  
+  for (const sessionSets of sessions) {
+    let maxOneRMInWorkout = 0;
+    let maxVolumeInWorkout = 0;
+    let maxWeightInWorkout = 0;
+    let maxRepsAtMaxWeight = 0;
+    let bestSetIndexOneRM = -1;
+    let bestSetIndexVolume = -1;
+    let bestSetIndexWeight = -1;
+    
+    sessionSets.forEach((set, idx) => {
+      const oneRM = set.oneRM || 0;
+      const weight = set.weight || 0;
+      const reps = set.reps || 0;
+      const volume = weight * reps;
+      
+      if (oneRM > maxOneRMInWorkout) {
+        maxOneRMInWorkout = oneRM;
+        bestSetIndexOneRM = idx;
+      }
+      if (volume > maxVolumeInWorkout) {
+        maxVolumeInWorkout = volume;
+        bestSetIndexVolume = idx;
+      }
+      if (reps > 0) {
+        if (weight > maxWeightInWorkout) {
+          maxWeightInWorkout = weight;
+          maxRepsAtMaxWeight = reps;
+          bestSetIndexWeight = idx;
+        } else if (weight === maxWeightInWorkout && reps > maxRepsAtMaxWeight) {
+          maxRepsAtMaxWeight = reps;
+          bestSetIndexWeight = idx;
+        }
+      }
+    });
+
+    const is1rmPR = maxOneRMInWorkout > historicalBestOneRM;
+    const isVolumePR = maxVolumeInWorkout > historicalBestVolume;
+    const isWeightPR =
+      maxWeightInWorkout > historicalBestWeight ||
+      (maxWeightInWorkout === historicalBestWeight && maxRepsAtMaxWeight > historicalBestRepsAtMaxWeight);
+
+    if (is1rmPR) historicalBestOneRM = maxOneRMInWorkout;
+    if (isVolumePR) historicalBestVolume = maxVolumeInWorkout;
+    if (isWeightPR) {
+      historicalBestWeight = maxWeightInWorkout;
+      historicalBestRepsAtMaxWeight = maxRepsAtMaxWeight;
+    }
+
+    sessionSets.forEach((set, idx) => {
+      const isThisSet1rmPR = (is1rmPR && idx === bestSetIndexOneRM) ? 1 : 0;
+      const isThisSetVolumePR = (isVolumePR && idx === bestSetIndexVolume) ? 1 : 0;
+      const isThisSetWeightPR = (isWeightPR && idx === bestSetIndexWeight) ? 1 : 0;
+      const isLegacyPR = isThisSet1rmPR;
+      
+      if (set.is1rmPR !== isThisSet1rmPR || 
+          set.isVolumePR !== isThisSetVolumePR || 
+          set.isWeightPR !== isThisSetWeightPR ||
+          set.pr !== isLegacyPR) {
+          updates.push({
+            rowid: set.rowid,
+            is1rmPR: isThisSet1rmPR,
+            isVolumePR: isThisSetVolumePR,
+            isWeightPR: isThisSetWeightPR,
+            pr: isLegacyPR
+          });
+      }
+    });
+  }
+  
+  if (updates.length > 0) {
+    await database.withTransactionAsync(async () => {
+      for (const update of updates) {
+        await database.runAsync(
+          `UPDATE workoutHistory SET is1rmPR = ?, isVolumePR = ?, isWeightPR = ?, pr = ? WHERE rowid = ?;`,
+          [update.is1rmPR, update.isVolumePR, update.isWeightPR, update.pr, update.rowid]
+        );
+      }
+    });
+  }
 };
 
 // Pin an exercise

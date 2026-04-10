@@ -197,15 +197,6 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         if (filtered.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
 
         const now = new Date();
-        let startDate = new Date(0);
-        if (timeRange === '3M') {
-            startDate = new Date(); startDate.setMonth(now.getMonth() - 3);
-        } else if (timeRange === '1Y') {
-            startDate = new Date(); startDate.setFullYear(now.getFullYear() - 1);
-        }
-        filtered = filtered.filter(p => p.date >= startDate);
-
-        if (filtered.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
 
         let processed = [];
         const useValue = (p) => graphMode === 'maxWeight' ? p.maxWeight : p.max1RM;
@@ -274,8 +265,23 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                 }
             }
 
+            let startDate = new Date(0);
+            if (timeRange === '3M') {
+                startDate = new Date(); startDate.setMonth(now.getMonth() - 3);
+            } else if (timeRange === '1Y') {
+                startDate = new Date(); startDate.setFullYear(now.getFullYear() - 1);
+            }
+            let timeFiltered = interpolated.filter(p => p.date >= startDate);
+            if (timeFiltered.length === 0 && interpolated.length > 0) {
+                const lastVal = interpolated[interpolated.length - 1].value;
+                timeFiltered = [
+                    { date: startDate, value: lastVal },
+                    { date: now, value: lastVal }
+                ];
+            }
+
             const maxPts = timeRange === '3M' ? Infinity : 200;
-            processed = downsample(interpolated, maxPts);
+            processed = downsample(timeFiltered, maxPts);
         } else if (!DEBUG_INTERPOLATE && processed.length >= 5) {
             const firstDate = processed[0].date;
             const lastActualDate = processed[processed.length - 1].date;
@@ -310,6 +316,24 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                 iteratorDate = bucketEnd;
             }
             processed = aggregated;
+        }
+
+        if (!DEBUG_INTERPOLATE) {
+            let startDate = new Date(0);
+            if (timeRange === '3M') {
+                startDate = new Date(); startDate.setMonth(now.getMonth() - 3);
+            } else if (timeRange === '1Y') {
+                startDate = new Date(); startDate.setFullYear(now.getFullYear() - 1);
+            }
+            let timeFiltered = processed.filter(p => p.date >= startDate);
+            if (timeFiltered.length === 0 && processed.length > 0) {
+                const lastVal = processed[processed.length - 1].value;
+                timeFiltered = [
+                    { date: startDate, value: lastVal },
+                    { date: now, value: lastVal }
+                ];
+            }
+            processed = timeFiltered;
         }
 
         const values = processed.map(p => p.value).filter(v => !isNaN(v) && isFinite(v));

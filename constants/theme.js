@@ -292,6 +292,30 @@ const DEFAULT = {
     overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
+const DEFAULT_LIGHTER = {
+    primary: "#0A84FF",      // Apple San Francisco Blue
+    primaryDark: "#007AFF",  // Slightly boosted for visibility
+    secondary: "#0A84FF",
+    background: "#151517",   // Lifted from near-black to deep charcoal to reduce glare
+    surface: "#242426",      // Noticeably lighter than background for card definition
+    text: "#FFFFFF",
+    textSecondary: "#A1A1A6",// Boosted from #8E8E93 for better legibility in bright light
+    border: "#3A3A3C",       // Made more distinct so UI sections are visible
+    success: "#30D158",      // Slightly more vibrant iOS Green
+    danger: "#FF453A",
+    warning: "#FF9F0A",
+    info: "#64D2FF",
+    bodyFill: "#3A3A3C",     // Matches borders for a cohesive look
+    statusBar: "light",
+    // Increased opacity for overlays to ensure they don't disappear under glare
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
+};
+
+
 const THRIVE = {
     primary: "#1bffcd",      // Apple San Francisco Blue
     primaryDark: "#2E7F78",
@@ -376,6 +400,7 @@ const SYSTEM = Platform.OS === 'android' ? {
 export const THEMES = {
     ...(Platform.OS === 'android' ? { SYSTEM } : {}),
     DEFAULT,
+    DEFAULT_LIGHTER,
     LIGHT,
     NOIR,
     ARCTIC,

@@ -213,8 +213,8 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                     >
                         <MaterialIcons name="drag-indicator" size={20} color={theme.textSecondary} />
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                        onPress={onOpenDetails} 
+                    <TouchableOpacity
+                        onPress={onOpenDetails}
                         onLongPress={drag}
                         delayLongPress={100}
                         style={{ flex: 1 }}
@@ -363,7 +363,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                             onPress={() => toggleSetComplete(index)}
                                             hitSlop={{ top: 20, bottom: 20, left: 5, right: 20 }}
                                         >
-                                            <Feather name="check" size={14} color={set.completed ? '#fff' : 'transparent'} />
+                                            <Feather name="check" size={14} color={set.completed ? '#fff' : theme.textSecondary} />
                                         </TouchableOpacity>
                                     </View>
                                 )}
