@@ -153,6 +153,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
     const isCardio = exerciseDetails
         ? exerciseDetails.isCardio === 1
         : exercises.some(ex => ex.distance > 0 || ex.seconds > 0);
+    const isAssisted = exerciseDetails?.isAssisted === 1;
 
     return (
         <AnimatedTouchableOpacity
@@ -193,7 +194,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                     <View style={styles.setsHeaderRow}>
                         <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
                         <Text style={[styles.colHeader, styles.colHeaderLift]}>{isCardio ? "DIST / TIME" : "LIFT"}</Text>
-                        <Text style={[styles.colHeader, styles.colHeader1RM]}>{isCardio ? "PACE" : "1RM"}</Text>
+                        {!isAssisted && <Text style={[styles.colHeader, styles.colHeader1RM]}>{isCardio ? "PACE" : "1RM"}</Text>}
                     </View>
 
                     {setsWithDisplayNumbers.map((set, setIndex) => {
@@ -225,17 +226,19 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                                         {isCardio ? (
                                             `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)}m`
                                         ) : (
-                                            `${set.weight}kg × ${set.reps}`
+                                            `${isAssisted && set.weight > 0 ? '-' : ''}${set.weight}kg × ${set.reps}`
                                         )}
                                     </Text>
 
-                                    <Text style={styles.setOneRM}>
-                                        {isCardio ? (
-                                            set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)}` : '-'
-                                        ) : (
-                                            set.oneRM ? Math.round(set.oneRM) : '-'
-                                        )}
-                                    </Text>
+                                    {!isAssisted && (
+                                        <Text style={styles.setOneRM}>
+                                            {isCardio ? (
+                                                set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)}` : '-'
+                                            ) : (
+                                                set.oneRM ? Math.round(set.oneRM) : '-'
+                                            )}
+                                        </Text>
+                                    )}
                                 </View>
 
                                 {isPR && (
@@ -363,7 +366,6 @@ const ExerciseHistory = (props) => {
             const history = await fetchExerciseHistory(props.exerciseID);
             const groupedHistory = groupBySession(history);
             setWorkoutHistory(groupedHistory);
-            calculateStats(history);
         } catch (error) {
             console.error("Error loading workout history:", error);
         } finally {
@@ -371,23 +373,32 @@ const ExerciseHistory = (props) => {
         }
     };
 
-    const calculateStats = (history) => {
+    useEffect(() => {
+        if (!workoutHistory || workoutHistory.length === 0) return;
+        
         let maxWeight = 0;
+        let minWeight = Infinity;
         let volume = 0;
+        let totalSetsCount = 0;
 
-        history.forEach(entry => {
-            if (entry.reps > 0 && entry.weight > maxWeight) {
-                maxWeight = entry.weight;
-            }
-            volume += (entry.weight * entry.reps);
+        workoutHistory.forEach(([session, exercises]) => {
+            exercises.forEach(entry => {
+                totalSetsCount++;
+                if (entry.reps > 0 && entry.weight > maxWeight) maxWeight = entry.weight;
+                if (entry.reps > 0 && entry.weight < minWeight) minWeight = entry.weight;
+                volume += (entry.weight * entry.reps);
+            });
         });
+
+        const currentEx = exercisesList.find(e => e.exerciseID === props.exerciseID);
+        const isAssisted = !!currentEx?.isAssisted;
 
         setStats({
-            totalSets: history.length,
-            personalBest: maxWeight,
+            totalSets: totalSetsCount,
+            personalBest: isAssisted ? (minWeight === Infinity ? 0 : minWeight) : maxWeight,
             totalVolume: volume
         });
-    };
+    }, [workoutHistory, exercisesList, props.exerciseID]);
 
     const groupBySession = (history) => {
         const grouped = {};
@@ -418,6 +429,7 @@ const ExerciseHistory = (props) => {
 
     const currentExerciseDetails = exercisesList.find(e => e.exerciseID === props.exerciseID);
     const isCardioHeader = !!currentExerciseDetails?.isCardio;
+    const isAssistedHeader = !!currentExerciseDetails?.isAssisted;
 
 
 
@@ -451,7 +463,7 @@ const ExerciseHistory = (props) => {
                             {!isCardioHeader && (
                                 <View style={styles.statCard}>
                                     <Feather name="award" size={16} color={theme.primary} style={styles.statIcon} />
-                                    <Text style={styles.statValue}>{stats.personalBest}kg</Text>
+                                    <Text style={styles.statValue}>{isAssistedHeader && stats.personalBest > 0 ? '-' : ''}{stats.personalBest}kg</Text>
                                     <Text style={styles.statLabel}>Best Lift</Text>
                                 </View>
                             )}
@@ -460,7 +472,7 @@ const ExerciseHistory = (props) => {
                                 <Text style={styles.statValue}>{stats.totalSets}</Text>
                                 <Text style={styles.statLabel}>Total Sets</Text>
                             </View>
-                            {!isCardioHeader && (
+                            {!isCardioHeader && !isAssistedHeader && (
                                 <View style={styles.statCard}>
                                     <Feather name="activity" size={16} color={theme.primary} style={styles.statIcon} />
                                     <Text style={styles.statValue}>{(stats.totalVolume / 1000).toFixed(1)}k</Text>

@@ -23,7 +23,8 @@ export const setupDatabase = async () => {
         name TEXT NOT NULL UNIQUE,
         targetMuscle TEXT NOT NULL,
         accessoryMuscles TEXT,
-        isCardio INTEGER DEFAULT 0
+        isCardio INTEGER DEFAULT 0,
+        isAssisted INTEGER DEFAULT 0
       );
       
       CREATE TABLE IF NOT EXISTS workoutHistory (
@@ -86,6 +87,7 @@ export const setupDatabase = async () => {
     await ensureColumnExists('workoutHistory', 'isVolumePR', 'INTEGER DEFAULT 0');
     await ensureColumnExists('workoutHistory', 'isWeightPR', 'INTEGER DEFAULT 0');
     await ensureColumnExists('exercises', 'isCardio', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('exercises', 'isAssisted', 'INTEGER DEFAULT 0');
     await ensureColumnExists('workoutHistory', 'distance', 'FLOAT');
     await ensureColumnExists('workoutHistory', 'seconds', 'INTEGER');
 
@@ -134,13 +136,13 @@ export const fetchExercises = async () => {
 };
 
 // Insert exercise entries
-export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscles, isCardio = 0) => {
+export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscles, isCardio = 0, isAssisted = 0) => {
   const database = await getDb();
   try {
     const result = await database.runAsync(
-      `INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio) 
-       VALUES (?, ?, ?, ?);`,
-      [exerciseName, targetMuscles, accessoryMuscles, isCardio]
+      `INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio, isAssisted) 
+       VALUES (?, ?, ?, ?, ?);`,
+      [exerciseName, targetMuscles, accessoryMuscles, isCardio, isAssisted]
     );
     return result.lastInsertRowId;
   } catch (error) {
@@ -152,14 +154,14 @@ export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscl
 };
 
 // Update existing exercise
-export const updateExercise = async (exerciseID, exerciseName, targetMuscles, accessoryMuscles, isCardio = 0) => {
+export const updateExercise = async (exerciseID, exerciseName, targetMuscles, accessoryMuscles, isCardio = 0, isAssisted = 0) => {
   const database = await getDb();
   try {
     await database.runAsync(
       `UPDATE exercises 
-       SET name = ?, targetMuscle = ?, accessoryMuscles = ?, isCardio = ? 
+       SET name = ?, targetMuscle = ?, accessoryMuscles = ?, isCardio = ?, isAssisted = ? 
        WHERE exerciseID = ?;`,
-      [exerciseName, targetMuscles, accessoryMuscles, isCardio, exerciseID]
+      [exerciseName, targetMuscles, accessoryMuscles, isCardio, isAssisted, exerciseID]
     );
     return "Exercise updated successfully!";
   } catch (error) {
@@ -377,6 +379,9 @@ export const fetchLastWorkoutSets = async (exerciseID) => {
 export const getExercisePRs = async (exerciseID, excludeSessionNumber = null) => {
   const database = await getDb();
 
+  const exertRow = await database.getFirstAsync('SELECT isAssisted FROM exercises WHERE exerciseID = ?;', [exerciseID]);
+  const isAssisted = exertRow?.isAssisted === 1;
+
   let queryCond = `WHERE exerciseID = ? AND reps > 0`;
   let params = [exerciseID];
 
@@ -389,7 +394,7 @@ export const getExercisePRs = async (exerciseID, excludeSessionNumber = null) =>
     `SELECT 
       MAX(oneRM) as maxOneRM,
       MAX(weight * reps) as maxVolume,
-      MAX(weight) as maxWeight
+      ${isAssisted ? 'MIN(weight)' : 'MAX(weight)'} as maxWeight
      FROM workoutHistory
      ${queryCond};`,
     params
@@ -413,8 +418,8 @@ export const getExercisePRs = async (exerciseID, excludeSessionNumber = null) =>
   ) : null;
 
   return {
-    maxOneRM: result?.maxOneRM || 0,
-    maxVolume: result?.maxVolume || 0,
+    maxOneRM: isAssisted ? 0 : (result?.maxOneRM || 0),
+    maxVolume: isAssisted ? 0 : (result?.maxVolume || 0),
     maxWeight: maxWeight,
     maxRepsAtMaxWeight: repsAtMaxWeight?.maxReps || 0
   };
@@ -430,6 +435,9 @@ export const calculateIfPR = async (exerciseID, oneRM) => {
 export const recalculateExercisePRs = async (exerciseID) => {
   const database = await getDb();
   
+  const exertRow = await database.getFirstAsync('SELECT isAssisted FROM exercises WHERE exerciseID = ?;', [exerciseID]);
+  const isAssisted = exertRow?.isAssisted === 1;
+
   const sets = await database.getAllAsync(
     `SELECT rowid, * FROM workoutHistory WHERE exerciseID = ? ORDER BY time ASC, workoutSession ASC, exerciseNum ASC, setNum ASC;`,
     [exerciseID]
@@ -452,7 +460,7 @@ export const recalculateExercisePRs = async (exerciseID) => {
   
   let historicalBestOneRM = 0;
   let historicalBestVolume = 0;
-  let historicalBestWeight = 0;
+  let historicalBestWeight = isAssisted ? Infinity : 0;
   let historicalBestRepsAtMaxWeight = 0;
   
   const updates = [];
@@ -460,8 +468,8 @@ export const recalculateExercisePRs = async (exerciseID) => {
   for (const sessionSets of sessions) {
     let maxOneRMInWorkout = 0;
     let maxVolumeInWorkout = 0;
-    let maxWeightInWorkout = 0;
-    let maxRepsAtMaxWeight = 0;
+    let bestWeightInWorkout = isAssisted ? Infinity : 0;
+    let maxRepsAtBestWeight = 0;
     let bestSetIndexOneRM = -1;
     let bestSetIndexVolume = -1;
     let bestSetIndexWeight = -1;
@@ -472,37 +480,48 @@ export const recalculateExercisePRs = async (exerciseID) => {
       const reps = set.reps || 0;
       const volume = weight * reps;
       
-      if (oneRM > maxOneRMInWorkout) {
+      if (oneRM > maxOneRMInWorkout && !isAssisted) {
         maxOneRMInWorkout = oneRM;
         bestSetIndexOneRM = idx;
       }
-      if (volume > maxVolumeInWorkout) {
+      if (volume > maxVolumeInWorkout && !isAssisted) {
         maxVolumeInWorkout = volume;
         bestSetIndexVolume = idx;
       }
       if (reps > 0) {
-        if (weight > maxWeightInWorkout) {
-          maxWeightInWorkout = weight;
-          maxRepsAtMaxWeight = reps;
-          bestSetIndexWeight = idx;
-        } else if (weight === maxWeightInWorkout && reps > maxRepsAtMaxWeight) {
-          maxRepsAtMaxWeight = reps;
-          bestSetIndexWeight = idx;
+        if (isAssisted) {
+          if (weight < bestWeightInWorkout) {
+            bestWeightInWorkout = weight;
+            maxRepsAtBestWeight = reps;
+            bestSetIndexWeight = idx;
+          } else if (weight === bestWeightInWorkout && reps > maxRepsAtBestWeight) {
+            maxRepsAtBestWeight = reps;
+            bestSetIndexWeight = idx;
+          }
+        } else {
+          if (weight > bestWeightInWorkout) {
+            bestWeightInWorkout = weight;
+            maxRepsAtBestWeight = reps;
+            bestSetIndexWeight = idx;
+          } else if (weight === bestWeightInWorkout && reps > maxRepsAtBestWeight) {
+            maxRepsAtBestWeight = reps;
+            bestSetIndexWeight = idx;
+          }
         }
       }
     });
 
-    const is1rmPR = maxOneRMInWorkout > historicalBestOneRM;
-    const isVolumePR = maxVolumeInWorkout > historicalBestVolume;
-    const isWeightPR =
-      maxWeightInWorkout > historicalBestWeight ||
-      (maxWeightInWorkout === historicalBestWeight && maxRepsAtMaxWeight > historicalBestRepsAtMaxWeight);
+    const is1rmPR = isAssisted ? false : (maxOneRMInWorkout > historicalBestOneRM);
+    const isVolumePR = isAssisted ? false : (maxVolumeInWorkout > historicalBestVolume);
+    const isWeightPR = isAssisted 
+      ? (bestWeightInWorkout < historicalBestWeight || (bestWeightInWorkout === historicalBestWeight && maxRepsAtBestWeight > historicalBestRepsAtMaxWeight))
+      : (bestWeightInWorkout > historicalBestWeight || (bestWeightInWorkout === historicalBestWeight && maxRepsAtBestWeight > historicalBestRepsAtMaxWeight));
 
     if (is1rmPR) historicalBestOneRM = maxOneRMInWorkout;
     if (isVolumePR) historicalBestVolume = maxVolumeInWorkout;
     if (isWeightPR) {
-      historicalBestWeight = maxWeightInWorkout;
-      historicalBestRepsAtMaxWeight = maxRepsAtMaxWeight;
+      historicalBestWeight = bestWeightInWorkout;
+      historicalBestRepsAtMaxWeight = maxRepsAtBestWeight;
     }
 
     sessionSets.forEach((set, idx) => {

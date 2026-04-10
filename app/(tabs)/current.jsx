@@ -254,7 +254,11 @@ const Current = () => {
                     let maxOneRM = 0;
                     let maxVolume = 0;
                     let maxWeight = 0;
+                    let minWeight = Infinity;
                     let maxRepsAtMaxWeight = 0;
+                    
+                    const exerciseDetails = exercises.find(e => e.exerciseID === exercise.exerciseID);
+                    const isAssisted = !!exerciseDetails?.isAssisted;
 
                     for (const set of exercise.sets) {
                         // Calculate One Rep Max
@@ -272,17 +276,26 @@ const Current = () => {
                         const weight = parseFloat(set.weight) || 0;
                         const reps = parseInt(set.reps) || 0;
                         if (reps > 0) {
-                            if (weight > maxWeight) {
-                                maxWeight = weight;
-                                maxRepsAtMaxWeight = reps;
-                            } else if (weight === maxWeight && reps > maxRepsAtMaxWeight) {
-                                maxRepsAtMaxWeight = reps;
+                            if (isAssisted) {
+                                if (weight < minWeight) {
+                                    minWeight = weight;
+                                    maxRepsAtMaxWeight = reps;
+                                } else if (weight === minWeight && reps > maxRepsAtMaxWeight) {
+                                    maxRepsAtMaxWeight = reps;
+                                }
+                            } else {
+                                if (weight > maxWeight) {
+                                    maxWeight = weight;
+                                    maxRepsAtMaxWeight = reps;
+                                } else if (weight === maxWeight && reps > maxRepsAtMaxWeight) {
+                                    maxRepsAtMaxWeight = reps;
+                                }
                             }
                         }
                     }
                     maxOneRmsInWorkout.set(exercise.exerciseID, maxOneRM);
                     maxVolumesInWorkout.set(exercise.exerciseID, maxVolume);
-                    maxWeightsInWorkout.set(exercise.exerciseID, { weight: maxWeight, reps: maxRepsAtMaxWeight });
+                    maxWeightsInWorkout.set(exercise.exerciseID, { weight: isAssisted ? minWeight : maxWeight, reps: maxRepsAtMaxWeight });
                 }
             }
 
@@ -293,6 +306,9 @@ const Current = () => {
                 for (const exercise of exerciseGroup.exercises) {
                     let setNum = 1;
 
+                    const exerciseDetails = exercises.find(e => e.exerciseID === exercise.exerciseID);
+                    const isAssisted = !!exerciseDetails?.isAssisted;
+
                     // Retrieve the maximums achieved for this exercise in the current workout
                     const maxOneRMForExercise = maxOneRmsInWorkout.get(exercise.exerciseID);
                     const maxVolumeForExercise = maxVolumesInWorkout.get(exercise.exerciseID);
@@ -301,13 +317,15 @@ const Current = () => {
                     // Fetch historical bests
                     const historicalPRs = await getExercisePRs(exercise.exerciseID);
 
-                    const isOverall1rmPR = maxOneRMForExercise > historicalPRs.maxOneRM;
-                    const isOverallVolumePR = maxVolumeForExercise > historicalPRs.maxVolume;
+                    const isOverall1rmPR = isAssisted ? false : (maxOneRMForExercise > historicalPRs.maxOneRM);
+                    const isOverallVolumePR = isAssisted ? false : (maxVolumeForExercise > historicalPRs.maxVolume);
 
                     // Weight PR: either new max weight OR matching weight with more reps
-                    const isOverallWeightPR =
-                        maxWeightInfo.weight > historicalPRs.maxWeight ||
-                        (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight);
+                    const isOverallWeightPR = isAssisted
+                        ? (maxWeightInfo.weight < historicalPRs.maxWeight ||
+                            (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight))
+                        : (maxWeightInfo.weight > historicalPRs.maxWeight ||
+                            (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight));
 
                     // Track assigned PRs to avoid duplicate badges in the same workout (first set gets priority)
                     let pr1rmAssigned = false;
@@ -327,13 +345,13 @@ const Current = () => {
                         // Determine if this specific set is the PR-setting set
                         // Logic: Must match the workout max AND represent an overall PR AND not have been assigned yet
                         let is1rmPR = 0;
-                        if (!pr1rmAssigned && calculatedOneRM === maxOneRMForExercise && isOverall1rmPR) {
+                        if (!pr1rmAssigned && !isAssisted && calculatedOneRM === maxOneRMForExercise && isOverall1rmPR) {
                             is1rmPR = 1;
                             pr1rmAssigned = true;
                         }
 
                         let isVolumePR = 0;
-                        if (!prVolumeAssigned && volume === maxVolumeForExercise && isOverallVolumePR) {
+                        if (!prVolumeAssigned && !isAssisted && volume === maxVolumeForExercise && isOverallVolumePR) {
                             isVolumePR = 1;
                             prVolumeAssigned = true;
                         }
@@ -363,7 +381,6 @@ const Current = () => {
                             notes: exercise.notes || '',
                             is1rmPR: is1rmPR,
                             isVolumePR: isVolumePR,
-                            isWeightPR: isWeightPR,
                             isWeightPR: isWeightPR,
                             distance: set.distance || null,
                             seconds: set.minutes ? Math.round(parseFloat(set.minutes) * 60) : null
@@ -632,6 +649,7 @@ const Current = () => {
                             simultaneousHandlers={listRef}
                             onSetComplete={handleSetComplete}
                             isCardio={!!exerciseDetails?.isCardio}
+                            isAssisted={!!exerciseDetails?.isAssisted}
                         />
                     );
                 })}

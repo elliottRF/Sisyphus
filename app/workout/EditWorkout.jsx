@@ -138,6 +138,7 @@ const EditWorkout = () => {
                             onOpenDetails={() => showExerciseInfo(exerciseDetails)}
                             simultaneousHandlers={listRef}
                             isCardio={exerciseDetails ? exerciseDetails.isCardio : false}
+                            isAssisted={exerciseDetails ? (exerciseDetails.isAssisted === 1) : false}
                         />
                     );
                 })}

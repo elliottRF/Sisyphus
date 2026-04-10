@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router';
 import { LineGraph } from 'react-native-graph';
 import { FONTS, SHADOWS } from '../constants/theme';
-import { fetchExerciseProgress, unpinExercise } from './db';
+import { fetchExerciseProgress, unpinExercise, fetchExercises } from './db';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -22,7 +22,7 @@ const DEBUG_INTERPOLATE = true;
 let _cachedData = null;
 export const primeGraphData = (data) => { _cachedData = data; };
 
-export const computeGraphPoints = (history) => {
+export const computeGraphPoints = (history, isAssisted = false) => {
     if (!history?.length) return [];
 
     const dailyData = {};
@@ -39,14 +39,18 @@ export const computeGraphPoints = (history) => {
         const weight = Number(entry.weight) || 0;
 
         if (!dailyData[dateKey]) {
-            dailyData[dateKey] = { date: entry.time, max1RM: 0, maxWeight: 0 };
+            dailyData[dateKey] = { date: entry.time, max1RM: 0, maxWeight: isAssisted ? Infinity : 0 };
         }
-        if (oneRM > dailyData[dateKey].max1RM) dailyData[dateKey].max1RM = Math.round(oneRM);
-        if (weight > dailyData[dateKey].maxWeight) dailyData[dateKey].maxWeight = Math.round(weight);
+        if (oneRM > dailyData[dateKey].max1RM && !isAssisted) dailyData[dateKey].max1RM = Math.round(oneRM);
+        if (isAssisted) {
+            if (weight < dailyData[dateKey].maxWeight) dailyData[dateKey].maxWeight = Math.round(weight);
+        } else {
+            if (weight > dailyData[dateKey].maxWeight) dailyData[dateKey].maxWeight = Math.round(weight);
+        }
     });
 
     return Object.values(dailyData)
-        .filter(d => d.max1RM > 0 || d.maxWeight > 0)
+        .filter(d => d.max1RM > 0 || (isAssisted ? d.maxWeight !== Infinity : d.maxWeight > 0))
         .sort((a, b) => new Date(a.date) - new Date(b.date));
 };
 
@@ -128,6 +132,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
     const [graphMode, setGraphMode] = useState('history');
     const [timeRange, setTimeRange] = useState('ALL');
     const [selectedPoint, setSelectedPoint] = useState(null);
+    const [isAssisted, setIsAssisted] = useState(false);
 
     const isTouching = useRef(false);
 
@@ -158,6 +163,12 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         try {
             setLoading(true);
 
+            const exercises = await fetchExercises();
+            const exercise = exercises.find(e => e.exerciseID === exerciseID);
+            const assisted = !!exercise?.isAssisted;
+            setIsAssisted(assisted);
+            if (assisted) setGraphMode('maxWeight');
+
             // Use primed cache if available (set by Profile before navigating)
             if (_cachedData) {
                 setAllData(_cachedData);
@@ -166,7 +177,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
             }
 
             const history = await fetchExerciseProgress(exerciseID);
-            setAllData(computeGraphPoints(history));
+            setAllData(computeGraphPoints(history, assisted));
         } catch (error) {
             console.error("Error loading graph data:", error);
             setAllData([]);
@@ -191,8 +202,8 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         let filtered = allData.map(item => ({
             date: new Date(item.date),
             max1RM: Number(item.max1RM) || 0,
-            maxWeight: Number(item.maxWeight) || 0
-        })).filter(item => !isNaN(item.date.getTime()) && (item.max1RM > 0 || item.maxWeight > 0));
+            maxWeight: Number(item.maxWeight) === 0 ? 0 : Number(item.maxWeight) // ensure 0 parses to 0
+        })).filter(item => !isNaN(item.date.getTime()) && (item.max1RM > 0 || (isAssisted ? item.maxWeight >= 0 : item.maxWeight > 0)));
 
         if (filtered.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
 
@@ -200,7 +211,8 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
 
         let processed = [];
         const useValue = (p) => graphMode === 'maxWeight' ? p.maxWeight : p.max1RM;
-        let tempProcessed = filtered.map(p => ({ date: p.date, value: useValue(p) })).filter(p => p.value > 0);
+        let tempProcessed = filtered.map(p => ({ date: p.date, value: useValue(p) }))
+            .filter(p => isAssisted ? (p.value !== null && p.value !== undefined && p.value !== Infinity && p.value >= 0) : p.value > 0);
 
         if (graphMode === 'truePR') {
             let maxVal = 0;
@@ -209,12 +221,13 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                 return false;
             });
         } else if (graphMode === 'maxWeight') {
-            let maxVal = 0;
+            let bestVal = isAssisted ? Infinity : 0;
             processed = [];
             tempProcessed.forEach(p => {
-                if (p.value > maxVal) {
-                    maxVal = p.value;
-                    processed.push({ date: p.date, value: maxVal });
+                const isNewPR = isAssisted ? p.value < bestVal : p.value > bestVal;
+                if (isNewPR) {
+                    bestVal = p.value;
+                    processed.push({ date: p.date, value: bestVal });
                 }
             });
         } else {
@@ -412,7 +425,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
             label: formattedPercent,
             period: periodLabel
         };
-    }, [points, timeRange]);
+    }, [points, timeRange, isAssisted]);
 
     const axisLabels = useMemo(() => {
         if (!points.length) return [];
@@ -511,20 +524,20 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                             {hasEnoughData && points.length >= 2 && (
                                 <View style={[styles.trendBadge, {
                                     backgroundColor:
-                                        trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.15)' :
-                                            trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.15)' :
+                                        trendData.direction === 'up' ? (isAssisted ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)') :
+                                            trendData.direction === 'down' ? (isAssisted ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)') :
                                                 'rgba(100, 100, 100, 0.1)'
                                 }]}>
                                     <Text style={[styles.trendArrow, {
-                                        color: trendData.direction === 'up' ? '#22c55e' :
-                                            trendData.direction === 'down' ? '#ef4444' :
+                                        color: trendData.direction === 'up' ? (isAssisted ? '#ef4444' : '#22c55e') :
+                                            trendData.direction === 'down' ? (isAssisted ? '#22c55e' : '#ef4444') :
                                                 theme.textSecondary
                                     }]}>
                                         {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
                                     </Text>
                                     <Text style={[styles.trendText, {
-                                        color: trendData.direction === 'up' ? '#22c55e' :
-                                            trendData.direction === 'down' ? '#ef4444' :
+                                        color: trendData.direction === 'up' ? (isAssisted ? '#ef4444' : '#22c55e') :
+                                            trendData.direction === 'down' ? (isAssisted ? '#22c55e' : '#ef4444') :
                                                 theme.textSecondary,
                                         fontFamily: FONTS.bold
                                     }]}>
@@ -559,19 +572,21 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                                     <Feather name="x" size={14} color={theme.textSecondary} />
                                 </TouchableOpacity>
                             )}
-                            <TouchableOpacity
-                                onPress={() => setGraphMode(prev =>
-                                    prev === 'history' ? 'truePR' :
-                                        prev === 'truePR' ? 'maxWeight' : 'history'
-                                )}
-                                style={[styles.unpinButton, { padding: 4 }]}
-                            >
-                                <MaterialIcons
-                                    name={graphMode === 'truePR' ? "trending-up" : graphMode === 'maxWeight' ? "fitness-center" : "history"}
-                                    size={14}
-                                    color={theme.primary}
-                                />
-                            </TouchableOpacity>
+                            {!isAssisted && (
+                                <TouchableOpacity
+                                    onPress={() => setGraphMode(prev =>
+                                        prev === 'history' ? 'truePR' :
+                                            prev === 'truePR' ? 'maxWeight' : 'history'
+                                    )}
+                                    style={[styles.unpinButton, { padding: 4 }]}
+                                >
+                                    <MaterialIcons
+                                        name={graphMode === 'truePR' ? "trending-up" : graphMode === 'maxWeight' ? "fitness-center" : "history"}
+                                        size={14}
+                                        color={theme.primary}
+                                    />
+                                </TouchableOpacity>
+                            )}
                             {hasEnoughData && points.length >= 2 && (
                                 <View style={[styles.trendBadge, {
                                     marginVertical: 0,
@@ -579,13 +594,13 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                                     height: 26,
                                     paddingHorizontal: 10,
                                     backgroundColor:
-                                        trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.1)' :
-                                            trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.1)' :
+                                        trendData.direction === 'up' ? (isAssisted ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)') :
+                                            trendData.direction === 'down' ? (isAssisted ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)') :
                                                 'rgba(100, 100, 100, 0.05)'
                                 }]}>
                                     <Text style={[styles.trendText, {
-                                        color: trendData.direction === 'up' ? '#22c55e' :
-                                            trendData.direction === 'down' ? '#ef4444' :
+                                        color: trendData.direction === 'up' ? (isAssisted ? '#ef4444' : '#22c55e') :
+                                            trendData.direction === 'down' ? (isAssisted ? '#22c55e' : '#ef4444') :
                                                 theme.textSecondary,
                                         fontSize: 12,
                                         fontFamily: FONTS.bold
@@ -598,34 +613,36 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                     </View>
                 )}
 
-                <View style={[styles.modeToggleContainer, isCompact && { marginBottom: 8 }]}>
-                    {[
-                        { key: 'history', label: '1RM', icon: 'chart-timeline-variant' },
-                        { key: 'truePR', label: 'True PR', icon: 'trending-up' },
-                        { key: 'maxWeight', label: 'Max Wt', icon: 'weight' },
-                    ].map(mode => (
-                        <TouchableOpacity
-                            key={mode.key}
-                            onPress={() => setGraphMode(mode.key)}
-                            style={[
-                                styles.modeButton,
-                                graphMode === mode.key && styles.modeButtonActive
-                            ]}
-                        >
-                            <MaterialCommunityIcons
-                                name={mode.icon}
-                                size={14}
-                                color={graphMode === mode.key ? theme.primary : theme.textSecondary}
-                            />
-                            <Text style={[
-                                styles.modeButtonText,
-                                graphMode === mode.key && styles.modeButtonTextActive
-                            ]}>
-                                {mode.label}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                {!isAssisted && (
+                    <View style={[styles.modeToggleContainer, isCompact && { marginBottom: 8 }]}>
+                        {[
+                            { key: 'history', label: '1RM', icon: 'chart-timeline-variant' },
+                            { key: 'truePR', label: 'True PR', icon: 'trending-up' },
+                            { key: 'maxWeight', label: 'Max Wt', icon: 'weight' },
+                        ].map(mode => (
+                            <TouchableOpacity
+                                key={mode.key}
+                                onPress={() => setGraphMode(mode.key)}
+                                style={[
+                                    styles.modeButton,
+                                    graphMode === mode.key && styles.modeButtonActive
+                                ]}
+                            >
+                                <MaterialCommunityIcons
+                                    name={mode.icon}
+                                    size={14}
+                                    color={graphMode === mode.key ? theme.primary : theme.textSecondary}
+                                />
+                                <Text style={[
+                                    styles.modeButtonText,
+                                    graphMode === mode.key && styles.modeButtonTextActive
+                                ]}>
+                                    {mode.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
 
                 {hasEnoughData ? (
                     <>

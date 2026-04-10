@@ -4,7 +4,7 @@ import {
     ScrollView as RNScrollView
 } from 'react-native';
 import Body from 'react-native-body-highlighter';
-import { insertExercise, updateExercise, fetchExercises } from '../components/db';
+import { insertExercise, updateExercise, fetchExercises, recalculateExercisePRs } from '../components/db';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Added this import
+import { emit, AppEvents } from '../utils/events';
 
 const MUSCLE_OPTIONS = [
     'Chest', 'Triceps', 'Deltoids', 'Trapezius', 'Upper-Back', 'Lower-Back',
@@ -49,6 +50,8 @@ const NewExercise = (props) => {
     const [targetSelected, setTargetSelected] = useState([]);
     const [accessorySelected, setAccessorySelected] = useState([]);
     const [isCardio, setIsCardio] = useState(false);
+    const [isAssisted, setIsAssisted] = useState(false);
+    const [originalIsAssisted, setOriginalIsAssisted] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
 
     // Load exercise data if exerciseID is provided
@@ -62,6 +65,8 @@ const NewExercise = (props) => {
                 if (exercise) {
                     setExerciseName(exercise.name);
                     setIsCardio(!!exercise.isCardio);
+                    setIsAssisted(!!exercise.isAssisted);
+                    setOriginalIsAssisted(!!exercise.isAssisted);
 
                     const targets = exercise.targetMuscle ? exercise.targetMuscle.split(',').map((m) => m.trim()) : [];
                     const accessories = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',').map((m) => m.trim()) : [];
@@ -134,7 +139,8 @@ const NewExercise = (props) => {
             name: exerciseName,
             targetMuscle: formatListToString(targetSelected),
             accessoryMuscles: formatListToString(accessorySelected),
-            isCardio: isCardio ? 1 : 0
+            isCardio: isCardio ? 1 : 0,
+            isAssisted: isAssisted ? 1 : 0
         };
 
         if (isEditMode && props.exerciseID) {
@@ -143,19 +149,25 @@ const NewExercise = (props) => {
                 newExerciseObj.name,
                 newExerciseObj.targetMuscle,
                 newExerciseObj.accessoryMuscles,
-                newExerciseObj.isCardio
+                newExerciseObj.isCardio,
+                newExerciseObj.isAssisted
             );
+            if (originalIsAssisted !== isAssisted) {
+                await recalculateExercisePRs(props.exerciseID);
+            }
             newExerciseObj.exerciseID = props.exerciseID;
         } else {
             const newId = await insertExercise(
                 newExerciseObj.name,
                 newExerciseObj.targetMuscle,
                 newExerciseObj.accessoryMuscles,
-                newExerciseObj.isCardio
+                newExerciseObj.isCardio,
+                newExerciseObj.isAssisted
             );
             newExerciseObj.exerciseID = newId;
         }
 
+        emit(AppEvents.WORKOUT_DATA_IMPORTED);
         props.close(newExerciseObj);
     };
 
@@ -242,16 +254,36 @@ const NewExercise = (props) => {
                     <TouchableOpacity
                         style={styles.cardioToggleCard}
                         activeOpacity={0.8}
-                        onPress={() => setIsCardio(!isCardio)}
+                        onPress={() => {
+                            setIsCardio(!isCardio);
+                            if (!isCardio) setIsAssisted(false);
+                        }}
                     >
                         <View style={styles.cardioTextWrapper}>
                             <Text style={styles.label}>Cardio Exercise</Text>
-                            <Text style={styles.subtext}>Does not target specific muscles</Text>
                         </View>
                         <Feather
                             name={isCardio ? "check-circle" : "circle"}
                             size={26}
                             color={isCardio ? theme.primary : theme.textSecondary}
+                        />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.cardioToggleCard}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                            setIsAssisted(!isAssisted);
+                            if (!isAssisted) setIsCardio(false);
+                        }}
+                    >
+                        <View style={styles.cardioTextWrapper}>
+                            <Text style={styles.label}>Assisted Machine</Text>
+                        </View>
+                        <Feather
+                            name={isAssisted ? "check-circle" : "circle"}
+                            size={26}
+                            color={isAssisted ? theme.primary : theme.textSecondary}
                         />
                     </TouchableOpacity>
 
@@ -351,7 +383,6 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.text,
         fontFamily: FONTS.bold,
         fontSize: 16,
-        marginBottom: 4,
     },
     subtext: {
         color: theme.textSecondary,

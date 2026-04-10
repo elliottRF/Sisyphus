@@ -94,7 +94,7 @@ const Profile = () => {
         setLoadingExerciseID(item.exerciseID);
         try {
             const history = await fetchExerciseProgress(item.exerciseID);
-            primeGraphData(computeGraphPoints(history));
+            primeGraphData(computeGraphPoints(history, !!item.isAssisted));
         } catch (e) {
             console.error(e);
         } finally {

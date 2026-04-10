@@ -135,7 +135,7 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
     );
 };
 
-const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, onOpenDetails, simultaneousHandlers, onSetComplete, isCardio, isTemplate = false }) => {
+const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, onOpenDetails, simultaneousHandlers, onSetComplete, isCardio, isAssisted, isTemplate = false }) => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
     const [isNoteVisible, setIsNoteVisible] = useState(false);
@@ -262,7 +262,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                 ) : (
                     <View style={{ flex: 1 }} />
                 )}
-                <Text style={[styles.columnHeader, styles.colKg]}>{isCardio ? "DIST (km)" : "KG"}</Text>
+                <Text style={[styles.columnHeader, styles.colKg]}>{isCardio ? "DIST (km)" : (isAssisted ? "ASSIST (kg)" : "KG")}</Text>
                 <Text style={[styles.columnHeader, styles.colReps]}>{isCardio ? "TIME (min)" : "REPS"}</Text>
                 {!isTemplate && <View style={styles.colCheck}><Feather name="check" size={12} color={theme.textSecondary} /></View>}
             </View>
@@ -468,8 +468,8 @@ const getStyles = (theme) => {
         },
         colSet: { width: 30, alignItems: 'center', justifyContent: 'center' },
         colPrev: { flex: 1, textAlign: 'center' },
-        colKg: { width: 65, marginHorizontal: 2 },
-        colReps: { width: 65, marginHorizontal: 2 },
+        colKg: { width: 76, marginHorizontal: 2 },
+        colReps: { width: 76, marginHorizontal: 2 },
         colCheck: { width: 30, alignItems: 'center' },
 
         setsContainer: {

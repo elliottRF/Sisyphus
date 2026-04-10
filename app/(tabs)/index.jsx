@@ -726,7 +726,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     addGraphButton: {
         marginHorizontal: 16,
-        marginBottom: 20,
+        marginBottom: 30,
         borderRadius: 16,
         ...SHADOWS.small
     },
