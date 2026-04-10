@@ -5,6 +5,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
+import { useRouter } from 'expo-router';
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -90,6 +91,7 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 
 const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, onRepeat, onSaveAsTemplate, onExerciseInfo, contentContainerStyle }, ref) => {
     const { theme } = useTheme();
+    const router = useRouter();
     const styles = getStyles(theme);
     const [expandedWarmups, setExpandedWarmups] = useState({});
     const handlers = useScrollHandlers();
@@ -260,6 +262,11 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                         const warmupsExpanded = !!expandedWarmups[exerciseId];
                         const visibleSets = warmupsExpanded ? [...warmups, ...nonWarmups] : nonWarmups;
 
+                        const hasMuscles = exerciseDetails && (
+                            (exerciseDetails.targetMuscle && exerciseDetails.targetMuscle.trim() !== '') || 
+                            (exerciseDetails.accessoryMuscles && exerciseDetails.accessoryMuscles.trim() !== '')
+                        );
+
                         return (
                             <View key={index} style={styles.exerciseCard}>
                                 <TouchableOpacity
@@ -269,7 +276,17 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                     disabled={!onExerciseInfo}
                                 >
                                     <Text style={styles.exerciseName}>{exerciseName}</Text>
-                                    {onExerciseInfo && <Feather name="chevron-right" size={18} color={theme.textSecondary} />}
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        {!hasMuscles && exerciseDetails && !exerciseDetails.isCardio && (
+                                            <TouchableOpacity
+                                                onPress={() => router.push(`/exercise/new?id=${exerciseId}`)}
+                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                            >
+                                                <Feather name="help-circle" size={18} color={theme.textSecondary} />
+                                            </TouchableOpacity>
+                                        )}
+                                        {onExerciseInfo && <Feather name="chevron-right" size={18} color={theme.textSecondary} />}
+                                    </View>
                                 </TouchableOpacity>
 
                                 {exerciseNote && (

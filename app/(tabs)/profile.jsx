@@ -106,6 +106,9 @@ const Profile = () => {
 
     const renderItem = ({ item }) => {
         const count = workoutCounts.get(item.exerciseID) ?? 0;
+        const hasMuscles = (item.targetMuscle && item.targetMuscle.trim() !== '') || 
+                           (item.accessoryMuscles && item.accessoryMuscles.trim() !== '');
+
         return (
             <TouchableOpacity
                 style={styles.exerciseCard}
@@ -117,6 +120,14 @@ const Profile = () => {
                         {item.name}
                     </Text>
                     <View style={styles.exerciseRight}>
+                        {!hasMuscles && !item.isCardio && (
+                            <TouchableOpacity
+                                onPress={() => router.push(`/exercise/new?id=${item.exerciseID}`)}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                <Feather name="help-circle" size={18} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                        )}
                         {count > 0 && (
                             <Text style={styles.workoutCount}>{count}×</Text>
                         )}

@@ -165,13 +165,31 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
 
                 <View style={styles.summaryList}>
                     {groupedExercises.slice(0, 4).map((group, idx) => {
-                        const exerciseName = exercisesList.find(e => e.exerciseID === group[0].exerciseID)?.name || 'Unknown Exercise';
+                        const exerciseObjFromList = exercisesList.find(e => e.exerciseID === group[0].exerciseID);
+                        const exerciseName = exerciseObjFromList?.name || 'Unknown Exercise';
                         const workingSets = group.filter(set => set.setType !== 'W');
                         const count = workingSets.length;
+
+                        const hasMuscles = exerciseObjFromList && (
+                            (exerciseObjFromList.targetMuscle && exerciseObjFromList.targetMuscle.trim() !== '') ||
+                            (exerciseObjFromList.accessoryMuscles && exerciseObjFromList.accessoryMuscles.trim() !== '')
+                        );
+
                         return (
-                            <Text key={idx} style={styles.summaryText} numberOfLines={1}>
-                                <Text style={styles.summaryCount}>{count} x</Text> {exerciseName}
-                            </Text>
+                            <View key={idx} style={styles.summaryRow}>
+                                <Text style={[styles.summaryText, { flexShrink: 1 }]} numberOfLines={1}>
+                                    <Text style={styles.summaryCount}>{count} x</Text> {exerciseName}
+                                </Text>
+                                {!hasMuscles && exerciseObjFromList && !exerciseObjFromList.isCardio && (
+                                    <TouchableOpacity
+                                        onPress={() => router.push(`/exercise/new?id=${group[0].exerciseID}`)}
+                                        style={styles.missingMuscleIcon}
+                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    >
+                                        <Feather name="help-circle" size={14} color={theme.textSecondary} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
                         );
                     })}
                     {groupedExercises.length > 4 && (
@@ -501,6 +519,14 @@ const getStyles = (theme) => StyleSheet.create({
     },
     summaryList: {
         gap: 4,
+    },
+    summaryRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    missingMuscleIcon: {
+        marginLeft: 6,
+        padding: 2,
     },
     summaryText: {
         fontSize: 14,
