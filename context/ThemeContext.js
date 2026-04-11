@@ -10,6 +10,7 @@ export const ThemeProvider = ({ children }) => {
 
     const [gender, setGender] = useState('male');
     const [accessoryWeight, setAccessoryWeight] = useState(0.5);
+    const [workoutInProgress, setWorkoutInProgress] = useState(false);
 
     useEffect(() => {
         loadSettings();
@@ -76,7 +77,9 @@ export const ThemeProvider = ({ children }) => {
             gender,
             updateGender,
             accessoryWeight,
-            updateAccessoryWeight
+            updateAccessoryWeight,
+            workoutInProgress,
+            setWorkoutInProgress
         }}>
             {children}
         </ThemeContext.Provider>

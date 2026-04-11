@@ -295,7 +295,7 @@ const NewExercise = (props) => {
                             </View>
 
                             <View style={styles.sectionContainer}>
-                                <Text style={styles.sectionTitle}>Accessory Muscles</Text>
+                                <Text style={styles.sectionTitle}>Secondary Muscles</Text>
                                 <MuscleChips type="accessory" selectedData={accessorySelected} />
                             </View>
                         </>

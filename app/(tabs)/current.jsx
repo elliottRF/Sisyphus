@@ -38,7 +38,7 @@ const { width } = Dimensions.get('window');
 
 const Current = () => {
     const insets = useSafeAreaInsets();
-    const { theme } = useTheme();
+    const { theme, setWorkoutInProgress } = useTheme();
     const styles = getStyles(theme);
 
     const [exercises, setExercises] = useState([]);
@@ -583,7 +583,8 @@ const Current = () => {
         if (currentWorkout.length > 0) {
             saveWorkoutToAsyncStorage(currentWorkout);
         }
-    }, [currentWorkout]);
+        setWorkoutInProgress(currentWorkout.length > 0 || !!startTime);
+    }, [currentWorkout, startTime]);
 
     const inputExercise = (item) => {
         actionSheetRef.current?.hide();

@@ -81,7 +81,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
                                     color: isFocused
                                         ? theme.primary
                                         : (route.name === 'current' && workoutInProgress)
-                                            ? theme.secondary
+                                            ? `${theme.primary}60`
                                             : theme.textSecondary
                                 })
                             }
@@ -89,9 +89,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
                             <Text style={{
                                 color: isFocused
                                     ? theme.primary
-                                    : (route.name === 'current' && workoutInProgress)
-                                        ? theme.secondary
-                                        : theme.textSecondary,
+                                    : theme.textSecondary,
                                 fontSize: 10,
                                 fontFamily: isFocused ? FONTS.bold : FONTS.medium,
                                 marginTop: 4
