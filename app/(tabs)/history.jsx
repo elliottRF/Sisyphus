@@ -329,6 +329,7 @@ const History = () => {
                 data={workoutHistory}
                 style={styles.list}
                 contentContainerStyle={styles.listContentContainer}
+                showsVerticalScrollIndicator={false}
                 keyExtractor={([session]) => session}
                 renderItem={({ item: [session, exercises] }) => (
                     <HistoryCard

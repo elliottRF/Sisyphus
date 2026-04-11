@@ -256,7 +256,7 @@ const Current = () => {
                     let maxWeight = 0;
                     let minWeight = Infinity;
                     let maxRepsAtMaxWeight = 0;
-                    
+
                     const exerciseDetails = exercises.find(e => e.exerciseID === exercise.exerciseID);
                     const isAssisted = !!exerciseDetails?.isAssisted;
 
@@ -702,7 +702,7 @@ const Current = () => {
                     <>
                         {!startTime && currentWorkout.length === 0 && (
                             <View style={{ flex: 1 }}>
-                                <ScrollView contentContainerStyle={styles.emptyStateScrollContent}>
+                                <ScrollView contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false}>
                                     <View style={styles.emptyStateHeader}>
                                         <Feather name="activity" size={48} color={theme.primary} style={{ marginBottom: 16, opacity: 0.8 }} />
                                         <Text style={styles.emptyStateTitle}>Ready to train?</Text>

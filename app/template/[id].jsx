@@ -343,6 +343,7 @@ const EditTemplate = () => {
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
                     panGesture={panGesture}
+                    showsVerticalScrollIndicator={false}
                     ListFooterComponent={
                         <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
                             <TouchableOpacity

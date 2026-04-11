@@ -52,17 +52,29 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
             {isFocused ? (
                 <TextInput
                     ref={inputRef}
-                    style={[styles.textInputInternal, { color: editable ? theme.text : theme.textSecondary, width: '100%', height: '100%' }]}
-                    value={value}
+                    style={[
+                        styles.textInputInternal,
+                        {
+                            color: editable ? theme.text : theme.textSecondary,
+                            width: '100%',
+                            height: '100%',
+                        }
+                    ]}
+                    value={value || ""}
                     onChangeText={onChangeText}
                     placeholder={placeholder}
                     placeholderTextColor={placeholderTextColor}
-                    keyboardType={keyboardType}
+                    keyboardType="numeric"
                     maxLength={maxLength}
                     editable={editable}
                     onBlur={() => setIsFocused(false)}
                     selectTextOnFocus
                     autoFocus
+                    multiline={Platform.OS === 'android'}
+                    blurOnSubmit={true}
+                    selectionColor={theme.primary}
+                    cursorColor={theme.primary}
+                    underlineColorAndroid="transparent"
                 />
             ) : (
                 <Text style={[styles.textInputInternal, { color: editable ? theme.text : theme.textSecondary }]}>
@@ -560,9 +572,12 @@ const getStyles = (theme) => {
         },
         textInputInternal: {
             textAlign: 'center',
+            textAlignVertical: 'center',
             fontFamily: FONTS.bold,
             fontSize: 16,
             padding: 0,
+            paddingHorizontal: 0,
+            margin: 0,
             includeFontPadding: false,
         },
 

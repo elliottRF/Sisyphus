@@ -375,7 +375,7 @@ const ExerciseHistory = (props) => {
 
     useEffect(() => {
         if (!workoutHistory || workoutHistory.length === 0) return;
-        
+
         let maxWeight = 0;
         let minWeight = Infinity;
         let volume = 0;
@@ -445,6 +445,7 @@ const ExerciseHistory = (props) => {
                 maxToRenderPerBatch={5}
                 updateCellsBatchingPeriod={50}
                 windowSize={10}
+                showsVerticalScrollIndicator={false}
                 ListHeaderComponent={
                     <View style={styles.headerWrapper}>
                         <View style={styles.titleRow}>

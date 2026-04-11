@@ -518,6 +518,7 @@ const Home = () => {
                     <FlatList
                         data={filteredExercises}
                         keyExtractor={item => item.exerciseID.toString()}
+                        showsVerticalScrollIndicator={false}
                         renderItem={({ item }) => (
                             <TouchableOpacity
                                 style={styles.exerciseCard}

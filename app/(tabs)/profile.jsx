@@ -106,8 +106,8 @@ const Profile = () => {
 
     const renderItem = ({ item }) => {
         const count = workoutCounts.get(item.exerciseID) ?? 0;
-        const hasMuscles = (item.targetMuscle && item.targetMuscle.trim() !== '') || 
-                           (item.accessoryMuscles && item.accessoryMuscles.trim() !== '');
+        const hasMuscles = (item.targetMuscle && item.targetMuscle.trim() !== '') ||
+            (item.accessoryMuscles && item.accessoryMuscles.trim() !== '');
 
         return (
             <TouchableOpacity
@@ -179,6 +179,7 @@ const Profile = () => {
                         onChangeText={setSearchQuery}
                         returnKeyType="done"
                         onSubmitEditing={Keyboard.dismiss}
+
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity
@@ -208,6 +209,7 @@ const Profile = () => {
                 keyboardShouldPersistTaps="always"
                 contentContainerStyle={styles.list}
                 showsVerticalScrollIndicator={false}
+                keyboardDismissMode="on-drag"
             />
 
 
