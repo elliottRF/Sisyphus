@@ -15,7 +15,18 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
     const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
     const [searchQuery, setSearchQuery] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
     const createExerciseActionSheetRef = useRef(null);
+    const searchInputRef = useRef(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            const timer = setTimeout(() => {
+                searchInputRef.current?.focus();
+            }, 150);
+            return () => clearTimeout(timer);
+        }
+    }, [isOpen]);
 
     const isDynamic = theme.type === 'dynamic';
     const safeBackground = isDynamic ? '#121212' : theme.background;
@@ -101,8 +112,10 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
             activeOpacity={0.7}
         >
             <View style={styles.exerciseContent}>
-                <Text style={styles.exerciseName}>{item.name}</Text>
-                <Feather name="plus" size={20} color={theme.primary} />
+                <Text style={styles.exerciseName} numberOfLines={2}>{item.name}</Text>
+                <View style={styles.plusIconContainer}>
+                    <Feather name="plus" size={20} color={theme.primary} />
+                </View>
             </View>
         </TouchableOpacity>
     );
@@ -113,13 +126,20 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
             containerStyle={styles.actionSheetContainer}
             indicatorStyle={styles.indicator}
             gestureEnabled={true}
-            onClose={() => setSearchQuery('')}
+            keyboardHandlerEnabled={true}
+            onOpen={() => setIsOpen(true)}
+
+            onClose={() => {
+                setIsOpen(false);
+                setSearchQuery('');
+            }}
         >
             <View style={styles.contentContainer}>
                 <View style={styles.searchContainer}>
                     <View style={styles.searchBar}>
                         <Feather name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
                         <TextInput
+                            ref={searchInputRef}
                             style={styles.searchInput}
                             placeholder="Search exercises..."
                             placeholderTextColor={theme.textSecondary}
@@ -152,6 +172,8 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
                     keyExtractor={(item) => item.exerciseID.toString()}
                     renderItem={renderItem}
                     keyboardShouldPersistTaps="always"
+                    keyboardDismissMode="on-drag"
+
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                     style={styles.list}
@@ -225,7 +247,7 @@ const getStyles = (theme) => {
             backgroundColor: 'transparent',
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
-            height: '85%',
+            height: '100%',
         },
         subActionSheetContainer: {
             height: '100%',
@@ -323,6 +345,12 @@ const getStyles = (theme) => {
             color: safeText,
             fontSize: 16,
             fontFamily: FONTS.semiBold,
+            flex: 1,
+            marginRight: 12,
+        },
+        plusIconContainer: {
+            justifyContent: 'center',
+            alignItems: 'center',
         },
     });
 };

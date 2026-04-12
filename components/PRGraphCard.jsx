@@ -624,7 +624,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                     <View style={[styles.modeToggleContainer, isCompact && { marginBottom: 8 }]}>
                         {[
                             { key: 'history', label: '1RM', icon: 'chart-timeline-variant' },
-                            { key: 'truePR', label: 'True PR', icon: 'trending-up' },
+                            { key: 'truePR', label: 'Top 1RM', icon: 'trending-up' },
                             { key: 'maxWeight', label: 'Max Wt', icon: 'weight' },
                         ].map(mode => (
                             <TouchableOpacity

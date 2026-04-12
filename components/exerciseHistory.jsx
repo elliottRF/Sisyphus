@@ -466,7 +466,7 @@ const ExerciseHistory = (props) => {
                                 <View style={styles.statCard}>
                                     <Feather name="award" size={16} color={theme.primary} style={styles.statIcon} />
                                     <Text style={styles.statValue}>{isAssistedHeader && stats.personalBest > 0 ? '-' : ''}{Math.round(formatWeight(stats.personalBest, useImperial, 0))}{unitLabel(useImperial)}</Text>
-                                    <Text style={styles.statLabel}>Best Lift</Text>
+                                    <Text style={styles.statLabel}>Weight PR</Text>
                                 </View>
                             )}
                             <View style={styles.statCard}>
@@ -776,8 +776,8 @@ const getStyles = (theme) => StyleSheet.create({
         lineHeight: 18,
     },
     setsContainer: {
-        paddingVertical: 4,
-        paddingBottom: 8,
+        paddingTop: 4,
+        paddingBottom: 4,
     },
     setsHeaderRow: {
         flexDirection: 'row',
@@ -800,7 +800,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     colHeader1RM: { flex: 1, textAlign: 'center' },
     setRowContainer: {
-        paddingVertical: 6,
+        paddingVertical: 3,
         paddingHorizontal: 12,
     },
     setRow: {

@@ -519,6 +519,7 @@ const Home = () => {
                         data={filteredExercises}
                         keyExtractor={item => item.exerciseID.toString()}
                         showsVerticalScrollIndicator={false}
+                        keyboardDismissMode="on-drag"
                         renderItem={({ item }) => (
                             <TouchableOpacity
                                 style={styles.exerciseCard}
@@ -749,7 +750,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     actionSheetContainer: {
         backgroundColor: 'transparent',
-        height: '85%'
+        height: '100%'
     },
     indicator: {
         backgroundColor: '#aaaaaa'

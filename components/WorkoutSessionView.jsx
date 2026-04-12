@@ -516,7 +516,7 @@ const getStyles = (theme) => {
             color: theme.textSecondary,
         },
         setsContainer: {
-            paddingVertical: 2,
+            paddingVertical: 4,
         },
         setsHeaderRow: {
             flexDirection: 'row',
