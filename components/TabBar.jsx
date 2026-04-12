@@ -81,7 +81,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
                                     color: isFocused
                                         ? theme.primary
                                         : (route.name === 'current' && workoutInProgress)
-                                            ? `${theme.primary}60`
+                                            ? theme.primary
                                             : theme.textSecondary
                                 })
                             }

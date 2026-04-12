@@ -623,7 +623,7 @@ const getStyles = (theme) => StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 6,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.05)'
+        borderBottomColor: theme.overlayBorder
     },
     highlighterTitle: {
         fontSize: 14,
@@ -638,7 +638,7 @@ const getStyles = (theme) => StyleSheet.create({
         width: 6,
         height: 6,
         borderRadius: 3,
-        backgroundColor: 'rgba(255,255,255,0.1)'
+        backgroundColor: theme.overlayBorder
     },
     indicatorDotActive: {
         backgroundColor: theme.primary
@@ -701,7 +701,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     progressBarContainer: {
         height: 4,
-        backgroundColor: 'rgba(255,255,255,0.08)',
+        backgroundColor: theme.overlayBorder,
         borderRadius: 2,
         overflow: 'hidden'
     },

@@ -80,7 +80,11 @@ const ThemeConsumer = () => {
                 backgroundColor="transparent"
                 translucent={true}
             />
-            <Stack screenOptions={{ headerShown: false, animation: 'flip' }}>
+            <Stack screenOptions={{ 
+                headerShown: false, 
+                animation: 'flip',
+                contentStyle: { backgroundColor: theme.background }
+            }}>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="workout/[session]" options={{ headerShown: false }} />
                 <Stack.Screen name="workout/EditWorkout" options={{ headerShown: false }} />

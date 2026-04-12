@@ -344,51 +344,57 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                         <Text style={[styles.colHeader, styles.colHeaderLift]}>{exerciseDetails?.isCardio ? "DIST / TIME" : "LIFT"}</Text>
                                         {!isAssisted && <Text style={[styles.colHeader, styles.colHeader1RM]}>{exerciseDetails?.isCardio ? "PACE" : "1RM"}</Text>}
                                     </View>
-                                    {visibleSets.map((set, setIndex) => {
-                                        const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
-                                        const setType = set.setType || 'N';
-                                        const isWarmup = setType === 'W';
-                                        const isDrop = setType === 'D';
+                                    {(() => {
+                                        let workingIndex = 0;
+                                        return visibleSets.map((set, setIndex) => {
+                                            const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+                                            const setType = set.setType || 'N';
+                                            const isWarmup = setType === 'W';
+                                            const isDrop = setType === 'D';
 
-                                        return (
-                                            <View key={`${set.exerciseHistoryID ?? ''}-${setIndex}`} style={[
-                                                styles.setRowContainer,
-                                                setIndex % 2 === 1 && styles.setRowOdd,
-                                                isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
-                                            ]}>
-                                                <View style={styles.setRow}>
-                                                    <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
-                                                    <Text style={[
-                                                        styles.setLift,
-                                                        isWarmup && styles.setLiftWarmup,
-                                                    ]}>
-                                                        {exerciseDetails?.isCardio ? (
-                                                            `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)}m`
-                                                        ) : (
-                                                            `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} × ${set.reps}`
-                                                        )}
-                                                    </Text>
-                                                    {!isAssisted && (
-                                                        <Text style={styles.setOneRM}>
+                                            const isOdd = !isWarmup && (workingIndex % 2 === 1);
+                                            if (!isWarmup) workingIndex++;
+
+                                            return (
+                                                <View key={`${set.exerciseHistoryID ?? ''}-${setIndex}`} style={[
+                                                    styles.setRowContainer,
+                                                    isOdd && styles.setRowOdd,
+                                                    isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
+                                                ]}>
+                                                    <View style={styles.setRow}>
+                                                        <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
+                                                        <Text style={[
+                                                            styles.setLift,
+                                                            isWarmup && styles.setLiftWarmup,
+                                                        ]}>
                                                             {exerciseDetails?.isCardio ? (
-                                                                set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} m/k` : '-'
+                                                                `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)}m`
                                                             ) : (
-                                                                set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))} ${unitLabel(useImperial)}` : '-'
+                                                                `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} × ${set.reps}`
                                                             )}
                                                         </Text>
+                                                        {!isAssisted && (
+                                                            <Text style={styles.setOneRM}>
+                                                                {exerciseDetails?.isCardio ? (
+                                                                    set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} m/k` : '-'
+                                                                ) : (
+                                                                    set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))}` : '-'
+                                                                )}
+                                                            </Text>
+                                                        )}
+                                                    </View>
+                                                    {isPR && (
+                                                        <View style={styles.badgeRow}>
+                                                            <View style={{ width: 32 }} />
+                                                            {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
+                                                            {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
+                                                            {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
+                                                        </View>
                                                     )}
                                                 </View>
-                                                {isPR && (
-                                                    <View style={styles.badgeRow}>
-                                                        <View style={{ width: 32 }} />
-                                                        {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
-                                                        {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
-                                                        {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
-                                                    </View>
-                                                )}
-                                            </View>
-                                        );
-                                    })}
+                                            );
+                                        });
+                                    })()}
                                 </View>
                             </View>
                         );
@@ -472,12 +478,12 @@ const getStyles = (theme) => {
         exerciseHeader: {
             paddingHorizontal: 12,
             paddingVertical: 10,
-            backgroundColor: 'rgba(255,255,255,0.03)',
+            backgroundColor: theme.overlayMedium,
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
             borderBottomWidth: 1,
-            borderBottomColor: 'rgba(255,255,255,0.05)',
+            borderBottomColor: theme.border,
         },
         exerciseName: {
             fontSize: 15,
@@ -490,7 +496,7 @@ const getStyles = (theme) => {
             paddingHorizontal: 12,
             paddingVertical: 6,
             gap: 6,
-            backgroundColor: 'rgba(255, 253, 203, 0.05)',
+            backgroundColor: theme.overlayBorder,
         },
         noteText: {
             flex: 1,
@@ -507,8 +513,8 @@ const getStyles = (theme) => {
             paddingHorizontal: 12,
             paddingVertical: 8,
             borderBottomWidth: 1,
-            borderBottomColor: 'rgba(255,255,255,0.05)',
-            backgroundColor: 'rgba(255,255,255,0.02)',
+            borderBottomColor: theme.overlayBorder,
+            backgroundColor: theme.overlaySubtle,
         },
         warmupToggleText: {
             fontSize: 12,
@@ -522,7 +528,7 @@ const getStyles = (theme) => {
             flexDirection: 'row',
             paddingVertical: 6,
             borderBottomWidth: 1,
-            borderBottomColor: 'rgba(255,255,255,0.05)',
+            borderBottomColor: theme.overlayBorder,
             paddingHorizontal: 12,
         },
         colHeader: {
@@ -548,7 +554,7 @@ const getStyles = (theme) => {
             minHeight: 28,
         },
         setRowOdd: {
-            backgroundColor: 'rgba(255,255,255,0.01)',
+            backgroundColor: theme.overlaySubtle,
         },
         badgeRow: {
             flexDirection: 'row',

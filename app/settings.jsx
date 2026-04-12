@@ -153,7 +153,7 @@ const Settings = () => {
             if (result.canceled) return;
 
             setImportingWorkouts(true);
-            setImportProgress('Reading file...');
+            setImportProgress('Reading file (This could take a while)...');
             const fileUri = result.assets[0].uri;
             const fileContent = await FileSystem.readAsStringAsync(fileUri);
 

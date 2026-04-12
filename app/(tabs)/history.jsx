@@ -1,5 +1,6 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Animated } from 'react-native'
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Animated as RNAnimated } from 'react-native'
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import Animated, { FadeIn, FadeInUp, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useScrollToTop } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession } from '../../components/db';
@@ -67,17 +68,17 @@ const groupBySession = (history) => {
     return Object.entries(grouped).sort((a, b) => b[0] - a[0]);
 };
 
-const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+const AnimatedTouchableOpacity = RNAnimated.createAnimatedComponent(TouchableOpacity);
 
-const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styles, formatDate, formatDuration, router }) => {
+const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styles, formatDate, formatDuration, router, index }) => {
     const groupedExercises = groupExercisesByName(exercises);
     const duration = exercises[0].duration;
     const [isLoading, setIsLoading] = useState(false);
 
-    const scaleAnim = useRef(new Animated.Value(1)).current;
+    const scaleAnim = useRef(new RNAnimated.Value(1)).current;
 
     const handlePressIn = () => {
-        Animated.spring(scaleAnim, {
+        RNAnimated.spring(scaleAnim, {
             toValue: 0.98,
             useNativeDriver: true,
             speed: 20,
@@ -86,7 +87,7 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
     };
 
     const handlePressOut = () => {
-        Animated.spring(scaleAnim, {
+        RNAnimated.spring(scaleAnim, {
             toValue: 1,
             useNativeDriver: true,
             speed: 20,
@@ -113,7 +114,7 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
         } finally {
             setIsLoading(false);
             // Ensure card scales back up when Returning to the page even if interaction was interrupted
-            Animated.spring(scaleAnim, {
+            RNAnimated.spring(scaleAnim, {
                 toValue: 1,
                 useNativeDriver: true,
                 speed: 20,
@@ -123,81 +124,87 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
     };
 
     return (
-        <AnimatedTouchableOpacity
-            activeOpacity={0.8}
-            onPress={handlePress}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
-            disabled={isLoading}
+        <Animated.View
+            entering={FadeIn.duration(300)}
+            exiting={FadeOut.duration(200)}
+            layout={LinearTransition}
         >
-            <View style={[styles.cardContent, { backgroundColor: theme.surface }]}>
-                <View style={styles.cardHeader}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.workoutName} numberOfLines={1}>{exercises[0].name}</Text>
-                        <View style={styles.metaContainer}>
-                            <View style={styles.metaItem}>
-                                <Feather name="calendar" size={12} color={theme.textSecondary} />
-                                <Text style={styles.metaText}>{formatDate(exercises[0].time)}</Text>
+            <AnimatedTouchableOpacity
+                activeOpacity={0.8}
+                onPress={handlePress}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
+                disabled={isLoading}
+            >
+                <View style={[styles.cardContent, { backgroundColor: theme.surface }]}>
+                    <View style={styles.cardHeader}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.workoutName} numberOfLines={1}>{exercises[0].name}</Text>
+                            <View style={styles.metaContainer}>
+                                <View style={styles.metaItem}>
+                                    <Feather name="calendar" size={12} color={theme.textSecondary} />
+                                    <Text style={styles.metaText}>{formatDate(exercises[0].time)}</Text>
+                                </View>
+                                <View style={styles.metaDivider} />
+                                <View style={styles.metaItem}>
+                                    <Feather name="clock" size={12} color={theme.textSecondary} />
+                                    <Text style={styles.metaText}>{formatDuration(duration)}</Text>
+                                </View>
                             </View>
-                            <View style={styles.metaDivider} />
-                            <View style={styles.metaItem}>
-                                <Feather name="clock" size={12} color={theme.textSecondary} />
-                                <Text style={styles.metaText}>{formatDuration(duration)}</Text>
+                        </View>
+
+                        <View style={styles.badgeContainer}>
+                            {totalPRs > 0 && (
+                                <View style={styles.prSummaryBadge}>
+                                    <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
+                                    <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
+                                </View>
+                            )}
+                            <View style={styles.sessionBadge}>
+                                <Text style={styles.sessionBadgeText}>#{session}</Text>
                             </View>
                         </View>
                     </View>
 
-                    <View style={styles.badgeContainer}>
-                        {totalPRs > 0 && (
-                            <View style={styles.prSummaryBadge}>
-                                <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
-                                <Text style={styles.prSummaryText}>{totalPRs} PR{totalPRs > 1 ? 's' : ''}</Text>
-                            </View>
+                    <View style={styles.divider} />
+
+                    <View style={styles.summaryList}>
+                        {groupedExercises.slice(0, 4).map((group, idx) => {
+                            const exerciseObjFromList = exercisesList.find(e => e.exerciseID === group[0].exerciseID);
+                            const exerciseName = exerciseObjFromList?.name || 'Unknown Exercise';
+                            const workingSets = group.filter(set => set.setType !== 'W');
+                            const count = workingSets.length;
+
+                            const hasMuscles = exerciseObjFromList && (
+                                (exerciseObjFromList.targetMuscle && exerciseObjFromList.targetMuscle.trim() !== '') ||
+                                (exerciseObjFromList.accessoryMuscles && exerciseObjFromList.accessoryMuscles.trim() !== '')
+                            );
+
+                            return (
+                                <View key={idx} style={styles.summaryRow}>
+                                    <Text style={[styles.summaryText, { flexShrink: 1 }]} numberOfLines={1}>
+                                        <Text style={styles.summaryCount}>{count} x</Text> {exerciseName}
+                                    </Text>
+                                    {!hasMuscles && exerciseObjFromList && !exerciseObjFromList.isCardio && (
+                                        <TouchableOpacity
+                                            onPress={() => router.push(`/exercise/new?id=${group[0].exerciseID}`)}
+                                            style={styles.missingMuscleIcon}
+                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                        >
+                                            <Feather name="help-circle" size={14} color={theme.textSecondary} />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            );
+                        })}
+                        {groupedExercises.length > 4 && (
+                            <Text style={styles.moreText}>+ {groupedExercises.length - 4} more exercises</Text>
                         )}
-                        <View style={styles.sessionBadge}>
-                            <Text style={styles.sessionBadgeText}>#{session}</Text>
-                        </View>
                     </View>
                 </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.summaryList}>
-                    {groupedExercises.slice(0, 4).map((group, idx) => {
-                        const exerciseObjFromList = exercisesList.find(e => e.exerciseID === group[0].exerciseID);
-                        const exerciseName = exerciseObjFromList?.name || 'Unknown Exercise';
-                        const workingSets = group.filter(set => set.setType !== 'W');
-                        const count = workingSets.length;
-
-                        const hasMuscles = exerciseObjFromList && (
-                            (exerciseObjFromList.targetMuscle && exerciseObjFromList.targetMuscle.trim() !== '') ||
-                            (exerciseObjFromList.accessoryMuscles && exerciseObjFromList.accessoryMuscles.trim() !== '')
-                        );
-
-                        return (
-                            <View key={idx} style={styles.summaryRow}>
-                                <Text style={[styles.summaryText, { flexShrink: 1 }]} numberOfLines={1}>
-                                    <Text style={styles.summaryCount}>{count} x</Text> {exerciseName}
-                                </Text>
-                                {!hasMuscles && exerciseObjFromList && !exerciseObjFromList.isCardio && (
-                                    <TouchableOpacity
-                                        onPress={() => router.push(`/exercise/new?id=${group[0].exerciseID}`)}
-                                        style={styles.missingMuscleIcon}
-                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    >
-                                        <Feather name="help-circle" size={14} color={theme.textSecondary} />
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        );
-                    })}
-                    {groupedExercises.length > 4 && (
-                        <Text style={styles.moreText}>+ {groupedExercises.length - 4} more exercises</Text>
-                    )}
-                </View>
-            </View>
-        </AnimatedTouchableOpacity>
+            </AnimatedTouchableOpacity>
+        </Animated.View>
     );
 });
 
@@ -307,11 +314,8 @@ const History = () => {
         return marked;
     }, [workoutHistory, safePrimary, safePrimaryFaint]);
 
-    if (loading) {
-        return (
-            <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]} />
-        );
-    }
+    // Removed full-screen loading blank view to avoid jarring jumps
+    // We now render the header even while loading
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
@@ -331,7 +335,7 @@ const History = () => {
                 contentContainerStyle={styles.listContentContainer}
                 showsVerticalScrollIndicator={false}
                 keyExtractor={([session]) => session}
-                renderItem={({ item: [session, exercises] }) => (
+                renderItem={({ item: [session, exercises], index }) => (
                     <HistoryCard
                         session={session}
                         exercises={exercises}
@@ -341,23 +345,30 @@ const History = () => {
                         formatDate={formatDate}
                         formatDuration={formatDuration}
                         router={router}
+                        index={index}
                     />
                 )}
                 ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <View style={styles.emptyIconContainer}>
-                            <MaterialCommunityIcons name="clipboard-text-outline" size={48} color={theme.primary} />
+                    loading ? (
+                        <View style={{ flex: 1, paddingVertical: 100, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
+                            <ActivityIndicator size="large" color={theme.primary} />
                         </View>
-                        <Text style={styles.emptyTitle}>No Workouts Found</Text>
-                        <Text style={styles.emptySubtitle}>
-                            Finish a workout and your history will appear here.
-                        </Text>
-                    </View>
+                    ) : (
+                        <View style={styles.emptyContainer}>
+                            <View style={styles.emptyIconContainer}>
+                                <MaterialCommunityIcons name="clipboard-text-outline" size={48} color={theme.primary} />
+                            </View>
+                            <Text style={styles.emptyTitle}>No Workouts Found</Text>
+                            <Text style={styles.emptySubtitle}>
+                                Finish a workout and your history will appear here.
+                            </Text>
+                        </View>
+                    )
                 }
                 initialNumToRender={10}
                 maxToRenderPerBatch={10}
                 windowSize={10}
-                removeClippedSubviews={true}
+                removeClippedSubviews={false}
             />
 
             <ActionSheet
@@ -451,8 +462,10 @@ const getStyles = (theme) => StyleSheet.create({
     list: {
         flex: 1,
         width: '100%',
+        backgroundColor: theme.background,
     },
     listContentContainer: {
+        paddingTop: 8,
         paddingBottom: 100,
         paddingHorizontal: 16,
     },
