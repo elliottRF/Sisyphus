@@ -9,9 +9,10 @@ import { useTheme } from '../context/ThemeContext';
 
 import NewExercise from './NewExercise';
 import { LinearGradient } from 'expo-linear-gradient';
+import { formatWeight } from '../utils/units';
 
 const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, onExerciseCreated }) => {
-    const { theme } = useTheme();
+    const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
     const [searchQuery, setSearchQuery] = useState('');
     const createExerciseActionSheetRef = useRef(null);
@@ -57,7 +58,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
             // Use all sets from history including warm-ups
             setsToUse = history.map(hSet => ({
                 id: generateId(),
-                weight: hSet.weight?.toString() || null,
+                weight: formatWeight(hSet.weight, useImperial),
                 reps: hSet.reps?.toString() || null,
                 distance: hSet.distance?.toString() || null,
                 minutes: hSet.seconds ? (hSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : null,

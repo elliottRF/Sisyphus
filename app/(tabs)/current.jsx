@@ -14,6 +14,7 @@ import * as NavigationBar from 'expo-navigation-bar';
 
 import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, fetchLastWorkoutSets, getTemplate } from '../../components/db';
 import { setPreloadedData } from '../../constants/preloader';
+import { toStorageKg, formatWeight } from '../../utils/units';
 
 
 import ExerciseEditable from '../../components/exerciseEditable'
@@ -38,7 +39,7 @@ const { width } = Dimensions.get('window');
 
 const Current = () => {
     const insets = useSafeAreaInsets();
-    const { theme, setWorkoutInProgress } = useTheme();
+    const { theme, setWorkoutInProgress, useImperial } = useTheme();
     const styles = getStyles(theme);
 
     const [exercises, setExercises] = useState([]);
@@ -93,7 +94,7 @@ const Current = () => {
                     // Overwrite template sets with history (weights, reps, counts)
                     setsToUse = history.map(hSet => ({
                         id: generateId(),
-                        weight: hSet.weight?.toString() || null,
+                        weight: formatWeight(hSet.weight, useImperial),
                         reps: hSet.reps?.toString() || null,
                         distance: hSet.distance?.toString() || null,
                         minutes: hSet.seconds ? (hSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : null,
@@ -105,6 +106,7 @@ const Current = () => {
                     setsToUse = ex.sets.map(set => ({
                         ...set,
                         id: generateId(),
+                        weight: formatWeight(set.weight, useImperial),
                         completed: false
                     }));
                 }
@@ -261,19 +263,21 @@ const Current = () => {
                     const isAssisted = !!exerciseDetails?.isAssisted;
 
                     for (const set of exercise.sets) {
+                        // Convert user-input weight to kg for storage
+                        const weightKg = toStorageKg(set.weight, useImperial);
                         // Calculate One Rep Max
                         const calculatedOneRM = calculateOneRepMax(
-                            parseFloat(set.weight) || 0,
+                            weightKg,
                             parseInt(set.reps) || 0
                         );
                         if (calculatedOneRM > maxOneRM) maxOneRM = calculatedOneRM;
 
                         // Calculate Volume
-                        const volume = (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0);
+                        const volume = weightKg * (parseInt(set.reps) || 0);
                         if (volume > maxVolume) maxVolume = volume;
 
                         // Calculate Weight (ignore 0 reps)
-                        const weight = parseFloat(set.weight) || 0;
+                        const weight = weightKg;
                         const reps = parseInt(set.reps) || 0;
                         if (reps > 0) {
                             if (isAssisted) {
@@ -334,12 +338,13 @@ const Current = () => {
 
                     for (const set of exercise.sets) {
                         // Calculate metrics for the set
+                        const weightKg = toStorageKg(set.weight, useImperial);
                         const calculatedOneRM = calculateOneRepMax(
-                            parseFloat(set.weight) || 0,
+                            weightKg,
                             parseInt(set.reps) || 0
                         );
-                        const volume = (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0);
-                        const weight = parseFloat(set.weight) || 0;
+                        const volume = weightKg * (parseInt(set.reps) || 0);
+                        const weight = weightKg;
                         const reps = parseInt(set.reps) || 0;
 
                         // Determine if this specific set is the PR-setting set
@@ -371,9 +376,9 @@ const Current = () => {
                             exerciseNum: globalExerciseNum,
                             setNum: setNum,
                             exerciseID: exercise.exerciseID,
-                            weight: set.weight,
+                            weight: toStorageKg(set.weight, useImperial), // always store in kg
                             reps: set.reps,
-                            oneRM: calculatedOneRM,
+                            oneRM: calculatedOneRM,   // already in kg
                             time: new Date().toISOString(),
                             name: workoutTitle,
                             pr: isPR,
@@ -795,6 +800,8 @@ const Current = () => {
                                     style={styles.list}
                                     contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                                     keyboardShouldPersistTaps="handled"
+                                    showsVerticalScrollIndicator={false}
+                                    keyboardDismissMode="on-drag"
                                     ListFooterComponent={
                                         <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
                                             <TouchableOpacity

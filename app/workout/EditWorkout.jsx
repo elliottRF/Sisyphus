@@ -33,6 +33,7 @@ import FilteredExerciseList from '../../components/FilteredExerciseList';
 import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
+import { toStorageKg, formatWeight } from '../../utils/units';
 
 // FIXED: Component now uses route params instead of props
 const EditWorkout = () => {
@@ -40,7 +41,7 @@ const EditWorkout = () => {
     const params = useLocalSearchParams();
     const WORKOUT_SESSION_NUMBER = params.session ? parseInt(params.session) : null;
 
-    const { theme } = useTheme();
+    const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
 
     const [exercises, setExercises] = useState([]);
@@ -188,16 +189,17 @@ const EditWorkout = () => {
                     let maxRepsAtMaxWeight = 0;
 
                     for (const set of exercise.sets) {
+                        const weightKg = toStorageKg(set.weight, useImperial);
                         const calculatedOneRM = calculateOneRepMax(
-                            parseFloat(set.weight),
+                            weightKg,
                             parseInt(set.reps)
                         );
                         if (calculatedOneRM > maxOneRM) maxOneRM = calculatedOneRM;
 
-                        const volume = parseFloat(set.weight) * parseInt(set.reps);
+                        const volume = weightKg * parseInt(set.reps);
                         if (volume > maxVolume) maxVolume = volume;
 
-                        const weight = parseFloat(set.weight);
+                        const weight = weightKg;
                         const reps = parseInt(set.reps);
                         if (reps > 0) {
                             if (weight > maxWeight) {
@@ -235,12 +237,13 @@ const EditWorkout = () => {
                     let prWeightAssigned = false;
 
                     for (const set of exercise.sets) {
+                        const weightKg = toStorageKg(set.weight, useImperial);
                         const calculatedOneRM = calculateOneRepMax(
-                            parseFloat(set.weight),
+                            weightKg,
                             parseInt(set.reps)
                         );
-                        const volume = parseFloat(set.weight) * parseInt(set.reps);
-                        const weight = parseFloat(set.weight);
+                        const volume = weightKg * parseInt(set.reps);
+                        const weight = weightKg;
                         const reps = parseInt(set.reps);
 
                         let is1rmPR = 0;
@@ -268,7 +271,7 @@ const EditWorkout = () => {
                             exerciseNum: globalExerciseNum,
                             setNum: setNum,
                             exerciseID: exercise.exerciseID,
-                            weight: set.weight,
+                            weight: toStorageKg(set.weight, useImperial), // always store in kg
                             reps: set.reps,
                             oneRM: calculatedOneRM,
                             time: originalStartTime,
@@ -405,7 +408,7 @@ const EditWorkout = () => {
                         const group = exerciseGroups.get(groupKey);
                         group.exercises[0].sets.push({
                             id: `set-${row.exerciseNum}-${row.setNum}-${index}`,
-                            weight: parseFloat(row.weight),
+                            weight: formatWeight(parseFloat(row.weight), useImperial), // convert kg→user unit for display
                             reps: parseInt(row.reps),
                             distance: row.distance || null,
                             minutes: row.seconds ? (row.seconds / 60).toString() : null,

@@ -103,22 +103,6 @@ const RestTimer = forwardRef((props, ref) => {
         }
     };
 
-    useImperativeHandle(ref, () => ({
-        startIfStopped: () => {
-            // Only start if NOT already running
-            if (!timerRunning.current) {
-                console.log("Auto-starting timer from set completion");
-                startTimer();
-            }
-        },
-        stopTimer: () => {
-            if (timerRunning.current) {
-                console.log("Stopping timer from parent");
-                startTimer(); // Toggle off
-            }
-        }
-    }));
-
     const internalStop = (playAudio = false) => {
         // Clear Native Persistence (Hack: start with 0 to overwrite any lingering time)
         Timer.startTimer(0, isMuted);

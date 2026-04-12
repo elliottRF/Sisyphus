@@ -6,12 +6,13 @@ import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/d
 import WorkoutSessionView from '../../components/WorkoutSessionView';
 import { useTheme } from '../../context/ThemeContext';
 import { setPreloadedData } from '../../constants/preloader';
+import { formatWeight } from '../../utils/units';
 
 const WorkoutDetail = () => {
     const insets = useSafeAreaInsets();
     const { session, initialData } = useLocalSearchParams();
     const router = useRouter();
-    const { theme } = useTheme();
+    const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
 
     const syncedInitialData = React.useMemo(() => {
@@ -137,7 +138,7 @@ const WorkoutDetail = () => {
                         notes: '',
                         sets: grouped[exerciseID].map(s => ({
                             id: Date.now().toString() + Math.random(),
-                            weight: s.weight?.toString() || null,
+                            weight: formatWeight(s.weight, useImperial),
                             reps: s.reps?.toString() || null,
                             distance: s.distance?.toString() || null,
                             minutes: s.seconds

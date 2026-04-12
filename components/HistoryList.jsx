@@ -5,9 +5,12 @@ import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { FONTS } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
+import { formatWeight, unitLabel } from '../utils/units';
 
 const HistoryList = ({ data, theme, styles, onEdit, onDelete }) => {
     const handlers = useScrollHandlers();
+    const { useImperial } = useTheme();
 
     return (
         <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
@@ -34,7 +37,7 @@ const HistoryList = ({ data, theme, styles, onEdit, onDelete }) => {
                                 </View>
                                 <View>
                                     <Text style={[styles.historyDate, { color: theme.text, fontSize: 16, fontFamily: FONTS.bold }]}>
-                                        {Number(item.weight).toFixed(1)} <Text style={{ fontSize: 14, color: theme.textSecondary, fontFamily: FONTS.medium }}>kg</Text>
+                                        {formatWeight(item.weight, useImperial)} <Text style={{ fontSize: 14, color: theme.textSecondary, fontFamily: FONTS.medium }}>{unitLabel(useImperial)}</Text>
                                     </Text>
                                     <Text style={[styles.historyWeight, { color: theme.textSecondary, fontSize: 13 }]}>
                                         {new Date(item.datetime).toLocaleDateString(undefined, {

@@ -11,6 +11,7 @@ export const ThemeProvider = ({ children }) => {
     const [gender, setGender] = useState('male');
     const [accessoryWeight, setAccessoryWeight] = useState(0.5);
     const [workoutInProgress, setWorkoutInProgress] = useState(false);
+    const [useImperial, setUseImperial] = useState(false);
 
     useEffect(() => {
         loadSettings();
@@ -18,10 +19,11 @@ export const ThemeProvider = ({ children }) => {
 
     const loadSettings = async () => {
         try {
-            const [storedThemeID, storedGender, storedAccessoryWeight] = await Promise.all([
+            const [storedThemeID, storedGender, storedAccessoryWeight, storedUnitPref] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
-                AsyncStorage.getItem('user_accessory_weight')
+                AsyncStorage.getItem('user_accessory_weight'),
+                AsyncStorage.getItem('user_unit_imperial')
             ]);
 
             if (storedThemeID && THEMES[storedThemeID]) {
@@ -33,6 +35,9 @@ export const ThemeProvider = ({ children }) => {
             }
             if (storedAccessoryWeight !== null) {
                 setAccessoryWeight(parseFloat(storedAccessoryWeight));
+            }
+            if (storedUnitPref !== null) {
+                setUseImperial(storedUnitPref === 'true');
             }
         } catch (error) {
             console.error("Failed to load settings:", error);
@@ -69,6 +74,15 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updateUnitPref = async (imperial) => {
+        setUseImperial(imperial);
+        try {
+            await AsyncStorage.setItem('user_unit_imperial', imperial.toString());
+        } catch (error) {
+            console.error("Failed to save unit preference:", error);
+        }
+    };
+
     return (
         <ThemeContext.Provider value={{
             theme,
@@ -79,7 +93,9 @@ export const ThemeProvider = ({ children }) => {
             accessoryWeight,
             updateAccessoryWeight,
             workoutInProgress,
-            setWorkoutInProgress
+            setWorkoutInProgress,
+            useImperial,
+            updateUnitPref
         }}>
             {children}
         </ThemeContext.Provider>

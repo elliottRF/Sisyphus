@@ -68,7 +68,9 @@ const Settings = () => {
         gender,
         updateGender,
         accessoryWeight,
-        updateAccessoryWeight
+        updateAccessoryWeight,
+        useImperial,
+        updateUnitPref
     } = useTheme(); // Use Theme Hook
     const styles = getStyles(theme);
 
@@ -450,6 +452,28 @@ const Settings = () => {
                     </View>
                 </View>
 
+                {/* Weight Units */}
+                <View style={styles.card}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={[styles.cardHeader, { marginBottom: 0 }]}>
+                            <MaterialCommunityIcons name="weight" size={20} color={theme.primary} />
+                            <Text style={styles.cardTitle}>Use Pounds (lbs)</Text>
+                        </View>
+                        {isReady ? (
+                            <AnimatedSwitch
+                                value={useImperial}
+                                onValueChange={(val) => updateUnitPref(val)}
+                                activeColor={theme.primary}
+                                inactiveColor={theme.type === 'dynamic' ? '#555555' : theme.overlayInputFocused}
+                                thumbColor={theme.surface}
+                            />
+                        ) : (
+                            <ActivityIndicator size="small" color={theme.primary} />
+                        )}
+                    </View>
+                </View>
+
+
                 {/* Highlighter Gender */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
@@ -706,6 +730,7 @@ const getStyles = (theme) => StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
     },
+
     genderOption: {
         flex: 1,
         flexDirection: 'row',

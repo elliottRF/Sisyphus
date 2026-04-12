@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, on, off } from '../utils/events';
+import { formatWeight, unitLabel } from '../utils/units';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DEFAULT_GRAPH_HEIGHT = 130;
@@ -119,7 +120,7 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 };
 
 const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, onReady }) => {
-    const { theme } = useTheme();
+    const { theme, useImperial } = useTheme();
     const styles = getStyles(theme, isCompact);
 
     const graphWidth = isCompact
@@ -349,11 +350,17 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
             processed = timeFiltered;
         }
 
-        const values = processed.map(p => p.value).filter(v => !isNaN(v) && isFinite(v));
-        if (values.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
+        // Convert kg values to the user's preferred unit for display
+        const displayPoints = processed.map(p => ({
+            ...p,
+            value: useImperial ? parseFloat((p.value * 2.20462).toFixed(1)) : p.value
+        }));
 
-        const minVal = Math.min(...values);
-        const maxVal = Math.max(...values);
+        const displayValues = displayPoints.map(p => p.value).filter(v => !isNaN(v) && isFinite(v));
+        if (displayValues.length === 0) return { points: [], minDate: new Date(), maxDate: new Date(), yRange: [0, 100] };
+
+        const minVal = Math.min(...displayValues);
+        const maxVal = Math.max(...displayValues);
         const rawRange = maxVal - minVal;
 
         let yMin, yMax;
@@ -380,12 +387,12 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         yMin = Math.max(0, yMin);
 
         return {
-            points: processed,
-            minDate: processed[0].date,
-            maxDate: processed[processed.length - 1].date,
+            points: displayPoints,
+            minDate: displayPoints[0].date,
+            maxDate: displayPoints[displayPoints.length - 1].date,
             yRange: [yMin, yMax]
         };
-    }, [allData, timeRange, graphMode]);
+    }, [allData, timeRange, graphMode, useImperial]);
 
     const trendData = useMemo(() => {
         if (points.length < 2) return { direction: 'flat', label: '0%', period: 'all time' };
@@ -649,14 +656,14 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                         <View style={[styles.tooltipContainer, isCompact && { height: 44, marginBottom: 4 }]}>
                             {selectedPoint?.date ? (
                                 <View style={styles.activeTooltip}>
-                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{selectedPoint.value.toFixed(1)} kg</Text>
+                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{selectedPoint.value.toFixed(1)} {unitLabel(useImperial)}</Text>
                                     <Text style={styles.tooltipDate}>
                                         {selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                     </Text>
                                 </View>
                             ) : (
                                 <View style={styles.placeholderTooltip}>
-                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{currentValue.toFixed(1)} kg</Text>
+                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{currentValue.toFixed(1)} {unitLabel(useImperial)}</Text>
                                     <Text style={styles.tooltipDate}>
                                         {graphMode === 'maxWeight' ? 'Heaviest Lift' : 'Current PR'}
                                     </Text>

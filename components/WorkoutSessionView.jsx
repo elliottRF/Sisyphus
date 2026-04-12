@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import React, { useState, useCallback, useRef, useLayoutEffect, forwardRef } from 'react';
 import { FONTS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
+import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -90,7 +91,8 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 });
 
 const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, onRepeat, onSaveAsTemplate, onExerciseInfo, contentContainerStyle }, ref) => {
-    const { theme } = useTheme();
+    const { theme, useImperial, workoutInProgress } = useTheme();
+    const isDynamic = theme.type === 'dynamic';
     const router = useRouter();
     const styles = getStyles(theme);
     const [expandedWarmups, setExpandedWarmups] = useState({});
@@ -101,6 +103,21 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
             ref.current?.scrollTo({ y: 0, animated: false });
         }
     }, [workoutDetails]);
+
+    const handleRepeatPress = () => {
+        if (workoutInProgress) {
+            Alert.alert(
+                "Workout in Progress",
+                "Workout currently in progress. Overwrite it?",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Redo Workout", style: "destructive", onPress: onRepeat }
+                ]
+            );
+        } else {
+            onRepeat();
+        }
+    };
 
     const toggleWarmups = useCallback((exerciseId, event) => {
         event?.stopPropagation();
@@ -169,7 +186,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                         {onRepeat && (
                             <TouchableOpacity
                                 style={styles.headerActionButton}
-                                onPress={onRepeat}
+                                onPress={handleRepeatPress}
                                 activeOpacity={0.7}
                                 disabled={isEmpty}
                             >
@@ -260,10 +277,12 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                         const warmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') === 'W');
                         const nonWarmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') !== 'W');
                         const warmupsExpanded = !!expandedWarmups[exerciseId];
-                        const visibleSets = warmupsExpanded ? [...warmups, ...nonWarmups] : nonWarmups;
+                        const visibleSets = warmupsExpanded
+                            ? [...warmups, ...nonWarmups]
+                            : [...warmups.filter(s => s.is1rmPR === 1 || s.isVolumePR === 1 || s.isWeightPR === 1), ...nonWarmups];
 
                         const hasMuscles = exerciseDetails && (
-                            (exerciseDetails.targetMuscle && exerciseDetails.targetMuscle.trim() !== '') || 
+                            (exerciseDetails.targetMuscle && exerciseDetails.targetMuscle.trim() !== '') ||
                             (exerciseDetails.accessoryMuscles && exerciseDetails.accessoryMuscles.trim() !== '')
                         );
 
@@ -336,19 +355,17 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                                 styles.setRowContainer,
                                                 setIndex % 2 === 1 && styles.setRowOdd,
                                                 isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
-                                                isDrop && { backgroundColor: 'rgba(116, 185, 255, 0.05)' },
                                             ]}>
                                                 <View style={styles.setRow}>
                                                     <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
                                                     <Text style={[
                                                         styles.setLift,
                                                         isWarmup && styles.setLiftWarmup,
-                                                        isDrop && styles.setLiftDrop,
                                                     ]}>
                                                         {exerciseDetails?.isCardio ? (
                                                             `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)}m`
                                                         ) : (
-                                                            `${isAssisted && set.weight > 0 ? '-' : ''}${set.weight}kg × ${set.reps}`
+                                                            `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} × ${set.reps}`
                                                         )}
                                                     </Text>
                                                     {!isAssisted && (
@@ -356,7 +373,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                                             {exerciseDetails?.isCardio ? (
                                                                 set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} m/k` : '-'
                                                             ) : (
-                                                                set.oneRM ? Math.round(set.oneRM) : '-'
+                                                                set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))} ${unitLabel(useImperial)}` : '-'
                                                             )}
                                                         </Text>
                                                     )}

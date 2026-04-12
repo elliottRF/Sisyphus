@@ -9,6 +9,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar } from 'react-native-calendars';
 import HistoryList from './HistoryList';
 import { AppEvents, on, off } from '../utils/events';
+import { useTheme } from '../context/ThemeContext';
+import { formatWeight, unitLabel, toStorageKg } from '../utils/units';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRAPH_HEIGHT = 100;
@@ -60,6 +62,7 @@ const BodyweightGraphCard = ({ theme }) => {
     const accentColor = isDynamic ? '#2DC4B6' : theme.primary;
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
     const graphWidth = SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH;
+    const { useImperial } = useTheme();
 
     const [allData, setAllData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -118,6 +121,8 @@ const BodyweightGraphCard = ({ theme }) => {
                 setSaving(false);
                 return;
             }
+            // Always store in kg regardless of user's unit preference
+            const weightKg = toStorageKg(weightVal, useImperial);
             const now = new Date();
             const timePart = now.toISOString().split('T')[1];
             const fullIso = `${logDate}T${timePart}`;
@@ -126,7 +131,7 @@ const BodyweightGraphCard = ({ theme }) => {
                 await deleteBodyWeight(editingEntry.datetime);
             }
 
-            await insertBodyWeight(fullIso, weightVal);
+            await insertBodyWeight(fullIso, weightKg);
 
             setModalVisible(false);
             setNewWeight('');
@@ -164,7 +169,8 @@ const BodyweightGraphCard = ({ theme }) => {
     };
 
     const handleEdit = (entry) => {
-        setNewWeight(entry.weight.toString());
+        // Show the stored kg value converted to the user's preferred unit for editing
+        setNewWeight(formatWeight(entry.weight, useImperial).toString());
         setLogDate(entry.datetime.split('T')[0]);
         setEditingEntry(entry);
         historySheetRef.current?.hide();
@@ -195,7 +201,7 @@ const BodyweightGraphCard = ({ theme }) => {
                 date: new Date(r.datetime),
                 value: Number(r.weight)
             }))
-            .filter(r => !isNaN(r.date.getTime()) && r.value > 20)
+            .filter(r => !isNaN(r.date.getTime()) && r.value > 3) // 3 kg minimum — accommodates any unit
             .sort((a, b) => a.date - b.date)
             .filter(p => p.date >= startDate);
 
@@ -226,33 +232,33 @@ const BodyweightGraphCard = ({ theme }) => {
             }
         }
 
-        // **FIX: Ensure the last actual data point is always included**
+        // Ensure the last actual data point is always included
         const finalPoints = densePoints.length > 0 ? densePoints : parsed;
         const lastParsedPoint = parsed[parsed.length - 1];
         const lastDensePoint = finalPoints[finalPoints.length - 1];
-
-        // If the last dense point doesn't match the last actual point, add it
         if (!lastDensePoint || Math.abs(lastDensePoint.date.getTime() - lastParsedPoint.date.getTime()) > 1000) {
             finalPoints.push(lastParsedPoint);
         }
 
-        const values = finalPoints.map(p => p.value);
+        // Convert for display
+        const displayFinalPoints = finalPoints.map(p => ({
+            ...p,
+            value: useImperial ? parseFloat((p.value * 2.20462).toFixed(1)) : p.value
+        }));
+
+        const values = displayFinalPoints.map(p => p.value);
         const minVal = Math.min(...values);
         const maxVal = Math.max(...values);
         const rawRange = maxVal - minVal;
 
         let minY, maxY;
 
-        // "Factor of 5" snapping logic for non-minimal ranges
         if (rawRange > 6) {
-            // Give 10% padding initially
             const padding = rawRange * 0.1;
             minY = Math.floor((minVal - padding) / 5) * 5;
             maxY = Math.ceil((maxVal + padding) / 5) * 5;
 
-            // Ensure the range (maxY - minY) is a multiple of 10 so the mid label is also a factor of 5
             while ((maxY - minY) % 10 !== 0) {
-                // Expand the side that is closer to the raw values to keep it balanced
                 if (Math.abs(maxY - maxVal) < Math.abs(minVal - minY)) {
                     maxY += 5;
                 } else {
@@ -260,17 +266,16 @@ const BodyweightGraphCard = ({ theme }) => {
                 }
             }
         } else {
-            // Minimal range logic: basic padding, no snapping to 5s
             const padding = Math.max(0.6, rawRange * 0.15);
             minY = minVal - padding;
             maxY = maxVal + padding;
         }
 
         return {
-            points: finalPoints,
+            points: displayFinalPoints,
             yRange: [minY, maxY]
         };
-    }, [allData, timeRange]);
+    }, [allData, timeRange, useImperial]);
 
     const durationDays = useMemo(() => {
         if (!points || points.length < 2) return 0;
@@ -359,7 +364,7 @@ const BodyweightGraphCard = ({ theme }) => {
                                     returnKeyType="done"
                                     onSubmitEditing={handleLogWeight}
                                 />
-                                <Text style={[styles.unitText, { color: theme.textSecondary }]}>kg</Text>
+                                <Text style={[styles.unitText, { color: theme.textSecondary }]}>{unitLabel(useImperial)}</Text>
                             </View>
                             <Pressable
                                 style={[styles.dateButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
@@ -460,7 +465,7 @@ const BodyweightGraphCard = ({ theme }) => {
                             <Text style={styles.title}>Body Weight</Text>
                             <Text style={styles.subtitle}>
                                 {allData.length > 0 && points.length >= 1
-                                    ? `Current: ${points.at(-1)?.value.toFixed(1)} kg`
+                                    ? `Current: ${points.at(-1)?.value.toFixed(1)} ${unitLabel(useImperial)}`
                                     : 'No logs for this period'}
                             </Text>
 
@@ -508,7 +513,7 @@ const BodyweightGraphCard = ({ theme }) => {
                         <>
                             <View style={styles.tooltipContainer}>
                                 <View style={styles.activeTooltip}>
-                                    <Text style={styles.tooltipValue}>{(selectedPoint?.value ?? points.at(-1)?.value).toFixed(1)} kg</Text>
+                                    <Text style={styles.tooltipValue}>{(selectedPoint?.value ?? points.at(-1)?.value).toFixed(1)} {unitLabel(useImperial)}</Text>
                                     <Text style={styles.tooltipDate}>
                                         {selectedPoint ? selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Current'}
                                     </Text>

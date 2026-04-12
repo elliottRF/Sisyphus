@@ -15,6 +15,7 @@ import { FONTS, SHADOWS } from '../constants/theme'
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { fetchLastWorkoutSets } from './db';
 import { useTheme } from '../context/ThemeContext';
+import { formatWeight, unitLabel } from '../utils/units';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
@@ -148,7 +149,7 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
 };
 
 const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, onOpenDetails, simultaneousHandlers, onSetComplete, isCardio, isAssisted, isTemplate = false }) => {
-    const { theme } = useTheme();
+    const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
     const [isNoteVisible, setIsNoteVisible] = useState(false);
     const [previousSets, setPreviousSets] = useState([]);
@@ -170,17 +171,38 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
         loadPreviousData();
     }, [exerciseID, isTemplate]);
 
+    const sanitizeDecimal = (text) => {
+        let cleaned = text.replace(/[^0-9.]/g, '');
+        if (cleaned.startsWith('.')) cleaned = '0' + cleaned;
+        const parts = cleaned.split('.');
+        if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+        return cleaned;
+    };
+
+    const sanitizeInteger = (text) => {
+        return text.replace(/[^0-9]/g, '');
+    };
+
     const handleWeightChange = (text, setIndex) => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, weight: text } : s) } : e) } : w));
+        const sanitized = sanitizeDecimal(text);
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, weight: sanitized } : s) } : e) } : w));
     };
     const handleRepsChange = (text, setIndex) => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, reps: text } : s) } : e) } : w));
+        const sanitized = sanitizeInteger(text);
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, reps: sanitized } : s) } : e) } : w));
     };
     const handleDistanceChange = (text, setIndex) => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, distance: text } : s) } : e) } : w));
+        const sanitized = sanitizeDecimal(text);
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, distance: sanitized } : s) } : e) } : w));
     };
     const handleMinutesChange = (text, setIndex) => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: text } : s) } : e) } : w));
+        // Minutes can be decimal too, but following user's specific request for "reps" (integers)
+        // Usually minutes in cardio are decimal friendly, but if they want "reps" logic, 
+        // I will allow decimals for minutes too since distance is decimal allowed.
+        // Actually, user said "no decimal point for reps". I'll assume minutes = integer for now
+        // to be consistent with "reps" being the non-decimal one in the UI.
+        const sanitized = sanitizeInteger(text);
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: sanitized } : s) } : e) } : w));
     };
     const toggleSetComplete = (setIndex) => {
         if (isTemplate) return; // No completion in templates
@@ -207,7 +229,13 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.filter(ex => ex.id !== exercise.id) } : w).filter(w => w.exercises.length > 0));
     };
 
-    let previousSetIndex = 0;
+    const { prevWarmups, prevWorking } = React.useMemo(() => ({
+        prevWarmups: previousSets.filter(s => s.setType === 'W'),
+        prevWorking: previousSets.filter(s => s.setType !== 'W')
+    }), [previousSets]);
+
+    let prevWarmupIndex = 0;
+    let prevWorkingIndex = 0;
 
     return (
         <View style={[
@@ -274,7 +302,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                 ) : (
                     <View style={{ flex: 1 }} />
                 )}
-                <Text style={[styles.columnHeader, styles.colKg]}>{isCardio ? "DIST (km)" : (isAssisted ? "ASSIST (kg)" : "KG")}</Text>
+                <Text style={[styles.columnHeader, styles.colKg]}>{isCardio ? "DIST (km)" : (isAssisted ? `ASSIST (${unitLabel(useImperial)})` : unitLabel(useImperial).toUpperCase())}</Text>
                 <Text style={[styles.columnHeader, styles.colReps]}>{isCardio ? "TIME (min)" : "REPS"}</Text>
                 {!isTemplate && <View style={styles.colCheck}><Feather name="check" size={12} color={theme.textSecondary} /></View>}
             </View>
@@ -291,16 +319,18 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                     }
 
                     let prevSetText = '-';
-                    const prevSet = previousSets[previousSetIndex];
+                    const prevSet = set.setType === 'W'
+                        ? prevWarmups[prevWarmupIndex++]
+                        : prevWorking[prevWorkingIndex++];
+
                     if (prevSet) {
                         if (isCardio) {
                             // Convert previous seconds to minutes for display
                             const prevMins = prevSet.seconds ? (prevSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : '0';
                             prevSetText = `${prevSet.distance || 0}km / ${prevMins}m`;
                         } else {
-                            prevSetText = `${prevSet.weight} × ${prevSet.reps}`;
+                            prevSetText = `${formatWeight(prevSet.weight, useImperial)} × ${prevSet.reps}`;
                         }
-                        previousSetIndex++;
                     }
 
                     acc.push(

@@ -26,13 +26,14 @@ import FilteredExerciseList from '../../components/FilteredExerciseList';
 import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
+import { formatWeight, toStorageKg } from '../../utils/units';
 
 const EditTemplate = () => {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const TEMPLATE_ID = params.id; // 'new' or a numeric ID
 
-    const { theme } = useTheme();
+    const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
 
     const [prevVersion, setPrevVersion] = useState(params.v);
@@ -41,9 +42,21 @@ const EditTemplate = () => {
     const getInitialState = () => {
         const preloaded = getPreloadedData();
         if (preloaded.template || preloaded.exercises) {
+            // Convert preloaded weights to preferred unit
+            const convertedData = preloaded.template?.data?.map(group => ({
+                ...group,
+                exercises: group.exercises.map(ex => ({
+                    ...ex,
+                    sets: ex.sets.map(set => ({
+                        ...set,
+                        weight: formatWeight(set.weight, useImperial)
+                    }))
+                }))
+            }));
+
             return {
                 exercises: preloaded.exercises || [],
-                workout: preloaded.template?.data || [],
+                workout: convertedData || [],
                 name: preloaded.template?.name || "",
                 loading: false
             };
@@ -188,7 +201,7 @@ const EditTemplate = () => {
                     notes: ex.notes,
                     sets: ex.sets.map(set => ({
                         id: set.id,
-                        weight: set.weight,
+                        weight: toStorageKg(set.weight, useImperial),
                         reps: set.reps,
                         distance: set.distance,
                         minutes: set.minutes,
@@ -264,8 +277,19 @@ const EditTemplate = () => {
                 if (TEMPLATE_ID !== 'new') {
                     const template = await getTemplate(TEMPLATE_ID);
                     if (template) {
+                        // Convert DB weights (KG) to preferred unit
+                        const convertedData = template.data.map(group => ({
+                            ...group,
+                            exercises: group.exercises.map(ex => ({
+                                ...ex,
+                                sets: ex.sets.map(set => ({
+                                    ...set,
+                                    weight: formatWeight(set.weight, useImperial)
+                                }))
+                            }))
+                        }));
                         setTemplateName(template.name);
-                        setCurrentWorkout(template.data);
+                        setCurrentWorkout(convertedData);
                     }
                 } else {
                     if (!templateName && currentWorkout.length === 0) {

@@ -14,6 +14,7 @@ import { useTheme } from '../context/ThemeContext';
 import PRGraphCard from "./PRGraphCard";
 import WorkoutSessionView from './WorkoutSessionView';
 import { Stack } from 'expo-router';
+import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 
 
 
@@ -100,6 +101,8 @@ const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpaci
 
 const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect, exercisesList }) => {
     const [isLoading, setIsLoading] = useState(false);
+    const { useImperial } = useTheme();
+    const isDynamic = theme.type === 'dynamic';
 
     const handlePress = async () => {
         if (isLoading) return;
@@ -210,7 +213,6 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                                     styles.setRowContainer,
                                     setIndex % 2 === 1 && styles.setRowOdd,
                                     isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.04)' },
-                                    isDrop && { backgroundColor: 'rgba(116, 185, 255, 0.04)' },
                                 ]}
                             >
                                 <View style={styles.setRow}>
@@ -220,13 +222,12 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                                         style={[
                                             styles.setLift,
                                             isWarmup && styles.setLiftWarmup,
-                                            isDrop && styles.setLiftDrop,
                                         ]}
                                     >
                                         {isCardio ? (
                                             `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)}m`
                                         ) : (
-                                            `${isAssisted && set.weight > 0 ? '-' : ''}${set.weight}kg × ${set.reps}`
+                                            `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} × ${set.reps}`
                                         )}
                                     </Text>
 
@@ -235,7 +236,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                                             {isCardio ? (
                                                 set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)}` : '-'
                                             ) : (
-                                                set.oneRM ? Math.round(set.oneRM) : '-'
+                                                set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))} ${unitLabel(useImperial)}` : '-'
                                             )}
                                         </Text>
                                     )}
@@ -259,7 +260,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
 });
 
 const ExerciseHistory = (props) => {
-    const { theme, gender } = useTheme();
+    const { theme, gender, useImperial } = useTheme();
     const router = useRouter();
     const styles = getStyles(theme);
 
@@ -464,7 +465,7 @@ const ExerciseHistory = (props) => {
                             {!isCardioHeader && (
                                 <View style={styles.statCard}>
                                     <Feather name="award" size={16} color={theme.primary} style={styles.statIcon} />
-                                    <Text style={styles.statValue}>{isAssistedHeader && stats.personalBest > 0 ? '-' : ''}{stats.personalBest}kg</Text>
+                                    <Text style={styles.statValue}>{isAssistedHeader && stats.personalBest > 0 ? '-' : ''}{Math.round(formatWeight(stats.personalBest, useImperial, 0))}{unitLabel(useImperial)}</Text>
                                     <Text style={styles.statLabel}>Best Lift</Text>
                                 </View>
                             )}
@@ -557,7 +558,6 @@ const ExerciseHistory = (props) => {
                         <Text style={styles.emptySubtext}>Complete a workout to see your progress.</Text>
                     </View>
                 }
-                showsVerticalScrollIndicator={false}
             />
 
             <ActionSheet
