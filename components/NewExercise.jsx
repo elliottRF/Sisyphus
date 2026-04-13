@@ -213,7 +213,10 @@ const NewExercise = (props) => {
             <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers} >
                 <RNScrollView
                     {...handlers}
-                    contentContainerStyle={styles.scrollContent}
+                    contentContainerStyle={[
+                        styles.scrollContent,
+                        { paddingBottom: insets.bottom + 20 }
+                    ]}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
@@ -325,7 +328,6 @@ const getStyles = (theme) => StyleSheet.create({
         backgroundColor: theme.background,
     },
     scrollContent: {
-        paddingBottom: 40,
         paddingHorizontal: 20,
     },
     bodyWrapper: {

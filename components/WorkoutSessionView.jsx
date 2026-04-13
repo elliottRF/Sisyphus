@@ -8,6 +8,7 @@ import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 
+
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
     try {

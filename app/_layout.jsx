@@ -80,8 +80,8 @@ const ThemeConsumer = () => {
                 backgroundColor="transparent"
                 translucent={true}
             />
-            <Stack screenOptions={{ 
-                headerShown: false, 
+            <Stack screenOptions={{
+                headerShown: false,
                 animation: 'flip',
                 contentStyle: { backgroundColor: theme.background }
             }}>

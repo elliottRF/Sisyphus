@@ -223,6 +223,7 @@ const WorkoutDetail = () => {
                     onRepeat={readOnly === 'true' ? null : handleRepeat}
                     onSaveAsTemplate={readOnly === 'true' ? null : handleSaveAsTemplate}
                     onExerciseInfo={readOnly === 'true' ? null : showExerciseInfo}
+                    contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
                 />
             </View>
 
@@ -249,7 +250,6 @@ const getStyles = (theme) => {
         container: {
             flex: 1,
             backgroundColor: theme.background,
-            paddingBottom: 20
         },
         actionSheetContainer: {
             backgroundColor: safeSurface,
