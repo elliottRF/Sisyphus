@@ -11,7 +11,7 @@ import { useFocusEffect } from 'expo-router';
 import Timer from '../app/timer/androidTimerModule';
 import { useTheme } from '../context/ThemeContext';
 
-const RestTimer = forwardRef((props, ref) => {
+const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     const { theme } = useTheme();
     const [timeLeft, setTimeLeft] = useState(0);
     const [defaultDuration, setDefaultDuration] = useState(180);
@@ -139,6 +139,8 @@ const RestTimer = forwardRef((props, ref) => {
             // STOP (Manual Tap -> NO SOUND)
             internalStop(false);
         } else {
+            onFirstStart?.(); // Ask for permission contextually on first ever start
+
             // START
             targetEndTimeRef.current = Date.now() + (defaultDuration * 1000);
             timerRunning.current = true;

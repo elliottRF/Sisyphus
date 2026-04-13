@@ -30,7 +30,7 @@ class TimerService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      startForeground(1, buildNotification(0), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+      startForeground(1, buildNotification(0), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
     } else {
       startForeground(1, buildNotification(0))
     }

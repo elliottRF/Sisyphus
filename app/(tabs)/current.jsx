@@ -35,6 +35,10 @@ import { useTheme } from '../../context/ThemeContext';
 import { ActivityIndicator } from 'react-native';
 import { AppEvents, emit } from '../../utils/events';
 import { useLocalSearchParams } from 'expo-router';
+
+import * as Notifications from 'expo-notifications';
+
+
 const { width } = Dimensions.get('window');
 
 const Current = () => {
@@ -63,6 +67,17 @@ const Current = () => {
             console.error("Error loading templates:", error);
         }
     };
+
+
+    const requestNotificationPermissionOnce = async () => {
+        const asked = await AsyncStorage.getItem('notifications_permission_asked');
+        if (asked) return;
+
+        await AsyncStorage.setItem('notifications_permission_asked', 'true');
+        await Notifications.requestPermissionsAsync();
+    };
+
+
 
     const startWorkout = async () => {
         const now = new Date().toISOString();
@@ -817,7 +832,7 @@ const Current = () => {
                                         {startTime && (
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                                 <Timer startTime={startTime} />
-                                                <RestTimer ref={restTimerRef} />
+                                                <RestTimer ref={restTimerRef} onFirstStart={requestNotificationPermissionOnce} />
                                             </View>
                                         )}
                                     </View>
