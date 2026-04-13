@@ -210,12 +210,13 @@ const NewExercise = (props) => {
 
     return (
         < View style={[styles.container, { paddingTop: insets.top }]} >
-            <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
+            <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers} >
                 <RNScrollView
                     {...handlers}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
                 >
                     <View style={styles.bodyWrapper}>
                         <Body

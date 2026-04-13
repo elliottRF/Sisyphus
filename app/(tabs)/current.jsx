@@ -716,34 +716,65 @@ const Current = () => {
                                     </View>
 
                                     <View style={styles.templatesGrid}>
-                                        {[...templates].reverse().map((template) => (
-                                            <TouchableOpacity
-                                                key={template.id}
-                                                style={styles.templateCard}
-                                                activeOpacity={0.7}
-                                                onPress={() => loadTemplate(template)}
-                                            >
-                                                <TouchableOpacity
-                                                    style={styles.templateEditButton}
-                                                    onPress={(e) => {
-                                                        e.stopPropagation();
-                                                        handleLongPressTemplate(template);
-                                                    }}
-                                                    disabled={!!loadingTemplateId}
-                                                >
-                                                    {loadingTemplateId === template.id ? (
-                                                        <ActivityIndicator size="small" color={theme.primary} />
-                                                    ) : (
-                                                        <Feather name="edit-2" size={16} color={safeText} />
-                                                    )}
-                                                </TouchableOpacity>
+                                        {[...templates].reverse().map((template) => {
+                                            const exerciseNames = template.data.flatMap(group =>
+                                                group.exercises.map(ex => {
+                                                    const detail = exercises.find(e => e.exerciseID === ex.exerciseID);
+                                                    return detail ? detail.name : 'Unknown';
+                                                })
+                                            );
+                                            const displayNames = exerciseNames.slice(0, 4);
+                                            const moreCount = exerciseNames.length - displayNames.length;
 
-                                                <Text style={styles.templateName} numberOfLines={2}>{template.name}</Text>
-                                                <Text style={styles.templateDetails}>
-                                                    {template.data.length} exercises
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ))}
+                                            return (
+                                                <TouchableOpacity
+                                                    key={template.id}
+                                                    style={styles.templateCard}
+                                                    activeOpacity={0.7}
+                                                    onPress={() => loadTemplate(template)}
+                                                >
+                                                    <View style={{ flex: 1 }}>
+                                                        <View style={styles.templateCardHeader}>
+                                                            <Text style={styles.templateName} numberOfLines={1}>{template.name}</Text>
+                                                            <TouchableOpacity
+                                                                style={styles.templateEditButton}
+                                                                onPress={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleLongPressTemplate(template);
+                                                                }}
+                                                                disabled={!!loadingTemplateId}
+                                                            >
+                                                                {loadingTemplateId === template.id ? (
+                                                                    <ActivityIndicator size="small" color={theme.primary} />
+                                                                ) : (
+                                                                    <Feather name="edit-2" size={14} color={theme.textSecondary} />
+                                                                )}
+                                                            </TouchableOpacity>
+                                                        </View>
+
+                                                        <View style={styles.templateOverview}>
+                                                            {displayNames.map((name, idx) => (
+                                                                <Text key={idx} style={styles.templateExerciseItem} numberOfLines={1}>
+                                                                    • {name}
+                                                                </Text>
+                                                            ))}
+                                                            {moreCount > 0 && (
+                                                                <Text style={styles.templateMoreCount}>
+                                                                    + {moreCount} more
+                                                                </Text>
+                                                            )}
+                                                        </View>
+                                                    </View>
+
+                                                    <View style={styles.cardFooter}>
+                                                        <Text style={styles.templateDetails}>
+                                                            {exerciseNames.length} {exerciseNames.length === 1 ? 'exercise' : 'exercises'}
+                                                        </Text>
+                                                        <Ionicons name="chevron-forward" size={16} color={theme.primary} opacity={0.5} />
+                                                    </View>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
 
                                         {/* Add Template Button */}
                                         <TouchableOpacity
@@ -752,12 +783,15 @@ const Current = () => {
                                             onPress={handleAddTemplate}
                                             disabled={!!loadingTemplateId}
                                         >
-                                            <AntDesign name="plus" size={32} color={theme.textSecondary} />
+                                            <View style={styles.addTemplateInner}>
+                                                <AntDesign name="plus" size={28} color={theme.textSecondary} style={{ marginBottom: 4 }} />
+                                                <Text style={styles.addTemplateText}>New Template</Text>
+                                            </View>
                                         </TouchableOpacity>
                                     </View>
                                 </ScrollView>
 
-                                <View style={styles.bottomButtonContainer}>
+                                <View style={[styles.bottomButtonContainer, { bottom: Math.max(insets.bottom + 80, 115) }]}>
                                     <TouchableOpacity onPress={startWorkout} activeOpacity={0.8} style={styles.startWorkoutButtonContainer}>
                                         <ButtonBackground style={styles.startButton}>
                                             <Text style={styles.startButtonText}>Start an Empty Workout</Text>
@@ -864,11 +898,15 @@ const getStyles = (theme) => {
     const safeBorder = isDynamic ? theme.overlayInput : theme.border;
     const safeDanger = isDynamic ? '#FF4444' : theme.danger;
 
-    // Grid sizing
-    const numColumns = 3;
+    const insets = useSafeAreaInsets(); // Access insets inside getStyles if needed, but it's passed from component
+    // Actually, getStyles is called inside the component, but it doesn't take insets.
+    // I should pass insets to getStyles or just use them directly if I'm within the Hook.
+    // Wait, getStyles is a separate function. I'll pass insets to it.
+
+    // Grid sizing - CHANGED TO 2 COLUMNS
+    const numColumns = 2;
     const gap = 12;
     const padding = 16;
-    // Use Math.floor to ensure we don't exceed availability due to fractional pixels
     const availableWidth = width - (padding * 2) - ((numColumns - 1) * gap);
     const itemWidth = Math.floor(availableWidth / numColumns);
 
@@ -887,7 +925,7 @@ const getStyles = (theme) => {
         },
         emptyStateScrollContent: {
             padding: padding,
-            paddingBottom: 240, // Increased space to clear the floating button + tab bar
+            paddingBottom: 240,
         },
         emptyStateHeader: {
             alignItems: 'center',
@@ -916,19 +954,57 @@ const getStyles = (theme) => {
         },
         templateCard: {
             width: itemWidth,
-            height: itemWidth * 1.6, // Longer than wide
+            height: 200, // Fixed height for consistency with overview
             backgroundColor: theme.surface,
-            borderRadius: 12,
-            padding: 12,
+            borderRadius: 16,
+            padding: 14,
             justifyContent: 'space-between',
             borderWidth: 1,
             borderColor: safeBorder,
             position: 'relative',
+            ...SHADOWS.small,
+        },
+        templateCardHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8,
+        },
+        templateOverview: {
+            flex: 1,
+            marginTop: 4,
+        },
+        templateExerciseItem: {
+            fontSize: 12,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            marginBottom: 2,
+            opacity: 0.8,
+        },
+        templateMoreCount: {
+            fontSize: 11,
+            fontFamily: FONTS.regular,
+            color: theme.textSecondary,
+            marginTop: 2,
+            opacity: 0.6,
         },
         cardFooter: {
             flexDirection: 'row',
             justifyContent: 'space-between',
-            alignItems: 'flex-end',
+            alignItems: 'center',
+            marginTop: 8,
+            paddingTop: 8,
+            borderTopWidth: 1,
+            borderTopColor: theme.overlayBorder,
+        },
+        addTemplateInner: {
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        addTemplateText: {
+            fontSize: 14,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
         },
         plusCardLoader: {
             position: 'absolute',
@@ -940,41 +1016,39 @@ const getStyles = (theme) => {
             justifyContent: 'center',
             borderStyle: 'dashed',
             backgroundColor: 'transparent',
-            borderColor: theme.textSecondary,
-            opacity: 0.6,
+            borderColor: theme.overlayBorder,
+            opacity: 0.8,
         },
         templateEditButton: {
-            width: 32,
-            height: 32,
+            width: 28,
+            height: 28,
             borderRadius: 8,
             backgroundColor: theme.overlayInput,
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 10,
         },
         templateName: {
-            fontSize: 14,
-            fontFamily: FONTS.semiBold,
+            fontSize: 15,
+            fontFamily: FONTS.bold,
             color: safeText,
-            marginTop: 8,
+            flex: 1,
+            marginRight: 8,
         },
         templateDetails: {
             fontSize: 12,
-            fontFamily: FONTS.regular,
+            fontFamily: FONTS.semiBold,
             color: theme.textSecondary,
-            marginTop: 4,
         },
         bottomButtonContainer: {
             position: 'absolute',
-            bottom: 100, // Moved up to clear the floating tab bar (approx 50-60px height + margin)
+            // Use props passed to getStyles or fallback. 
+            // I'll update the component to pass insets to getStyles.
+            bottom: 75, // Base offset, will be adjusted in the component style if needed
             left: 0,
             right: 0,
-            padding: 16,
-            // paddingBottom handled by bottom position
-            backgroundColor: 'transparent', // Make transparent so it floats nicely, or add gradient mask if needed
-            // If background is needed to cover content:
-            // backgroundColor: theme.background, 
-            // paddingBottom: 0,
+            paddingHorizontal: 16,
+            backgroundColor: 'transparent',
+            zIndex: 100,
         },
         startWorkoutButtonContainer: {
             width: '100%',
@@ -982,7 +1056,7 @@ const getStyles = (theme) => {
         },
         startButton: {
             paddingVertical: 16,
-            borderRadius: 12,
+            borderRadius: 16, // Rounder for premium feel
             alignItems: 'center',
             justifyContent: 'center',
         },
@@ -990,6 +1064,7 @@ const getStyles = (theme) => {
             color: safeText,
             fontSize: 16,
             fontFamily: FONTS.bold,
+            letterSpacing: 0.5,
         },
         headerContainer: {
             paddingHorizontal: 16,

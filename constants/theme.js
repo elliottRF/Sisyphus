@@ -269,7 +269,7 @@ const BLACK_PINK = {
     overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
-const DEFAULT = {
+const DEFAULT_DARK = {
     primary: "#0A84FF",      // Apple San Francisco Blue
     primaryDark: "#0066CC",
     secondary: "#0A84FF",    // iOS System Gray
@@ -292,7 +292,7 @@ const DEFAULT = {
     overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
-const DEFAULT_LIGHTER = {
+const DEFAULT = {
     primary: "#0A84FF",      // Apple San Francisco Blue
     primaryDark: "#007AFF",  // Slightly boosted for visibility
     secondary: "#0A84FF",
@@ -400,7 +400,7 @@ const SYSTEM = Platform.OS === 'android' ? {
 export const THEMES = {
     ...(Platform.OS === 'android' ? { SYSTEM } : {}),
     DEFAULT,
-    DEFAULT_LIGHTER,
+    DEFAULT_DARK,
     LIGHT,
     NOIR,
     ARCTIC,

@@ -17,6 +17,7 @@ const GRAPH_HEIGHT = 100;
 const CARD_MARGIN = 32;
 const CARD_PADDING = 40;
 const Y_AXIS_WIDTH = 40;
+const GRAPH_RIGHT_PADDING = 0;
 
 const CustomSelectionDot = ({ isActive, color }) => (
     <View style={{
@@ -61,7 +62,7 @@ const BodyweightGraphCard = ({ theme }) => {
     const isDynamic = theme.type === 'dynamic';
     const accentColor = isDynamic ? '#2DC4B6' : theme.primary;
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
-    const graphWidth = SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH;
+    const graphWidth = SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING;
     const { useImperial } = useTheme();
 
     const [allData, setAllData] = useState([]);
@@ -534,7 +535,7 @@ const BodyweightGraphCard = ({ theme }) => {
                                         );
                                     })()}
                                 </View>
-                                <View>
+                                <View style={{ paddingRight: GRAPH_RIGHT_PADDING }}>
                                     {/* Horizontal grid lines at top, mid, bottom — matching y-axis labels */}
                                     <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: GRAPH_HEIGHT }}>
                                         {[0, 0.5, 1].map(fraction => (

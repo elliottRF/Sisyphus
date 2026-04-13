@@ -368,7 +368,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                                             isWarmup && styles.setLiftWarmup,
                                                         ]}>
                                                             {exerciseDetails?.isCardio ? (
-                                                                `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)}m`
+                                                                `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)} mins`
                                                             ) : (
                                                                 `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} × ${set.reps}`
                                                             )}
@@ -376,7 +376,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                                         {!isAssisted && (
                                                             <Text style={styles.setOneRM}>
                                                                 {exerciseDetails?.isCardio ? (
-                                                                    set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} m/k` : '-'
+                                                                    set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} min/km` : '-'
                                                                 ) : (
                                                                     set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))}` : '-'
                                                                 )}
@@ -522,7 +522,7 @@ const getStyles = (theme) => {
             color: theme.textSecondary,
         },
         setsContainer: {
-            paddingVertical: 4,
+            paddingVertical: 2,
         },
         setsHeaderRow: {
             flexDirection: 'row',

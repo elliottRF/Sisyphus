@@ -153,8 +153,8 @@ const MuscleRadarChart = () => {
             <View style={styles.header}>
                 <View>
                     <Text style={styles.title}>Muscle Balance</Text>
-                    {!loading && (
-                        <View style={[styles.balanceBadge, { backgroundColor: getScoreColor(balanceScore) + '20' }]}>
+                    {Object.keys(radarData).length > 0 && (
+                        <View style={[styles.balanceBadge, { backgroundColor: getScoreColor(balanceScore) + '20', opacity: loading ? 0.6 : 1 }]}>
                             <Text style={[styles.balanceText, { color: getScoreColor(balanceScore) }]}>
                                 {balanceScore}% Balanced
                             </Text>
@@ -165,7 +165,9 @@ const MuscleRadarChart = () => {
             </View>
 
             {loading ? (
-                <View style={{ height: SVG_HEIGHT, justifyContent: 'center' }}><ActivityIndicator color={theme.primary} /></View>
+                <View style={{ height: SVG_HEIGHT, justifyContent: 'center', marginTop: -5 }}>
+                    <ActivityIndicator color={theme.primary} />
+                </View>
             ) : (
                 <View style={styles.chartWrapper}>
                     <Svg width={CHART_SIZE} height={SVG_HEIGHT}>

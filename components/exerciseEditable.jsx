@@ -148,7 +148,7 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
     );
 };
 
-const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, onOpenDetails, simultaneousHandlers, onSetComplete, isCardio, isAssisted, isTemplate = false }) => {
+const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerciseID, workoutID, onOpenDetails, simultaneousHandlers, onSetComplete, isCardio, isAssisted, isTemplate = false, hidePrevious = false }) => {
     const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
     const [isNoteVisible, setIsNoteVisible] = useState(false);
@@ -159,7 +159,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
     const isActive = useIsActive();
 
     useEffect(() => {
-        if (isTemplate) return; // Don't load previous sets for templates
+        if (isTemplate || hidePrevious) return; // Don't load previous sets for templates or if hidden
         const loadPreviousData = async () => {
             try {
                 const prevSets = await fetchLastWorkoutSets(exerciseID);
@@ -297,7 +297,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
             {/* Table Header */}
             <View style={styles.tableHeader}>
                 <Text style={[styles.columnHeader, styles.colSet]}>SET</Text>
-                {!isTemplate ? (
+                {(!isTemplate && !hidePrevious) ? (
                     <Text style={[styles.columnHeader, styles.colPrev]}>PREVIOUS</Text>
                 ) : (
                     <View style={{ flex: 1 }} />
@@ -327,7 +327,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                         if (isCardio) {
                             // Convert previous seconds to minutes for display
                             const prevMins = prevSet.seconds ? (prevSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : '0';
-                            prevSetText = `${prevSet.distance || 0}km / ${prevMins}m`;
+                            prevSetText = `${prevSet.distance || 0}km / ${prevMins}mins`;
                         } else {
                             prevSetText = `${formatWeight(prevSet.weight, useImperial)} × ${prevSet.reps}`;
                         }
@@ -362,7 +362,7 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                     </TouchableOpacity>
                                 </View>
 
-                                {!isTemplate ? (
+                                {(!isTemplate && !hidePrevious) ? (
                                     <Text style={[styles.prevText, styles.colPrev]} numberOfLines={1}>{prevSetText}</Text>
                                 ) : (
                                     <View style={{ flex: 1 }} />

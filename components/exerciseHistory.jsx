@@ -4,7 +4,6 @@ import { FlatList } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import Body from "react-native-body-highlighter";
-import ActionSheet from "react-native-actions-sheet";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -12,7 +11,6 @@ import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession } fr
 import { FONTS, SHADOWS } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import PRGraphCard from "./PRGraphCard";
-import WorkoutSessionView from './WorkoutSessionView';
 import { Stack } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 
@@ -43,7 +41,7 @@ const PRBadge = React.memo(({ type, theme }) => {
     if (type === 'KG') label = "Weight";
 
     const brightColor = lightenColor(theme.primary, 20);
-    const bgColor = `${brightColor}25`; // Softer background
+    const bgColor = `${brightColor}25`;
     const borderColor = `${brightColor}50`;
 
     return (
@@ -87,7 +85,7 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
         containerStyle.backgroundColor = 'rgba(116, 185, 255, 0.15)';
         textStyle.color = theme.info;
     } else {
-        containerStyle.backgroundColor = theme.border; // Slightly more visible for normal sets
+        containerStyle.backgroundColor = theme.border;
         textStyle.color = theme.textSecondary;
     }
 
@@ -102,14 +100,13 @@ const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpaci
 const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect, exercisesList }) => {
     const [isLoading, setIsLoading] = useState(false);
     const { useImperial } = useTheme();
-    const isDynamic = theme.type === 'dynamic';
 
     const handlePress = async () => {
         if (isLoading) return;
         setIsLoading(true);
         try {
             const sessionData = await fetchWorkoutHistoryBySession(session);
-            onSessionSelect(sessionData);
+            onSessionSelect(session, sessionData);
         } catch (error) {
             console.error("Error pre-fetching workout:", error);
         } finally {
@@ -136,7 +133,6 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
             bounciness: 4,
         }).start();
     };
-
 
     const sessionNote = exercises.find(e => e.notes)?.notes;
     const workoutName = exercises[0].name || "Workout";
@@ -165,7 +161,6 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
             style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
-
             disabled={isLoading}
         >
             <View style={styles.sessionCard}>
@@ -229,16 +224,16 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                                             ]}
                                         >
                                             {isCardio ? (
-                                                `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)}m`
+                                                `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)} mins`
                                             ) : (
-                                                `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} × ${set.reps}`
+                                                `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} x ${set.reps}`
                                             )}
                                         </Text>
 
                                         {!isAssisted && (
                                             <Text style={styles.setOneRM}>
                                                 {isCardio ? (
-                                                    set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)}` : '-'
+                                                    set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} min/km` : '-'
                                                 ) : (
                                                     set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))}` : '-'
                                                 )}
@@ -264,6 +259,52 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
     );
 });
 
+// Defined at module level so DEFAULT_MUSCLE_TARGETS is a stable reference
+// that doesn't cause re-renders and isn't recreated per instance.
+const ALL_MUSCLE_SLUGS = [
+    'chest', 'quadriceps', 'triceps', 'biceps', 'hamstring',
+    'upper-back', 'lower-back', 'deltoids', 'gluteal', 'forearm',
+    'trapezius', 'calves', 'abs', 'adductors', 'obliques',
+    'tibialis', 'abductors', 'neck', 'hands', 'feet', 'knees', 'ankles'
+];
+
+// Every muscle starts at intensity 1 (unworked). The body diagram renders
+// immediately with the correct base colour scheme on mount; only the
+// highlighted muscles change once exercise data loads — no full colour pop.
+const DEFAULT_MUSCLE_TARGETS = ALL_MUSCLE_SLUGS.map(slug => ({ slug, intensity: 1 }));
+
+
+const FadingStatText = React.memo(({ text, style }) => {
+    const fadeAnim = useRef(new Animated.Value(1)).current;
+    const [displayText, setDisplayText] = useState(text);
+
+    useEffect(() => {
+        // Only trigger the animation if the text actually changes
+        if (text !== displayText) {
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 150, // Quick fade out
+                useNativeDriver: true,
+            }).start(() => {
+                // Swap the text while invisible
+                setDisplayText(text);
+                // Fade back in
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 250,
+                    useNativeDriver: true,
+                }).start();
+            });
+        }
+    }, [text]);
+
+    return (
+        <Animated.Text style={[style, { opacity: fadeAnim }]}>
+            {displayText}
+        </Animated.Text>
+    );
+});
+
 const ExerciseHistory = (props) => {
     const { theme, gender, useImperial } = useTheme();
     const router = useRouter();
@@ -272,17 +313,20 @@ const ExerciseHistory = (props) => {
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
-    const [formattedTargets, setFormattedTargets] = useState([]);
-    const [selectedSessionData, setSelectedSessionData] = useState(null);
+    const [formattedTargets, setFormattedTargets] = useState(DEFAULT_MUSCLE_TARGETS);
+
+    // Null rather than 0 so stat cards render '—' on mount instead of '0',
+    // avoiding a jarring jump from a zero placeholder to the real value.
     const [stats, setStats] = useState({
-        totalSets: 0,
-        personalBest: 0,
-        totalVolume: 0
+        totalSets: null,
+        personalBest: null,
+        totalVolume: null,
+        maxDistance: null,
+        bestPace: null,
     });
     const [showOnlyPRs, setShowOnlyPRs] = useState(false);
 
     const [exerciseName, setExerciseName] = useState(props.exerciseName);
-
 
     const filteredWorkoutHistory = useMemo(() => {
         if (!showOnlyPRs) return workoutHistory;
@@ -297,15 +341,18 @@ const ExerciseHistory = (props) => {
             .filter(Boolean);
     }, [workoutHistory, showOnlyPRs]);
 
-    const sessionActionSheetRef = useRef(null);
-
     const showEditSheet = () => {
         router.push(`/exercise/new?id=${props.exerciseID}`);
     };
 
-    const handleSessionSelect = (data) => {
-        setSelectedSessionData(data);
-        sessionActionSheetRef.current?.show();
+    const handleSessionSelect = (session, data) => {
+        router.push({
+            pathname: `/workout/${session}`,
+            params: {
+                initialData: JSON.stringify(data),
+                readOnly: 'true'
+            }
+        });
     };
 
     useEffect(() => {
@@ -323,13 +370,6 @@ const ExerciseHistory = (props) => {
         const accessoryMuscles = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',') : [];
         return { targetMuscles, accessoryMuscles };
     };
-
-    const ALL_MUSCLE_SLUGS = [
-        'chest', 'quadriceps', 'triceps', 'biceps', 'hamstring',
-        'upper-back', 'lower-back', 'deltoids', 'gluteal', 'forearm',
-        'trapezius', 'calves', 'abs', 'adductors', 'obliques',
-        'tibialis', 'abductors', 'neck', 'hands', 'feet', 'knees', 'ankles'
-    ];
 
     const handleMuscleStrings = (targetSelected, accessorySelected) => {
         const workedSlugs = new Set();
@@ -386,6 +426,8 @@ const ExerciseHistory = (props) => {
         let minWeight = Infinity;
         let volume = 0;
         let totalSetsCount = 0;
+        let maxDist = 0;
+        let bestP = Infinity;
 
         workoutHistory.forEach(([session, exercises]) => {
             exercises.forEach(entry => {
@@ -393,6 +435,12 @@ const ExerciseHistory = (props) => {
                 if (entry.reps > 0 && entry.weight > maxWeight) maxWeight = entry.weight;
                 if (entry.reps > 0 && entry.weight < minWeight) minWeight = entry.weight;
                 volume += (entry.weight * entry.reps);
+
+                if (entry.distance > maxDist) maxDist = entry.distance;
+                if (entry.distance > 0 && entry.seconds > 0) {
+                    const pace = (entry.seconds / 60) / entry.distance;
+                    if (pace < bestP) bestP = pace;
+                }
             });
         });
 
@@ -402,7 +450,9 @@ const ExerciseHistory = (props) => {
         setStats({
             totalSets: totalSetsCount,
             personalBest: isAssisted ? (minWeight === Infinity ? 0 : minWeight) : maxWeight,
-            totalVolume: volume
+            totalVolume: volume,
+            maxDistance: maxDist,
+            bestPace: bestP,
         });
     }, [workoutHistory, exercisesList, props.exerciseID]);
 
@@ -431,14 +481,22 @@ const ExerciseHistory = (props) => {
         ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
         : [theme.bodyFill, `${theme.primary}60`, theme.primary];
     const safeBorder = isDynamic ? '#4d4d4d' : theme.border;
-    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
 
     const currentExerciseDetails = exercisesList.find(e => e.exerciseID === props.exerciseID);
     const isCardioHeader = !!currentExerciseDetails?.isCardio;
     const isAssistedHeader = !!currentExerciseDetails?.isAssisted;
 
-
-
+    // Null-safe formatters — show '—' until real data arrives
+    const fmtWeight = (val) =>
+        val == null ? '—' : `${Math.round(formatWeight(val, useImperial, 0))}${unitLabel(useImperial)}`;
+    const fmtVolume = (val) =>
+        val == null ? '—' : `${(val / 1000).toFixed(1)}k`;
+    const fmtDist = (val) =>
+        val == null ? '—' : `${val}km`;
+    const fmtPace = (val) =>
+        val == null || val === Infinity ? '—' : val.toFixed(1);
+    const fmtSets = (val) =>
+        val == null ? '—' : String(val);
 
     return (
         <View style={styles.container}>
@@ -465,26 +523,49 @@ const ExerciseHistory = (props) => {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Updated Stats Cards */}
                         <View style={styles.statsRow}>
-                            {!isCardioHeader && (
+                            {isCardioHeader ? (
                                 <View style={styles.statCard}>
-                                    <Feather name="award" size={16} color={theme.primary} style={styles.statIcon} />
-                                    <Text style={styles.statValue}>{isAssistedHeader && stats.personalBest > 0 ? '-' : ''}{Math.round(formatWeight(stats.personalBest, useImperial, 0))}{unitLabel(useImperial)}</Text>
-                                    <Text style={styles.statLabel}>Weight PR</Text>
+                                    <Feather name="map-pin" size={16} color={theme.primary} style={styles.statIcon} />
+                                    <FadingStatText text={fmtDist(stats.maxDistance)} style={styles.statValue} />
+                                    <Text style={styles.statLabel}>Longest Dist</Text>
                                 </View>
+                            ) : (
+                                !isCardioHeader && (
+                                    <View style={styles.statCard}>
+                                        <Feather name="award" size={16} color={theme.primary} style={styles.statIcon} />
+                                        <FadingStatText
+                                            text={stats.personalBest == null
+                                                ? '—'
+                                                : `${isAssistedHeader && stats.personalBest > 0 ? '-' : ''}${fmtWeight(stats.personalBest)}`
+                                            }
+                                            style={styles.statValue}
+                                        />
+                                        <Text style={styles.statLabel}>Weight PR</Text>
+                                    </View>
+                                )
                             )}
+
                             <View style={styles.statCard}>
                                 <Feather name="layers" size={16} color={theme.primary} style={styles.statIcon} />
-                                <Text style={styles.statValue}>{stats.totalSets}</Text>
+                                <FadingStatText text={fmtSets(stats.totalSets)} style={styles.statValue} />
                                 <Text style={styles.statLabel}>Total Sets</Text>
                             </View>
-                            {!isCardioHeader && !isAssistedHeader && (
+
+                            {isCardioHeader ? (
                                 <View style={styles.statCard}>
-                                    <Feather name="activity" size={16} color={theme.primary} style={styles.statIcon} />
-                                    <Text style={styles.statValue}>{(stats.totalVolume / 1000).toFixed(1)}k</Text>
-                                    <Text style={styles.statLabel}>Volume</Text>
+                                    <Feather name="zap" size={16} color={theme.primary} style={styles.statIcon} />
+                                    <FadingStatText text={fmtPace(stats.bestPace)} style={styles.statValue} />
+                                    <Text style={styles.statLabel}>Fastest Pace</Text>
                                 </View>
+                            ) : (
+                                !isAssistedHeader && (
+                                    <View style={styles.statCard}>
+                                        <Feather name="activity" size={16} color={theme.primary} style={styles.statIcon} />
+                                        <FadingStatText text={fmtVolume(stats.totalVolume)} style={styles.statValue} />
+                                        <Text style={styles.statLabel}>Volume</Text>
+                                    </View>
+                                )
                             )}
                         </View>
 
@@ -565,23 +646,6 @@ const ExerciseHistory = (props) => {
                 }
             />
 
-            <ActionSheet
-                ref={sessionActionSheetRef}
-                enableGestureBack={true}
-                closeOnPressBack={true}
-                androidCloseOnBackPress={true}
-                containerStyle={{ height: '100%', backgroundColor: safeSurface }}
-                indicatorStyle={{ backgroundColor: theme.textSecondary }}
-                snapPoints={[100]}
-                initialSnapIndex={0}
-            >
-                {selectedSessionData && (
-                    <WorkoutSessionView
-                        workoutDetails={selectedSessionData}
-                        exercisesList={exercisesList}
-                    />
-                )}
-            </ActionSheet>
         </View>
     );
 };

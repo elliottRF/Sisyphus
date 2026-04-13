@@ -10,7 +10,7 @@ import { formatWeight } from '../../utils/units';
 
 const WorkoutDetail = () => {
     const insets = useSafeAreaInsets();
-    const { session, initialData } = useLocalSearchParams();
+    const { session, initialData, readOnly } = useLocalSearchParams();
     const router = useRouter();
     const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
@@ -183,12 +183,13 @@ const WorkoutDetail = () => {
                 grouped.get(row.exerciseNum).exercises[0].sets.push({
                     id: `${Date.now()}_${row.setNum}_${Math.random().toString(36).substr(2, 6)}`,
                     weight: row.weight,
-                    reps: row.reps,
-                    minutes: row.minutes,
-                    distance: row.distance,
+                    reps: row.reps?.toString() || null,
+                    minutes: row.seconds ? (row.seconds / 60).toFixed(1).replace(/\.0$/, '') : null,
+                    distance: row.distance?.toString() || null,
                     setType: row.setType || 'N',
                     completed: false,
                 });
+
             });
 
             setPreloadedData({
@@ -218,10 +219,10 @@ const WorkoutDetail = () => {
                     ref={sessionViewRef}
                     workoutDetails={effectiveWorkoutDetails}
                     exercisesList={exercisesList}
-                    onEdit={showEditPage}
-                    onRepeat={handleRepeat}
-                    onSaveAsTemplate={handleSaveAsTemplate}
-                    onExerciseInfo={showExerciseInfo}
+                    onEdit={readOnly === 'true' ? null : showEditPage}
+                    onRepeat={readOnly === 'true' ? null : handleRepeat}
+                    onSaveAsTemplate={readOnly === 'true' ? null : handleSaveAsTemplate}
+                    onExerciseInfo={readOnly === 'true' ? null : showExerciseInfo}
                 />
             </View>
 
@@ -248,6 +249,7 @@ const getStyles = (theme) => {
         container: {
             flex: 1,
             backgroundColor: theme.background,
+            paddingBottom: 20
         },
         actionSheetContainer: {
             backgroundColor: safeSurface,

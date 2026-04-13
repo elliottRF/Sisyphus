@@ -21,7 +21,6 @@ import {
 
 import ExerciseEditable from '../../components/exerciseEditable'
 import ActionSheet from "react-native-actions-sheet";
-import ExerciseHistory from "../../components/exerciseHistory"
 import FilteredExerciseList from '../../components/FilteredExerciseList';
 import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -93,10 +92,7 @@ const EditTemplate = () => {
         setIsLoading(initialState.loading);
     }
 
-    const [selectedExerciseId, setSelectedExerciseId] = useState(null);
-    const [currentExerciseName, setCurrentExerciseName] = useState(null);
     const actionSheetRef = useRef(null);
-    const exerciseInfoActionSheetRef = useRef(null);
     const listRef = useRef(null);
 
     const inputExercise = (item) => {
@@ -137,9 +133,7 @@ const EditTemplate = () => {
 
     const showExerciseInfo = (exerciseDetails) => {
         if (exerciseDetails) {
-            setSelectedExerciseId(exerciseDetails.exerciseID);
-            setCurrentExerciseName(exerciseDetails.name);
-            exerciseInfoActionSheetRef.current?.show();
+            router.push(`/exercise/${exerciseDetails.exerciseID}?name=${encodeURIComponent(exerciseDetails.name || '')}`);
         }
     };
 
@@ -417,18 +411,6 @@ const EditTemplate = () => {
                     onExerciseCreated={() => fetchExercises().then(data => setExercises(data))}
                 />
 
-                <ActionSheet
-                    ref={exerciseInfoActionSheetRef}
-                    enableGestureBack={true}
-                    containerStyle={{ height: '100%', backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
-                    indicatorStyle={{ backgroundColor: theme.textSecondary }}
-                >
-                    <ExerciseHistory
-                        exerciseID={selectedExerciseId}
-                        exerciseName={currentExerciseName}
-                        onClose={() => exerciseInfoActionSheetRef.current?.hide()}
-                    />
-                </ActionSheet>
             </View>
         </GestureHandlerRootView>
     );

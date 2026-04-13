@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { LineGraph } from 'react-native-graph';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { fetchExerciseProgress, unpinExercise, fetchExercises } from './db';
@@ -16,6 +16,7 @@ const COMPACT_GRAPH_HEIGHT = 130;
 const CARD_PADDING = 40;
 const CARD_MARGIN = 32;
 const Y_AXIS_WIDTH = 40;
+const GRAPH_RIGHT_PADDING = 0;
 
 const DEBUG_INTERPOLATE = true;
 
@@ -121,11 +122,12 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 
 const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, onReady }) => {
     const { theme, useImperial } = useTheme();
+    const router = useRouter();
     const styles = getStyles(theme, isCompact);
 
     const graphWidth = isCompact
-        ? SCREEN_WIDTH - 24 - 16 - Y_AXIS_WIDTH
-        : SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH;
+        ? SCREEN_WIDTH - 24 - 24 - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING
+        : SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING;
     const graphHeight = isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT;
 
     const [allData, setAllData] = useState([]);
@@ -186,6 +188,11 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
             setLoading(false);
             onReady?.();
         }
+    };
+
+    const primeDataForNavigation = () => {
+        // Prime the cache so the history screen doesn't have to re-fetch/re-compute the graph data
+        primeGraphData(allData);
     };
 
     const handleUnpin = async () => {
@@ -521,7 +528,15 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                 {!isCompact && (
                     <View style={styles.header}>
                         <View style={{ flex: 1, marginRight: 8 }}>
-                            <Text style={styles.title}>{exerciseName}</Text>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    primeDataForNavigation();
+                                    router.push(`/exercise/${exerciseID}?name=${encodeURIComponent(exerciseName)}`);
+                                }}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.title]}>{exerciseName}</Text>
+                            </TouchableOpacity>
                             <Text style={styles.subtitle}>
                                 {graphMode === 'truePR' ? 'True PRs Only' :
                                     graphMode === 'maxWeight' ? 'Max Weight PRs' :
@@ -709,11 +724,10 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                                     color={graphMode === 'maxWeight' ? maxWeightColor : graphColor}
                                     gradientFillColors={graphMode === 'maxWeight' ? maxWeightGradient : gradientFill}
                                     enablePanGesture={true}
-                                    enableIndicator={true}
-                                    SelectionDot={CustomSelectionDot}
                                     onPointSelected={onPointSelected}
                                     onGestureStart={onGestureStart}
                                     onGestureEnd={onGestureEnd}
+                                    enableIndicator
                                     range={{ y: { min: yRange[0], max: yRange[1] } }}
                                     style={{ width: graphWidth, height: graphHeight }}
                                 />
@@ -801,6 +815,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     },
     graphCol: {
         flex: 1,
+        paddingRight: GRAPH_RIGHT_PADDING,
     },
     xAxisContainer: {
         position: 'absolute',
