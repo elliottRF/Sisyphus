@@ -3,7 +3,7 @@ import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard } from 'r
 import { FlatList } from 'react-native-gesture-handler';
 import ActionSheet from "react-native-actions-sheet";
 import { fetchExercises, fetchLastWorkoutSets } from '../components/db';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
@@ -163,7 +163,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
                         onPress={openCreateExerciseSheet}
                     >
                         <ButtonBackground style={styles.addButtonGradient} theme={theme}>
-                            <Feather name="plus" size={24} color="#fff" />
+                            <Feather name="plus" size={24} color={theme.surface} />
                         </ButtonBackground>
                     </TouchableOpacity>
                 </View>
@@ -189,7 +189,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
             >
                 <View style={styles.closeIconContainerUpperPosition}>
                     <TouchableOpacity onPress={handleCloseCreateExerciseSheet} style={styles.closeIcon}>
-                        <Feather name="x" size={24} color="#fff" />
+                        <Feather name="x" size={24} color={theme.text} />
                     </TouchableOpacity>
                 </View>
 
@@ -236,6 +236,7 @@ const ButtonBackground = ({ children, style, theme }) => {
 const getStyles = (theme) => {
     // Safe Colors for Reanimated (ActionSheet)
     const isDynamic = theme.type === 'dynamic';
+    const lightTheme = isLightTheme(theme);
     const safeBackground = isDynamic ? '#121212' : theme.background;
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
     const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
@@ -299,7 +300,7 @@ const getStyles = (theme) => {
             marginLeft: 8,
         },
         addButton: {
-            ...SHADOWS.medium,
+            ...getThemedShadow(theme, 'medium'),
         },
         addButtonGradient: {
             width: 44,
@@ -315,9 +316,11 @@ const getStyles = (theme) => {
             zIndex: 1,
         },
         closeIcon: {
-            backgroundColor: theme.surface,
+            backgroundColor: lightTheme ? 'rgba(255,255,255,0.94)' : theme.surface,
             padding: 8,
             borderRadius: 20,
+            borderWidth: 1,
+            borderColor: lightTheme ? safeBorder : 'transparent',
         },
         list: {
             flex: 1,
@@ -334,7 +337,7 @@ const getStyles = (theme) => {
             padding: 20,
             borderWidth: 1,
             borderColor: safeBorder,
-            ...SHADOWS.small,
+            ...getThemedShadow(theme, 'small'),
         },
         exerciseContent: {
             flexDirection: 'row',

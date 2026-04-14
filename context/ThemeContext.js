@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS as DEFAULT_COLORS, THEMES } from '../constants/theme';
+import { THEMES } from '../constants/theme';
+import {
+    DEFAULT_REP_RANGE,
+    DEFAULT_REP_RANGE_PRESET,
+    SETTINGS_KEYS
+} from '../constants/preferences';
 
 const ThemeContext = createContext();
 
@@ -10,6 +15,9 @@ export const ThemeProvider = ({ children }) => {
 
     const [gender, setGender] = useState('male');
     const [accessoryWeight, setAccessoryWeight] = useState(0.5);
+    const [repRangePreset, setRepRangePreset] = useState(DEFAULT_REP_RANGE_PRESET);
+    const [repRangeMin, setRepRangeMin] = useState(DEFAULT_REP_RANGE.min);
+    const [repRangeMax, setRepRangeMax] = useState(DEFAULT_REP_RANGE.max);
     const [workoutInProgress, setWorkoutInProgress] = useState(false);
     const [useImperial, setUseImperial] = useState(false);
 
@@ -19,11 +27,22 @@ export const ThemeProvider = ({ children }) => {
 
     const loadSettings = async () => {
         try {
-            const [storedThemeID, storedGender, storedAccessoryWeight, storedUnitPref] = await Promise.all([
+            const [
+                storedThemeID,
+                storedGender,
+                storedAccessoryWeight,
+                storedUnitPref,
+                storedRepRangePreset,
+                storedRepRangeMin,
+                storedRepRangeMax
+            ] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
                 AsyncStorage.getItem('user_accessory_weight'),
-                AsyncStorage.getItem('user_unit_imperial')
+                AsyncStorage.getItem('user_unit_imperial'),
+                AsyncStorage.getItem(SETTINGS_KEYS.repRangePreset),
+                AsyncStorage.getItem(SETTINGS_KEYS.repRangeMin),
+                AsyncStorage.getItem(SETTINGS_KEYS.repRangeMax)
             ]);
 
             if (storedThemeID && THEMES[storedThemeID]) {
@@ -38,6 +57,15 @@ export const ThemeProvider = ({ children }) => {
             }
             if (storedUnitPref !== null) {
                 setUseImperial(storedUnitPref === 'true');
+            }
+            if (storedRepRangePreset) {
+                setRepRangePreset(storedRepRangePreset);
+            }
+            if (storedRepRangeMin !== null) {
+                setRepRangeMin(parseInt(storedRepRangeMin, 10));
+            }
+            if (storedRepRangeMax !== null) {
+                setRepRangeMax(parseInt(storedRepRangeMax, 10));
             }
         } catch (error) {
             console.error("Failed to load settings:", error);
@@ -74,6 +102,31 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updateRepRangePreset = async (preset) => {
+        setRepRangePreset(preset);
+        try {
+            await AsyncStorage.setItem(SETTINGS_KEYS.repRangePreset, preset);
+        } catch (error) {
+            console.error("Failed to save rep range preset:", error);
+        }
+    };
+
+    const updateRepRange = async ({ min, max, preset = 'custom' }) => {
+        setRepRangeMin(min);
+        setRepRangeMax(max);
+        setRepRangePreset(preset);
+
+        try {
+            await Promise.all([
+                AsyncStorage.setItem(SETTINGS_KEYS.repRangeMin, String(min)),
+                AsyncStorage.setItem(SETTINGS_KEYS.repRangeMax, String(max)),
+                AsyncStorage.setItem(SETTINGS_KEYS.repRangePreset, preset)
+            ]);
+        } catch (error) {
+            console.error("Failed to save rep range:", error);
+        }
+    };
+
     const updateUnitPref = async (imperial) => {
         setUseImperial(imperial);
         try {
@@ -92,6 +145,11 @@ export const ThemeProvider = ({ children }) => {
             updateGender,
             accessoryWeight,
             updateAccessoryWeight,
+            repRangePreset,
+            updateRepRangePreset,
+            repRangeMin,
+            repRangeMax,
+            updateRepRange,
             workoutInProgress,
             setWorkoutInProgress,
             useImperial,

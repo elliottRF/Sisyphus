@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import Body from 'react-native-body-highlighter';
 import { insertExercise, updateExercise, fetchExercises, recalculateExercisePRs } from '../components/db';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useScrollHandlers } from 'react-native-actions-sheet';
@@ -322,7 +322,9 @@ const NewExercise = (props) => {
     );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => {
+    const lightTheme = isLightTheme(theme);
+    return StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: theme.background,
@@ -340,7 +342,7 @@ const getStyles = (theme) => StyleSheet.create({
         borderWidth: 1,
         borderColor: theme.border,
         marginBottom: 24,
-        ...SHADOWS.small,
+        ...getThemedShadow(theme, 'small'),
     },
     bodyDivider: {
         width: 1,
@@ -351,12 +353,13 @@ const getStyles = (theme) => StyleSheet.create({
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: theme.surface,
+        backgroundColor: lightTheme ? 'rgba(255,255,255,0.94)' : theme.surface,
         borderRadius: 14,
         borderWidth: 1,
         borderColor: theme.border,
         paddingHorizontal: 16,
         marginBottom: 20,
+        ...getThemedShadow(theme, 'small'),
     },
     inputIcon: {
         marginRight: 10,
@@ -378,6 +381,7 @@ const getStyles = (theme) => StyleSheet.create({
         borderWidth: 1,
         borderColor: theme.border,
         marginBottom: 24,
+        ...getThemedShadow(theme, 'small'),
     },
     cardioTextWrapper: {
         flex: 1,
@@ -394,6 +398,11 @@ const getStyles = (theme) => StyleSheet.create({
     },
     sectionContainer: {
         marginBottom: 24,
+        backgroundColor: lightTheme ? 'rgba(255,255,255,0.72)' : 'transparent',
+        borderRadius: 18,
+        padding: lightTheme ? 16 : 0,
+        borderWidth: lightTheme ? 1 : 0,
+        borderColor: lightTheme ? theme.overlayBorder : 'transparent',
     },
     sectionTitle: {
         color: theme.text,
@@ -407,7 +416,7 @@ const getStyles = (theme) => StyleSheet.create({
         marginHorizontal: -4,
     },
     chip: {
-        backgroundColor: theme.surface,
+        backgroundColor: lightTheme ? theme.background : theme.surface,
         borderWidth: 1,
         borderColor: theme.border,
         paddingHorizontal: 16,
@@ -438,7 +447,7 @@ const getStyles = (theme) => StyleSheet.create({
         borderRadius: 30,
         alignItems: 'center',
         marginTop: 10,
-        ...SHADOWS.medium,
+        ...getThemedShadow(theme, 'medium'),
     },
     saveButtonText: {
         color: '#FFFFFF',
@@ -447,5 +456,6 @@ const getStyles = (theme) => StyleSheet.create({
         letterSpacing: 0.5,
     },
 });
+};
 
 export default NewExercise;

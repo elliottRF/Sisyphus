@@ -178,6 +178,12 @@ export const fetchWorkoutHistory = async () => {
   return await database.getAllAsync('SELECT * FROM workoutHistory;');
 };
 
+export const getWorkoutHistoryCount = async () => {
+  const database = await getDb();
+  const result = await database.getFirstAsync('SELECT COUNT(*) as count FROM workoutHistory;');
+  return result?.count || 0;
+};
+
 // Get the latest workout session number
 export const getLatestWorkoutSession = async () => {
   const database = await getDb();

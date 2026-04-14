@@ -7,11 +7,14 @@ import Animated, {
     withSpring,
     runOnJS,
     LinearTransition,
+    FadeIn,
+    FadeOut,
+    ZoomIn,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useReorderableDrag, useIsActive } from 'react-native-reorderable-list';
 
-import { FONTS, SHADOWS } from '../constants/theme'
+import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme'
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { fetchLastWorkoutSets } from './db';
 import { useTheme } from '../context/ThemeContext';
@@ -86,7 +89,7 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
     );
 };
 
-const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isExerciseDragging }) => {
+const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isExerciseDragging, completed }) => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
     const translateX = useSharedValue(0);
@@ -130,7 +133,9 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
 
     return (
         <Animated.View
-            style={styles.swipeableContainer}
+            style={[
+                styles.swipeableContainer
+            ]}
         >
             <Animated.View style={[styles.deleteBackground, rDeleteBackgroundStyle]}>
                 <Animated.View style={[styles.deleteActionRegion, rRedBoxStyle]}>
@@ -196,17 +201,13 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, distance: sanitized } : s) } : e) } : w));
     };
     const handleMinutesChange = (text, setIndex) => {
-        // Minutes can be decimal too, but following user's specific request for "reps" (integers)
-        // Usually minutes in cardio are decimal friendly, but if they want "reps" logic, 
-        // I will allow decimals for minutes too since distance is decimal allowed.
-        // Actually, user said "no decimal point for reps". I'll assume minutes = integer for now
-        // to be consistent with "reps" being the non-decimal one in the UI.
         const sanitized = sanitizeInteger(text);
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: sanitized } : s) } : e) } : w));
     };
     const toggleSetComplete = (setIndex) => {
-        if (isTemplate) return; // No completion in templates
+        if (isTemplate) return;
         const set = exercise.sets[setIndex];
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         if (!set.completed) {
             Keyboard.dismiss();
             if (onSetComplete) onSetComplete();
@@ -325,7 +326,6 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
 
                     if (prevSet) {
                         if (isCardio) {
-                            // Convert previous seconds to minutes for display
                             const prevMins = prevSet.seconds ? (prevSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : '0';
                             prevSetText = `${prevSet.distance || 0}km / ${prevMins}mins`;
                         } else {
@@ -340,9 +340,18 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                             index={index}
                             simultaneousHandlers={simultaneousHandlers}
                             isExerciseDragging={isActive}
+                            completed={set.completed}
                         >
                             <View style={styles.setRow}>
-                                {set.completed && <View style={styles.completionOverlay} />}
+                                {/* Subtle green fade overlay when completed */}
+                                {set.completed && (
+                                    <Animated.View
+                                        style={styles.completedBackground}
+                                        entering={FadeIn.duration(180)}
+                                        exiting={FadeOut.duration(150)}
+                                    />
+                                )}
+
                                 <View style={styles.colSet}>
                                     <TouchableOpacity
                                         onPress={() => toggleSetType(index)}
@@ -405,7 +414,13 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
                                             onPress={() => toggleSetComplete(index)}
                                             hitSlop={{ top: 20, bottom: 20, left: 5, right: 20 }}
                                         >
-                                            <Feather name="check" size={14} color={set.completed ? '#fff' : theme.textSecondary} />
+                                            {/* Toned-down animation: very subtle zoom + fade, almost no bounce */}
+                                            <Animated.View
+                                                key={`check-${set.id}-${set.completed}`}
+                                                entering={set.completed ? ZoomIn.springify().damping(25) : undefined}
+                                            >
+                                                <Feather name="check" size={14} color={set.completed ? '#fff' : theme.textSecondary} />
+                                            </Animated.View>
                                         </TouchableOpacity>
                                     </View>
                                 )}
@@ -427,27 +442,31 @@ const ExerciseEditable = ({ exercise, exerciseName, updateCurrentWorkout, exerci
 const getStyles = (theme) => {
     // Determine safe colors for Reanimated components
     const isDynamic = theme.type === 'dynamic';
+    const lightTheme = isLightTheme(theme);
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
     const safeError = isDynamic ? '#EF4444' : (theme.error || '#EF4444');
     const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
     const safeSuccess = isDynamic ? '#22c55e' : (theme.success || '#22c55e');
+    const completedFill = withAlpha(safeSuccess, lightTheme ? 0.06 : 0.045);
+    const completedOverlayFill = withAlpha(safeSuccess, lightTheme ? 0.025 : 0.02);
 
     return StyleSheet.create({
         container: {
             backgroundColor: theme.surface,
-            borderRadius: 12,
+            borderRadius: 16,
             marginBottom: 12,
             borderWidth: 1,
-            borderColor: 'transparent',
+            borderColor: lightTheme ? theme.border : 'transparent',
+            ...getThemedShadow(theme, 'small'),
         },
         containerActive: {
             borderColor: safePrimary,
             backgroundColor: theme.surface,
             elevation: 10,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 3.84,
+            shadowColor: lightTheme ? '#7C8FAA' : "#000",
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: lightTheme ? 0.18 : 0.25,
+            shadowRadius: 16,
         },
         header: {
             flexDirection: 'row',
@@ -455,9 +474,11 @@ const getStyles = (theme) => {
             alignItems: 'center',
             paddingHorizontal: 12,
             paddingVertical: 10,
-            backgroundColor: theme.surface,
-            borderTopLeftRadius: 12,
-            borderTopRightRadius: 12,
+            backgroundColor: lightTheme ? theme.overlaySubtle : theme.surface,
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: lightTheme ? theme.overlayBorder : 'transparent',
         },
         headerLeft: {
             flexDirection: 'row',
@@ -489,17 +510,19 @@ const getStyles = (theme) => {
             color: theme.text,
             fontFamily: FONTS.regular,
             fontSize: 13,
-            backgroundColor: theme.overlayMedium,
-            borderRadius: 4,
-            padding: 8,
+            backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlayMedium,
+            borderRadius: 8,
+            padding: 10,
             minHeight: 32,
+            borderWidth: 1,
+            borderColor: lightTheme ? theme.overlayBorder : 'transparent',
         },
         tableHeader: {
             flexDirection: 'row',
             paddingHorizontal: 12,
             paddingVertical: 6,
             alignItems: 'center',
-            backgroundColor: theme.overlaySubtle,
+            backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlaySubtle,
         },
         columnHeader: {
             fontSize: 10,
@@ -519,8 +542,10 @@ const getStyles = (theme) => {
         },
         swipeableContainer: {
             overflow: 'hidden',
-            backgroundColor: 'transparent',
+            backgroundColor: theme.surface,
+            marginBottom: -StyleSheet.hairlineWidth,
         },
+
         deleteBackground: {
             ...StyleSheet.absoluteFillObject,
             backgroundColor: safeError,
@@ -534,27 +559,27 @@ const getStyles = (theme) => {
             justifyContent: 'center'
         },
         deleteIconContainer: {
-            // Add this style if missing
             alignItems: 'center',
             justifyContent: 'center',
         },
         rowForeground: {
-            // Add this style if missing
             backgroundColor: 'transparent',
         },
 
         setRow: {
-            backgroundColor: theme.surface,
+            backgroundColor: 'transparent',
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 12,
-            paddingVertical: 4,
-            borderBottomWidth: 0, // Remove border
+            paddingVertical: 6,
             overflow: 'hidden',
+            position: 'relative',           // required for absolute overlay
         },
-        completionOverlay: {
+
+        completedBackground: {
             ...StyleSheet.absoluteFillObject,
-            backgroundColor: 'rgba(0,255,0,0.05)',
+            backgroundColor: completedFill,
+            zIndex: -1,
         },
 
         setNumberBadge: {
@@ -570,9 +595,9 @@ const getStyles = (theme) => {
             fontFamily: FONTS.bold,
             color: theme.textSecondary,
         },
-        badgeWarmup: { backgroundColor: 'rgba(253, 203, 110, 0.2)' },
+        badgeWarmup: { backgroundColor: withAlpha(theme.warning, lightTheme ? 0.18 : 0.2) },
         textWarmup: { color: '#fdcb6e' },
-        badgeDrop: { backgroundColor: 'rgba(116, 185, 255, 0.2)' },
+        badgeDrop: { backgroundColor: withAlpha(theme.info, lightTheme ? 0.16 : 0.2) },
         textDrop: { color: '#74b9ff' },
 
         prevText: {
@@ -584,16 +609,16 @@ const getStyles = (theme) => {
         },
 
         inputContainer: {
-            backgroundColor: theme.overlayInput,
-            borderRadius: 4,
-            height: 32,
+            backgroundColor: lightTheme ? theme.background : theme.overlayInput,
+            borderRadius: 8,
+            height: 36,
             justifyContent: 'center',
             borderWidth: 1,
-            borderColor: theme.overlayBorder,
+            borderColor: lightTheme ? theme.border : theme.overlayBorder,
         },
         inputFocused: {
             borderColor: safePrimary,
-            backgroundColor: theme.overlayInputFocused,
+            backgroundColor: lightTheme ? withAlpha(safePrimary, 0.08) : theme.overlayInputFocused,
         },
         inputDisabled: {
             opacity: 0.5,
@@ -604,7 +629,7 @@ const getStyles = (theme) => {
             textAlign: 'center',
             textAlignVertical: 'center',
             fontFamily: FONTS.bold,
-            fontSize: 16,
+            fontSize: 17,
             padding: 0,
             paddingHorizontal: 0,
             margin: 0,
@@ -612,14 +637,14 @@ const getStyles = (theme) => {
         },
 
         checkButton: {
-            width: 24,
-            height: 24,
-            borderRadius: 4,
-            backgroundColor: theme.overlayBorder,
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            backgroundColor: lightTheme ? theme.background : theme.overlayBorder,
             alignItems: 'center',
             justifyContent: 'center',
             borderWidth: 1,
-            borderColor: theme.overlayBorder,
+            borderColor: lightTheme ? theme.border : theme.overlayBorder,
         },
         checkButtonCompleted: {
             backgroundColor: safeSuccess,
@@ -627,11 +652,11 @@ const getStyles = (theme) => {
         },
 
         addSetButton: {
-            paddingVertical: 10,
+            paddingVertical: 12,
             alignItems: 'center',
-            backgroundColor: theme.overlaySubtle,
-            borderBottomLeftRadius: 12,
-            borderBottomRightRadius: 12,
+            backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlaySubtle,
+            borderBottomLeftRadius: 16,
+            borderBottomRightRadius: 16,
         },
         addSetText: {
             fontSize: 11,

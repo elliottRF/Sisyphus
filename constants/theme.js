@@ -32,6 +32,25 @@ export const SHADOWS = {
     },
 };
 
+export const withAlpha = (color, opacity) => {
+    if (typeof color !== 'string') return color;
+
+    if (color.startsWith('#')) {
+        let hex = color.slice(1);
+        if (hex.length === 3) {
+            hex = hex.split('').map(char => char + char).join('');
+        }
+        if (hex.length !== 6) return color;
+
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+
+    return color;
+};
+
 export const SIZES = {
     height,
     width,
@@ -72,6 +91,28 @@ const isLight = (color) => {
 
 
 // --- THEME DEFINITIONS ---
+const DEFAULT = {
+    primary: "#0A84FF",      // Apple San Francisco Blue
+    primaryDark: "#007AFF",  // Slightly boosted for visibility
+    secondary: "#0A84FF",
+    background: "#151517",   // Lifted from near-black to deep charcoal to reduce glare
+    surface: "#242426",      // Noticeably lighter than background for card definition
+    text: "#FFFFFF",
+    textSecondary: "#A1A1A6",// Boosted from #8E8E93 for better legibility in bright light
+    border: "#3A3A3C",       // Made more distinct so UI sections are visible
+    success: "#30D158",      // Slightly more vibrant iOS Green
+    danger: "#FF453A",
+    warning: "#FF9F0A",
+    info: "#64D2FF",
+    bodyFill: "#3A3A3C",     // Matches borders for a cohesive look
+    statusBar: "light",
+    // Increased opacity for overlays to ensure they don't disappear under glare
+    overlaySubtle: "rgba(255,255,255,0.02)",
+    overlayMedium: "rgba(255,255,255,0.03)",
+    overlayBorder: "rgba(255,255,255,0.05)",
+    overlayInput: "rgba(0,0,0,0.2)",
+    overlayInputFocused: "rgba(0,0,0,0.4)",
+};
 
 
 const NOIR = {
@@ -219,13 +260,13 @@ const BLOSSOM = {
     secondary: "#ff85a1",         // Soft Periwinkle (Complementary for Data/Charts)
 
     // Neutrals & Surfaces
-    background: "#FFF5F7",        // Very Light Pink Tint (Lifts white cards)
+    background: "#FFF1F4",        // Slightly richer pink wash for stronger structure
     surface: "#FFFFFF",           // Pure White (Cards & Modals)
-    border: "#F7DCE1",            // Soft Pinkish Border
+    border: "#EBCFD7",            // Stronger blush border
 
     // Typography
     text: "#2D1A1E",              // Deep Berry (High Contrast for Readability)
-    textSecondary: "#8A6A72",     // Muted Rose-Grey (Subtle info)
+    textSecondary: "#7C5E66",     // Darker muted rose-grey for utility text
 
     // Feedback & Semantic
     success: "#7CD9A3",           // Sage Green (Softened for the theme)
@@ -239,11 +280,11 @@ const BLOSSOM = {
 
     statusBar: isLight("#FFF5F7") ? "dark" : "light",
     // Adaptive Overlays
-    overlaySubtle: "rgba(45, 26, 30, 0.02)",
-    overlayMedium: "rgba(45, 26, 30, 0.04)",
-    overlayBorder: "rgba(45, 26, 30, 0.06)",
-    overlayInput: "rgba(45, 26, 30, 0.03)",
-    overlayInputFocused: "rgba(255, 133, 161, 0.1)",
+    overlaySubtle: "rgba(45, 26, 30, 0.028)",
+    overlayMedium: "rgba(45, 26, 30, 0.05)",
+    overlayBorder: "rgba(45, 26, 30, 0.08)",
+    overlayInput: "rgba(45, 26, 30, 0.045)",
+    overlayInputFocused: "rgba(255, 133, 161, 0.12)",
 };
 
 const BLACK_PINK = {
@@ -292,29 +333,6 @@ const DEFAULT_DARK = {
     overlayInputFocused: "rgba(0,0,0,0.4)",
 };
 
-const DEFAULT = {
-    primary: "#0A84FF",      // Apple San Francisco Blue
-    primaryDark: "#007AFF",  // Slightly boosted for visibility
-    secondary: "#0A84FF",
-    background: "#151517",   // Lifted from near-black to deep charcoal to reduce glare
-    surface: "#242426",      // Noticeably lighter than background for card definition
-    text: "#FFFFFF",
-    textSecondary: "#A1A1A6",// Boosted from #8E8E93 for better legibility in bright light
-    border: "#3A3A3C",       // Made more distinct so UI sections are visible
-    success: "#30D158",      // Slightly more vibrant iOS Green
-    danger: "#FF453A",
-    warning: "#FF9F0A",
-    info: "#64D2FF",
-    bodyFill: "#3A3A3C",     // Matches borders for a cohesive look
-    statusBar: "light",
-    // Increased opacity for overlays to ensure they don't disappear under glare
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-};
-
 
 const THRIVE = {
     primary: "#1bffcd",      // Apple San Francisco Blue
@@ -345,13 +363,13 @@ const LIGHT = {
     secondary: "#6366F1",         // Indigo (Complementary for Charts)
 
     // Neutrals & Surfaces
-    background: "#F8FAFC",        // Cool Slate Grey (Modern App Background)
+    background: "#F3F7FC",        // Cleaner cool background for elevated white cards
     surface: "#FFFFFF",           // Pure White
-    border: "#E2E8F0",            // Subtle Slate Border
+    border: "#D7E1EC",            // Stronger border so bright cards still separate
 
     // Typography
-    text: "#0F172A",              // Deep Navy/Slate (Maximum Contrast)
-    textSecondary: "#64748B",     // Medium Slate (Muted Info)
+    text: "#162033",              // Deep Navy with slightly softer contrast
+    textSecondary: "#5D6B80",     // Darker secondary text for better readability
 
     // Feedback & Semantic
     success: "#10B981",           // Emerald Green
@@ -365,11 +383,11 @@ const LIGHT = {
 
     statusBar: isLight("#F8FAFC") ? "dark" : "light",
     // Adaptive Overlays
-    overlaySubtle: "rgba(15, 23, 42, 0.02)",
-    overlayMedium: "rgba(15, 23, 42, 0.04)",
-    overlayBorder: "rgba(15, 23, 42, 0.06)",
-    overlayInput: "rgba(15, 23, 42, 0.03)",
-    overlayInputFocused: "rgba(59, 130, 246, 0.1)",
+    overlaySubtle: "rgba(15, 23, 42, 0.028)",
+    overlayMedium: "rgba(15, 23, 42, 0.05)",
+    overlayBorder: "rgba(15, 23, 42, 0.08)",
+    overlayInput: "rgba(15, 23, 42, 0.045)",
+    overlayInputFocused: "rgba(59, 130, 246, 0.12)",
 };
 
 const SYSTEM = Platform.OS === 'android' ? {
@@ -398,7 +416,6 @@ const SYSTEM = Platform.OS === 'android' ? {
 
 // Export the dictionary
 export const THEMES = {
-    ...(Platform.OS === 'android' ? { SYSTEM } : {}),
     DEFAULT,
     DEFAULT_DARK,
     LIGHT,
@@ -411,6 +428,39 @@ export const THEMES = {
     SCHEMATIC,
     CALIPER,
     THRIVE
+};
+
+export const isLightTheme = (theme) => {
+    if (!theme) return false;
+    return isLight(theme.background || theme.surface || '#000000');
+};
+
+export const getThemedShadow = (theme, size = 'medium') => {
+    if (theme?.type === 'dynamic') {
+        return SHADOWS[size] || SHADOWS.medium;
+    }
+
+    if (isLightTheme(theme)) {
+        if (size === 'small') {
+            return {
+                shadowColor: '#7C8FAA',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.12,
+                shadowRadius: 18,
+                elevation: 4,
+            };
+        }
+
+        return {
+            shadowColor: '#7C8FAA',
+            shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.16,
+            shadowRadius: 24,
+            elevation: 8,
+        };
+    }
+
+    return SHADOWS[size] || SHADOWS.medium;
 };
 
 // Deprecated: Backwards compatibility for now, will be removed

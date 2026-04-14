@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import React, { useState, useCallback, useRef, useLayoutEffect, forwardRef } from 'react';
-import { FONTS } from '../constants/theme';
+import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useScrollHandlers } from 'react-native-actions-sheet';
@@ -33,8 +33,8 @@ const PRBadge = React.memo(({ type, theme }) => {
 
     const brightColor = lightenColor(theme.primary, 20);
     const color = brightColor;
-    const bgColor = `${brightColor}40`;
-    const borderColor = `${brightColor}66`;
+    const bgColor = withAlpha(brightColor, isLightTheme(theme) ? 0.14 : 0.25);
+    const borderColor = withAlpha(brightColor, isLightTheme(theme) ? 0.24 : 0.4);
 
     return (
         <View style={{
@@ -70,17 +70,17 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
     };
 
     if (type === 'W') {
-        containerStyle.backgroundColor = 'rgba(253, 203, 110, 0.25)';
+        containerStyle.backgroundColor = withAlpha(theme.warning, isLightTheme(theme) ? 0.18 : 0.25);
         TextStyle.color = theme.warning;
         TextStyle.fontFamily = FONTS.bold;
         TextStyle.fontSize = 10;
     } else if (type === 'D') {
-        containerStyle.backgroundColor = 'rgba(116, 185, 255, 0.15)';
+        containerStyle.backgroundColor = withAlpha(theme.info, isLightTheme(theme) ? 0.12 : 0.15);
         TextStyle.color = theme.info;
         TextStyle.fontFamily = FONTS.semiBold;
     } else {
-        containerStyle.backgroundColor = 'rgba(255,255,255,0.05)';
-        TextStyle.color = theme.text;
+        containerStyle.backgroundColor = isLightTheme(theme) ? theme.overlayMedium : 'rgba(255,255,255,0.05)';
+        TextStyle.color = isLightTheme(theme) ? theme.textSecondary : theme.text;
         TextStyle.fontFamily = FONTS.semiBold;
     }
 
@@ -407,6 +407,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
 });
 
 const getStyles = (theme) => {
+    const lightTheme = isLightTheme(theme);
     return StyleSheet.create({
         scrollContent: {
             paddingTop: 10,
@@ -458,7 +459,8 @@ const getStyles = (theme) => {
             paddingVertical: 4,
             borderRadius: 6,
             borderWidth: 1,
-            borderColor: theme.border,
+            borderColor: lightTheme ? theme.overlayBorder : theme.border,
+            backgroundColor: lightTheme ? theme.surface : theme.surface,
         },
         metaText: {
             fontSize: 12,
@@ -475,11 +477,12 @@ const getStyles = (theme) => {
             overflow: 'hidden',
             borderWidth: 1,
             borderColor: theme.border,
+            ...getThemedShadow(theme, 'small'),
         },
         exerciseHeader: {
             paddingHorizontal: 12,
             paddingVertical: 10,
-            backgroundColor: theme.overlayMedium,
+            backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlayMedium,
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -497,7 +500,7 @@ const getStyles = (theme) => {
             paddingHorizontal: 12,
             paddingVertical: 6,
             gap: 6,
-            backgroundColor: theme.overlayBorder,
+            backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlayBorder,
         },
         noteText: {
             flex: 1,
@@ -515,7 +518,7 @@ const getStyles = (theme) => {
             paddingVertical: 8,
             borderBottomWidth: 1,
             borderBottomColor: theme.overlayBorder,
-            backgroundColor: theme.overlaySubtle,
+            backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlaySubtle,
         },
         warmupToggleText: {
             fontSize: 12,
@@ -548,6 +551,8 @@ const getStyles = (theme) => {
         setRowContainer: {
             paddingVertical: 3,
             paddingHorizontal: 12,
+            borderTopWidth: 1,
+            borderTopColor: lightTheme ? withAlpha(theme.border, 0.45) : 'transparent',
         },
         setRow: {
             flexDirection: 'row',
@@ -555,7 +560,7 @@ const getStyles = (theme) => {
             minHeight: 28,
         },
         setRowOdd: {
-            backgroundColor: theme.overlaySubtle,
+            backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlaySubtle,
         },
         badgeRow: {
             flexDirection: 'row',

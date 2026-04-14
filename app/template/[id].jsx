@@ -22,7 +22,7 @@ import {
 import ExerciseEditable from '../../components/exerciseEditable'
 import ActionSheet from "react-native-actions-sheet";
 import FilteredExerciseList from '../../components/FilteredExerciseList';
-import { FONTS, SHADOWS } from '../../constants/theme';
+import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { formatWeight, toStorageKg } from '../../utils/units';
@@ -418,6 +418,7 @@ const EditTemplate = () => {
 
 const getStyles = (theme) => {
     const isDynamic = theme.type === 'dynamic';
+    const lightTheme = isLightTheme(theme);
     const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
     const safeText = isDynamic ? '#FFFFFF' : theme.text;
     const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
@@ -455,7 +456,7 @@ const getStyles = (theme) => {
             padding: 16,
         },
         addExerciseButton: {
-            backgroundColor: 'rgba(255,255,255,0.05)',
+            backgroundColor: lightTheme ? theme.overlaySubtle : 'rgba(255,255,255,0.05)',
             paddingVertical: 16,
             borderRadius: 12,
             alignItems: 'center',
@@ -473,7 +474,7 @@ const getStyles = (theme) => {
         finishButtonContainer: {
             marginBottom: 16,
             borderRadius: 12,
-            ...SHADOWS.medium,
+            ...getThemedShadow(theme, 'medium'),
         },
         finishButton: {
             paddingVertical: 16,
@@ -492,14 +493,14 @@ const getStyles = (theme) => {
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: 16,
-            backgroundColor: 'rgba(255,0,0,0.08)',
+            backgroundColor: withAlpha(theme.danger || '#FF4D4D', lightTheme ? 0.1 : 0.08),
             borderWidth: 1,
-            borderColor: 'rgba(255,0,0,0.4)',
+            borderColor: withAlpha(theme.danger || '#FF4D4D', lightTheme ? 0.25 : 0.4),
         },
         deleteButtonText: {
             fontSize: 16,
             fontFamily: FONTS.semiBold,
-            color: '#FF4D4D',
+            color: theme.danger || '#FF4D4D',
         },
         clearButton: {
             paddingVertical: 12,

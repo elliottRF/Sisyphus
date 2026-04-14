@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LineGraph } from 'react-native-graph';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { fetchExerciseProgress, unpinExercise, fetchExercises } from './db';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -58,18 +58,18 @@ export const computeGraphPoints = (history, isAssisted = false) => {
 
 // -------------
 
-const CustomSelectionDot = ({ isActive, color }) => (
+const CustomSelectionDot = ({ isActive, color, borderColor }) => (
     <View style={{
         width: 12,
         height: 12,
         borderRadius: 6,
         backgroundColor: color,
         borderWidth: 3,
-        borderColor: 'white',
+        borderColor: borderColor,
         opacity: isActive ? 1 : 0.7,
-        shadowColor: '#000',
+        shadowColor: borderColor,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.18,
         shadowRadius: 4,
         elevation: 5,
     }} />
@@ -712,7 +712,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                                                 left: 0,
                                                 right: 0,
                                                 height: 1,
-                                                backgroundColor: 'rgba(255,255,255,0.06)',
+                                                backgroundColor: isLightTheme(theme) ? theme.overlayBorder : 'rgba(255,255,255,0.06)',
                                             }}
                                         />
                                     ))}
@@ -763,7 +763,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         borderWidth: 1,
         borderColor: theme.border,
         overflow: 'hidden',
-        ...SHADOWS.medium,
+        ...getThemedShadow(theme, 'medium'),
     },
     content: {
         padding: isCompact ? 12 : 20,
@@ -793,8 +793,10 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     },
     unpinButton: {
         padding: 8,
-        backgroundColor: theme.overlayBorder,
+        backgroundColor: isLightTheme(theme) ? theme.overlaySubtle : theme.overlayBorder,
         borderRadius: 12,
+        borderWidth: 1,
+        borderColor: isLightTheme(theme) ? theme.overlayBorder : 'transparent',
     },
     graphRow: {
         flexDirection: 'row',
@@ -848,9 +850,11 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     },
     rangeSelector: {
         flexDirection: 'row',
-        backgroundColor: theme.overlayBorder,
+        backgroundColor: isLightTheme(theme) ? theme.overlaySubtle : theme.overlayBorder,
         borderRadius: 8,
         padding: 2,
+        borderWidth: 1,
+        borderColor: isLightTheme(theme) ? theme.overlayBorder : 'transparent',
     },
     rangeButton: {
         paddingVertical: 4,
@@ -858,7 +862,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         borderRadius: 6,
     },
     rangeButtonActive: {
-        backgroundColor: theme.overlayInputFocused,
+        backgroundColor: isLightTheme(theme) ? withAlpha(theme.primary, 0.12) : theme.overlayInputFocused,
     },
     rangeText: {
         fontSize: 10,
@@ -870,12 +874,12 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     },
     modeToggleContainer: {
         flexDirection: 'row',
-        backgroundColor: theme.overlayMedium,
+        backgroundColor: isLightTheme(theme) ? theme.overlaySubtle : theme.overlayMedium,
         borderRadius: 14,
         padding: 4,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: theme.overlaySubtle,
+        borderColor: isLightTheme(theme) ? theme.overlayBorder : theme.overlaySubtle,
     },
     modeButton: {
         flex: 1,
@@ -887,7 +891,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         gap: 8,
     },
     modeButtonActive: {
-        backgroundColor: theme.overlayInput,
+        backgroundColor: isLightTheme(theme) ? theme.surface : theme.overlayInput,
     },
     modeButtonText: {
         fontSize: 12,

@@ -1,9 +1,9 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, PanResponder, Dimensions, Animated } from 'react-native';
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, Animated } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 // import { COLORS, FONTS, SHADOWS } from '../constants/theme'; // Removed static import
-import { FONTS, SHADOWS, THEMES } from '../constants/theme';
+import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -13,8 +13,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TextInput } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, emit } from '../utils/events';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import {
+    AppThemeSelector,
+    GenderSegment,
+    RepRangeSelector,
+    SecondaryVolumeSlider
+} from '../components/PreferenceControls';
 
 const AnimatedSwitch = ({ value, onValueChange, activeColor, inactiveColor, thumbColor }) => {
     // 1. Initialize the value directly so it starts at the right spot
@@ -69,6 +73,10 @@ const Settings = () => {
         updateGender,
         accessoryWeight,
         updateAccessoryWeight,
+        repRangePreset,
+        repRangeMin,
+        repRangeMax,
+        updateRepRange,
         useImperial,
         updateUnitPref
     } = useTheme(); // Use Theme Hook
@@ -90,26 +98,6 @@ const Settings = () => {
             scrollRef.current?.scrollTo({ y: 0, animated: false });
         }, [])
     );
-
-    const SLIDER_WIDTH = 200;
-
-    const panResponder = useMemo(() => PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderMove: (evt) => {
-            const { locationX } = evt.nativeEvent;
-            const weight = Math.max(0, Math.min(1, locationX / SLIDER_WIDTH));
-            const steppedWeight = Math.round(weight / 0.05) * 0.05;
-            updateAccessoryWeight(parseFloat(steppedWeight.toFixed(2)));
-        },
-        onPanResponderGrant: (evt) => {
-            const { locationX } = evt.nativeEvent;
-            const weight = Math.max(0, Math.min(1, locationX / SLIDER_WIDTH));
-            const steppedWeight = Math.round(weight / 0.05) * 0.05;
-            updateAccessoryWeight(parseFloat(steppedWeight.toFixed(2)));
-            emit(AppEvents.WORKOUT_DATA_IMPORTED);
-        }
-    }), [updateAccessoryWeight]);
 
     useEffect(() => {
         loadSettings();
@@ -305,28 +293,7 @@ const Settings = () => {
                     </View>
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.themeScroll}>
-                        {Object.keys(THEMES).map((key) => {
-                            const itemTheme = THEMES[key];
-                            const isActive = themeID === key;
-                            return (
-                                <TouchableOpacity
-                                    key={key}
-                                    style={[
-                                        styles.themeOption,
-                                        isActive && styles.themeOptionActive,
-                                        { backgroundColor: itemTheme.surface, borderColor: isActive ? theme.primary : itemTheme.border }
-                                    ]}
-                                    onPress={() => updateTheme(key)}
-                                >
-                                    <View style={[styles.themePreview, { backgroundColor: itemTheme.background }]}>
-                                        <View style={[styles.themePreviewCircle, { backgroundColor: itemTheme.primary }]} />
-                                    </View>
-                                    <Text style={[styles.themeName, { color: isActive ? theme.primary : theme.textSecondary }]}>
-                                        {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
+                        <AppThemeSelector theme={theme} themeID={themeID} onChange={updateTheme} compact />
                     </ScrollView>
                 </View>
 
@@ -390,6 +357,24 @@ const Settings = () => {
                     </View>
                 </View>
 
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Feather name="sliders" size={20} color={theme.primary} />
+                        <Text style={styles.cardTitle}>Preferred Rep Range</Text>
+                    </View>
+                    <Text style={styles.cardDescription}>
+                        Save a default training bias for future guidance. This will be used more fully later.
+                    </Text>
+                    <RepRangeSelector
+                        theme={theme}
+                        value={repRangePreset}
+                        min={repRangeMin}
+                        max={repRangeMax}
+                        onRangeChange={updateRepRange}
+                        compact
+                    />
+                </View>
+
                 {/* Accessory Contribution */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
@@ -399,57 +384,14 @@ const Settings = () => {
                     <Text style={styles.cardDescription}>
                         How much supporting muscles count toward a muscle’s weekly volume (0.0–1.0).
                     </Text>
-
-                    <View style={styles.sliderContainer}>
-                        <View style={styles.sliderTrack}>
-                            <View
-                                style={[
-                                    styles.sliderFill,
-                                    { width: `${accessoryWeight * 100}%`, backgroundColor: theme.primary }
-                                ]}
-                            />
-                            <View
-                                style={[
-                                    styles.sliderThumb,
-                                    { left: `${accessoryWeight * 100}%`, borderColor: theme.primary, backgroundColor: theme.surface }
-                                ]}
-                            />
-                            <View
-                                {...panResponder.panHandlers}
-                                style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
-                            />
-                        </View>
-                        <View style={styles.sliderLabels}>
-                            <Text style={styles.sliderValueText}>0.0 (None)</Text>
-                            <Text style={[styles.sliderValueText, { color: theme.primary, fontFamily: FONTS.bold }]}>
-                                {accessoryWeight.toFixed(2)}
-                            </Text>
-                            <Text style={styles.sliderValueText}>1.0 (Full)</Text>
-                        </View>
-
-                        <View style={styles.weightQuickSelect}>
-                            {[0, 0.25, 0.5, 0.75, 1].map((val) => (
-                                <TouchableOpacity
-                                    key={val}
-                                    style={[
-                                        styles.weightOption,
-                                        accessoryWeight === val && { backgroundColor: theme.primary, borderColor: theme.primary }
-                                    ]}
-                                    onPress={() => {
-                                        updateAccessoryWeight(val);
-                                        emit(AppEvents.WORKOUT_DATA_IMPORTED);
-                                    }}
-                                >
-                                    <Text style={[
-                                        styles.weightOptionText,
-                                        accessoryWeight === val && { color: theme.surface }
-                                    ]}>
-                                        {val}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
+                    <SecondaryVolumeSlider
+                        theme={theme}
+                        value={accessoryWeight}
+                        onChange={(value) => {
+                            updateAccessoryWeight(value);
+                            emit(AppEvents.WORKOUT_DATA_IMPORTED);
+                        }}
+                    />
                 </View>
 
                 {/* Weight Units */}
@@ -483,28 +425,7 @@ const Settings = () => {
                     <Text style={styles.cardDescription}>
                         Gender of the muscle highlighter model shown across the app.
                     </Text>
-                    <View style={styles.genderToggleContainer}>
-                        <TouchableOpacity
-                            style={[
-                                styles.genderOption,
-                                gender === 'male' && { backgroundColor: theme.primary, borderColor: theme.primary }
-                            ]}
-                            onPress={() => updateGender('male')}
-                        >
-                            <Feather name="user" size={18} color={gender === 'male' ? theme.surface : theme.text} />
-                            <Text style={[styles.genderText, gender === 'male' && { color: theme.surface }]}>Male</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[
-                                styles.genderOption,
-                                gender === 'female' && { backgroundColor: theme.primary, borderColor: theme.primary }
-                            ]}
-                            onPress={() => updateGender('female')}
-                        >
-                            <Feather name="user" size={18} color={gender === 'female' ? theme.surface : theme.text} />
-                            <Text style={[styles.genderText, gender === 'female' && { color: theme.surface }]}>Female</Text>
-                        </TouchableOpacity>
-                    </View>
+                    <GenderSegment theme={theme} value={gender} onChange={updateGender} />
                 </View>
 
                 {/* --- DATA & BACKUP SECTION --- */}
@@ -691,128 +612,10 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 14,
         marginLeft: 8,
     },
-    // Theme Selector Styles
     themeScroll: {
         paddingHorizontal: 0,
         paddingBottom: 4,
         gap: 12,
-    },
-    themeOption: {
-        width: 100,
-        padding: 12,
-        borderRadius: 12,
-        borderWidth: 2,
-        alignItems: 'center',
-        gap: 8,
-    },
-    themeOptionActive: {
-        // Border color handled inline
-    },
-    themePreview: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
-    },
-    themePreviewCircle: {
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-    },
-    themeName: {
-        fontSize: 12,
-        fontFamily: FONTS.medium,
-    },
-    genderToggleContainer: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-
-    genderOption: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: theme.border,
-        gap: 8,
-    },
-    genderText: {
-        fontSize: 14,
-        fontFamily: FONTS.semiBold,
-        color: theme.text,
-    },
-    // Slider Styles
-    sliderContainer: {
-        marginTop: 10,
-    },
-    sliderTrack: {
-        height: 40,
-        backgroundColor: theme.background,
-        borderRadius: 20,
-        position: 'relative',
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: theme.border,
-        width: 200,
-        alignSelf: 'center',
-    },
-    sliderFill: {
-        height: '100%',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-    },
-    sliderThumb: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 3,
-        position: 'absolute',
-        top: 8,
-        marginLeft: -12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-        elevation: 3,
-    },
-    sliderLabels: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 12,
-        paddingHorizontal: 10,
-    },
-    sliderValueText: {
-        fontSize: 12,
-        fontFamily: FONTS.medium,
-        color: theme.textSecondary,
-    },
-    weightQuickSelect: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 8,
-        marginTop: 20,
-    },
-    weightOption: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: theme.border,
-        backgroundColor: theme.background,
-        minWidth: 45,
-        alignItems: 'center',
-    },
-    weightOptionText: {
-        fontSize: 12,
-        fontFamily: FONTS.bold,
-        color: theme.text,
     },
     buttonRow: {
         flexDirection: 'row',

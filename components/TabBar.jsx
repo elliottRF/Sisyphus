@@ -6,7 +6,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import Octicons from '@expo/vector-icons/Octicons';
 import Entypo from '@expo/vector-icons/Entypo';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
 const TabBar = ({ state, descriptors, navigation }) => {
@@ -116,14 +116,14 @@ const getStyles = (theme) => StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: theme.surface,
+        backgroundColor: isLightTheme(theme) ? 'rgba(255,255,255,0.96)' : theme.surface,
         width: '90%',
         paddingVertical: 12,
         paddingHorizontal: 10,
         borderRadius: 35,
         borderWidth: 1,
-        borderColor: theme.border,
-        ...SHADOWS.medium,
+        borderColor: isLightTheme(theme) ? theme.overlayBorder : theme.border,
+        ...getThemedShadow(theme, 'medium'),
     },
     tabBarItem: {
         flex: 1,

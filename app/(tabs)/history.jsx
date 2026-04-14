@@ -7,7 +7,7 @@ import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession } fro
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import ActionSheet from "react-native-actions-sheet";
-import { FONTS, SHADOWS } from '../../constants/theme';
+import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -412,7 +412,9 @@ const History = () => {
     );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => {
+    const lightTheme = isLightTheme(theme);
+    return StyleSheet.create({
     badgeContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -421,13 +423,13 @@ const getStyles = (theme) => StyleSheet.create({
     prSummaryBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: `${lightenColor(theme.primary, 20)}40`,
+        backgroundColor: withAlpha(lightenColor(theme.primary, 20), lightTheme ? 0.14 : 0.25),
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
         gap: 4,
         borderWidth: 1,
-        borderColor: `${lightenColor(theme.primary, 20)}66`,
+        borderColor: withAlpha(lightenColor(theme.primary, 20), lightTheme ? 0.24 : 0.4),
     },
     prSummaryText: {
         fontSize: 12,
@@ -457,7 +459,7 @@ const getStyles = (theme) => StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.border,
-        ...SHADOWS.small,
+        ...getThemedShadow(theme, 'small'),
     },
     list: {
         flex: 1,
@@ -471,16 +473,16 @@ const getStyles = (theme) => StyleSheet.create({
     },
     cardContainer: {
         marginBottom: 16,
-        borderRadius: 16,
+        borderRadius: 20,
         backgroundColor: theme.surface,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: theme.border,
-        ...SHADOWS.small,
+        ...getThemedShadow(theme, 'small'),
     },
     cardContent: {
-        padding: 16,
-        borderRadius: 12,
+        padding: 18,
+        borderRadius: 18,
     },
     cardHeader: {
         flexDirection: 'row',
@@ -515,10 +517,12 @@ const getStyles = (theme) => StyleSheet.create({
         backgroundColor: theme.border,
     },
     sessionBadge: {
-        backgroundColor: theme.overlayBorder,
+        backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlayBorder,
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 8,
+        borderWidth: 1,
+        borderColor: lightTheme ? theme.overlayBorder : 'transparent',
     },
     sessionBadgeText: {
         fontSize: 12,
@@ -603,5 +607,6 @@ const getStyles = (theme) => StyleSheet.create({
         lineHeight: 24,
     },
 });
+};
 
 export default History;

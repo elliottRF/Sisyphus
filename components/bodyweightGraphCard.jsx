@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Alert, ScrollView, Pressable } from 'react-native';
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { LineGraph } from 'react-native-graph';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
 import { getBodyWeightHistory, insertBodyWeight, deleteBodyWeight } from './db';
 import ActionSheet from "react-native-actions-sheet";
@@ -19,18 +19,18 @@ const CARD_PADDING = 40;
 const Y_AXIS_WIDTH = 40;
 const GRAPH_RIGHT_PADDING = 0;
 
-const CustomSelectionDot = ({ isActive, color }) => (
+const CustomSelectionDot = ({ isActive, color, borderColor }) => (
     <View style={{
         width: 12,
         height: 12,
         borderRadius: 6,
         backgroundColor: color,
         borderWidth: 3,
-        borderColor: 'white',
+        borderColor: borderColor,
         opacity: isActive ? 1 : 0.7,
-        shadowColor: '#000',
+        shadowColor: borderColor,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.18,
         shadowRadius: 4,
         elevation: 5,
     }} />
@@ -547,7 +547,7 @@ const BodyweightGraphCard = ({ theme }) => {
                                                     left: 0,
                                                     right: 0,
                                                     height: 1,
-                                                    backgroundColor: 'rgba(255,255,255,0.06)',
+                                                    backgroundColor: isLightTheme(theme) ? theme.overlayBorder : 'rgba(255,255,255,0.06)',
                                                 }}
                                             />
                                         ))}
@@ -559,7 +559,12 @@ const BodyweightGraphCard = ({ theme }) => {
                                         gradientFillColors={isDynamic ? ['#2DC4B6CC', '#2DC4B600'] : [`${theme.primary}CC`, `${theme.primary}00`]}
                                         enablePanGesture
                                         enableIndicator
-                                        SelectionDot={CustomSelectionDot}
+                                        SelectionDot={(props) => (
+                                            <CustomSelectionDot
+                                                {...props}
+                                                borderColor={isLightTheme(theme) ? theme.background : theme.surface}
+                                            />
+                                        )}
                                         onPointSelected={onPointSelected}
                                         onGestureStart={onGestureStart}
                                         onGestureEnd={onGestureEnd}
@@ -593,7 +598,7 @@ const getStyles = (theme) => StyleSheet.create({
         borderWidth: 1,
         borderColor: theme.border,
         overflow: 'hidden',
-        ...SHADOWS.medium,
+        ...getThemedShadow(theme, 'medium'),
     },
     content: {
         padding: 20,
@@ -640,9 +645,11 @@ const getStyles = (theme) => StyleSheet.create({
     },
     rangeSelector: {
         flexDirection: 'row',
-        backgroundColor: theme.overlayBorder,
+        backgroundColor: isLightTheme(theme) ? theme.overlaySubtle : theme.overlayBorder,
         borderRadius: 8,
         padding: 2,
+        borderWidth: 1,
+        borderColor: isLightTheme(theme) ? theme.overlayBorder : 'transparent',
     },
     rangeButton: {
         paddingVertical: 4,
@@ -650,7 +657,7 @@ const getStyles = (theme) => StyleSheet.create({
         borderRadius: 6,
     },
     rangeButtonActive: {
-        backgroundColor: theme.overlayInputFocused,
+        backgroundColor: isLightTheme(theme) ? withAlpha(theme.primary, 0.12) : theme.overlayInputFocused,
     },
     rangeText: {
         fontSize: 10,
@@ -756,7 +763,7 @@ const getStyles = (theme) => StyleSheet.create({
         width: '85%',
         padding: 24,
         borderRadius: 24,
-        ...SHADOWS.medium,
+        ...getThemedShadow(theme, 'medium'),
         alignItems: 'center',
     },
     modalTitle: {
