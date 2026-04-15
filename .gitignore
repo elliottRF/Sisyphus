@@ -9,6 +9,7 @@ npm-debug.*
 *.key
 *.mobileprovision
 *.orig.*
+*.log
 release.keystore
 keystore.properties
 web-build/

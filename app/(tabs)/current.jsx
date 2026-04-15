@@ -8,7 +8,7 @@ import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
 import * as Haptics from 'expo-haptics';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { AntDesign, Feather, Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import * as NavigationBar from 'expo-navigation-bar';
 
@@ -54,6 +54,9 @@ const Current = () => {
     const restTimerRef = useRef(null);
     const listRef = useRef(null);
     const isFirstLaunch = useRef(true);
+
+
+    const [PRMODE, setPRMODE] = useState(false);
 
     // Real template data
     const [templates, setTemplates] = useState([]);
@@ -704,12 +707,13 @@ const Current = () => {
                             isAssisted={!!exerciseDetails?.isAssisted}
                             // Use the map we pre-calculated!
                             isFirstMuscleOccurrence={occurrenceMap[exercise.id]}
+                            PRMODE={PRMODE}
                         />
                     );
                 })}
             </View>
         );
-    }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap]);
+    }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap, PRMODE]);
 
     // Pan gesture configuration to work with swipeable rows
     const panGesture = useMemo(
@@ -864,6 +868,9 @@ const Current = () => {
                                         />
                                         {startTime && (
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                <TouchableOpacity onPress={() => setPRMODE(!PRMODE)}>
+                                                    <MaterialCommunityIcons name="trending-up" size={24} color={PRMODE ? theme.primary : theme.textSecondary} />
+                                                </TouchableOpacity>
                                                 <Timer startTime={startTime} />
                                                 <RestTimer ref={restTimerRef} onFirstStart={requestNotificationPermissionOnce} />
                                             </View>

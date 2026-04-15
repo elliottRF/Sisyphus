@@ -618,15 +618,24 @@ export const fetchExerciseProgress = async (exerciseID) => {
 export const fetchLifetimePRs = async (exerciseID) => {
   const database = await getDb();
   const query = `
-        SELECT 
-            MAX(oneRM) as max1RM, 
-            MAX(weight) as maxWeight, 
-            MAX(weight * reps) as maxVolume 
-        FROM workoutHistory 
-        WHERE exerciseID = ?;
-    `;
-  const result = await database.getFirstAsync(query, [exerciseID]);
-  return result || { max1RM: 0, maxWeight: 0, maxVolume: 0 };
+    SELECT 
+      MAX(oneRM) as max1RM, 
+      MAX(weight) as maxWeight, 
+      MAX(weight * reps) as maxVolume,
+      (
+        SELECT reps FROM workoutHistory
+        WHERE exerciseID = ?
+          AND (setType IS NULL OR setType != 'W')
+          AND weight = (SELECT MAX(weight) FROM workoutHistory WHERE exerciseID = ? AND (setType IS NULL OR setType != 'W'))
+        ORDER BY reps DESC
+        LIMIT 1
+      ) as maxRepsAtMaxWeight
+    FROM workoutHistory 
+    WHERE exerciseID = ?
+      AND (setType IS NULL OR setType != 'W');
+  `;
+  const result = await database.getFirstAsync(query, [exerciseID, exerciseID, exerciseID]);
+  return result || { max1RM: 0, maxWeight: 0, maxVolume: 0, maxRepsAtMaxWeight: 0 };
 };
 
 
@@ -677,6 +686,24 @@ export const fetchBestSessionInPeriod = async (exerciseID, days = 60) => {
   );
 };
 
+export const hasAchieved = async (exerciseID, weight, reps, days = 60) => {
+  const database = await getDb();
+
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+
+  const result = await database.getFirstAsync(
+    `SELECT 1 FROM workoutHistory
+     WHERE exerciseID = ?
+       AND weight = ?
+       AND reps >= ?
+       AND time >= ?
+     LIMIT 1;`,
+    [exerciseID, weight, reps, cutoffDate.toISOString()]
+  );
+
+  return !!result;
+};
 
 
 // --- Template Functions ---

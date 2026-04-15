@@ -17,12 +17,13 @@ import { useReorderableDrag, useIsActive } from 'react-native-reorderable-list';
 
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme'
 import { Feather, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { fetchLastWorkoutSets, fetchBestSessionInPeriod, fetchLifetimePRs } from './db';
+import { fetchLastWorkoutSets, fetchBestSessionInPeriod, fetchLifetimePRs, hasAchieved } from './db';
 import { useTheme } from '../context/ThemeContext';
 import { formatWeight, unitLabel } from '../utils/units';
 import * as Haptics from 'expo-haptics';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
+const DAYS_TO_CHECK = 60;
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -40,19 +41,46 @@ const lightenColor = (color, percent) => {
 
 const computeSuggestion = (bestSet, repRangeMin, repRangeMax, isAssisted = false) => {
     if (!bestSet || !bestSet.reps || bestSet.reps === 0) return null;
+
     const weight = bestSet.weight || 0;
     const reps = bestSet.reps;
+
+    if (reps < repRangeMin) {
+        const oneRM = weight * (1 + reps / 30);
+        const rawNew = oneRM / (1 + repRangeMin / 30);
+        const roundedWeight = Math.round(rawNew / 2.5) * 2.5;
+
+        return { weight: roundedWeight, reps: repRangeMin, isWeightIncrease: true };
+    }
+
     if (reps < repRangeMax) {
         return { weight, reps: reps + 1, isWeightIncrease: false };
     }
+
     if (isAssisted) {
         const newWeight = Math.max(0, Math.round((weight - 2.5) / 2.5) * 2.5);
         return { weight: newWeight, reps: repRangeMin, isWeightIncrease: true };
     }
+
     const oneRM = weight * (1 + reps / 30);
     const rawNew = oneRM / (1 + repRangeMin / 30);
     const roundedWeight = Math.round(rawNew / 2.5) * 2.5;
+
     return { weight: roundedWeight, reps: repRangeMin, isWeightIncrease: true };
+};
+
+const adjustSuggestion = async (exerciseID, suggestion, repRangeMax) => {
+    let { weight, reps } = suggestion;
+
+    while (await hasAchieved(exerciseID, weight, reps, DAYS_TO_CHECK)) {
+        reps++;
+
+        if (reps > repRangeMax) {
+            return null; // signals: move weight up instead
+        }
+    }
+
+    return { weight, reps };
 };
 
 
@@ -376,21 +404,24 @@ const ExerciseEditable = ({
     }, [exerciseID, isTemplate, hidePrevious]);
 
     useEffect(() => {
+        if (!PRMODE) return;
         if (isTemplate || hidePrevious || !isFirstMuscleOccurrence || isCardio) return;
         const loadBestSession = async () => {
             try {
-                const sets = await fetchBestSessionInPeriod(exerciseID, 60);
+                const sets = await fetchBestSessionInPeriod(exerciseID, DAYS_TO_CHECK);
                 setBestSessionSets(sets);
             } catch (error) {
                 console.error("Error loading best session sets:", error);
             }
         };
         loadBestSession();
-    }, [exerciseID, isFirstMuscleOccurrence, isTemplate, hidePrevious, isCardio]);
+    }, [exerciseID, isFirstMuscleOccurrence, isTemplate, hidePrevious, isCardio, PRMODE]);
 
-    const [lifetimePRs, setLifetimePRs] = useState({ max1RM: 0, maxWeight: 0, maxVolume: 0 });
-
+    const [lifetimePRs, setLifetimePRs] = useState({
+        max1RM: 0, maxWeight: 0, maxVolume: 0, maxRepsAtMaxWeight: 0
+    });
     useEffect(() => {
+        if (!PRMODE) return;
         if (isTemplate || hidePrevious || isCardio) return;
         const loadPRs = async () => {
             try {
@@ -399,7 +430,11 @@ const ExerciseEditable = ({
             } catch (e) { console.error(e); }
         };
         loadPRs();
-    }, [exerciseID]);
+    }, [exerciseID, PRMODE]);
+
+
+
+
 
     const getPRType = (suggestion) => {
         if (!suggestion || isCardio) return null;
@@ -408,13 +443,17 @@ const ExerciseEditable = ({
         const sug1RM = sugWeight * (1 + sugReps / 30);
         const sugVol = sugWeight * sugReps;
         if (sug1RM > lifetimePRs.max1RM) return '1RM';
-        if (sugWeight > lifetimePRs.maxWeight) return 'Weight';
+        if (
+            sugWeight > lifetimePRs.maxWeight ||
+            (sugWeight === lifetimePRs.maxWeight && sugReps > lifetimePRs.maxRepsAtMaxWeight)
+        ) return 'Weight';
         if (sugVol > lifetimePRs.maxVolume) return 'Volume';
         return null;
     };
 
     const suggestionSource = isFirstMuscleOccurrence ? bestSessionSets : previousSets;
-    const showSuggestion = !isTemplate && !hidePrevious && !isCardio && suggestionSource.length > 0;
+    const showSuggestion = PRMODE && !isTemplate && !hidePrevious && !isCardio && suggestionSource.length > 0;
+
 
     const sanitizeDecimal = (text) => {
         let cleaned = text.replace(/[^0-9.]/g, '');
@@ -512,6 +551,45 @@ const ExerciseEditable = ({
     // Whether the header should show the suggestion icon or "PREVIOUS" label.
     // key-driven FadeIn means the label cross-fades instead of flashing on reorder.
     const headerKey = showSuggestion ? 'suggest' : 'prev';
+
+
+
+    const [adjustedSuggestions, setAdjustedSuggestions] = useState([]);
+
+    useEffect(() => {
+        if (!showSuggestion) return;
+
+        const run = async () => {
+            const results = [];
+
+            for (let i = 0; i < suggestWorking.length; i++) {
+                const base = suggestWorking[i];
+                const computed = computeSuggestion(base, repRangeMin, repRangeMax, isAssisted);
+
+                if (!computed) {
+                    results.push(null);
+                    continue;
+                }
+
+                // Only adjust the first working set — trailing sets are naturally
+                // lower-rep and shouldn't be bumped by the primary set's history.
+                if (i === 0) {
+                    const adjusted = await adjustSuggestion(exerciseID, computed, repRangeMax);
+                    results.push(adjusted || computed);
+                } else {
+                    results.push(computed);
+                }
+            }
+
+            setAdjustedSuggestions(results);
+        };
+
+        run();
+    }, [suggestWorking, repRangeMin, repRangeMax, isAssisted, showSuggestion]);
+
+
+
+
 
     return (
         <View style={[styles.container, isActive && styles.containerActive]}>
@@ -638,8 +716,11 @@ const ExerciseEditable = ({
                                 suggestionText = `${formatWeight(suggestBase.weight, useImperial)} × ${suggestBase.reps}`;
                             } else {
                                 computedSuggestion = computeSuggestion(suggestBase, repRangeMin, repRangeMax, isAssisted);
+
                                 if (computedSuggestion) {
-                                    suggestionText = `${formatWeight(computedSuggestion.weight, useImperial)} × ${computedSuggestion.reps}`;
+                                    const finalSuggestion = adjustedSuggestions[suggestWorkingIndex - 1] || computedSuggestion;
+                                    computedSuggestion = finalSuggestion; // PR check should use the adjusted value
+                                    suggestionText = `${formatWeight(finalSuggestion.weight, useImperial)} × ${finalSuggestion.reps}`;
                                 }
                             }
                         }
@@ -651,7 +732,9 @@ const ExerciseEditable = ({
                             if (set.setType === 'W') {
                                 fillData = { weight: suggestBase.weight, reps: suggestBase.reps };
                             } else if (computedSuggestion) {
-                                fillData = { weight: computedSuggestion.weight, reps: computedSuggestion.reps };
+                                const finalSuggestion = adjustedSuggestions[suggestWorkingIndex - 1] || computedSuggestion;
+
+                                fillData = { weight: finalSuggestion.weight, reps: finalSuggestion.reps };
                             }
                         }
                     } else if (prevSet) {
@@ -826,13 +909,13 @@ const getStyles = (theme) => {
             flexDirection: 'row',
             justifyContent: 'flex-end',
             alignItems: 'center',
-            paddingRight: 16,
         },
         deleteActionRegion: {
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: safeError,
             height: '100%',
+
         },
         deleteIconContainer: {
             alignItems: 'center',
