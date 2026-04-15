@@ -649,7 +649,38 @@ const Current = () => {
         }
     }, []);
 
-    // Render function for each item
+
+    const getFirstOccurrenceMap = (currentWorkout, exercisesData) => {
+        const seenMuscles = new Set();
+        const occurrenceMap = {};
+
+        currentWorkout.forEach((workoutGroup) => {
+            workoutGroup.exercises.forEach((ex) => {
+                const details = exercisesData.find((d) => d.exerciseID === ex.exerciseID);
+                const targets = (details?.targetMuscle || '')
+                    .split(',')
+                    .map(m => m.trim().toLowerCase())
+                    .filter(Boolean);
+
+                // It's a first occurrence if NO targets have been seen yet in previous exercises
+                const isFirst = targets.length > 0 && !targets.some(m => seenMuscles.has(m));
+
+                // Store by the exercise's unique instance ID (not the exerciseID type)
+                occurrenceMap[ex.id] = isFirst;
+
+                // Mark these muscles as seen
+                targets.forEach(m => seenMuscles.add(m));
+            });
+        });
+        return occurrenceMap;
+    };
+
+
+    const occurrenceMap = useMemo(() =>
+        getFirstOccurrenceMap(currentWorkout, exercises),
+        [currentWorkout, exercises]
+    );
+
     const renderItem = useCallback(({ item, index }) => {
         return (
             <View collapsable={false} style={styles.exerciseWrapper}>
@@ -660,9 +691,9 @@ const Current = () => {
 
                     return (
                         <ExerciseEditable
+                            key={exercise.id} // Use the unique instance ID
                             exerciseID={exercise.exerciseID}
                             workoutID={item.id}
-                            key={exerciseIndex}
                             exercise={exercise}
                             exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
                             updateCurrentWorkout={setCurrentWorkout}
@@ -671,12 +702,14 @@ const Current = () => {
                             onSetComplete={handleSetComplete}
                             isCardio={!!exerciseDetails?.isCardio}
                             isAssisted={!!exerciseDetails?.isAssisted}
+                            // Use the map we pre-calculated!
+                            isFirstMuscleOccurrence={occurrenceMap[exercise.id]}
                         />
                     );
                 })}
             </View>
         );
-    }, [setCurrentWorkout, exercises, handleSetComplete]);
+    }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap]);
 
     // Pan gesture configuration to work with swipeable rows
     const panGesture = useMemo(

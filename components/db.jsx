@@ -289,7 +289,7 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
     });
 
     console.log(`Workout session ${sessionNumber} overwritten successfully with ${setsOverwritten} sets.`);
-    
+
     const newExerciseIDs = workoutEntries.map(e => e.exerciseID);
     const affectedExerciseIDs = [...new Set([...originalExerciseIDs, ...newExerciseIDs])];
     for (const exerciseID of affectedExerciseIDs) {
@@ -319,7 +319,7 @@ export const calculateSessionVolume = async (sessionNumber) => {
 // Delete a specific workout session
 export const deleteWorkoutSession = async (sessionNumber) => {
   const database = await getDb();
-  
+
   const originalRows = await database.getAllAsync(
     `SELECT DISTINCT exerciseID FROM workoutHistory WHERE workoutSession = ?;`,
     [sessionNumber]
@@ -440,7 +440,7 @@ export const calculateIfPR = async (exerciseID, oneRM) => {
 // Recalculate PRs for all sets of a given exercise
 export const recalculateExercisePRs = async (exerciseID) => {
   const database = await getDb();
-  
+
   const exertRow = await database.getFirstAsync('SELECT isAssisted FROM exercises WHERE exerciseID = ?;', [exerciseID]);
   const isAssisted = exertRow?.isAssisted === 1;
 
@@ -448,11 +448,11 @@ export const recalculateExercisePRs = async (exerciseID) => {
     `SELECT rowid, * FROM workoutHistory WHERE exerciseID = ? ORDER BY time ASC, workoutSession ASC, exerciseNum ASC, setNum ASC;`,
     [exerciseID]
   );
-  
+
   const sessions = [];
   let currentKey = null;
   let currentSets = [];
-  
+
   for (const set of sets) {
     const key = `${set.workoutSession}-${set.exerciseNum}`;
     if (key !== currentKey) {
@@ -463,14 +463,14 @@ export const recalculateExercisePRs = async (exerciseID) => {
     currentSets.push(set);
   }
   if (currentSets.length > 0) sessions.push(currentSets);
-  
+
   let historicalBestOneRM = 0;
   let historicalBestVolume = 0;
   let historicalBestWeight = isAssisted ? Infinity : 0;
   let historicalBestRepsAtMaxWeight = 0;
-  
+
   const updates = [];
-  
+
   for (const sessionSets of sessions) {
     let maxOneRMInWorkout = 0;
     let maxVolumeInWorkout = 0;
@@ -479,13 +479,13 @@ export const recalculateExercisePRs = async (exerciseID) => {
     let bestSetIndexOneRM = -1;
     let bestSetIndexVolume = -1;
     let bestSetIndexWeight = -1;
-    
+
     sessionSets.forEach((set, idx) => {
       const oneRM = set.oneRM || 0;
       const weight = set.weight || 0;
       const reps = set.reps || 0;
       const volume = weight * reps;
-      
+
       if (oneRM > maxOneRMInWorkout && !isAssisted) {
         maxOneRMInWorkout = oneRM;
         bestSetIndexOneRM = idx;
@@ -519,7 +519,7 @@ export const recalculateExercisePRs = async (exerciseID) => {
 
     const is1rmPR = isAssisted ? false : (maxOneRMInWorkout > historicalBestOneRM);
     const isVolumePR = isAssisted ? false : (maxVolumeInWorkout > historicalBestVolume);
-    const isWeightPR = isAssisted 
+    const isWeightPR = isAssisted
       ? (bestWeightInWorkout < historicalBestWeight || (bestWeightInWorkout === historicalBestWeight && maxRepsAtBestWeight > historicalBestRepsAtMaxWeight))
       : (bestWeightInWorkout > historicalBestWeight || (bestWeightInWorkout === historicalBestWeight && maxRepsAtBestWeight > historicalBestRepsAtMaxWeight));
 
@@ -535,22 +535,22 @@ export const recalculateExercisePRs = async (exerciseID) => {
       const isThisSetVolumePR = (isVolumePR && idx === bestSetIndexVolume) ? 1 : 0;
       const isThisSetWeightPR = (isWeightPR && idx === bestSetIndexWeight) ? 1 : 0;
       const isLegacyPR = isThisSet1rmPR;
-      
-      if (set.is1rmPR !== isThisSet1rmPR || 
-          set.isVolumePR !== isThisSetVolumePR || 
-          set.isWeightPR !== isThisSetWeightPR ||
-          set.pr !== isLegacyPR) {
-          updates.push({
-            rowid: set.rowid,
-            is1rmPR: isThisSet1rmPR,
-            isVolumePR: isThisSetVolumePR,
-            isWeightPR: isThisSetWeightPR,
-            pr: isLegacyPR
-          });
+
+      if (set.is1rmPR !== isThisSet1rmPR ||
+        set.isVolumePR !== isThisSetVolumePR ||
+        set.isWeightPR !== isThisSetWeightPR ||
+        set.pr !== isLegacyPR) {
+        updates.push({
+          rowid: set.rowid,
+          is1rmPR: isThisSet1rmPR,
+          isVolumePR: isThisSetVolumePR,
+          isWeightPR: isThisSetWeightPR,
+          pr: isLegacyPR
+        });
       }
     });
   }
-  
+
   if (updates.length > 0) {
     await database.withTransactionAsync(async () => {
       for (const update of updates) {
@@ -615,6 +615,21 @@ export const fetchExerciseProgress = async (exerciseID) => {
   );
 };
 
+export const fetchLifetimePRs = async (exerciseID) => {
+  const database = await getDb();
+  const query = `
+        SELECT 
+            MAX(oneRM) as max1RM, 
+            MAX(weight) as maxWeight, 
+            MAX(weight * reps) as maxVolume 
+        FROM workoutHistory 
+        WHERE exerciseID = ?;
+    `;
+  const result = await database.getFirstAsync(query, [exerciseID]);
+  return result || { max1RM: 0, maxWeight: 0, maxVolume: 0 };
+};
+
+
 // Fetch muscle usage from the last N days
 export const fetchRecentMuscleUsage = async (days) => {
   const database = await getDb();
@@ -634,6 +649,35 @@ export const fetchRecentMuscleUsage = async (days) => {
     [cutoffDate.toISOString()]
   );
 };
+
+// Fetch all sets from the best-performing session for an exercise within N days
+export const fetchBestSessionInPeriod = async (exerciseID, days = 60) => {
+  const database = await getDb();
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+
+  // Find the session with the highest peak 1RM among working sets in the period
+  const bestSession = await database.getFirstAsync(
+    `SELECT workoutSession
+     FROM workoutHistory
+     WHERE exerciseID = ? AND time >= ? AND (setType IS NULL OR setType != 'W')
+     GROUP BY workoutSession
+     ORDER BY MAX(oneRM) DESC
+     LIMIT 1;`,
+    [exerciseID, cutoffDate.toISOString()]
+  );
+
+  if (!bestSession?.workoutSession) return [];
+
+  return await database.getAllAsync(
+    `SELECT * FROM workoutHistory
+     WHERE exerciseID = ? AND workoutSession = ?
+     ORDER BY setNum ASC;`,
+    [exerciseID, bestSession.workoutSession]
+  );
+};
+
+
 
 // --- Template Functions ---
 

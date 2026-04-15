@@ -360,10 +360,10 @@ const Settings = () => {
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <Feather name="sliders" size={20} color={theme.primary} />
-                        <Text style={styles.cardTitle}>Preferred Rep Range</Text>
+                        <Text style={styles.cardTitle}>Target Rep Range</Text>
                     </View>
                     <Text style={styles.cardDescription}>
-                        Save a default training bias for future guidance. This will be used more fully later.
+                        Set a rep range for progressive overload suggestions! (Yet to be implemented)
                     </Text>
                     <RepRangeSelector
                         theme={theme}
