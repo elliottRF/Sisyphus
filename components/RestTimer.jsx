@@ -116,18 +116,46 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
         if (playAudio) playDing();
     };
 
+    const restartTimer = useCallback(() => {
+        console.log("Restarting timer (overwrite)...");
+
+        // 1. Clear any existing UI loops
+        if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
+
+        // 2. Set the new end time (Default Duration)
+        const newTarget = Date.now() + (defaultDuration * 1000);
+        targetEndTimeRef.current = newTarget;
+        timerRunning.current = true;
+
+        // 3. Update state immediately so UI doesn't flicker
+        setTimeLeft(defaultDuration);
+
+        // 4. Sync with Native persistence (This overwrites the previous native timer)
+        Timer.startTimer(defaultDuration, isMuted);
+
+        // 5. Start the UI update loop
+        updateUI();
+
+        // 6. Optional: Trigger the start animation
+        scale.value = withSequence(
+            withTiming(1.2, { duration: 100 }),
+            withTiming(1, { duration: 100 })
+        );
+    }, [defaultDuration, isMuted, updateUI]);
+
     useImperativeHandle(ref, () => ({
         startIfStopped: () => {
-            // Only start if NOT already running
             if (!timerRunning.current) {
-                console.log("Auto-starting timer from set completion");
                 startTimer();
             }
         },
+        // Add this new method
+        restartTimer: () => {
+            restartTimer();
+        },
         stopTimer: () => {
             if (timerRunning.current) {
-                console.log("Stopping timer from parent (silent)");
-                internalStop(false); // Silent Stop
+                internalStop(false);
             }
         }
     }));

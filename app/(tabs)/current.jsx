@@ -646,9 +646,9 @@ const Current = () => {
     }, []);
 
     const handleSetComplete = useCallback(() => {
-        console.log("Set completed, checking timer...");
+        console.log("Set completed, restarting timer...");
         if (autoTimerEnabledRef.current) {
-            restTimerRef.current?.startIfStopped();
+            restTimerRef.current?.restartTimer();
         }
     }, []);
 
