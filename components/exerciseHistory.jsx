@@ -488,7 +488,9 @@ const ExerciseHistory = (props) => {
 
     // Null-safe formatters — show '—' until real data arrives
     const fmtWeight = (val) =>
-        val == null ? '—' : `${Math.round(formatWeight(val, useImperial, 0))}${unitLabel(useImperial)}`;
+        val == null
+            ? '—'
+            : `${+formatWeight(val, useImperial, 1).toFixed(1)}${unitLabel(useImperial)}`;
     const fmtVolume = (val) =>
         val == null ? '—' : `${(val / 1000).toFixed(1)}k`;
     const fmtDist = (val) =>

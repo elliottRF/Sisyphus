@@ -511,7 +511,7 @@ const ExerciseEditable = ({
         if (!fillData) return;
         const currentSet = exercise.sets[setIndex];
         if (currentSet.completed) return;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? {
             ...w,
             exercises: w.exercises.map(e => e.id === exercise.id ? {
