@@ -101,9 +101,6 @@ const ThemeConsumer = () => {
 
     return (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
-            {/* backgroundColor locks status bar colour to THEME, preventing system override.
-                translucent={true} is the modern "premium" standard for Android apps, 
-                letting the background color of this View flow behind the icons. */}
             <StatusBar
                 style={theme.statusBar}
                 backgroundColor="transparent"

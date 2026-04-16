@@ -90,9 +90,9 @@ const TabBar = ({ state, descriptors, navigation }) => {
                                 color: isFocused
                                     ? theme.primary
                                     : theme.textSecondary,
-                                fontSize: 10,
+                                fontSize: 11,
                                 fontFamily: isFocused ? FONTS.bold : FONTS.medium,
-                                marginTop: 4
+                                marginTop: 2
                             }}>
                                 {label}
                             </Text>
@@ -103,6 +103,13 @@ const TabBar = ({ state, descriptors, navigation }) => {
         </View>
     )
 }
+
+const withOpacity = (hex, opacity) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+};
 
 const getStyles = (theme) => StyleSheet.create({
     container: {
@@ -116,9 +123,12 @@ const getStyles = (theme) => StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: isLightTheme(theme) ? 'rgba(255,255,255,0.96)' : theme.surface,
-        width: '90%',
-        paddingVertical: 12,
+        backgroundColor: withOpacity(
+            theme.surface,
+            isLightTheme(theme) ? 0.95 : 0.95
+        ),
+        width: '85%',
+        paddingVertical: 8,
         paddingHorizontal: 10,
         borderRadius: 35,
         borderWidth: 1,
