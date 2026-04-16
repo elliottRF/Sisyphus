@@ -162,271 +162,269 @@ const Onboarding = () => {
 
   return (
     <Animated.View style={[styles.container, { paddingTop: insets.top, opacity: masterOpacity }]}>
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        {isDynamicTheme ? (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
-        ) : (
-          <LinearGradient
-            colors={[
-              theme.background,
-              theme.surface,
-              theme.background,
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-        )}
-
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: Math.max(insets.bottom + 32, 40) },
+      {isDynamicTheme ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
+      ) : (
+        <LinearGradient
+          colors={[
+            theme.background,
+            theme.surface,
+            theme.background,
           ]}
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View
-            style={[
-              styles.hero,
-              {
-                opacity: heroAnim,
-                transform: [
-                  {
-                    translateY: heroAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [28, 0],
-                    }),
-                  },
-                  {
-                    scale: heroAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.97, 1],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>Personalize Sisyphus</Text>
-            </View>
-            <Text style={styles.title}>Customise your experience</Text>
-            <Text style={styles.subtitle}>
-              Select your options and preferred experience. You can change these at any time.
-            </Text>
-          </Animated.View>
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
 
-          <Animated.View
-            style={[
-              styles.panel,
-              styles.heroPanel,
-              {
-                opacity: cardsAnim,
-                transform: [
-                  {
-                    translateY: cardsAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [34, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <View style={styles.sectionHeader}>
-              <Feather name="droplet" size={18} color={theme.primary} />
-              <Text style={styles.sectionTitle}>Theme</Text>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Choose the look you want to launch into. You can change this any time.
-            </Text>
-            <AppThemeSelector theme={theme} themeID={themeID} onChange={updateTheme} />
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.panel,
-              {
-                opacity: cardsAnim,
-                transform: [
-                  {
-                    translateY: cardsAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [40, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <View style={styles.sectionHeader}>
-              <Feather name="sliders" size={18} color={theme.primary} />
-              <Text style={styles.sectionTitle}>Target Rep Range</Text>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Set a rep range for progressive overload suggestions! (Yet to be implemented)
-            </Text>
-            <RepRangeSelector
-              theme={theme}
-              value={repRangePreset}
-              min={repRangeMin}
-              max={repRangeMax}
-              onRangeChange={updateRepRange}
-            />
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.panel,
-              {
-                opacity: cardsAnim,
-                transform: [
-                  {
-                    translateY: cardsAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [46, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons name="chart-bell-curve-cumulative" size={18} color={theme.primary} />
-              <Text style={styles.sectionTitle}>Secondary volume</Text>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Choose how much supporting muscles should count toward weekly volume.
-            </Text>
-            <SecondaryVolumeSlider
-              theme={theme}
-              value={accessoryWeight}
-              onChange={updateAccessoryWeight}
-            />
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.panel,
-              {
-                opacity: cardsAnim,
-                transform: [
-                  {
-                    translateY: cardsAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [52, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons name="human-male-female" size={18} color={theme.primary} />
-              <Text style={styles.sectionTitle}>Muscle model</Text>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Pick the body model used by the highlighter across the app.
-            </Text>
-            <GenderSegment theme={theme} value={gender} onChange={updateGender} />
-          </Animated.View>
-
-          {!hasWorkoutHistory && (
-            <Animated.View
-              style={[
-                styles.panel,
-                styles.importPanel,
-                {
-                  opacity: cardsAnim,
-                  transform: [
-                    {
-                      translateY: cardsAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [58, 0],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <View style={styles.sectionHeader}>
-                <Feather name="download-cloud" size={18} color={theme.primary} />
-                <Text style={styles.sectionTitle}>Import past training</Text>
-              </View>
-              <Text style={styles.sectionDescription}>
-                Bring in previous workouts now so your charts and exercise history are ready from day one.
-              </Text>
-
-              <View style={styles.importButtonGroup}>
-                <TouchableOpacity
-                  style={styles.importButton}
-                  onPress={() => handleImportData('Strong')}
-                  activeOpacity={0.85}
-                  disabled={importing}
-                >
-                  {importing ? (
-                    <ActivityIndicator color={theme.surface} />
-                  ) : (
-                    <>
-                      <Feather name="upload" size={18} color={theme.surface} />
-                      <Text style={styles.importButtonText}>Import Strong CSV</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.importButton, styles.secondaryImportButton]}
-                  onPress={() => handleImportData('Sisyphus')}
-                  activeOpacity={0.85}
-                  disabled={importing}
-                >
-                  {importing ? (
-                    <ActivityIndicator color={theme.primary} />
-                  ) : (
-                    <>
-                      <Feather name="refresh-cw" size={18} color={theme.primary} />
-                      <Text style={[styles.importButtonText, { color: theme.primary }]}>Import Sisyphus CSV</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {!!importProgress && <Text style={styles.progressText}>{importProgress}</Text>}
-            </Animated.View>
-          )}
-
-          <Animated.View
-            style={{
-              opacity: ctaAnim,
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom + 32, 40) },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View
+          style={[
+            styles.hero,
+            {
+              opacity: heroAnim,
               transform: [
                 {
-                  translateY: ctaAnim.interpolate({
+                  translateY: heroAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [24, 0],
+                    outputRange: [28, 0],
+                  }),
+                },
+                {
+                  scale: heroAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.97, 1],
                   }),
                 },
               ],
-            }}
+            },
+          ]}
+        >
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>Personalize Sisyphus</Text>
+          </View>
+          <Text style={styles.title}>Customise your experience</Text>
+          <Text style={styles.subtitle}>
+            Select your options and preferred experience. You can change these at any time.
+          </Text>
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.panel,
+            styles.heroPanel,
+            {
+              opacity: cardsAnim,
+              transform: [
+                {
+                  translateY: cardsAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [34, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.sectionHeader}>
+            <Feather name="droplet" size={18} color={theme.primary} />
+            <Text style={styles.sectionTitle}>Theme</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Choose the look you want to launch into.
+          </Text>
+          <AppThemeSelector theme={theme} themeID={themeID} onChange={updateTheme} />
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.panel,
+            {
+              opacity: cardsAnim,
+              transform: [
+                {
+                  translateY: cardsAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [40, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.sectionHeader}>
+            <Feather name="sliders" size={18} color={theme.primary} />
+            <Text style={styles.sectionTitle}>Target Rep Range</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Set a rep range for progressive overload suggestions!
+          </Text>
+          <RepRangeSelector
+            theme={theme}
+            value={repRangePreset}
+            min={repRangeMin}
+            max={repRangeMax}
+            onRangeChange={updateRepRange}
+          />
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.panel,
+            {
+              opacity: cardsAnim,
+              transform: [
+                {
+                  translateY: cardsAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [46, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="chart-bell-curve-cumulative" size={18} color={theme.primary} />
+            <Text style={styles.sectionTitle}>Secondary volume</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Choose how much supporting muscles should count toward weekly volume.
+          </Text>
+          <SecondaryVolumeSlider
+            theme={theme}
+            value={accessoryWeight}
+            onChange={updateAccessoryWeight}
+          />
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.panel,
+            {
+              opacity: cardsAnim,
+              transform: [
+                {
+                  translateY: cardsAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [52, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="human-male-female" size={18} color={theme.primary} />
+            <Text style={styles.sectionTitle}>Muscle model</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Pick the body model used by the highlighter across the app.
+          </Text>
+          <GenderSegment theme={theme} value={gender} onChange={updateGender} />
+        </Animated.View>
+
+        {!hasWorkoutHistory && (
+          <Animated.View
+            style={[
+              styles.panel,
+              styles.importPanel,
+              {
+                opacity: cardsAnim,
+                transform: [
+                  {
+                    translateY: cardsAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [58, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
           >
-            <TouchableOpacity style={styles.continueButton} onPress={finishOnboarding} activeOpacity={0.9}>
-              {isDynamicTheme ? (
-                <View style={[styles.continueGradient, { backgroundColor: theme.primary }]}>
-                  <Text style={styles.continueText}>Continue</Text>
-                </View>
-              ) : (
-                <LinearGradient
-                  colors={[theme.primary, theme.primaryDark || theme.primary]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.continueGradient}
-                >
-                  <Text style={styles.continueText}>Continue</Text>
-                </LinearGradient>
-              )}
-            </TouchableOpacity>
+            <View style={styles.sectionHeader}>
+              <Feather name="download-cloud" size={18} color={theme.primary} />
+              <Text style={styles.sectionTitle}>Import past training</Text>
+            </View>
+            <Text style={styles.sectionDescription}>
+              Bring in previous workouts now so your charts and exercise history are ready from day one.
+            </Text>
+
+            <View style={styles.importButtonGroup}>
+              <TouchableOpacity
+                style={styles.importButton}
+                onPress={() => handleImportData('Strong')}
+                activeOpacity={0.85}
+                disabled={importing}
+              >
+                {importing ? (
+                  <ActivityIndicator color={theme.surface} />
+                ) : (
+                  <>
+                    <Feather name="upload" size={18} color={theme.surface} />
+                    <Text style={styles.importButtonText}>Import Strong CSV</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.importButton, styles.secondaryImportButton]}
+                onPress={() => handleImportData('Sisyphus')}
+                activeOpacity={0.85}
+                disabled={importing}
+              >
+                {importing ? (
+                  <ActivityIndicator color={theme.primary} />
+                ) : (
+                  <>
+                    <Feather name="refresh-cw" size={18} color={theme.primary} />
+                    <Text style={[styles.importButtonText, { color: theme.primary }]}>Import Sisyphus CSV</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {!!importProgress && <Text style={styles.progressText}>{importProgress}</Text>}
           </Animated.View>
-        </ScrollView>
-      </View>
+        )}
+
+        <Animated.View
+          style={{
+            opacity: ctaAnim,
+            transform: [
+              {
+                translateY: ctaAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [24, 0],
+                }),
+              },
+            ],
+          }}
+        >
+          <TouchableOpacity style={styles.continueButton} onPress={finishOnboarding} activeOpacity={0.9}>
+            {isDynamicTheme ? (
+              <View style={[styles.continueGradient, { backgroundColor: theme.primary }]}>
+                <Text style={styles.continueText}>Continue</Text>
+              </View>
+            ) : (
+              <LinearGradient
+                colors={[theme.primary, theme.primaryDark || theme.primary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.continueGradient}
+              >
+                <Text style={styles.continueText}>Continue</Text>
+              </LinearGradient>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+      </ScrollView>
     </Animated.View>
   );
 };

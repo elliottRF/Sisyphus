@@ -363,7 +363,7 @@ const Settings = () => {
                         <Text style={styles.cardTitle}>Target Rep Range</Text>
                     </View>
                     <Text style={styles.cardDescription}>
-                        Set a rep range for progressive overload suggestions! (Yet to be implemented)
+                        Set a rep range for progressive overload suggestions!
                     </Text>
                     <RepRangeSelector
                         theme={theme}

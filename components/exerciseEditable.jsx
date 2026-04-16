@@ -404,7 +404,7 @@ const ExerciseEditable = ({
     }, [exerciseID, isTemplate, hidePrevious]);
 
     useEffect(() => {
-        if (!PRMODE) return;
+        if (!PRMODE || isAssisted) return;
         if (isTemplate || hidePrevious || !isFirstMuscleOccurrence || isCardio) return;
         const loadBestSession = async () => {
             try {
@@ -415,13 +415,13 @@ const ExerciseEditable = ({
             }
         };
         loadBestSession();
-    }, [exerciseID, isFirstMuscleOccurrence, isTemplate, hidePrevious, isCardio, PRMODE]);
+    }, [exerciseID, isFirstMuscleOccurrence, isTemplate, hidePrevious, isCardio, PRMODE, isAssisted]);
 
     const [lifetimePRs, setLifetimePRs] = useState({
         max1RM: 0, maxWeight: 0, maxVolume: 0, maxRepsAtMaxWeight: 0
     });
     useEffect(() => {
-        if (!PRMODE) return;
+        if (!PRMODE || isAssisted) return;
         if (isTemplate || hidePrevious || isCardio) return;
         const loadPRs = async () => {
             try {
@@ -430,7 +430,7 @@ const ExerciseEditable = ({
             } catch (e) { console.error(e); }
         };
         loadPRs();
-    }, [exerciseID, PRMODE]);
+    }, [exerciseID, PRMODE, isAssisted]);
 
 
 
@@ -452,7 +452,7 @@ const ExerciseEditable = ({
     };
 
     const suggestionSource = isFirstMuscleOccurrence ? bestSessionSets : previousSets;
-    const showSuggestion = PRMODE && !isTemplate && !hidePrevious && !isCardio && suggestionSource.length > 0;
+    const showSuggestion = PRMODE && !isTemplate && !hidePrevious && !isCardio && !isAssisted && suggestionSource.length > 0;
 
 
     const sanitizeDecimal = (text) => {
@@ -573,7 +573,7 @@ const ExerciseEditable = ({
 
                 // Only adjust the first working set — trailing sets are naturally
                 // lower-rep and shouldn't be bumped by the primary set's history.
-                if (i === 0) {
+                if (i === 0 && isFirstMuscleOccurrence) {
                     const adjusted = await adjustSuggestion(exerciseID, computed, repRangeMax);
                     results.push(adjusted || computed);
                 } else {
