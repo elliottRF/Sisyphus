@@ -296,8 +296,8 @@ const SetRowBody = React.memo(({
                                     borderColor: withAlpha(brightColor, 0.1),
                                     borderWidth: 1,
                                     borderRadius: 10,
-                                    paddingHorizontal: 6,
-                                    paddingVertical: 1,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 3,
                                     gap: 3,
                                 }
                             ]}
@@ -438,9 +438,8 @@ const ExerciseEditable = ({
         loadBestSession();
     }, [exerciseID, isFirstMuscleOccurrence, isTemplate, hidePrevious, isCardio, PRMODE, isAssisted]);
 
-    const [lifetimePRs, setLifetimePRs] = useState({
-        max1RM: 0, maxWeight: 0, maxVolume: 0, maxRepsAtMaxWeight: 0
-    });
+    const [lifetimePRs, setLifetimePRs] = useState(null);
+
     useEffect(() => {
         if (!PRMODE || isAssisted) return;
         if (isTemplate || hidePrevious || isCardio) return;
@@ -458,17 +457,23 @@ const ExerciseEditable = ({
 
 
     const getPRType = (suggestion) => {
-        if (!suggestion || isCardio) return null;
+        if (!suggestion || isCardio || !lifetimePRs) return null;
+
         const sugWeight = suggestion.weight || 0;
         const sugReps = suggestion.reps || 0;
         const sug1RM = sugWeight * (1 + sugReps / 30);
         const sugVol = sugWeight * sugReps;
+
         if (sug1RM > lifetimePRs.max1RM) return '1RM';
+
         if (
             sugWeight > lifetimePRs.maxWeight ||
-            (sugWeight === lifetimePRs.maxWeight && sugReps > lifetimePRs.maxRepsAtMaxWeight)
+            (sugWeight === lifetimePRs.maxWeight &&
+                sugReps > lifetimePRs.maxRepsAtMaxWeight)
         ) return 'Weight';
+
         if (sugVol > lifetimePRs.maxVolume) return 'Volume';
+
         return null;
     };
 
@@ -771,7 +776,10 @@ const ExerciseEditable = ({
 
                     const columnText = showSuggestion ? suggestionText : prevSetText;
                     const prType = getPRType(computedSuggestion);
-                    const isLifetimePRSuggestion = showSuggestion && prType !== null;
+                    const isLifetimePRSuggestion =
+                        showSuggestion &&
+                        lifetimePRs !== null &&
+                        prType !== null;
 
                     acc.push(
                         <SwipeableSetRow
