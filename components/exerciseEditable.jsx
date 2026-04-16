@@ -234,6 +234,12 @@ const SetRowBody = React.memo(({
         onFillFromPrevious(index, fillData);
     };
 
+
+    const color = brightColor;
+    const bgColor = withAlpha(brightColor, isLightTheme(theme) ? 0.14 : 0.25);
+    const borderColor = withAlpha(brightColor, isLightTheme(theme) ? 0.24 : 0.4);
+
+
     return (
         <View style={styles.setRow}>
             {set.completed && (
@@ -278,32 +284,47 @@ const SetRowBody = React.memo(({
                     disabled={!fillData || set.completed}
                 >
                     <View style={styles.prevContentWrapper}>
-                        {/*
-                          key={columnText} makes Reanimated treat a text change as a
-                          remount, so the entering animation re-fires — smoothly fading
-                          in the new value instead of flickering during reorders.
-                        */}
-                        <Animated.Text
-                            key={columnText}
+                        <Animated.View
+                            key={columnText} // Key moves to the wrapper so the whole badge fades in/out
                             entering={FadeIn.duration(200)}
                             style={[
-                                styles.prevText,
-                                showSuggestion && computedSuggestion && styles.suggestionText,
-                                isLifetimePRSuggestion && { color: brightColor, fontFamily: FONTS.bold },
+                                styles.prevTextContainer, // General container styles
+                                isLifetimePRSuggestion && {
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: withAlpha(brightColor, 0.05),
+                                    borderColor: withAlpha(brightColor, 0.1),
+                                    borderWidth: 1,
+                                    borderRadius: 10,
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 1,
+                                    gap: 3,
+                                }
                             ]}
-                            numberOfLines={1}
                         >
-                            {columnText}
-                        </Animated.Text>
+                            <Text
+                                style={[
+                                    styles.prevText,
+                                    showSuggestion && computedSuggestion && styles.suggestionText,
+                                    isLifetimePRSuggestion && {
+                                        color: brightColor,
+                                        fontFamily: FONTS.bold,
+                                    },
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {columnText}
+                            </Text>
 
-                        {isLifetimePRSuggestion && (
-                            <MaterialCommunityIcons
-                                name="trophy"
-                                size={11}
-                                color={brightColor}
-                                style={styles.inlineTrophy}
-                            />
-                        )}
+                            {isLifetimePRSuggestion && (
+                                <MaterialCommunityIcons
+                                    name="trophy"
+                                    size={11}
+                                    color={brightColor}
+                                    style={{ marginLeft: 2 }} // Small nudge if gap isn't enough
+                                />
+                            )}
+                        </Animated.View>
                     </View>
                 </Pressable>
             ) : (

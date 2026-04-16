@@ -199,6 +199,7 @@ const Current = () => {
         setStartTime(null);
         setWorkoutTitle("New Workout"); // Reset title
         restTimerRef.current?.stopTimer();
+        setPRMODE(false);
         await AsyncStorage.removeItem('@currentWorkout');
         await AsyncStorage.removeItem('@workoutStartTime');
     };
@@ -433,6 +434,7 @@ const Current = () => {
             setStartTime(null);
             setWorkoutTitle("New Workout");
             restTimerRef.current?.stopTimer();
+            setPRMODE(false);
             console.log("Workout saved successfully");
             router.push({
                 pathname: `/workout/${nextSessionNumber}`,
