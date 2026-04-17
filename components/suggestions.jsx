@@ -64,6 +64,35 @@ const findBestSet = (sets) => {
     }, null);
 };
 
+
+
+/**
+ * If the given suggestion has already been matched or beaten in recent history
+ * (weight ≥ suggestion.weight AND reps ≥ repRangeMin), progress from the best
+ * such actual performance instead of returning the stale anchor-derived value.
+ *
+ * This prevents infinite loops like: 90×5 → suggests 87.5×6 → user hits it →
+ * 90×5 still wins on weight → suggests 87.5×6 again forever.
+ */
+const resolveAgainstRecentHistory = (
+    suggestion,
+    recentWorkingSets,
+    repRangeMin,
+    repRangeMax,
+    isAssisted
+) => {
+    if (!suggestion) return null;
+
+    const alreadyAchieved = recentWorkingSets.filter(
+        (s) => s.weight >= suggestion.weight && s.reps >= repRangeMin
+    );
+
+    if (alreadyAchieved.length === 0) return suggestion;
+
+    const bestAchieved = findBestSet(alreadyAchieved);
+    return computeNextSet(bestAchieved, repRangeMin, repRangeMax, isAssisted);
+};
+
 export const useWorkoutSuggestions = ({
     showSuggestion,
     exerciseID,
@@ -131,9 +160,8 @@ export const useWorkoutSuggestions = ({
                 // When the muscle has already been trained before → NO fighting the last 60 days.
                 // Every set just does normal +1 rep / weight-adjust progression from its own last performance.
                 if (!isFirstMuscleOccurrence) {
-                    return initial;
+                    return initial;  // ← back to original, no history check
                 }
-
                 // Only for FIRST time training this muscle:
                 // The top set of that best workout fights the full 60-day history.
                 // All other sets in the same workout just do normal progression.
@@ -143,10 +171,13 @@ export const useWorkoutSuggestions = ({
                     baseSet.reps === workoutTopSet.reps;
 
                 if (!globalAnchorSet || !isTheTopSetInWorkout) {
-                    return initial;
+                    return initial;  // ← back to original, no history check
                 }
 
-                return computeNextSet(globalAnchorSet, repRangeMin, repRangeMax, isAssisted);
+                const anchorSuggestion = computeNextSet(globalAnchorSet, repRangeMin, repRangeMax, isAssisted);
+                return resolveAgainstRecentHistory(
+                    anchorSuggestion, recentWorkingSets, repRangeMin, repRangeMax, isAssisted
+                );
             });
 
             if (!cancelled) {
