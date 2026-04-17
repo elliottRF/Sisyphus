@@ -350,7 +350,7 @@ const ExerciseHistory = (props) => {
             pathname: `/workout/${session}`,
             params: {
                 initialData: JSON.stringify(data),
-                readOnly: 'true'
+                readOnly: 'false'
             }
         });
     };

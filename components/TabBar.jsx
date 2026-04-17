@@ -128,7 +128,7 @@ const getStyles = (theme) => StyleSheet.create({
             isLightTheme(theme) ? 0.95 : 0.95
         ),
         width: '85%',
-        paddingVertical: 8,
+        paddingVertical: 10,
         paddingHorizontal: 10,
         borderRadius: 35,
         borderWidth: 1,

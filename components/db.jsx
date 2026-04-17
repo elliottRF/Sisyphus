@@ -381,6 +381,20 @@ export const fetchLastWorkoutSets = async (exerciseID) => {
   );
 };
 
+
+export const fetchRecentSets = async (exerciseID, days) => {
+  const database = await getDb();
+
+  return await database.getAllAsync(
+    `SELECT *
+     FROM workoutHistory
+     WHERE exerciseID = ?
+     AND time >= datetime('now', ?)
+     ORDER BY time DESC, setNum ASC;`,
+    [exerciseID, `-${days} days`]
+  );
+};
+
 // Get current PRs for an exercise
 export const getExercisePRs = async (exerciseID, excludeSessionNumber = null) => {
   const database = await getDb();
@@ -659,50 +673,62 @@ export const fetchRecentMuscleUsage = async (days) => {
   );
 };
 
-// Fetch all sets from the best-performing session for an exercise within N days
-export const fetchBestSessionInPeriod = async (exerciseID, days = 60) => {
-  const database = await getDb();
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - days);
+const DAYS_TO_CHECK = 60;
 
-  // Find the session with the highest peak 1RM among working sets in the period
-  const bestSession = await database.getFirstAsync(
+export const fetchRecentPRSession = async (exerciseID) => {
+  const database = await getDb();
+
+  // 1. Find the workoutSession that contains the single best set
+  const prSession = await database.getFirstAsync(
     `SELECT workoutSession
-     FROM workoutHistory
-     WHERE exerciseID = ? AND time >= ? AND (setType IS NULL OR setType != 'W')
-     GROUP BY workoutSession
-     ORDER BY MAX(oneRM) DESC
-     LIMIT 1;`,
-    [exerciseID, cutoffDate.toISOString()]
+         FROM workoutHistory
+         WHERE exerciseID = ?
+           AND time >= datetime('now', ?)
+           AND (setType IS NULL OR setType != 'W')
+           AND reps > 0
+         ORDER BY weight DESC, reps DESC, time DESC
+         LIMIT 1;`,
+    [exerciseID, `-${DAYS_TO_CHECK} days`]
   );
 
-  if (!bestSession?.workoutSession) return [];
+  if (!prSession?.workoutSession) return [];
 
+  // 2. Return ALL working sets from that exact workout (no rep-range filter)
   return await database.getAllAsync(
-    `SELECT * FROM workoutHistory
-     WHERE exerciseID = ? AND workoutSession = ?
-     ORDER BY setNum ASC;`,
-    [exerciseID, bestSession.workoutSession]
+    `SELECT *
+         FROM workoutHistory
+         WHERE exerciseID = ?
+           AND workoutSession = ?
+           AND (setType IS NULL OR setType != 'W')
+           AND reps > 0
+         ORDER BY setNum ASC;`,
+    [exerciseID, prSession.workoutSession]
   );
 };
 
-export const hasAchieved = async (exerciseID, weight, reps, days = 60) => {
+// Fallback: Just grab the absolute most recent workout session for this exercise
+export const fetchMostRecentSession = async (exerciseID) => {
   const database = await getDb();
 
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - days);
-
-  const result = await database.getFirstAsync(
-    `SELECT 1 FROM workoutHistory
-     WHERE exerciseID = ?
-       AND weight = ?
-       AND reps >= ?
-       AND time >= ?
-     LIMIT 1;`,
-    [exerciseID, weight, reps, cutoffDate.toISOString()]
+  const recentSession = await database.getFirstAsync(
+    `SELECT workoutSession
+         FROM workoutHistory
+         WHERE exerciseID = ? 
+           AND (setType IS NULL OR setType != 'W')
+           AND reps > 0
+         ORDER BY time DESC
+         LIMIT 1;`,
+    [exerciseID]
   );
 
-  return !!result;
+  if (!recentSession?.workoutSession) return [];
+
+  return await database.getAllAsync(
+    `SELECT * FROM workoutHistory
+         WHERE exerciseID = ? AND workoutSession = ? AND reps > 0
+         ORDER BY setNum ASC;`,
+    [exerciseID, recentSession.workoutSession]
+  );
 };
 
 

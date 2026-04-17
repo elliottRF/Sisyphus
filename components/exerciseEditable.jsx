@@ -17,13 +17,17 @@ import { useReorderableDrag, useIsActive } from 'react-native-reorderable-list';
 
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme'
 import { Feather, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { fetchLastWorkoutSets, fetchBestSessionInPeriod, fetchLifetimePRs, hasAchieved } from './db';
+import { fetchLastWorkoutSets, fetchLifetimePRs } from './db';
 import { useTheme } from '../context/ThemeContext';
 import { formatWeight, unitLabel } from '../utils/units';
 import * as Haptics from 'expo-haptics';
+import {
+    getPRType,
+    useWorkoutSuggestions,
+} from './suggestions';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
-const DAYS_TO_CHECK = 60;
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -37,50 +41,6 @@ const lightenColor = (color, percent) => {
     } catch (e) {
         return color;
     }
-};
-
-const computeSuggestion = (bestSet, repRangeMin, repRangeMax, isAssisted = false) => {
-    if (!bestSet || !bestSet.reps || bestSet.reps === 0) return null;
-
-    const weight = bestSet.weight || 0;
-    const reps = bestSet.reps;
-
-    if (reps < repRangeMin) {
-        const oneRM = weight * (1 + reps / 30);
-        const rawNew = oneRM / (1 + repRangeMin / 30);
-        const roundedWeight = Math.round(rawNew / 2.5) * 2.5;
-
-        return { weight: roundedWeight, reps: repRangeMin, isWeightIncrease: true };
-    }
-
-    if (reps < repRangeMax) {
-        return { weight, reps: reps + 1, isWeightIncrease: false };
-    }
-
-    if (isAssisted) {
-        const newWeight = Math.max(0, Math.round((weight - 2.5) / 2.5) * 2.5);
-        return { weight: newWeight, reps: repRangeMin, isWeightIncrease: true };
-    }
-
-    const oneRM = weight * (1 + reps / 30);
-    const rawNew = oneRM / (1 + repRangeMin / 30);
-    const roundedWeight = Math.round(rawNew / 2.5) * 2.5;
-
-    return { weight: roundedWeight, reps: repRangeMin, isWeightIncrease: true };
-};
-
-const adjustSuggestion = async (exerciseID, suggestion, repRangeMax) => {
-    let { weight, reps } = suggestion;
-
-    while (await hasAchieved(exerciseID, weight, reps, DAYS_TO_CHECK)) {
-        reps++;
-
-        if (reps > repRangeMax) {
-            return null; // signals: move weight up instead
-        }
-    }
-
-    return { weight, reps };
 };
 
 
@@ -203,8 +163,6 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
 };
 
 // ─── SetRowBody ───────────────────────────────────────────────────────────────
-// Extracted so each row can own its own fill-flash shared value without
-// conditionally calling hooks inside a .reduce().
 const SetRowBody = React.memo(({
     set, index, displayNumber,
     isTemplate, hidePrevious,
@@ -321,7 +279,7 @@ const SetRowBody = React.memo(({
                                     name="trophy"
                                     size={11}
                                     color={brightColor}
-                                    style={{ marginLeft: 2 }} // Small nudge if gap isn't enough
+                                    style={{ marginLeft: 2 }}
                                 />
                             )}
                         </Animated.View>
@@ -404,7 +362,6 @@ const ExerciseEditable = ({
     const styles = getStyles(theme);
     const [isNoteVisible, setIsNoteVisible] = useState(false);
     const [previousSets, setPreviousSets] = useState([]);
-    const [bestSessionSets, setBestSessionSets] = useState([]);
 
     const drag = useReorderableDrag();
     const isActive = useIsActive();
@@ -424,20 +381,6 @@ const ExerciseEditable = ({
         loadPreviousData();
     }, [exerciseID, isTemplate, hidePrevious]);
 
-    useEffect(() => {
-        if (!PRMODE || isAssisted) return;
-        if (isTemplate || hidePrevious || !isFirstMuscleOccurrence || isCardio) return;
-        const loadBestSession = async () => {
-            try {
-                const sets = await fetchBestSessionInPeriod(exerciseID, DAYS_TO_CHECK);
-                setBestSessionSets(sets);
-            } catch (error) {
-                console.error("Error loading best session sets:", error);
-            }
-        };
-        loadBestSession();
-    }, [exerciseID, isFirstMuscleOccurrence, isTemplate, hidePrevious, isCardio, PRMODE, isAssisted]);
-
     const [lifetimePRs, setLifetimePRs] = useState(null);
 
     useEffect(() => {
@@ -451,35 +394,6 @@ const ExerciseEditable = ({
         };
         loadPRs();
     }, [exerciseID, PRMODE, isAssisted]);
-
-
-
-
-
-    const getPRType = (suggestion) => {
-        if (!suggestion || isCardio || !lifetimePRs) return null;
-
-        const sugWeight = suggestion.weight || 0;
-        const sugReps = suggestion.reps || 0;
-        const sug1RM = sugWeight * (1 + sugReps / 30);
-        const sugVol = sugWeight * sugReps;
-
-        if (sug1RM > lifetimePRs.max1RM) return '1RM';
-
-        if (
-            sugWeight > lifetimePRs.maxWeight ||
-            (sugWeight === lifetimePRs.maxWeight &&
-                sugReps > lifetimePRs.maxRepsAtMaxWeight)
-        ) return 'Weight';
-
-        if (sugVol > lifetimePRs.maxVolume) return 'Volume';
-
-        return null;
-    };
-
-    const suggestionSource = isFirstMuscleOccurrence ? bestSessionSets : previousSets;
-    const showSuggestion = PRMODE && !isTemplate && !hidePrevious && !isCardio && !isAssisted && suggestionSource.length > 0;
-
 
     const sanitizeDecimal = (text) => {
         let cleaned = text.replace(/[^0-9.]/g, '');
@@ -564,58 +478,24 @@ const ExerciseEditable = ({
         prevWorking: previousSets.filter(s => s.setType !== 'W'),
     }), [previousSets]);
 
-    const { suggestWarmups, suggestWorking } = React.useMemo(() => ({
-        suggestWarmups: suggestionSource.filter(s => s.setType === 'W'),
-        suggestWorking: suggestionSource.filter(s => s.setType !== 'W'),
-    }), [suggestionSource]);
+    // New progressive-overload logic (replaces old computeSuggestion + adjustedSuggestions)
+    const showSuggestion = PRMODE && !isTemplate && !hidePrevious && !isCardio && !isAssisted;
+
+    const workingSuggestions = useWorkoutSuggestions({
+        showSuggestion,
+        exerciseID,
+        repRangeMin,
+        repRangeMax,
+        isAssisted,
+        isFirstMuscleOccurrence,
+    });
+
+    // Whether the header should show the suggestion icon or "PREVIOUS" label.
+    const headerKey = showSuggestion ? 'suggest' : 'prev';
 
     let prevWarmupIndex = 0;
     let prevWorkingIndex = 0;
-    let suggestWarmupIndex = 0;
     let suggestWorkingIndex = 0;
-
-    // Whether the header should show the suggestion icon or "PREVIOUS" label.
-    // key-driven FadeIn means the label cross-fades instead of flashing on reorder.
-    const headerKey = showSuggestion ? 'suggest' : 'prev';
-
-
-
-    const [adjustedSuggestions, setAdjustedSuggestions] = useState([]);
-
-    useEffect(() => {
-        if (!showSuggestion) return;
-
-        const run = async () => {
-            const results = [];
-
-            for (let i = 0; i < suggestWorking.length; i++) {
-                const base = suggestWorking[i];
-                const computed = computeSuggestion(base, repRangeMin, repRangeMax, isAssisted);
-
-                if (!computed) {
-                    results.push(null);
-                    continue;
-                }
-
-                // Only adjust the first working set — trailing sets are naturally
-                // lower-rep and shouldn't be bumped by the primary set's history.
-                if (i === 0 && isFirstMuscleOccurrence) {
-                    const adjusted = await adjustSuggestion(exerciseID, computed, repRangeMax);
-                    results.push(adjusted || computed);
-                } else {
-                    results.push(computed);
-                }
-            }
-
-            setAdjustedSuggestions(results);
-        };
-
-        run();
-    }, [suggestWorking, repRangeMin, repRangeMax, isAssisted, showSuggestion]);
-
-
-
-
 
     return (
         <View style={[styles.container, isActive && styles.containerActive]}>
@@ -675,11 +555,6 @@ const ExerciseEditable = ({
             <View style={styles.tableHeader}>
                 <Text style={[styles.columnHeader, styles.colSet]}>SET</Text>
                 {(!isTemplate && !hidePrevious) ? (
-                    /*
-                      key={headerKey} + FadeIn: when the column switches between
-                      "PREVIOUS" label and the trending-up icon (or vice versa on
-                      reorder), it cross-fades rather than flickering.
-                    */
                     <Animated.View
                         key={headerKey}
                         entering={FadeIn.duration(220)}
@@ -710,7 +585,7 @@ const ExerciseEditable = ({
                         displayNumber = normalSetCount + 1;
                     }
 
-                    // --- PREVIOUS column ---
+                    // --- PREVIOUS column (always computed for warmups + non-suggestion mode) ---
                     let prevSetText = '-';
                     let prevSet = null;
                     prevSet = set.setType === 'W'
@@ -726,44 +601,31 @@ const ExerciseEditable = ({
                         }
                     }
 
-                    // --- SUGGESTION column ---
+                    // --- SUGGESTION column (new progressive overload logic) ---
                     let suggestionText = '-';
-                    let suggestBase = null;
                     let computedSuggestion = null;
+                    let fillData = null;
 
                     if (showSuggestion) {
                         const isWarmup = set.setType === 'W';
-                        suggestBase = isWarmup
-                            ? suggestWarmups[suggestWarmupIndex++]
-                            : suggestWorking[suggestWorkingIndex++];
-
-                        if (suggestBase) {
-                            if (isWarmup) {
-                                suggestionText = `${formatWeight(suggestBase.weight, useImperial)} × ${suggestBase.reps}`;
-                            } else {
-                                computedSuggestion = computeSuggestion(suggestBase, repRangeMin, repRangeMax, isAssisted);
-
-                                if (computedSuggestion) {
-                                    const finalSuggestion = adjustedSuggestions[suggestWorkingIndex - 1] || computedSuggestion;
-                                    computedSuggestion = finalSuggestion; // PR check should use the adjusted value
-                                    suggestionText = `${formatWeight(finalSuggestion.weight, useImperial)} × ${finalSuggestion.reps}`;
-                                }
+                        if (isWarmup) {
+                            // Warmups are not progressively overloaded – just copy last warmup
+                            if (prevSet) {
+                                suggestionText = `${formatWeight(prevSet.weight, useImperial)} × ${prevSet.reps}`;
+                                fillData = { weight: prevSet.weight || 0, reps: prevSet.reps || 0 };
                             }
-                        }
-                    }
-
-                    let fillData = null;
-                    if (showSuggestion) {
-                        if (suggestBase) {
-                            if (set.setType === 'W') {
-                                fillData = { weight: suggestBase.weight, reps: suggestBase.reps };
-                            } else if (computedSuggestion) {
-                                const finalSuggestion = adjustedSuggestions[suggestWorkingIndex - 1] || computedSuggestion;
-
-                                fillData = { weight: finalSuggestion.weight, reps: finalSuggestion.reps };
+                        } else {
+                            // Working sets use the new computeNextSet logic from the hook
+                            const suggestIndex = suggestWorkingIndex++;
+                            const computed = workingSuggestions[suggestIndex];
+                            if (computed) {
+                                suggestionText = `${formatWeight(computed.weight, useImperial)} × ${computed.reps}`;
+                                computedSuggestion = computed;
+                                fillData = { weight: computed.weight, reps: computed.reps };
                             }
                         }
                     } else if (prevSet) {
+                        // Non-PRMODE → classic previous fill
                         if (isCardio) {
                             fillData = {
                                 distance: prevSet.distance || 0,
@@ -775,7 +637,8 @@ const ExerciseEditable = ({
                     }
 
                     const columnText = showSuggestion ? suggestionText : prevSetText;
-                    const prType = getPRType(computedSuggestion);
+
+                    const prType = getPRType(computedSuggestion, lifetimePRs, isCardio);
                     const isLifetimePRSuggestion =
                         showSuggestion &&
                         lifetimePRs !== null &&
@@ -835,7 +698,6 @@ const getStyles = (theme) => {
     const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
     const safeSuccess = isDynamic ? '#22c55e' : (theme.success || '#22c55e');
     const completedFill = withAlpha(safeSuccess, lightTheme ? 0.06 : 0.045);
-    // Flash overlay colour — primary at low alpha, opacity animated separately
     const fillFlashColor = withAlpha(safePrimary, lightTheme ? 0.12 : 0.18);
 
     return StyleSheet.create({
@@ -967,7 +829,6 @@ const getStyles = (theme) => {
             backgroundColor: completedFill,
             zIndex: -1,
         },
-        // Fill-tap flash overlay — primary tint, opacity driven by shared value
         fillFlashOverlay: {
             backgroundColor: fillFlashColor,
             zIndex: 0,
@@ -990,8 +851,6 @@ const getStyles = (theme) => {
         badgeDrop: { backgroundColor: withAlpha(theme.info, lightTheme ? 0.16 : 0.2) },
         textDrop: { color: '#74b9ff' },
 
-        // Prev/suggestion column content wrapper
-        // Row layout so text and trophy sit side-by-side; centred as a unit in colPrev
         prevContentWrapper: {
             flexDirection: 'row',
             alignItems: 'center',
@@ -1004,15 +863,11 @@ const getStyles = (theme) => {
             color: theme.textSecondary,
             textAlign: 'center',
             opacity: 0.7,
-            flexShrink: 1,      // prevents long text from pushing trophy out of column
+            flexShrink: 1,
         },
         suggestionText: {
             color: safePrimary,
             opacity: 1,
-        },
-        // Trophy sits snug to the right of the suggestion text
-        inlineTrophy: {
-            flexShrink: 0,
         },
 
         inputContainer: {
