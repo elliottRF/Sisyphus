@@ -325,7 +325,7 @@ const Onboarding = () => {
             <Text style={styles.sectionTitle}>Muscle model</Text>
           </View>
           <Text style={styles.sectionDescription}>
-            Pick the body model used by the highlighter across the app.
+            Gender of the muscle highlighter model.
           </Text>
           <GenderSegment theme={theme} value={gender} onChange={updateGender} />
         </Animated.View>

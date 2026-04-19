@@ -355,7 +355,7 @@ const ExerciseEditable = ({
     isAssisted,
     isTemplate = false,
     hidePrevious = false,
-    isFirstMuscleOccurrence = false,
+    muscleOccurrenceIndex = 1,
     PRMODE = false
 }) => {
     const { theme, useImperial, repRangeMin, repRangeMax } = useTheme();
@@ -487,7 +487,7 @@ const ExerciseEditable = ({
         repRangeMin,
         repRangeMax,
         isAssisted,
-        isFirstMuscleOccurrence,
+        muscleOccurrenceIndex,
     });
 
     // Whether the header should show the suggestion icon or "PREVIOUS" label.

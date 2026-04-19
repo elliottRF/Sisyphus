@@ -732,6 +732,91 @@ export const fetchMostRecentSession = async (exerciseID) => {
 };
 
 
+// Fetch the best (PR) session where this exercise was performed with the exact same muscle occurrence index
+export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex) => {
+  const database = await getDb();
+  
+  const recentSessions = await database.getAllAsync(`
+    SELECT workoutSession
+    FROM workoutHistory
+    WHERE exerciseID = ? AND time >= datetime('now', '-60 days') AND (setType IS NULL OR setType != 'W')
+    GROUP BY workoutSession
+  `, [exerciseID]);
+
+  const validSessions = [];
+
+  for (const sessionRow of recentSessions) {
+    const sessionNum = sessionRow.workoutSession;
+    
+    // Fetch all exercises from that session in order
+    const sessionExercises = await database.getAllAsync(`
+      SELECT wh.exerciseID, e.targetMuscle
+      FROM workoutHistory wh
+      JOIN exercises e ON wh.exerciseID = e.exerciseID
+      WHERE wh.workoutSession = ?
+      GROUP BY wh.exerciseNum, wh.exerciseID
+      ORDER BY wh.exerciseNum ASC
+    `, [sessionNum]);
+
+    const seenMuscles = {};
+    let occurrenceIndex = -1;
+
+    for (const ex of sessionExercises) {
+       const targets = (ex.targetMuscle || '')
+           .split(',')
+           .map(m => m.trim().toLowerCase())
+           .filter(Boolean);
+
+       let maxOcc = 0;
+       targets.forEach(m => {
+           if ((seenMuscles[m] || 0) > maxOcc) maxOcc = seenMuscles[m];
+       });
+
+       const curOcc = maxOcc + 1;
+
+       targets.forEach(m => {
+           seenMuscles[m] = (seenMuscles[m] || 0) + 1;
+       });
+
+       if (ex.exerciseID === exerciseID) {
+           occurrenceIndex = curOcc;
+           break;
+       }
+    }
+
+    if (occurrenceIndex >= targetIndex) {
+       validSessions.push(sessionNum);
+    }
+  }
+
+  if (validSessions.length === 0) {
+      return [];
+  }
+
+  const sessionListStr = validSessions.join(',');
+
+  // Now find the best session among valid ones
+  const prSession = await database.getFirstAsync(`
+    SELECT workoutSession
+      FROM workoutHistory
+      WHERE exerciseID = ?
+        AND workoutSession IN (${sessionListStr})
+        AND (setType IS NULL OR setType != 'W')
+        AND reps > 0
+      ORDER BY weight DESC, reps DESC, time DESC
+      LIMIT 1;
+  `, [exerciseID]);
+
+  if (!prSession?.workoutSession) return [];
+
+  return await database.getAllAsync(`
+      SELECT * FROM workoutHistory
+      WHERE exerciseID = ? AND workoutSession = ? AND (setType IS NULL OR setType != 'W') AND reps > 0
+      ORDER BY setNum ASC;
+  `, [exerciseID, prSession.workoutSession]);
+};
+
+
 // --- Template Functions ---
 
 export const createTemplate = async (name, workoutData) => {

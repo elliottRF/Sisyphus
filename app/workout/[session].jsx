@@ -151,7 +151,7 @@ const WorkoutDetail = () => {
                 }))
             };
 
-            router.push({
+            router.navigate({
                 pathname: "/current",
                 params: { template: JSON.stringify(template) }
             });

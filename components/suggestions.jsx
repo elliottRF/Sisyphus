@@ -4,7 +4,8 @@ import {
     fetchLifetimePRs,
     fetchRecentPRSession,
     fetchMostRecentSession,
-    fetchRecentSets
+    fetchRecentSets,
+    fetchBestSessionMatchingOccurrence
 } from './db';
 
 export const DAYS_TO_CHECK = 60;
@@ -99,7 +100,7 @@ export const useWorkoutSuggestions = ({
     repRangeMin,
     repRangeMax,
     isAssisted,
-    isFirstMuscleOccurrence,
+    muscleOccurrenceIndex,
 }) => {
     const [suggestions, setSuggestions] = useState([]);
 
@@ -108,6 +109,8 @@ export const useWorkoutSuggestions = ({
             setSuggestions([]);
             return;
         }
+
+        console.log(`useWorkoutSuggestions called for exerciseID=${exerciseID}, muscleOccurrenceIndex=${muscleOccurrenceIndex}`);
 
         let cancelled = false;
 
@@ -118,14 +121,16 @@ export const useWorkoutSuggestions = ({
                 (set) => !set.setType || set.setType !== 'W'
             );
 
-            const globalAnchorSet = isFirstMuscleOccurrence
+            const globalAnchorSet = muscleOccurrenceIndex === 1
                 ? findBestSet(recentWorkingSets)
                 : null;
 
             // 2. Decide which workout to base suggestions on
             let baseSets = [];
-            if (isFirstMuscleOccurrence) {
+            if (muscleOccurrenceIndex === 1) {
                 baseSets = await fetchRecentPRSession(exerciseID);
+            } else if (muscleOccurrenceIndex >= 2) {
+                baseSets = await fetchBestSessionMatchingOccurrence(exerciseID, muscleOccurrenceIndex);
             }
             if (!baseSets || baseSets.length === 0) {
                 baseSets = await fetchMostRecentSession(exerciseID);
@@ -147,7 +152,7 @@ export const useWorkoutSuggestions = ({
             }
 
             // 4. Identify the top set INSIDE this workout (only used for first-muscle case)
-            const workoutTopSet = isFirstMuscleOccurrence
+            const workoutTopSet = muscleOccurrenceIndex === 1
                 ? findBestSet(baseSets)
                 : null;
 
@@ -159,7 +164,7 @@ export const useWorkoutSuggestions = ({
                 // 🔥 NEW RULE (exactly what you asked for):
                 // When the muscle has already been trained before → NO fighting the last 60 days.
                 // Every set just does normal +1 rep / weight-adjust progression from its own last performance.
-                if (!isFirstMuscleOccurrence) {
+                if (muscleOccurrenceIndex !== 1) {
                     return initial;  // ← back to original, no history check
                 }
                 // Only for FIRST time training this muscle:
@@ -196,7 +201,7 @@ export const useWorkoutSuggestions = ({
         repRangeMin,
         repRangeMax,
         isAssisted,
-        isFirstMuscleOccurrence,
+        muscleOccurrenceIndex,
     ]);
 
     return suggestions;

@@ -230,6 +230,7 @@ const Current = () => {
             try {
                 const parsed = JSON.parse(params.template);
                 loadTemplate(parsed);
+                router.setParams({ template: "" });
             } catch (e) {
                 console.error("Invalid template passed:", e);
             }
@@ -601,6 +602,29 @@ const Current = () => {
             AsyncStorage.getItem('settings_auto_timer').then(val => {
                 if (val !== null) autoTimerEnabledRef.current = val === 'true';
             });
+
+            const checkActiveWorkout = async () => {
+                try {
+                    const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
+                    if (storedWorkout) {
+                        const { workout, title } = JSON.parse(storedWorkout);
+                        setCurrentWorkout(current => {
+                            if (current.length === 0 && workout && workout.length > 0) {
+                                if (title) setWorkoutTitle(title);
+                                return workout;
+                            }
+                            return current;
+                        });
+                    }
+                    const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
+                    if (storedStartTime) {
+                        setStartTime(current => (!current ? storedStartTime : current));
+                    }
+                } catch (e) {
+                    console.error("Error recovering active workout state:", e);
+                }
+            };
+            checkActiveWorkout();
         }, [])
     );
 
@@ -656,7 +680,7 @@ const Current = () => {
 
 
     const getFirstOccurrenceMap = (currentWorkout, exercisesData) => {
-        const seenMuscles = new Set();
+        const seenMuscles = {};
         const occurrenceMap = {};
 
         currentWorkout.forEach((workoutGroup) => {
@@ -667,14 +691,19 @@ const Current = () => {
                     .map(m => m.trim().toLowerCase())
                     .filter(Boolean);
 
-                // It's a first occurrence if NO targets have been seen yet in previous exercises
-                const isFirst = targets.length > 0 && !targets.some(m => seenMuscles.has(m));
+                let maxOcc = 0;
+                targets.forEach(m => {
+                    const count = seenMuscles[m] || 0;
+                    if (count > maxOcc) maxOcc = count;
+                });
 
-                // Store by the exercise's unique instance ID (not the exerciseID type)
-                occurrenceMap[ex.id] = isFirst;
+                const currentOccIdx = maxOcc + 1; // 1 for first time, 2 for second time, etc.
 
-                // Mark these muscles as seen
-                targets.forEach(m => seenMuscles.add(m));
+                occurrenceMap[ex.id] = currentOccIdx;
+
+                targets.forEach(m => {
+                    seenMuscles[m] = (seenMuscles[m] || 0) + 1;
+                });
             });
         });
         return occurrenceMap;
@@ -708,7 +737,7 @@ const Current = () => {
                             isCardio={!!exerciseDetails?.isCardio}
                             isAssisted={!!exerciseDetails?.isAssisted}
                             // Use the map we pre-calculated!
-                            isFirstMuscleOccurrence={occurrenceMap[exercise.id]}
+                            muscleOccurrenceIndex={occurrenceMap[exercise.id]}
                             PRMODE={PRMODE}
                         />
                     );
