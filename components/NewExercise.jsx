@@ -325,137 +325,138 @@ const NewExercise = (props) => {
 const getStyles = (theme) => {
     const lightTheme = isLightTheme(theme);
     return StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: theme.background,
-    },
-    scrollContent: {
-        paddingHorizontal: 20,
-    },
-    bodyWrapper: {
-        flexDirection: 'row',
-        justifyContent: 'space-evenly',
-        alignItems: 'center',
-        paddingVertical: 0,
-        backgroundColor: theme.surface,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: theme.border,
-        marginBottom: 24,
-        ...getThemedShadow(theme, 'small'),
-    },
-    bodyDivider: {
-        width: 1,
-        height: '80%',
-        backgroundColor: theme.border,
-        opacity: 0.5,
-    },
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: lightTheme ? 'rgba(255,255,255,0.94)' : theme.surface,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: theme.border,
-        paddingHorizontal: 16,
-        marginBottom: 20,
-        ...getThemedShadow(theme, 'small'),
-    },
-    inputIcon: {
-        marginRight: 10,
-    },
-    input: {
-        flex: 1,
-        color: theme.text,
-        fontFamily: FONTS.medium,
-        fontSize: 16,
-        paddingVertical: 16,
-    },
-    cardioToggleCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: theme.surface,
-        padding: 18,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: theme.border,
-        marginBottom: 24,
-        ...getThemedShadow(theme, 'small'),
-    },
-    cardioTextWrapper: {
-        flex: 1,
-    },
-    label: {
-        color: theme.text,
-        fontFamily: FONTS.bold,
-        fontSize: 16,
-    },
-    subtext: {
-        color: theme.textSecondary,
-        fontFamily: FONTS.regular,
-        fontSize: 13,
-    },
-    sectionContainer: {
-        marginBottom: 24,
-        backgroundColor: lightTheme ? 'rgba(255,255,255,0.72)' : 'transparent',
-        borderRadius: 18,
-        padding: lightTheme ? 16 : 0,
-        borderWidth: lightTheme ? 1 : 0,
-        borderColor: lightTheme ? theme.overlayBorder : 'transparent',
-    },
-    sectionTitle: {
-        color: theme.text,
-        fontFamily: FONTS.bold,
-        fontSize: 16,
-        marginBottom: 12,
-    },
-    chipContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginHorizontal: -4,
-    },
-    chip: {
-        backgroundColor: lightTheme ? theme.background : theme.surface,
-        borderWidth: 1,
-        borderColor: theme.border,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 20,
-        margin: 4,
-    },
-    chipActive: {
-        backgroundColor: theme.primary,
-        borderColor: theme.primary,
-    },
-    chipDisabled: {
-        opacity: 0.4,
-    },
-    chipText: {
-        color: theme.text,
-        fontFamily: FONTS.medium,
-        fontSize: 14,
-    },
-    chipTextActive: {
-        color: '#FFFFFF',
-    },
-    chipTextDisabled: {
-        color: theme.textSecondary,
-    },
-    saveButton: {
-        paddingVertical: 18,
-        borderRadius: 30,
-        alignItems: 'center',
-        marginTop: 10,
-        ...getThemedShadow(theme, 'medium'),
-    },
-    saveButtonText: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontFamily: FONTS.bold,
-        letterSpacing: 0.5,
-    },
-});
+        container: {
+            flex: 1,
+            backgroundColor: theme.background,
+        },
+        scrollContent: {
+            paddingHorizontal: 20,
+        },
+        bodyWrapper: {
+            flexDirection: 'row',
+            justifyContent: 'space-evenly',
+            alignItems: 'center',
+            paddingVertical: 0,
+            backgroundColor: theme.surface,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: theme.border,
+            marginBottom: 24,
+            ...getThemedShadow(theme, 'small'),
+        },
+        bodyDivider: {
+            width: 1,
+            height: '80%',
+            backgroundColor: theme.border,
+            opacity: 0.5,
+        },
+        inputContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: lightTheme ? 'rgba(255,255,255,0.94)' : theme.surface,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: theme.border,
+            paddingHorizontal: 16,
+            marginBottom: 20,
+            ...getThemedShadow(theme, 'small'),
+        },
+        inputIcon: {
+            marginRight: 10,
+        },
+        input: {
+            flex: 1,
+            color: theme.text,
+            fontFamily: FONTS.medium,
+            fontSize: 16,
+            paddingVertical: 16,
+        },
+        cardioToggleCard: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: theme.surface,
+            padding: 18,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: theme.border,
+            marginBottom: 24,
+            ...getThemedShadow(theme, 'small'),
+        },
+        cardioTextWrapper: {
+            flex: 1,
+        },
+        label: {
+            color: theme.text,
+            fontFamily: FONTS.bold,
+            fontSize: 16,
+        },
+        subtext: {
+            color: theme.textSecondary,
+            fontFamily: FONTS.regular,
+            fontSize: 13,
+        },
+        sectionContainer: {
+            marginBottom: 24,
+            backgroundColor: lightTheme ? 'rgba(255,255,255,0.72)' : 'transparent',
+            borderRadius: 18,
+            padding: lightTheme ? 16 : 0,
+            borderWidth: lightTheme ? 1 : 0,
+            borderColor: lightTheme ? theme.overlayBorder : 'transparent',
+        },
+        sectionTitle: {
+            color: theme.text,
+            fontFamily: FONTS.bold,
+            fontSize: 16,
+            marginBottom: 12,
+        },
+        chipContainer: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            marginHorizontal: -4,
+        },
+        chip: {
+            backgroundColor: lightTheme ? theme.background : theme.surface,
+            borderWidth: 1,
+            borderColor: theme.border,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderRadius: 20,
+            margin: 4,
+        },
+        chipActive: {
+            backgroundColor: theme.primary,
+            borderColor: theme.primary,
+        },
+        chipDisabled: {
+            opacity: 0.4,
+        },
+        chipText: {
+            color: theme.text,
+            fontFamily: FONTS.medium,
+            fontSize: 14,
+        },
+        chipTextActive: {
+            color: '#FFFFFF',
+            color: theme.textAlternate
+        },
+        chipTextDisabled: {
+            color: theme.textSecondary,
+        },
+        saveButton: {
+            paddingVertical: 18,
+            borderRadius: 30,
+            alignItems: 'center',
+            marginTop: 10,
+            ...getThemedShadow(theme, 'medium'),
+        },
+        saveButtonText: {
+            color: '#FFFFFF',
+            fontSize: 18,
+            fontFamily: FONTS.bold,
+            letterSpacing: 0.5,
+        },
+    });
 };
 
 export default NewExercise;

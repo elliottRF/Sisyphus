@@ -196,7 +196,7 @@ const Profile = () => {
                     onPress={openCreateExerciseSheet}
                 >
                     <ButtonBackground style={styles.addButtonGradient}>
-                        <Feather name="plus" size={24} color="#fff" />
+                        <Feather name="plus" size={24} color={theme.textAlternate} />
                     </ButtonBackground>
                 </TouchableOpacity>
             </View>

@@ -99,6 +99,7 @@ const DEFAULT = {
     surface: "#242426",      // Noticeably lighter than background for card definition
     text: "#FFFFFF",
     textSecondary: "#A1A1A6",// Boosted from #8E8E93 for better legibility in bright light
+    textAlternate: "#FFFFFF",
     border: "#3A3A3C",       // Made more distinct so UI sections are visible
     success: "#30D158",      // Slightly more vibrant iOS Green
     danger: "#FF453A",
@@ -118,11 +119,12 @@ const DEFAULT = {
 const NOIR = {
     primary: "#ffffff",
     primaryDark: "#b2bec3",
-    secondary: "#ffffff7e",
+    secondary: "#ffffff",
     background: "#0d0d0d",
     surface: "#1a1a1a",
     text: "#ffffff",
     textSecondary: "#999999",
+    textAlternate: "#1a1a1a",
     border: "#2a2a2a",
     success: "#27ae60",
     danger: "#e74c3c",
@@ -146,6 +148,7 @@ const ARCTIC = {
     surface: "#102027",
     text: "#f8feff",
     textSecondary: "#a7cbd9",
+    textAlternate: "#000000ff",
     border: "#1f3a44",
     success: "#2ecc71",
     danger: "#ff7675",
@@ -169,6 +172,7 @@ const NOTHING = {
     surface: "#0b0b0b",      // Near-black
     text: "#ffffff",
     textSecondary: "#8e8e8e",
+    textAlternate: "#ffffffff",
     border: "#1a1a1a",
     success: "#9eff00",      // Techy lime
     danger: "#ff2a2a",
@@ -192,6 +196,7 @@ const TERMINAL = {
     surface: "#0b1210",
     text: "#eafff6",
     textSecondary: "#6fbfa2",
+    textAlternate: "#000000ff",
     border: "#13261e",
     success: "#00ff9c",
     danger: "#ff4d4d",
@@ -215,6 +220,7 @@ const SCHEMATIC = {
     surface: "#121820",
     text: "#e6edf3",
     textSecondary: "#8fa3b8",
+    textAlternate: "#1a1a1a",
     border: "#1f2a36",
     success: "#00ff87",
     danger: "#ff5c5c",
@@ -238,6 +244,7 @@ const CALIPER = {
     surface: "#111827",
     text: "#f9fafb",
     textSecondary: "#9ca3af",
+    textAlternate: "#1a1a1a",
     border: "#1f2933",
     success: "#22c55e",
     danger: "#ef4444",
@@ -267,7 +274,7 @@ const BLOSSOM = {
     // Typography
     text: "#2D1A1E",              // Deep Berry (High Contrast for Readability)
     textSecondary: "#7C5E66",     // Darker muted rose-grey for utility text
-
+    textAlternate: "#ffffffff",
     // Feedback & Semantic
     success: "#7CD9A3",           // Sage Green (Softened for the theme)
     danger: "#F28D8D",            // Coral Red
@@ -318,6 +325,7 @@ const DEFAULT_DARK = {
     surface: "#121214",      // iOS Secondary System Background
     text: "#FFFFFF",         // Primary Label
     textSecondary: "#8E8E93",// Secondary Label
+    textAlternate: "#000000ff",
     border: "#2C2C2E",       // Thin, subtle separator
     success: "#32D74B",      // iOS System Green
     danger: "#FF453A",       // iOS System Red
@@ -342,6 +350,7 @@ const THRIVE = {
     surface: "#121214",      // iOS Secondary System Background
     text: "#FFFFFF",         // Primary Label
     textSecondary: "#8E8E93",// Secondary Label
+    textAlternate: "#ffffffff",
     border: "#2C2C2E",       // Thin, subtle separator
     success: "#32D74B",      // iOS System Green
     danger: "#FF453A",       // iOS System Red
@@ -370,7 +379,7 @@ const LIGHT = {
     // Typography
     text: "#162033",              // Deep Navy with slightly softer contrast
     textSecondary: "#5D6B80",     // Darker secondary text for better readability
-
+    textAlternate: "#FFFFFF",
     // Feedback & Semantic
     success: "#10B981",           // Emerald Green
     danger: "#EF4444",            // Standard Red

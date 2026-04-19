@@ -434,7 +434,7 @@ const Current = () => {
                 const { sound } = await Audio.Sound.createAsync(
                     require('../../assets/notifications/greatSuccess.mp3')
                 );
-                
+
                 await sound.playAsync();
 
                 // Cleanup when done – allow the full sound to play even during navigation
@@ -1084,7 +1084,7 @@ const getStyles = (theme) => {
             justifyContent: 'center',
         },
         startButtonText: {
-            color: safeText,
+            color: theme.textAlternate,
             fontSize: 16,
             fontFamily: FONTS.bold,
             letterSpacing: 0.5,
@@ -1151,7 +1151,7 @@ const getStyles = (theme) => {
         finishButtonText: {
             fontSize: 18,
             fontFamily: FONTS.bold,
-            color: safeText,
+            color: theme.textAlternate,
             letterSpacing: 0.5,
         },
         clearButton: {
