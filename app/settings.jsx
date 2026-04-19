@@ -423,7 +423,7 @@ const Settings = () => {
                         <Text style={styles.cardTitle}>Muscle Model</Text>
                     </View>
                     <Text style={styles.cardDescription}>
-                        Gender of the muscle highlighter model shown across the app.
+                        Gender of the muscle highlighter model.
                     </Text>
                     <GenderSegment theme={theme} value={gender} onChange={updateGender} />
                 </View>

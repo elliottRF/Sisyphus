@@ -1,5 +1,5 @@
 
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, Dimensions } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, Dimensions, Modal } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +28,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Timer from '../../components/Timer';
 import RestTimer from '../../components/RestTimer';
 import { useFocusEffect, router } from 'expo-router';
+import { Audio } from 'expo-av';
+import LottieView from 'lottie-react-native';
 
 import TestSoundButton from '../../components/TestSoundButton';
 import TestNotificationButton from '../../components/TestNotificationButton';
@@ -425,8 +427,25 @@ const Current = () => {
             const durationMinutes = Math.floor(durationMs / 60000);
             await insertWorkoutHistory(workoutEntries, workoutTitle, durationMinutes);
 
-            // Emit event so Home screen graphs refresh
+            // Emit event so Global Overlay triggers
             emit(AppEvents.WORKOUT_COMPLETED);
+
+            try {
+                const { sound } = await Audio.Sound.createAsync(
+                    require('../../assets/notifications/greatSuccess.mp3')
+                );
+                
+                await sound.playAsync();
+
+                // Cleanup when done – allow the full sound to play even during navigation
+                sound.setOnPlaybackStatusUpdate(async (status) => {
+                    if (status.didJustFinish) {
+                        await sound.unloadAsync();
+                    }
+                });
+            } catch (e) {
+                console.log("Error playing success sound", e);
+            }
 
             // Clear AsyncStorage and state
             await AsyncStorage.removeItem('@currentWorkout');
@@ -437,6 +456,10 @@ const Current = () => {
             restTimerRef.current?.stopTimer();
             setPRMODE(false);
             console.log("Workout saved successfully");
+
+            // Build our history stack effectively
+            router.navigate('/history');
+
             router.push({
                 pathname: `/workout/${nextSessionNumber}`,
                 params: {
@@ -486,107 +509,13 @@ const Current = () => {
     };
 
     useEffect(() => {
-        const loadWorkout = async () => {
-            fetchExercises()
-                .then(data => setExercises(data))
-                .catch(err => console.error(err));
+        setupDatabase()
+            .then(() => fetchExercises())
+            .then(data => setExercises(data))
+            .catch(err => console.error("Initial load error:", err));
 
-            setupDatabase().catch(err => console.error("DB Setup Error:", err));
-
-            try {
-                const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
-                if (storedWorkout) {
-                    const { workout, title } = JSON.parse(storedWorkout);
-
-                    // Robust unique ID generator
-                    const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
-
-                    // Re-generate IDs to ensure uniqueness across the entire workout structure
-                    const workoutWithUniqueIds = workout.map(item => ({
-                        ...item,
-                        id: generateId(),
-                        exercises: item.exercises.map(ex => ({
-                            ...ex,
-                            id: generateId(), // New unique ID for exercise instance
-                            sets: ex.sets.map(set => ({
-                                ...set,
-                                id: generateId() // New unique ID for set
-                            }))
-                        }))
-                    }));
-
-                    setCurrentWorkout(workoutWithUniqueIds);
-                    if (title) setWorkoutTitle(title);
-                }
-                const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
-                if (storedStartTime) {
-                    setStartTime(storedStartTime);
-                }
-            } catch (error) {
-                console.error('Error loading workout from AsyncStorage:', error);
-            } finally {
-                setIsReady(true);
-            }
-        };
-
-        loadWorkout();
-    }, []);
-
-    useFocusEffect(
-        React.useCallback(() => {
-            fetchExercises()
-                .then(data => setExercises(data))
-                .catch(err => console.error(err));
-            setLoadingTemplateId(null);
-        }, [])
-    );
-
-    useEffect(() => {
-        const loadWorkout = async () => {
-            fetchExercises()
-                .then(data => setExercises(data))
-                .catch(err => console.error(err));
-
-            setupDatabase().catch(err => console.error("DB Setup Error:", err));
-            loadTemplates(); // Load templates on mount
-
-            try {
-                const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
-                if (storedWorkout) {
-                    const { workout, title } = JSON.parse(storedWorkout);
-
-                    // Robust unique ID generator
-                    const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
-
-                    // Re-generate IDs to ensure uniqueness across the entire workout structure
-                    const workoutWithUniqueIds = workout.map(item => ({
-                        ...item,
-                        id: generateId(),
-                        exercises: item.exercises.map(ex => ({
-                            ...ex,
-                            id: generateId(), // New unique ID for exercise instance
-                            sets: ex.sets.map(set => ({
-                                ...set,
-                                id: generateId() // New unique ID for set
-                            }))
-                        }))
-                    }));
-
-                    setCurrentWorkout(workoutWithUniqueIds);
-                    if (title) setWorkoutTitle(title);
-                }
-                const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
-                if (storedStartTime) {
-                    setStartTime(storedStartTime);
-                }
-            } catch (error) {
-                console.error('Error loading workout from AsyncStorage:', error);
-            } finally {
-                setIsReady(true);
-            }
-        };
-
-        loadWorkout();
+        loadTemplates();
+        setIsReady(true);
     }, []);
 
     const autoTimerEnabledRef = useRef(true);
@@ -615,10 +544,15 @@ const Current = () => {
                             }
                             return current;
                         });
+                    } else {
+                        setCurrentWorkout([]);
+                        setWorkoutTitle("New Workout");
                     }
                     const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
                     if (storedStartTime) {
                         setStartTime(current => (!current ? storedStartTime : current));
+                    } else {
+                        setStartTime(null);
                     }
                 } catch (e) {
                     console.error("Error recovering active workout state:", e);

@@ -21,6 +21,7 @@ import { fetchLastWorkoutSets, fetchLifetimePRs } from './db';
 import { useTheme } from '../context/ThemeContext';
 import { formatWeight, unitLabel } from '../utils/units';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import {
     getPRType,
     useWorkoutSuggestions,
@@ -421,12 +422,31 @@ const ExerciseEditable = ({
         const sanitized = sanitizeInteger(text);
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: sanitized } : s) } : e) } : w));
     };
+    const playTapSound = async () => {
+        try {
+            const { sound } = await Audio.Sound.createAsync(
+                require('../assets/notifications/tap.mp3'),
+                { volume: 0 }
+            );
+            await sound.playAsync();
+            sound.setOnPlaybackStatusUpdate(async (status) => {
+                if (status.didJustFinish) {
+                    await sound.unloadAsync();
+                }
+            });
+        } catch (error) {
+            console.error("Failed to play tap sound", error);
+        }
+    };
+
     const toggleSetComplete = (setIndex) => {
         if (isTemplate) return;
         const set = exercise.sets[setIndex];
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         if (!set.completed) {
             Keyboard.dismiss();
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            //playTapSound();
             if (onSetComplete) onSetComplete();
         }
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
