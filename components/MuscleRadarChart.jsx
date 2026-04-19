@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import Svg, {
     Polygon,
     Line,
@@ -57,6 +58,11 @@ const MuscleRadarChart = () => {
     const [timeRange, setTimeRange] = useState('1M');
     const [loading, setLoading] = useState(true);
 
+    const chartOpacity = useSharedValue(0);
+    const animatedChartStyle = useAnimatedStyle(() => ({
+        opacity: chartOpacity.value,
+    }));
+
     const isDynamic = theme.type === 'dynamic';
     const accentColor = isDynamic ? '#2DC4B6' : theme.primary;
     const textColor = isDynamic ? '#FFFFFF' : theme.text;
@@ -92,6 +98,8 @@ const MuscleRadarChart = () => {
 
     const loadData = useCallback(async (range = timeRange) => {
         try {
+            // Fade out chart before loading new data
+            chartOpacity.value = withTiming(0.25, { duration: 150, easing: Easing.out(Easing.ease) });
             setLoading(true);
             let days = range === '6M' ? 180 : range === '1Y' ? 365 : range === 'ALL' ? 3650 : 30;
             const usageData = await fetchRecentMuscleUsage(days);
@@ -115,7 +123,11 @@ const MuscleRadarChart = () => {
             const cleaned = {};
             Object.keys(stats).forEach(cat => cleaned[cat] = Math.round(stats[cat] * 10) / 10);
             setRadarData(cleaned);
-        } catch (error) { console.error(error); } finally { setLoading(false); }
+        } catch (error) { console.error(error); } finally {
+            setLoading(false);
+            // Fade the chart back in with new data
+            chartOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.ease) });
+        }
     }, [timeRange, accessoryWeight]);
 
     useEffect(() => { loadData(); }, [loadData]);
@@ -164,77 +176,72 @@ const MuscleRadarChart = () => {
                 <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} styles={styles} />
             </View>
 
-            {loading ? (
-                <View style={{ height: SVG_HEIGHT, justifyContent: 'center', marginTop: -5 }}>
-                    <ActivityIndicator color={theme.primary} />
-                </View>
-            ) : (
-                <View style={styles.chartWrapper}>
-                    <Svg width={CHART_SIZE} height={SVG_HEIGHT}>
-                        <Defs>
-                            <LinearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                                <Stop offset="0%" stopColor={accentColor} stopOpacity="0.45" />
-                                <Stop offset="100%" stopColor={accentColor} stopOpacity="0.1" />
-                            </LinearGradient>
-                        </Defs>
+            {/* Chart is always rendered — we fade opacity instead of mounting/unmounting */}
+            <Animated.View style={[styles.chartWrapper, animatedChartStyle]}>
+                <Svg width={CHART_SIZE} height={SVG_HEIGHT}>
+                    <Defs>
+                        <LinearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+                            <Stop offset="0%" stopColor={accentColor} stopOpacity="0.45" />
+                            <Stop offset="100%" stopColor={accentColor} stopOpacity="0.1" />
+                        </LinearGradient>
+                    </Defs>
 
-                        {/* Background Grid */}
-                        {[0.25, 0.5, 0.75, 1].map((t, i) => (
-                            <Circle key={i} cx={CENTER_X} cy={CENTER_Y} r={RADIUS * t} fill="none" stroke={accentColor} strokeDasharray="4,4" opacity={0.15} />
-                        ))}
-                        {axes.map((_, i) => {
-                            const maxP = getCoordinates(i, maxGraphValue);
-                            return <Line key={i} x1={CENTER_X} y1={CENTER_Y} x2={maxP.x} y2={maxP.y} stroke={accentColor} opacity={0.2} />;
-                        })}
+                    {/* Background Grid */}
+                    {[0.25, 0.5, 0.75, 1].map((t, i) => (
+                        <Circle key={i} cx={CENTER_X} cy={CENTER_Y} r={RADIUS * t} fill="none" stroke={accentColor} strokeDasharray="4,4" opacity={0.15} />
+                    ))}
+                    {axes.map((_, i) => {
+                        const maxP = getCoordinates(i, maxGraphValue);
+                        return <Line key={i} x1={CENTER_X} y1={CENTER_Y} x2={maxP.x} y2={maxP.y} stroke={accentColor} opacity={0.2} />;
+                    })}
 
-                        <Polygon points={points} fill="url(#grad)" stroke={accentColor} strokeWidth="2" strokeLinejoin="round" />
+                    <Polygon points={points} fill="url(#grad)" stroke={accentColor} strokeWidth="2" strokeLinejoin="round" />
 
-                        {axes.map((axis, i) => {
-                            const maxP = getCoordinates(i, maxGraphValue);
-                            const val = radarData[axis] || 0;
-                            const p = getCoordinates(i, val);
-                            const isLagging = val < laggingThreshold && val > 0;
-                            const valuePos = getCoordinates(i, val, -12);
-                            const labelPos = getCoordinates(i, maxGraphValue, 16);
+                    {axes.map((axis, i) => {
+                        const maxP = getCoordinates(i, maxGraphValue);
+                        const val = radarData[axis] || 0;
+                        const p = getCoordinates(i, val);
+                        const isLagging = val < laggingThreshold && val > 0;
+                        const valuePos = getCoordinates(i, val, -12);
+                        const labelPos = getCoordinates(i, maxGraphValue, 16);
 
-                            const textAnchor = Math.cos(maxP.angle) > 0.2 ? 'start' : Math.cos(maxP.angle) < -0.2 ? 'end' : 'middle';
-                            const baseline = Math.sin(maxP.angle) > 0.5 ? 'hanging' : Math.sin(maxP.angle) < -0.5 ? 'baseline' : 'middle';
+                        const textAnchor = Math.cos(maxP.angle) > 0.2 ? 'start' : Math.cos(maxP.angle) < -0.2 ? 'end' : 'middle';
+                        const baseline = Math.sin(maxP.angle) > 0.5 ? 'hanging' : Math.sin(maxP.angle) < -0.5 ? 'baseline' : 'middle';
 
-                            return (
-                                <G key={i}>
-                                    {val > 0 && (
-                                        <SvgText
-                                            x={valuePos.x} y={valuePos.y}
-                                            fill={textColor} fontSize="9"
-                                            fontFamily={FONTS.bold} textAnchor="middle"
-                                            alignmentBaseline="middle" opacity={0.9}
-                                        >
-                                            {Math.round(val)}
-                                        </SvgText>
-                                    )}
+                        return (
+                            <G key={i}>
+                                {val > 0 && (
                                     <SvgText
-                                        x={labelPos.x} y={labelPos.y}
-                                        fill={textColor} fontSize="11"
-                                        fontFamily={FONTS.bold} textAnchor={textAnchor}
-                                        alignmentBaseline={baseline}
+                                        x={valuePos.x} y={valuePos.y}
+                                        fill={textColor} fontSize="9"
+                                        fontFamily={FONTS.bold} textAnchor="middle"
+                                        alignmentBaseline="middle" opacity={0.9}
                                     >
-                                        {axis}
+                                        {Math.round(val)}
                                     </SvgText>
-                                    {val > 0 && (
-                                        <Circle
-                                            cx={p.x} cy={p.y}
-                                            r={3}
-                                            fill={isLagging ? theme.danger : accentColor}
-                                            stroke={theme.surface}
-                                            strokeWidth={isLagging ? 1 : 0.5}
-                                        />
-                                    )}
-                                </G>
-                            );
-                        })}
-                    </Svg>
-                </View>
-            )}
+                                )}
+                                <SvgText
+                                    x={labelPos.x} y={labelPos.y}
+                                    fill={textColor} fontSize="11"
+                                    fontFamily={FONTS.bold} textAnchor={textAnchor}
+                                    alignmentBaseline={baseline}
+                                >
+                                    {axis}
+                                </SvgText>
+                                {val > 0 && (
+                                    <Circle
+                                        cx={p.x} cy={p.y}
+                                        r={3}
+                                        fill={isLagging ? theme.danger : accentColor}
+                                        stroke={theme.surface}
+                                        strokeWidth={isLagging ? 1 : 0.5}
+                                    />
+                                )}
+                            </G>
+                        );
+                    })}
+                </Svg>
+            </Animated.View>
         </View>
     );
 };

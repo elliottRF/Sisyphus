@@ -447,6 +447,9 @@ const Current = () => {
                 console.log("Error playing success sound", e);
             }
 
+            // Give the Global Modal a moment to fade in and cover the screen before we clear the state
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             // Clear AsyncStorage and state
             await AsyncStorage.removeItem('@currentWorkout');
             await AsyncStorage.removeItem('@workoutStartTime');

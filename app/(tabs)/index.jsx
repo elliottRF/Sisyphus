@@ -1,4 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Dimensions } from 'react-native'
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { useScrollToTop } from '@react-navigation/native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -363,7 +364,7 @@ const Home = () => {
                 contentContainerStyle={styles.scrollViewContent}
                 keyboardShouldPersistTaps="handled"
             >
-                <View style={styles.header}>
+                <Animated.View entering={FadeInDown.duration(400).delay(0).springify()} style={styles.header}>
                     <View>
                         <Text style={styles.greeting}>Recovery Status</Text>
                         <Text style={styles.subGreeting}>Last 3 Days Activity</Text>
@@ -376,9 +377,9 @@ const Home = () => {
                             <Feather name="settings" size={24} color={theme.text} />
                         </TouchableOpacity>
                     </View>
-                </View>
+                </Animated.View>
 
-                <View style={styles.recoverySideBySide}>
+                <Animated.View entering={FadeInDown.duration(450).delay(80).springify()} style={styles.recoverySideBySide}>
                     {/* Body Highlighter */}
                     <View style={[styles.highlighterCard, { width: cardWidth }]} onLayout={(e) => setCardBodyWidth(e.nativeEvent.layout.width)}>
                         <View style={styles.highlighterHeader}>
@@ -421,36 +422,47 @@ const Home = () => {
                             </View>
                         </ScrollView>
                     </View>
-                </View>
+                </Animated.View>
 
-                <View style={styles.divider} />
+                <Animated.View entering={FadeIn.duration(400).delay(200)} style={styles.divider} />
 
-                <View style={[styles.sectionHeader, { marginTop: 0 }]}>
+                <Animated.View entering={FadeInDown.duration(400).delay(240).springify()} style={[styles.sectionHeader, { marginTop: 0 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Feather name="trending-up" size={16} color={theme.primary} />
                         <Text style={styles.sectionTitle}>Progress Tracker</Text>
                     </View>
-                </View>
+                </Animated.View>
 
-                {showMuscleRadar && <MuscleRadarChart />}
-                {showBodyWeight && <BodyweightGraphCard theme={theme} />}
+                {showMuscleRadar && (
+                    <Animated.View entering={FadeInDown.duration(400).delay(300).springify()}>
+                        <MuscleRadarChart />
+                    </Animated.View>
+                )}
+                {showBodyWeight && (
+                    <Animated.View entering={FadeInDown.duration(400).delay(320).springify()}>
+                        <BodyweightGraphCard theme={theme} />
+                    </Animated.View>
+                )}
 
-                {pinnedExercises.map((exercise) => (
-                    <PRGraphCard
-                        key={exercise.exerciseID}
-                        exerciseID={exercise.exerciseID}
-                        exerciseName={exercise.name}
-                        onRemove={loadPinnedExercises}
-                        refreshTrigger={isRefreshing}
-                    />
+                {pinnedExercises.map((exercise, index) => (
+                    <Animated.View key={exercise.exerciseID} entering={FadeInDown.duration(400).delay(340 + index * 60).springify()}>
+                        <PRGraphCard
+                            exerciseID={exercise.exerciseID}
+                            exerciseName={exercise.name}
+                            onRemove={loadPinnedExercises}
+                            refreshTrigger={isRefreshing}
+                        />
+                    </Animated.View>
                 ))}
 
-                <TouchableOpacity onPress={handleAddGraph} style={styles.addGraphButton}>
-                    <GradientOrView colors={[theme.surface, theme.surface]} style={styles.addGraphGradient} theme={theme}>
-                        <Feather name="plus-circle" size={24} color={theme.primary} />
-                        <Text style={styles.addGraphText}>Add Tracker</Text>
-                    </GradientOrView>
-                </TouchableOpacity>
+                <Animated.View entering={FadeInDown.duration(400).delay(400).springify()}>
+                    <TouchableOpacity onPress={handleAddGraph} style={styles.addGraphButton}>
+                        <GradientOrView colors={[theme.surface, theme.surface]} style={styles.addGraphGradient} theme={theme}>
+                            <Feather name="plus-circle" size={24} color={theme.primary} />
+                            <Text style={styles.addGraphText}>Add Tracker</Text>
+                        </GradientOrView>
+                    </TouchableOpacity>
+                </Animated.View>
             </ScrollView>
 
             {/* ActionSheet - keep your original content here */}

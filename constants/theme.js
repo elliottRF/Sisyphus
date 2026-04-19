@@ -337,7 +337,7 @@ const DEFAULT_DARK = {
 const THRIVE = {
     primary: "#1bffcd",      // Apple San Francisco Blue
     primaryDark: "#2E7F78",
-    secondary: "#5a2676",    // iOS System Gray
+    secondary: "#8143a3",    // iOS System Gray
     background: "#000000",   // Pure Black (OLED optimized) - FIXED from #080808ff
     surface: "#121214",      // iOS Secondary System Background
     text: "#FFFFFF",         // Primary Label
