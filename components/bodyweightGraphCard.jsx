@@ -515,7 +515,7 @@ const BodyweightGraphCard = ({ theme }) => {
                                     <Feather name="list" size={16} color={theme.text} />
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.logButton} onPress={() => { setEditingEntry(null); setNewWeight(''); setLogDate(new Date().toISOString().split('T')[0]); setModalVisible(true); }}>
-                                    <Feather name="plus" size={16} color={theme.surface} />
+                                    <Feather name="plus" size={16} color={theme.textAlternate} />
                                     <Text style={styles.logButtonText}>Log</Text>
                                 </TouchableOpacity>
                             </View>
@@ -772,7 +772,7 @@ const getStyles = (theme) => StyleSheet.create({
         marginBottom: 8,
     },
     logButtonText: {
-        color: theme.surface,
+        color: theme.textAlternate,
         fontSize: 12,
         fontFamily: FONTS.bold,
     },

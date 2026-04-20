@@ -26,8 +26,8 @@ const AlertIcon = ({ type }) => {
             backgroundColor: icon.color + '1a',
             borderColor: icon.color + '33',
         }]}>
-            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none"
-                stroke={icon.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none"
+                stroke={icon.color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                 <Path d={icon.path} />
             </Svg>
         </View>
@@ -86,13 +86,14 @@ const CustomAlert = ({
 
     const handleButtonPress = (onPress) => {
         if (onPress) onPress();
-        // Use a slight delay to allow the animation to feel responsive
         setTimeout(() => onClose(id), 100);
     };
 
     const resolvedIconType = iconType ?? (
         buttons.some(b => b.style === 'destructive') ? 'destructive' : 'confirm'
     );
+
+    const isRow = buttons.length === 2;
 
     return (
         <Modal transparent visible={modalMounted} animationType="none" onRequestClose={onClose}>
@@ -117,37 +118,26 @@ const CustomAlert = ({
                         </Text>
                     )}
 
-                    <View style={styles.buttonStack}>
+                    <View style={[styles.buttonContainer, isRow && styles.buttonRow]}>
                         {buttons.map((button, index) => {
                             const isDestructive = button.style === 'destructive';
                             const isCancel = button.style === 'cancel';
 
-                            if (isCancel) {
-                                return (
-                                    <AnimatedButton
-                                        key={index}
-                                        style={[styles.ghostButton, { borderColor: theme.border }]}
-                                        onPress={() => handleButtonPress(button.onPress)}
-                                    >
-                                        <Text style={[styles.ghostButtonText, { color: theme.textSecondary }]}>
-                                            {button.text}
-                                        </Text>
-                                    </AnimatedButton>
-                                );
-                            }
+                            const baseButtonStyle = isCancel
+                                ? [styles.ghostButton, { borderColor: theme.border }]
+                                : [styles.filledButton, { backgroundColor: isDestructive ? theme.danger : theme.primary }];
+
+                            const rowStyle = isRow ? { flex: 1 } : { width: '100%' };
 
                             return (
                                 <AnimatedButton
                                     key={index}
-                                    style={[
-                                        styles.filledButton,
-                                        { backgroundColor: isDestructive ? theme.danger : theme.primary },
-                                    ]}
+                                    style={[...baseButtonStyle, rowStyle]}
                                     onPress={() => handleButtonPress(button.onPress)}
                                 >
                                     <Text style={[
-                                        styles.filledButtonText,
-                                        !isDestructive && { color: theme.textAlternate }
+                                        isCancel ? styles.ghostButtonText : styles.filledButtonText,
+                                        isCancel ? { color: theme.textSecondary } : (!isDestructive && { color: theme.textAlternate })
                                     ]}>
                                         {button.text}
                                     </Text>
@@ -172,68 +162,70 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.75)',
     },
     card: {
-        width: width * 0.82,
-        borderRadius: 28,
+        width: width * 0.72, // Much tighter width
+        maxWidth: 320,
+        borderRadius: 20,
         borderWidth: 1,
-        paddingTop: 28,
+        paddingTop: 18,
         paddingHorizontal: 16,
-        paddingBottom: 20,
+        paddingBottom: 16,
         alignItems: 'center',
-        gap: 10,
+        gap: 6, // Reduced internal gap
         ...SHADOWS.medium,
     },
     iconCircle: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 4,
+        marginBottom: 2,
     },
     title: {
-        fontSize: 18,
+        fontSize: 16,
         fontFamily: FONTS.bold,
         textAlign: 'center',
-        paddingHorizontal: 8,
-        letterSpacing: -0.3,
+        paddingHorizontal: 4,
+        letterSpacing: -0.2,
     },
     description: {
-        fontSize: 14,
+        fontSize: 13,
         fontFamily: FONTS.regular,
         textAlign: 'center',
-        paddingHorizontal: 8,
-        lineHeight: 20,
-        marginBottom: 6,
+        lineHeight: 18,
+        marginBottom: 8,
     },
-    buttonStack: {
+    buttonContainer: {
         width: '100%',
-        gap: 10,
+        gap: 8,
+        marginTop: 2,
+    },
+    buttonRow: {
+        flexDirection: 'row', // Places buttons side-by-side if there are exactly 2
     },
     filledButton: {
-        width: '100%',
-        paddingVertical: 15,
-        borderRadius: 16,
+        paddingVertical: 10,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
     },
     filledButtonText: {
-        fontSize: 16,
+        fontSize: 14,
         fontFamily: FONTS.bold,
         color: '#fff',
-        letterSpacing: 0.2,
+        letterSpacing: 0.1,
     },
     ghostButton: {
-        width: '100%',
-        paddingVertical: 13,
-        borderRadius: 16,
+        paddingVertical: 10,
+        borderRadius: 12,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: 'rgba(255,255,255,0.04)',
     },
     ghostButtonText: {
-        fontSize: 15,
+        fontSize: 14,
         fontFamily: FONTS.semiBold,
     },
 });

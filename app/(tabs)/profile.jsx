@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, TextInput, Keyboard, FlatList, TouchableOpacity } from 'react-native'
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +17,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { useRouter } from 'expo-router';
 import { primeGraphData, computeGraphPoints } from '../../components/PRGraphCard';
 import { fetchExerciseProgress } from '../../components/db';
+import Fuse from 'fuse.js';
+
 const Profile = () => {
     const insets = useSafeAreaInsets();
     const { theme } = useTheme();
@@ -79,15 +81,44 @@ const Profile = () => {
             .catch(err => console.error(err));
     };
 
-    const sortedAndFilteredExercises = exercises
-        .filter(exercise =>
-            exercise.name.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-        .sort((a, b) => {
-            const countDiff = (workoutCounts.get(b.exerciseID) ?? 0) - (workoutCounts.get(a.exerciseID) ?? 0);
-            if (countDiff !== 0) return countDiff;
-            return a.name.localeCompare(b.name); // alphabetical tiebreak
+
+    const fuse = useMemo(() => {
+        return new Fuse(exercises, {
+            keys: ['name'],
+            threshold: 0.35,      // 0.3 - 0.4 is usually the "sweet spot"
+            includeScore: true,   // CRITICAL: We need the score to sort properly
+            ignoreLocation: true,
+            minMatchCharLength: 2,
         });
+    }, [exercises]);
+
+    const sortedAndFilteredExercises = useMemo(() => {
+        if (!searchQuery.trim()) {
+            // Just sort by usage if no search
+            return [...exercises].sort((a, b) =>
+                (workoutCounts.get(b.exerciseID) ?? 0) - (workoutCounts.get(a.exerciseID) ?? 0)
+            );
+        }
+
+        const searchResults = fuse.search(searchQuery);
+
+        return searchResults
+            .sort((a, b) => {
+                // 1. If one is a significantly better fuzzy match, prioritize it
+                // Score 0 is perfect. We give a 0.2 buffer.
+                if (Math.abs(a.score - b.score) > 0.2) {
+                    return a.score - b.score;
+                }
+
+                // 2. If the matches are "close enough" in quality, 
+                // use workout count as the tie-breaker.
+                const countA = workoutCounts.get(a.item.exerciseID) ?? 0;
+                const countB = workoutCounts.get(b.item.exerciseID) ?? 0;
+
+                return countB - countA;
+            })
+            .map(r => r.item); // Map to item at the VERY end
+    }, [searchQuery, exercises, workoutCounts, fuse]);
 
     const showExerciseInfo = async (item) => {
         if (loadingExerciseID) return;

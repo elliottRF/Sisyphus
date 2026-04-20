@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Dimensions } from 'react-native'
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
-import React, { useState, useCallback, useRef, useEffect } from 'react'
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useScrollToTop } from '@react-navigation/native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,6 +18,8 @@ import BodyweightGraphCard from '../../components/bodyweightGraphCard';
 import MuscleRadarChart from '../../components/MuscleRadarChart';
 import { useTheme } from '../../context/ThemeContext';
 import { AppEvents, emit, on, off } from '../../utils/events';
+import Fuse from 'fuse.js';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -320,9 +322,41 @@ const Home = () => {
         }
     };
 
-    const filteredExercises = allExercises
-        .filter(ex => ex.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        .sort((a, b) => a.name.localeCompare(b.name));
+    const fuse = useMemo(() => {
+        return new Fuse(allExercises, {
+            keys: ['name'],
+            threshold: 0.35,      // Slightly tighter for better accuracy
+            includeScore: true,   // MUST have this to sort by relevance
+            ignoreLocation: true, // Matches "Press" even if it's at the end of "Bench Press"
+        });
+    }, [allExercises]);
+
+    const filteredExercises = useMemo(() => {
+        if (!searchQuery.trim()) {
+            // Default state: strictly alphabetical
+            return [...allExercises].sort((a, b) =>
+                a.name.localeCompare(b.name)
+            );
+        }
+
+        const searchResults = fuse.search(searchQuery);
+
+        return searchResults
+            .sort((a, b) => {
+                // 1. Sort by Fuse score (Relevance)
+                // If the score difference is significant (e.g., > 0.1), use it.
+                if (Math.abs(a.score - b.score) > 0.1) {
+                    return a.score - b.score;
+                }
+
+                // 2. Tie-breaker: Alphabetical
+                // If the matches are roughly equal in quality, then go A-Z.
+                return a.item.name.localeCompare(b.item.name);
+            })
+            .map(r => r.item); // Always map at the end
+    }, [searchQuery, allExercises, fuse]);
+
+
 
     const isDynamic = theme.type === 'dynamic';
     const bodyColors = isDynamic

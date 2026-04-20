@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import ActionSheet from "react-native-actions-sheet";
@@ -10,6 +10,7 @@ import { useTheme } from '../context/ThemeContext';
 import NewExercise from './NewExercise';
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatWeight } from '../utils/units';
+import Fuse from 'fuse.js';
 
 const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, onExerciseCreated }) => {
     const { theme, useImperial } = useTheme();
@@ -50,12 +51,39 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
         }
     };
 
-    // Sort exercises alphabetically and then filter based on search
-    const sortedAndFilteredExercises = exercises
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .filter(exercise =>
-            exercise.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+    const fuse = useMemo(() => {
+        return new Fuse(exercises, {
+            keys: ['name'],
+            threshold: 0.35,
+            includeScore: true,
+            ignoreLocation: true,
+        });
+    }, [exercises]);
+
+    const sortedAndFilteredExercises = useMemo(() => {
+        // 1. If search is empty, return the full list sorted alphabetically
+        if (!searchQuery.trim()) {
+            return [...exercises].sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        // 2. Perform the fuzzy search
+        const results = fuse.search(searchQuery);
+
+        // 3. Sort by relevance, then alphabetical
+        return results
+            .sort((a, b) => {
+                // Priority 1: Fuzzy Match Strength (Score)
+                // If one is clearly a better match, put it first
+                if (Math.abs(a.score - b.score) > 0.1) {
+                    return a.score - b.score;
+                }
+
+                // Priority 2: Alphabetical Tie-breaker
+                // If they are equally relevant, sort A-Z
+                return a.item.name.localeCompare(b.item.name);
+            })
+            .map(r => r.item);
+    }, [searchQuery, exercises, fuse]);
 
     const inputExercise = async (item) => {
         actionSheetRef.current?.hide();
@@ -163,7 +191,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
                         onPress={openCreateExerciseSheet}
                     >
                         <ButtonBackground style={styles.addButtonGradient} theme={theme}>
-                            <Feather name="plus" size={24} color={theme.surface} />
+                            <Feather name="plus" size={24} color={theme.textAlternate} />
                         </ButtonBackground>
                     </TouchableOpacity>
                 </View>
