@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Alert, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView, Pressable } from 'react-native';
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { LineGraph } from 'react-native-graph';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
@@ -11,6 +11,8 @@ import HistoryList from './HistoryList';
 import { AppEvents, on, off } from '../utils/events';
 import { useTheme } from '../context/ThemeContext';
 import { formatWeight, unitLabel, toStorageKg } from '../utils/units';
+import { customAlert } from '../utils/customAlert';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRAPH_HEIGHT = 100;
@@ -148,7 +150,7 @@ const BodyweightGraphCard = ({ theme }) => {
     };
 
     const handleDelete = async (entry) => {
-        Alert.alert(
+        customAlert(
             "Delete Entry",
             "Are you sure you want to delete this weight log?",
             [

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Animated } from 'react-native';
 import React, { useState, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TextInput } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, emit } from '../utils/events';
+import { customAlert } from '../utils/customAlert';
 import {
     AppThemeSelector,
     GenderSegment,
@@ -157,7 +158,7 @@ const Settings = () => {
                 }
             });
 
-            Alert.alert(
+            customAlert(
                 "Import Successful",
                 `Successfully imported ${count} workout sets.`,
                 [{ text: "OK" }]
@@ -166,7 +167,7 @@ const Settings = () => {
 
         } catch (error) {
             console.error("Import error:", error);
-            Alert.alert("Import Failed", "An error occurred while importing your data. Please check the CSV format.");
+            customAlert("Import Failed", "An error occurred while importing your data. Please check the CSV format.");
         } finally {
             setImportingWorkouts(false);
             setImportProgress('');
@@ -190,7 +191,7 @@ const Settings = () => {
             setImportProgress('Importing body weight data...');
             const count = await importBodyWeightData(fileContent);
 
-            Alert.alert(
+            customAlert(
                 "Import Successful",
                 `Successfully imported ${count} body weight entries.`,
                 [{ text: "OK" }]
@@ -199,7 +200,7 @@ const Settings = () => {
 
         } catch (error) {
             console.error("Import error:", error);
-            Alert.alert("Import Failed", "An error occurred while importing your data. Please check the CSV format.");
+            customAlert("Import Failed", "An error occurred while importing your data. Please check the CSV format.");
         } finally {
             setImportingBodyWeight(false);
             setImportProgress('');
@@ -211,13 +212,13 @@ const Settings = () => {
             // Check if Sharing is available first
             const isSharingAvailable = await Sharing.isAvailableAsync().catch(() => false);
             if (!isSharingAvailable) {
-                Alert.alert("Feature Unavailable", "Sharing is not available on this device or the app needs to be rebuilt with native modules.");
+                customAlert("Feature Unavailable", "Sharing is not available on this device or the app needs to be rebuilt with native modules.");
                 return;
             }
 
             const csv = await exportWorkoutData();
             if (!csv) {
-                Alert.alert("No Data", "There is no workout data to export.");
+                customAlert("No Data", "There is no workout data to export.");
                 return;
             }
 
@@ -233,7 +234,7 @@ const Settings = () => {
             });
         } catch (error) {
             console.error("Export error:", error);
-            Alert.alert("Export Failed", "An error occurred while exporting your data.");
+            customAlert("Export Failed", "An error occurred while exporting your data.");
         }
     };
 
@@ -241,13 +242,13 @@ const Settings = () => {
         try {
             const isSharingAvailable = await Sharing.isAvailableAsync().catch(() => false);
             if (!isSharingAvailable) {
-                Alert.alert("Feature Unavailable", "Sharing is not available on this device.");
+                customAlert("Feature Unavailable", "Sharing is not available on this device.");
                 return;
             }
 
             const csv = await exportBodyWeightData();
             if (!csv) {
-                Alert.alert("No Data", "There is no body weight data to export.");
+                customAlert("No Data", "There is no body weight data to export.");
                 return;
             }
 
@@ -263,7 +264,7 @@ const Settings = () => {
             });
         } catch (error) {
             console.error("Export error:", error);
-            Alert.alert("Export Failed", "An error occurred while exporting your body weight data.");
+            customAlert("Export Failed", "An error occurred while exporting your body weight data.");
         }
     };
 
@@ -488,7 +489,7 @@ const Settings = () => {
                                 )}
                             </TouchableOpacity>
                             <TouchableOpacity
-                                onPress={() => Alert.alert("Weight Import", "Extract Strong measurements ZIP file for weight.csv")}
+                                onPress={() => customAlert("Weight Import", "Extract Strong measurements ZIP file for weight.csv")}
                                 style={styles.infoButton}
                             >
                                 <Feather name="help-circle" size={20} color={theme.textSecondary} />

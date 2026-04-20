@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import React, { useState, useCallback, useRef, useLayoutEffect, forwardRef } from 'react';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
+import { customAlert } from '../utils/customAlert';
 
 
 const lightenColor = (color, percent) => {
@@ -107,7 +108,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
 
     const handleRepeatPress = () => {
         if (workoutInProgress) {
-            Alert.alert(
+            customAlert(
                 "Workout in Progress",
                 "Workout currently in progress. Overwrite it?",
                 [

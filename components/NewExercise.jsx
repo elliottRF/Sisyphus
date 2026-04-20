@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity,
-    ScrollView as RNScrollView
+    ScrollView as RNScrollView, Animated
 } from 'react-native';
 import Body from 'react-native-body-highlighter';
 import { insertExercise, updateExercise, fetchExercises, recalculateExercisePRs } from '../components/db';
@@ -19,6 +19,71 @@ const MUSCLE_OPTIONS = [
     'Biceps', 'Forearm', 'Abs', 'Quadriceps', 'Hamstring', 'Gluteal',
     'Calves', 'Adductors', 'Neck', 'Obliques'
 ];
+
+// ─── Animated muscle chip ────────────────────────────────────────────────────
+const AnimatedMuscleChip = React.memo(({ muscle, isSelected, isDisabled, onPress, styles, theme, inactiveBg }) => {
+    const activeProgress = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
+    const pressScale = useRef(new Animated.Value(1)).current;
+
+    // Cross-fade the active overlay whenever selection changes
+    useEffect(() => {
+        Animated.timing(activeProgress, {
+            toValue: isSelected ? 1 : 0,
+            duration: 180,
+            useNativeDriver: false, // needed for backgroundColor
+        }).start();
+    }, [isSelected]);
+
+    const handlePressIn = () =>
+        Animated.spring(pressScale, { toValue: 0.92, speed: 40, bounciness: 2, useNativeDriver: true }).start();
+    const handlePressOut = () =>
+        Animated.spring(pressScale, { toValue: 1, speed: 24, bounciness: 5, useNativeDriver: true }).start();
+
+    const activeBg = activeProgress.interpolate({ inputRange: [0, 1], outputRange: [inactiveBg, theme.primary] });
+    const activeBorder = activeProgress.interpolate({ inputRange: [0, 1], outputRange: [theme.border, theme.primary] });
+    const textColor = activeProgress.interpolate({ inputRange: [0, 1], outputRange: [theme.text, theme.textAlternate ?? '#ffffff'] });
+
+    return (
+        <Animated.View style={{ transform: [{ scale: pressScale }], opacity: isDisabled ? 0.4 : 1 }}>
+            <TouchableOpacity
+                activeOpacity={1}
+                onPress={onPress}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+            >
+                <Animated.View style={[styles.chip, { backgroundColor: activeBg, borderColor: activeBorder }]}>
+                    <Animated.Text style={[styles.chipText, { color: textColor }]}>
+                        {muscle}
+                    </Animated.Text>
+                </Animated.View>
+            </TouchableOpacity>
+        </Animated.View>
+    );
+});
+
+// ─── Chip row ─────────────────────────────────────────────────────────────────
+const MuscleChips = ({ type, selectedData, handleMuscleToggle, accessorySelected, targetSelected, styles, theme, inactiveBg }) => (
+    <View style={styles.chipContainer}>
+        {MUSCLE_OPTIONS.map((muscle) => {
+            const isSelected = selectedData.includes(muscle);
+            const isDisabled = type === 'target'
+                ? accessorySelected.includes(muscle)
+                : targetSelected.includes(muscle);
+            return (
+                <AnimatedMuscleChip
+                    key={muscle}
+                    muscle={muscle}
+                    isSelected={isSelected}
+                    isDisabled={isDisabled}
+                    onPress={() => handleMuscleToggle(muscle, type)}
+                    styles={styles}
+                    theme={theme}
+                    inactiveBg={inactiveBg}
+                />
+            );
+        })}
+    </View>
+);
 
 const GradientOrView = ({ colors, style, theme, children }) => {
     if (theme?.type === 'dynamic') {
@@ -175,42 +240,50 @@ const NewExercise = (props) => {
     const safeBodyColors = theme.type === 'dynamic'
         ? [theme.bodyFill, '#2DC4B6', '#2DC4B680']
         : [theme.bodyFill, theme.primary, `${theme.primary}60`];
-    // Helper component to render inline muscle chips
-    const MuscleChips = ({ type, selectedData }) => (
-        <View style={styles.chipContainer}>
-            {MUSCLE_OPTIONS.map((muscle) => {
-                const isSelected = selectedData.includes(muscle);
-                const isDisabled = type === 'target'
-                    ? accessorySelected.includes(muscle)
-                    : targetSelected.includes(muscle);
+    const chipInactiveBg = isLightTheme(theme) ? theme.background : theme.surface;
 
-                return (
-                    <TouchableOpacity
-                        key={muscle}
-                        activeOpacity={0.7}
-                        onPress={() => handleMuscleToggle(muscle, type)}
-                        style={[
-                            styles.chip,
-                            isSelected && styles.chipActive,
-                            isDisabled && styles.chipDisabled
-                        ]}
-                    >
-                        <Text style={[
-                            styles.chipText,
-                            isSelected && styles.chipTextActive,
-                            isDisabled && styles.chipTextDisabled
-                        ]}>
-                            {muscle}
-                        </Text>
-                    </TouchableOpacity>
-                );
-            })}
-        </View>
-    );
+    // ── Entrance animation ──────────────────────────────────────────────────────
+    const entranceOpacity = useRef(new Animated.Value(0)).current;
+    const entranceY = useRef(new Animated.Value(24)).current;
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(entranceOpacity, {
+                toValue: 1, duration: 320, useNativeDriver: true,
+            }),
+            Animated.spring(entranceY, {
+                toValue: 0, speed: 14, bounciness: 5, useNativeDriver: true,
+            }),
+        ]).start();
+    }, []);
+
+    // ── Muscle section collapse when cardio is toggled ──────────────────────────
+    const musclesAnim = useRef(new Animated.Value(isCardio ? 0 : 1)).current;
+
+    useEffect(() => {
+        Animated.timing(musclesAnim, {
+            toValue: isCardio ? 0 : 1,
+            duration: 260,
+            useNativeDriver: false, // opacity + maxHeight need JS driver
+        }).start();
+    }, [isCardio]);
+
+    // ── Animated toggle cards ───────────────────────────────────────────────────
+    const cardioScale = useRef(new Animated.Value(1)).current;
+    const assistedScale = useRef(new Animated.Value(1)).current;
+
+    const punchScale = (anim) => {
+        Animated.sequence([
+            Animated.spring(anim, { toValue: 0.98, speed: 60, bounciness: 2, useNativeDriver: true }),
+            Animated.spring(anim, { toValue: 1, speed: 30, bounciness: 6, useNativeDriver: true }),
+        ]).start();
+    };
+
+    const AnimatedCard = Animated.createAnimatedComponent(TouchableOpacity);
 
     return (
-        < View style={[styles.container, { paddingTop: insets.top }]} >
-            <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers} >
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
                 <RNScrollView
                     {...handlers}
                     contentContainerStyle={[
@@ -221,6 +294,7 @@ const NewExercise = (props) => {
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
                 >
+                    {/* Body highlighter – plain view, no animation */}
                     <View style={styles.bodyWrapper}>
                         <Body
                             data={formattedTargets}
@@ -243,82 +317,113 @@ const NewExercise = (props) => {
                         />
                     </View>
 
-                    <View style={styles.inputContainer}>
-                        <Feather name="edit-2" size={20} color={theme.textSecondary} style={styles.inputIcon} />
-                        <TextInput
-                            style={styles.input}
-                            onChangeText={setExerciseName}
-                            value={exerciseName}
-                            placeholder="Exercise Name"
-                            placeholderTextColor={theme.textSecondary}
-                            keyboardType="default"
-                        />
-                    </View>
+                    {/* Rest of content slides + fades in */}
+                    <Animated.View style={{ opacity: entranceOpacity, transform: [{ translateY: entranceY }] }}>
 
-                    <TouchableOpacity
-                        style={styles.cardioToggleCard}
-                        activeOpacity={0.8}
-                        onPress={() => {
-                            setIsCardio(!isCardio);
-                            if (!isCardio) setIsAssisted(false);
-                        }}
-                    >
-                        <View style={styles.cardioTextWrapper}>
-                            <Text style={styles.label}>Cardio Exercise</Text>
+                        <View style={styles.inputContainer}>
+                            <Feather name="edit-2" size={20} color={theme.textSecondary} style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.input}
+                                onChangeText={setExerciseName}
+                                value={exerciseName}
+                                placeholder="Exercise Name"
+                                placeholderTextColor={theme.textSecondary}
+                                keyboardType="default"
+                            />
                         </View>
-                        <Feather
-                            name={isCardio ? "check-circle" : "circle"}
-                            size={26}
-                            color={isCardio ? theme.primary : theme.textSecondary}
-                        />
-                    </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.cardioToggleCard}
-                        activeOpacity={0.8}
-                        onPress={() => {
-                            setIsAssisted(!isAssisted);
-                            if (!isAssisted) setIsCardio(false);
-                        }}
-                    >
-                        <View style={styles.cardioTextWrapper}>
-                            <Text style={styles.label}>Assisted Machine</Text>
-                        </View>
-                        <Feather
-                            name={isAssisted ? "check-circle" : "circle"}
-                            size={26}
-                            color={isAssisted ? theme.primary : theme.textSecondary}
-                        />
-                    </TouchableOpacity>
+                        <AnimatedCard
+                            style={[styles.cardioToggleCard, { transform: [{ scale: cardioScale }] }]}
+                            activeOpacity={0.85}
+                            onPress={() => {
+                                punchScale(cardioScale);
+                                setIsCardio(!isCardio);
+                                if (!isCardio) setIsAssisted(false);
+                            }}
+                        >
+                            <View style={styles.cardioTextWrapper}>
+                                <Text style={styles.label}>Cardio Exercise</Text>
+                            </View>
+                            <Feather
+                                name={isCardio ? "check-circle" : "circle"}
+                                size={26}
+                                color={isCardio ? theme.primary : theme.textSecondary}
+                            />
+                        </AnimatedCard>
 
-                    {!isCardio && (
-                        <>
+                        <AnimatedCard
+                            style={[styles.cardioToggleCard, { transform: [{ scale: assistedScale }] }]}
+                            activeOpacity={0.85}
+                            onPress={() => {
+                                punchScale(assistedScale);
+                                setIsAssisted(!isAssisted);
+                                if (!isAssisted) setIsCardio(false);
+                            }}
+                        >
+                            <View style={styles.cardioTextWrapper}>
+                                <Text style={styles.label}>Assisted Machine</Text>
+                            </View>
+                            <Feather
+                                name={isAssisted ? "check-circle" : "circle"}
+                                size={26}
+                                color={isAssisted ? theme.primary : theme.textSecondary}
+                            />
+                        </AnimatedCard>
+
+                        {/* Muscle sections – animate out when Cardio is enabled */}
+                        <Animated.View style={{
+                            opacity: musclesAnim,
+                            maxHeight: musclesAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0, 2000],
+                            }),
+                            overflow: 'hidden',
+                        }}>
                             <View style={styles.sectionContainer}>
                                 <Text style={styles.sectionTitle}>Target Muscles</Text>
-                                <MuscleChips type="target" selectedData={targetSelected} />
+                                <MuscleChips
+                                    type="target"
+                                    selectedData={targetSelected}
+                                    handleMuscleToggle={handleMuscleToggle}
+                                    accessorySelected={accessorySelected}
+                                    targetSelected={targetSelected}
+                                    styles={styles}
+                                    theme={theme}
+                                    inactiveBg={chipInactiveBg}
+                                />
                             </View>
 
                             <View style={styles.sectionContainer}>
                                 <Text style={styles.sectionTitle}>Secondary Muscles</Text>
-                                <MuscleChips type="accessory" selectedData={accessorySelected} />
+                                <MuscleChips
+                                    type="accessory"
+                                    selectedData={accessorySelected}
+                                    handleMuscleToggle={handleMuscleToggle}
+                                    accessorySelected={accessorySelected}
+                                    targetSelected={targetSelected}
+                                    styles={styles}
+                                    theme={theme}
+                                    inactiveBg={chipInactiveBg}
+                                />
                             </View>
-                        </>
-                    )}
+                        </Animated.View>
 
-                    <TouchableOpacity onPress={handleSave} activeOpacity={0.9}>
-                        <GradientOrView
-                            colors={[theme.primary, theme.secondary]}
-                            theme={theme}
-                            style={styles.saveButton}
-                        >
-                            <Text style={styles.saveButtonText}>
-                                {isEditMode ? 'Update Exercise' : 'Create Exercise'}
-                            </Text>
-                        </GradientOrView>
-                    </TouchableOpacity>
+                        <TouchableOpacity onPress={handleSave} activeOpacity={0.9}>
+                            <GradientOrView
+                                colors={[theme.primary, theme.secondary]}
+                                theme={theme}
+                                style={styles.saveButton}
+                            >
+                                <Text style={styles.saveButtonText}>
+                                    {isEditMode ? 'Update Exercise' : 'Create Exercise'}
+                                </Text>
+                            </GradientOrView>
+                        </TouchableOpacity>
+
+                    </Animated.View>
                 </RNScrollView>
             </NativeViewGestureHandler>
-        </View >
+        </View>
     );
 };
 
@@ -416,7 +521,6 @@ const getStyles = (theme) => {
             marginHorizontal: -4,
         },
         chip: {
-            backgroundColor: lightTheme ? theme.background : theme.surface,
             borderWidth: 1,
             borderColor: theme.border,
             paddingHorizontal: 16,
@@ -424,24 +528,9 @@ const getStyles = (theme) => {
             borderRadius: 20,
             margin: 4,
         },
-        chipActive: {
-            backgroundColor: theme.primary,
-            borderColor: theme.primary,
-        },
-        chipDisabled: {
-            opacity: 0.4,
-        },
         chipText: {
-            color: theme.text,
             fontFamily: FONTS.medium,
             fontSize: 14,
-        },
-        chipTextActive: {
-            color: '#FFFFFF',
-            color: theme.textAlternate
-        },
-        chipTextDisabled: {
-            color: theme.textSecondary,
         },
         saveButton: {
             paddingVertical: 18,

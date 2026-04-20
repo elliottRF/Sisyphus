@@ -1,7 +1,8 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, Alert, Platform } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { COLORS, FONTS } from '../constants/theme';
+import { customAlert } from '../utils/customAlert';
 
 const TestNotificationButton = () => {
     const testNotification = async () => {
@@ -26,7 +27,7 @@ const TestNotificationButton = () => {
                 console.log('New permission status:', newStatus);
 
                 if (newStatus !== 'granted') {
-                    Alert.alert('Error', 'Notification permissions not granted');
+                    customAlert('Error', 'Notification permissions not granted');
                     return;
                 }
             }
@@ -71,14 +72,14 @@ const TestNotificationButton = () => {
                 }
             }, 1000);
 
-            Alert.alert(
+            customAlert(
                 'Simple Test',
                 'Scheduled for 10 seconds. Background the app and wait!'
             );
 
         } catch (e) {
             console.error('✗ Test notification failed:', e);
-            Alert.alert('Error', `Failed: ${e.message}`);
+            customAlert('Error', `Failed: ${e.message}`);
         }
     };
 

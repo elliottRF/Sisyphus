@@ -1,6 +1,6 @@
 // COMPLETE FIXED EditWorkout.js
 
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +34,7 @@ import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../../constants
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { toStorageKg, formatWeight } from '../../utils/units';
+import { customAlert } from '../../utils/customAlert';
 
 // FIXED: Component now uses route params instead of props
 const EditWorkout = () => {
@@ -158,7 +159,7 @@ const EditWorkout = () => {
         console.log("saveWorkout called (Edit). State length:", currentWorkout.length);
         try {
             if (!currentWorkout || !currentWorkout.length) {
-                Alert.alert("Error", "Workout is empty. Cannot save.");
+                customAlert("Error", "Workout is empty. Cannot save.");
                 return;
             }
 
@@ -303,19 +304,19 @@ const EditWorkout = () => {
                 originalDurationMinutes
             );
 
-            Alert.alert("Success", "Workout updated successfully!", [
+            customAlert("Success", "Workout updated successfully!", [
                 { text: "OK", onPress: () => router.back() }
             ]);
 
         } catch (error) {
             console.error("Error saving edited workout:", error);
-            Alert.alert("Error", "Could not save workout. Please check console.");
+            customAlert("Error", "Could not save workout. Please check console.");
         }
     }, [currentWorkout, workoutTitle, originalStartTime, originalDurationMinutes, WORKOUT_SESSION_NUMBER]);
 
 
     const deleteWorkout = useCallback(() => {
-        Alert.alert(
+        customAlert(
             "Delete Workout",
             "This will permanently delete this workout. This cannot be undone.",
             [
@@ -326,12 +327,15 @@ const EditWorkout = () => {
                     onPress: async () => {
                         try {
                             await deleteWorkoutSession(WORKOUT_SESSION_NUMBER);
-                            Alert.alert("Deleted", "Workout deleted.", [
-                                { text: "OK", onPress: () => router.back() }
-                            ]);
+                            // Brief delay to allow the confirmation alert to dismiss smoothly
+                            setTimeout(() => {
+                                customAlert("Deleted", "Workout deleted.", [
+                                    { text: "OK", onPress: () => router.back() }
+                                ]);
+                            }, 300);
                         } catch (err) {
                             console.error(err);
-                            Alert.alert("Error", "Failed to delete workout.");
+                            customAlert("Error", "Failed to delete workout.");
                         }
                     }
                 }
@@ -423,11 +427,11 @@ const EditWorkout = () => {
                     setCurrentWorkout(groupedWorkout);
 
                 } else {
-                    Alert.alert("Error", "Workout not found or is empty.");
+                    customAlert("Error", "Workout not found or is empty.");
                 }
             } catch (error) {
                 console.error('Error loading workout from DB:', error);
-                Alert.alert("Error", `Could not load workout history: ${error.message}`);
+                customAlert("Error", `Could not load workout history: ${error.message}`);
             } finally {
                 setIsLoading(false);
             }
@@ -522,7 +526,16 @@ const EditWorkout = () => {
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                onPress={saveWorkout}
+                                onPress={() => {
+                                    customAlert(
+                                        "Save Changes?",
+                                        "Are you sure you want to save the changes to this workout?",
+                                        [
+                                            { text: "Cancel", style: "cancel" },
+                                            { text: "Save", onPress: saveWorkout }
+                                        ]
+                                    );
+                                }}
                                 activeOpacity={0.8}
                                 style={styles.finishButtonContainer}
                             >

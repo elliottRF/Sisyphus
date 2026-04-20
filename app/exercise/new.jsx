@@ -13,7 +13,7 @@ export default function NewExerciseScreen() {
     const { theme } = useTheme();
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.background, paddingBottom: insets.bottom }]}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
             <Stack.Screen options={{ headerShown: false }} />
 
             <NewExercise

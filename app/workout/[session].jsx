@@ -1,4 +1,4 @@
-import { View, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import React, { useState, useRef, useCallback } from 'react';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import WorkoutSessionView from '../../components/WorkoutSessionView';
 import { useTheme } from '../../context/ThemeContext';
 import { setPreloadedData } from '../../constants/preloader';
 import { formatWeight } from '../../utils/units';
+import { customAlert } from '../../utils/customAlert';
 
 const WorkoutDetail = () => {
     const insets = useSafeAreaInsets();
@@ -200,7 +201,7 @@ const WorkoutDetail = () => {
             router.push(`/template/new?v=${Date.now()}`);
         } catch (err) {
             console.error('handleSaveAsTemplate error:', err);
-            Alert.alert('Error', 'Could not load workout data.');
+            customAlert('Error', 'Could not load workout data.');
         } finally {
             setIsActionLoading(false);
         }

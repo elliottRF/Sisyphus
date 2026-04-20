@@ -39,6 +39,8 @@ import { AppEvents, emit } from '../../utils/events';
 import { useLocalSearchParams } from 'expo-router';
 
 import * as Notifications from 'expo-notifications';
+import { customAlert } from '../../utils/customAlert';
+
 
 
 const { width } = Dimensions.get('window');
@@ -63,6 +65,9 @@ const Current = () => {
     // Real template data
     const [templates, setTemplates] = useState([]);
     const [loadingTemplateId, setLoadingTemplateId] = useState(null);
+
+    // Real template data
+
 
     const loadTemplates = async () => {
         try {
@@ -778,11 +783,11 @@ const Current = () => {
                                                                     • {name}
                                                                 </Text>
                                                             ))}
-                                                            {moreCount > 0 && (
+                                                            {moreCount > 0 ? (
                                                                 <Text style={styles.templateMoreCount}>
                                                                     + {moreCount} more
                                                                 </Text>
-                                                            )}
+                                                            ) : null}
                                                         </View>
                                                     </View>
 
@@ -870,10 +875,20 @@ const Current = () => {
                                             </TouchableOpacity>
 
                                             <TouchableOpacity
-                                                onPress={endWorkout}
+                                                onPress={() => {
+                                                    customAlert(
+                                                        "Finish Workout?",
+                                                        "Are you sure you want to finish and save this workout?",
+                                                        [
+                                                            { text: "Cancel", style: "cancel" },
+                                                            { text: "Finish", onPress: endWorkout, style: "bold" }
+                                                        ]
+                                                    );
+                                                }}
                                                 activeOpacity={0.8}
                                                 style={styles.finishButtonContainer}
                                             >
+
                                                 <ButtonBackground style={styles.finishButton}>
                                                     <Text style={styles.finishButtonText}>Finish Workout</Text>
                                                 </ButtonBackground>
@@ -881,18 +896,19 @@ const Current = () => {
 
                                             <TouchableOpacity
                                                 onPress={() =>
-                                                    Alert.alert(
+                                                    customAlert(
                                                         "Clear Workout?",
                                                         "This will remove all data.",
                                                         [
                                                             { text: "Cancel", style: "cancel" },
-                                                            { text: "OK", onPress: clearWorkout }
+                                                            { text: "Clear", onPress: clearWorkout, style: "destructive" }
                                                         ]
                                                     )
                                                 }
                                                 activeOpacity={0.7}
                                                 style={styles.clearButton}
                                             >
+
                                                 <Text style={styles.clearButtonText}>Clear Workout</Text>
                                             </TouchableOpacity>
                                         </Animated.View>
@@ -912,6 +928,7 @@ const Current = () => {
         </GestureHandlerRootView>
     );
 };
+
 
 
 const getStyles = (theme) => {

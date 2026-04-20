@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, ActivityIndicator } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, ActivityIndicator } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +25,7 @@ import FilteredExerciseList from '../../components/FilteredExerciseList';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
+import { customAlert } from '../../utils/customAlert';
 import { formatWeight, toStorageKg } from '../../utils/units';
 
 const EditTemplate = () => {
@@ -177,12 +178,12 @@ const EditTemplate = () => {
 
     const saveTemplateAction = useCallback(async () => {
         if (!templateName.trim()) {
-            Alert.alert("Error", "Please enter a template name.");
+            customAlert("Error", "Please enter a template name.");
             return;
         }
 
         if (!currentWorkout.length) {
-            Alert.alert("Error", "Template is empty. Please add at least one exercise.");
+            customAlert("Error", "Template is empty. Please add at least one exercise.");
             return;
         }
 
@@ -206,18 +207,18 @@ const EditTemplate = () => {
 
             if (TEMPLATE_ID === 'new') {
                 await createTemplate(templateName, templateData);
-                Alert.alert("Success", "Template created successfully!", [
+                customAlert("Success", "Template created successfully!", [
                     { text: "OK", onPress: () => router.back() }
                 ]);
             } else {
                 await updateTemplate(TEMPLATE_ID, templateName, templateData);
-                Alert.alert("Success", "Template updated successfully!", [
+                customAlert("Success", "Template updated successfully!", [
                     { text: "OK", onPress: () => router.back() }
                 ]);
             }
         } catch (error) {
             console.error("Error saving template:", error);
-            Alert.alert("Error", "Could not save template.");
+            customAlert("Error", "Could not save template.");
         }
     }, [currentWorkout, templateName, TEMPLATE_ID]);
 
@@ -227,7 +228,7 @@ const EditTemplate = () => {
             return;
         }
 
-        Alert.alert(
+        customAlert(
             "Delete Template",
             "Are you sure you want to delete this template?",
             [
@@ -241,7 +242,7 @@ const EditTemplate = () => {
                             router.back();
                         } catch (err) {
                             console.error(err);
-                            Alert.alert("Error", "Failed to delete template.");
+                            customAlert("Error", "Failed to delete template.");
                         }
                     }
                 }

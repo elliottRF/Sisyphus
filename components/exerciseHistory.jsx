@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Switch, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Animated } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -97,7 +97,7 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 });
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
-const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect, exercisesList }) => {
+const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect, exercisesList, animationKey }) => {
     const [isLoading, setIsLoading] = useState(false);
     const { useImperial } = useTheme();
 
@@ -115,6 +115,27 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
     };
 
     const scaleAnim = useRef(new Animated.Value(1)).current;
+    const entranceOpacity = useRef(new Animated.Value(0)).current;
+    const entranceTranslateY = useRef(new Animated.Value(18)).current;
+
+    // Replay entrance animation whenever the filter key changes (PR toggle)
+    useEffect(() => {
+        entranceOpacity.setValue(0);
+        entranceTranslateY.setValue(18);
+        Animated.parallel([
+            Animated.timing(entranceOpacity, {
+                toValue: 1,
+                duration: 280,
+                useNativeDriver: true,
+            }),
+            Animated.spring(entranceTranslateY, {
+                toValue: 0,
+                speed: 14,
+                bounciness: 4,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, [animationKey]);
 
     const handlePressIn = () => {
         Animated.spring(scaleAnim, {
@@ -155,6 +176,10 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
     const isAssisted = exerciseDetails?.isAssisted === 1;
 
     return (
+        <Animated.View style={{
+            opacity: entranceOpacity,
+            transform: [{ translateY: entranceTranslateY }],
+        }}>
         <AnimatedTouchableOpacity
             activeOpacity={0.8}
             onPress={handlePress}
@@ -256,6 +281,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                 </View>
             </View>
         </AnimatedTouchableOpacity>
+        </Animated.View>
     );
 });
 
@@ -325,6 +351,7 @@ const ExerciseHistory = (props) => {
         bestPace: null,
     });
     const [showOnlyPRs, setShowOnlyPRs] = useState(false);
+    const [filterAnimKey, setFilterAnimKey] = useState(0);
 
     const [exerciseName, setExerciseName] = useState(props.exerciseName);
 
@@ -606,22 +633,33 @@ const ExerciseHistory = (props) => {
                         <View style={styles.historyHeaderRow}>
                             <Text style={styles.sectionTitle}>History</Text>
                             {!isCardioHeader && (
-                                <View style={styles.prFilterContainer}>
+                                <TouchableOpacity
+                                    activeOpacity={0.75}
+                                    onPress={() => {
+                                        const next = !showOnlyPRs;
+                                        setShowOnlyPRs(next);
+                                        setFilterAnimKey(k => k + 1);
+                                    }}
+                                    style={[
+                                        styles.prFilterPill,
+                                        showOnlyPRs && {
+                                            backgroundColor: theme.primary,
+                                            borderColor: theme.primary,
+                                        },
+                                    ]}
+                                >
+                                    <MaterialCommunityIcons
+                                        name="trophy"
+                                        size={13}
+                                        color={showOnlyPRs ? '#fff' : theme.textSecondary}
+                                    />
                                     <Text style={[
                                         styles.prFilterText,
-                                        showOnlyPRs && { color: theme.text }
+                                        showOnlyPRs && { color: '#fff', fontFamily: FONTS.bold },
                                     ]}>
                                         PRs Only
                                     </Text>
-                                    <Switch
-                                        value={showOnlyPRs}
-                                        onValueChange={setShowOnlyPRs}
-                                        trackColor={{ false: theme.border, true: theme.primary }}
-                                        thumbColor={showOnlyPRs ? '#FFF' : theme.textSecondary}
-                                        ios_backgroundColor={theme.border}
-                                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                    />
-                                </View>
+                                </TouchableOpacity>
                             )}
                         </View>
                     </View>
@@ -635,6 +673,7 @@ const ExerciseHistory = (props) => {
                         formatDate={formatDate}
                         onSessionSelect={handleSessionSelect}
                         exercisesList={exercisesList}
+                        animationKey={filterAnimKey}
                     />
                 )}
                 ListEmptyComponent={
@@ -765,13 +804,13 @@ const getStyles = (theme) => StyleSheet.create({
         fontFamily: FONTS.bold,
         color: theme.text,
     },
-    prFilterContainer: {
+    prFilterPill: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 6,
         backgroundColor: theme.surface,
-        paddingLeft: 12,
-        paddingRight: 4,
-        paddingVertical: 4,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
         borderRadius: 20,
         borderWidth: 1,
         borderColor: theme.border,
@@ -780,7 +819,6 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 13,
         fontFamily: FONTS.semiBold,
         color: theme.textSecondary,
-        marginRight: 6,
     },
     sessionCard: {
         marginBottom: 16,

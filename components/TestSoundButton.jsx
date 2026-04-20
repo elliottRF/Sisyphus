@@ -1,7 +1,8 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Audio } from 'expo-av';
 import { COLORS, FONTS } from '../constants/theme';
+import { customAlert } from '../utils/customAlert';
 
 const TestSoundButton = () => {
     const testSound = async () => {
@@ -25,7 +26,7 @@ const TestSoundButton = () => {
             await sound.playAsync();
             console.log('✓ Sound played!');
 
-            Alert.alert('Success!', 'Sound played. Did you hear it?');
+            customAlert('Success!', 'Sound played. Did you hear it?');
 
             // Cleanup after playing
             sound.setOnPlaybackStatusUpdate((status) => {
@@ -36,7 +37,7 @@ const TestSoundButton = () => {
             });
         } catch (e) {
             console.error('✗ Test sound failed:', e);
-            Alert.alert('Error', `Failed to play sound: ${e.message}`);
+            customAlert('Error', `Failed to play sound: ${e.message}`);
         }
     };
 

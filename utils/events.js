@@ -8,11 +8,12 @@ export const AppEvents = {
   WORKOUT_COMPLETED: 'WORKOUT_COMPLETED',
   WORKOUT_DATA_IMPORTED: 'WORKOUT_DATA_IMPORTED',
   BODYWEIGHT_DATA_IMPORTED: 'BODYWEIGHT_DATA_IMPORTED',
+  SHOW_CUSTOM_ALERT: 'SHOW_CUSTOM_ALERT',
 };
 
-export function emit(event) {
+export function emit(event, data) {
   if (listeners[event]) {
-    listeners[event].forEach(cb => cb());
+    listeners[event].forEach(cb => cb(data));
   }
 }
 

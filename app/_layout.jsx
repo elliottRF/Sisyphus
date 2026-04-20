@@ -14,6 +14,7 @@ import { SETTINGS_KEYS } from '../constants/preferences';
 import { AppEvents, on, off } from '../utils/events';
 import LottieView from 'lottie-react-native';
 import { StyleSheet, Modal } from 'react-native';
+import CustomAlert from '../components/CustomAlert';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -88,6 +89,28 @@ const ThemeConsumer = () => {
 
         on(AppEvents.WORKOUT_COMPLETED, handleWorkoutCompleted);
         return () => off(AppEvents.WORKOUT_COMPLETED, handleWorkoutCompleted);
+    }, []);
+
+    const [alertConfig, setAlertConfig] = useState({
+        visible: false,
+        title: '',
+        description: '',
+        buttons: [],
+        iconType: 'default',
+        id: null
+    });
+
+    useEffect(() => {
+        const handleShowAlert = (data) => {
+            setAlertConfig({
+                ...data,
+                id: Date.now(),
+                visible: true,
+            });
+        };
+
+        on(AppEvents.SHOW_CUSTOM_ALERT, handleShowAlert);
+        return () => off(AppEvents.SHOW_CUSTOM_ALERT, handleShowAlert);
     }, []);
 
     useEffect(() => {
@@ -175,6 +198,21 @@ const ThemeConsumer = () => {
                     />
                 </View>
             </Modal>
+
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                description={alertConfig.description}
+                buttons={alertConfig.buttons}
+                iconType={alertConfig.iconType}
+                id={alertConfig.id}
+                onClose={(id) => {
+                    setAlertConfig(prev => {
+                        if (id && prev.id !== id) return prev;
+                        return { ...prev, visible: false };
+                    });
+                }}
+            />
         </View>
     );
 };

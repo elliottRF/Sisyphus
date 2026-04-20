@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +26,7 @@ import {
 } from '../components/PreferenceControls';
 import { getWorkoutHistoryCount, importStrongData } from '../components/db';
 import { AppEvents, emit } from '../utils/events';
+import { customAlert } from '../utils/customAlert';
 
 const Onboarding = () => {
   const insets = useSafeAreaInsets();
@@ -137,12 +137,12 @@ const Onboarding = () => {
 
       emit(AppEvents.WORKOUT_DATA_IMPORTED);
       setHasWorkoutHistory(true);
-      Alert.alert('Import Successful', `Imported ${count} workout sets from ${sourceLabel}.`, [
+      customAlert('Import Successful', `Imported ${count} workout sets from ${sourceLabel}.`, [
         { text: 'Continue', onPress: finishOnboarding },
       ]);
     } catch (error) {
       console.error('Onboarding import error:', error);
-      Alert.alert('Import Failed', 'An error occurred while importing your Strong export.');
+      customAlert('Import Failed', 'An error occurred while importing your Strong export.');
     } finally {
       setImporting(false);
       setImportProgress('');
