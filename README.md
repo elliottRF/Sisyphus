@@ -3,6 +3,8 @@
 Sisyphus is an Android app for tracking workouts and monitoring long-term strength progression.  
 > Android only – no iOS build currently available.
 
+Now available on the Google Play Store.
+
 [![Get it on Google Play](https://img.shields.io/badge/Download-Google_Play-green?logo=google-play)](https://play.google.com/store/apps/details?id=com.elliottr.sisyphus)
 
 ![Platform](https://img.shields.io/badge/platform-android-green)
