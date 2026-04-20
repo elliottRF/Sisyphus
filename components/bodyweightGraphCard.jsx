@@ -304,14 +304,22 @@ const BodyweightGraphCard = ({ theme }) => {
     };
 
     const trendData = useMemo(() => {
-        if (points.length < 2) return { direction: 'flat', label: '0%', period: 'all time' };
+        if (points.length < 2) {
+            return { direction: 'flat', label: '0%', period: 'all time' };
+        }
+
         const first = points[0];
         const last = points[points.length - 1];
+
         const diff = last.value - first.value;
         const percentChange = first.value > 0 ? (diff / first.value) * 100 : 0;
+
+        const EPSILON = 0.01; // treat anything under 0.01% as flat
+        const isFlat = Math.abs(percentChange) < EPSILON;
+
         return {
-            direction: diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat',
-            label: `${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%`,
+            direction: isFlat ? 'flat' : diff > 0 ? 'up' : 'down',
+            label: isFlat ? '0%' : `${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%`,
             period: timeRange.toLowerCase()
         };
     }, [points, timeRange]);
@@ -473,14 +481,30 @@ const BodyweightGraphCard = ({ theme }) => {
                             </Text>
 
                             {allData.length >= 2 && points.length >= 2 && (
-                                <View style={[styles.trendBadge, { backgroundColor: trendData.direction === 'up' ? 'rgba(34, 197, 94, 0.15)' : trendData.direction === 'down' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(100, 100, 100, 0.1)' }]}>
-                                    <Text style={[styles.trendArrow, { color: trendData.direction === 'up' ? '#22c55e' : trendData.direction === 'down' ? '#ef4444' : theme.textSecondary }]}>
+                                <View style={[
+                                    styles.trendBadge,
+                                    { backgroundColor: `${theme.secondary}30` } // always neutral
+                                ]}>
+                                    <Text style={[
+                                        styles.trendArrow,
+                                        { color: theme.secondary } // always neutral
+                                    ]}>
                                         {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
                                     </Text>
-                                    <Text style={[styles.trendText, { color: trendData.direction === 'up' ? '#22c55e' : trendData.direction === 'down' ? '#ef4444' : theme.textSecondary, fontFamily: FONTS.bold }]}>
+
+                                    <Text style={[
+                                        styles.trendText,
+                                        {
+                                            color: theme.secondary, // always neutral
+                                            fontFamily: FONTS.bold
+                                        }
+                                    ]}>
                                         {trendData.label}
                                     </Text>
-                                    <Text style={styles.trendPeriod}>· {trendData.period}</Text>
+
+                                    <Text style={styles.trendPeriod}>
+                                        · {trendData.period}
+                                    </Text>
                                 </View>
                             )}
                         </View>
