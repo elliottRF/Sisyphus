@@ -64,22 +64,63 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
         frameIdRef.current = requestAnimationFrame(updateUI);
     }, []);
 
-    // Initial Sync
+
+    // ─── Native Sync Polling ───────────────────────────────────────────────────
+    // The notification +30/-30/Stop buttons update native SharedPreferences but
+    // the JS RAF loop has no way to know. We poll every 1.5s and resync if the
+    // native remaining differs from our JS estimate by more than 2 seconds.
     useEffect(() => {
-        const syncInitial = async () => {
-            const remaining = await Timer.getRemaining();
-            if (remaining > 0) {
-                targetEndTimeRef.current = Date.now() + (remaining * 1000);
+        const POLL_MS = 1500;
+        const DRIFT_THRESHOLD = 2; // seconds
+
+        const poll = async () => {
+            const nativeRemaining = await Timer.getRemaining();
+
+            if (nativeRemaining <= 0) {
+                // Native side finished or was stopped via notification
+                if (timerRunning.current) {
+                    timerRunning.current = false;
+                    targetEndTimeRef.current = null;
+                    setTimeLeft(0);
+                    if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
+                }
+                return;
+            }
+
+            if (!timerRunning.current) {
+                // Native timer is running but JS doesn't know — resync (e.g. after app resume)
+                targetEndTimeRef.current = Date.now() + nativeRemaining * 1000;
                 timerRunning.current = true;
+                setTimeLeft(nativeRemaining);
+                if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
                 updateUI();
+                return;
+            }
+
+            // Both sides think timer is running — check for drift
+            if (targetEndTimeRef.current) {
+                const jsRemaining = Math.ceil((targetEndTimeRef.current - Date.now()) / 1000);
+                const drift = Math.abs(jsRemaining - nativeRemaining);
+
+                if (drift > DRIFT_THRESHOLD) {
+                    // Notification button was tapped — snap JS to native value
+                    targetEndTimeRef.current = Date.now() + nativeRemaining * 1000;
+                    setTimeLeft(nativeRemaining);
+                    // RAF loop is already running, it'll pick up the new targetEndTimeRef naturally
+                }
             }
         };
-        syncInitial();
+
+        const intervalId = setInterval(poll, POLL_MS);
+
+        // Also run once immediately on mount to catch a timer that was running before this screen mounted
+        poll();
 
         return () => {
+            clearInterval(intervalId);
             if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
         };
-    }, []);
+    }, [updateUI]); // updateUI is stable (useCallback with no deps that change)
 
     // Play "Ding" sound helper
     const playDing = async () => {
