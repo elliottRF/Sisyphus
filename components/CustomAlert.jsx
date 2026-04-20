@@ -145,7 +145,12 @@ const CustomAlert = ({
                                     ]}
                                     onPress={() => handleButtonPress(button.onPress)}
                                 >
-                                    <Text style={styles.filledButtonText}>{button.text}</Text>
+                                    <Text style={[
+                                        styles.filledButtonText,
+                                        !isDestructive && { color: theme.textAlternate }
+                                    ]}>
+                                        {button.text}
+                                    </Text>
                                 </AnimatedButton>
                             );
                         })}

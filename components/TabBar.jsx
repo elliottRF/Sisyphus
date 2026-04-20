@@ -9,8 +9,47 @@ import Entypo from '@expo/vector-icons/Entypo';
 import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
+const TabTimer = ({ startTime, color }) => {
+    const [elapsed, setElapsed] = React.useState(0);
+
+    React.useEffect(() => {
+        if (!startTime) return;
+
+        const update = () => {
+            const now = new Date().getTime();
+            const start = new Date(startTime).getTime();
+            setElapsed(Math.floor((now - start) / 1000));
+        };
+
+        update();
+        const interval = setInterval(update, 1000);
+        return () => clearInterval(interval);
+    }, [startTime]);
+
+    const formatTime = (seconds) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        if (h > 0) return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    };
+
+    return (
+        <View style={{ height: 24, justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{
+                color,
+                fontSize: 13,
+                fontFamily: FONTS.bold,
+                fontVariant: ['tabular-nums']
+            }}>
+                {formatTime(elapsed)}
+            </Text>
+        </View>
+    );
+};
+
 const TabBar = ({ state, descriptors, navigation }) => {
-    const { theme, workoutInProgress } = useTheme();
+    const { theme, workoutInProgress, workoutStartTime } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = getStyles(theme);
 
@@ -77,13 +116,20 @@ const TabBar = ({ state, descriptors, navigation }) => {
                             onLongPress={onLongPress}
                         >
                             {
-                                icons[route.name]({
-                                    color: isFocused
-                                        ? theme.primary
-                                        : (route.name === 'current' && workoutInProgress)
+                                (route.name === 'current' && workoutInProgress && workoutStartTime) ? (
+                                    <TabTimer
+                                        startTime={workoutStartTime}
+                                        color={isFocused ? theme.primary : theme.primary}
+                                    />
+                                ) : (
+                                    icons[route.name]({
+                                        color: isFocused
                                             ? theme.primary
-                                            : theme.textSecondary
-                                })
+                                            : (route.name === 'current' && workoutInProgress)
+                                                ? theme.primary
+                                                : theme.textSecondary
+                                    })
+                                )
                             }
 
                             <Text style={{

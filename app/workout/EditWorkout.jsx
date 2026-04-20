@@ -686,7 +686,7 @@ const getStyles = (theme) => {
         finishButtonText: {
             fontSize: 18,
             fontFamily: FONTS.bold,
-            color: safeText,
+            color: theme.textAlternate,
             letterSpacing: 0.5,
         },
         clearButton: {

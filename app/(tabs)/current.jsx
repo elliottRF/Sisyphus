@@ -47,11 +47,10 @@ const { width } = Dimensions.get('window');
 
 const Current = () => {
     const insets = useSafeAreaInsets();
-    const { theme, setWorkoutInProgress, useImperial } = useTheme();
+    const { theme, setWorkoutInProgress, useImperial, workoutStartTime, updateWorkoutStartTime } = useTheme();
     const styles = getStyles(theme);
 
     const [exercises, setExercises] = useState([]);
-    const [startTime, setStartTime] = useState(null);
     const [isReady, setIsReady] = useState(false);
 
     const actionSheetRef = useRef(null);
@@ -91,8 +90,7 @@ const Current = () => {
 
     const startWorkout = async () => {
         const now = new Date().toISOString();
-        setStartTime(now);
-        saveStartTimeToAsyncStorage(now);
+        updateWorkoutStartTime(now);
 
         fetchExercises()
             .then(data => setExercises(data))
@@ -103,8 +101,7 @@ const Current = () => {
 
     const loadTemplate = async (template) => {
         const now = new Date().toISOString();
-        setStartTime(now);
-        saveStartTimeToAsyncStorage(now);
+        updateWorkoutStartTime(now);
         setWorkoutTitle(template.name);
 
         const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -203,12 +200,11 @@ const Current = () => {
 
     const clearWorkout = async () => {
         setCurrentWorkout([]);
-        setStartTime(null);
+        updateWorkoutStartTime(null);
         setWorkoutTitle("New Workout"); // Reset title
         restTimerRef.current?.stopTimer();
         setPRMODE(false);
         await AsyncStorage.removeItem('@currentWorkout');
-        await AsyncStorage.removeItem('@workoutStartTime');
     };
 
     const calculateOneRepMax = (weight, reps) => {
@@ -427,7 +423,7 @@ const Current = () => {
 
             // Calculate duration in minutes
             const endTime = Date.now();
-            const startTimeMs = startTime ? new Date(startTime).getTime() : endTime;
+            const startTimeMs = workoutStartTime ? new Date(workoutStartTime).getTime() : endTime;
             const durationMs = endTime - startTimeMs;
             const durationMinutes = Math.floor(durationMs / 60000);
             await insertWorkoutHistory(workoutEntries, workoutTitle, durationMinutes);
@@ -457,9 +453,8 @@ const Current = () => {
 
             // Clear AsyncStorage and state
             await AsyncStorage.removeItem('@currentWorkout');
-            await AsyncStorage.removeItem('@workoutStartTime');
             setCurrentWorkout([]);
-            setStartTime(null);
+            updateWorkoutStartTime(null);
             setWorkoutTitle("New Workout");
             restTimerRef.current?.stopTimer();
             setPRMODE(false);
@@ -479,7 +474,7 @@ const Current = () => {
         catch (error) {
             console.error("Error saving workout:", error);
         }
-    }, [currentWorkout, startTime, workoutTitle]);
+    }, [currentWorkout, workoutStartTime, workoutTitle]);
 
     const plusButtonShowExerciseList = () => {
         fetchExercises()
@@ -505,14 +500,6 @@ const Current = () => {
             await AsyncStorage.setItem('@currentWorkout', JSON.stringify(dataToSave));
         } catch (error) {
             console.error('Error saving workout to AsyncStorage:', error);
-        }
-    };
-
-    const saveStartTimeToAsyncStorage = async (time) => {
-        try {
-            await AsyncStorage.setItem('@workoutStartTime', time);
-        } catch (error) {
-            console.error('Error saving start time:', error);
         }
     };
 
@@ -558,9 +545,10 @@ const Current = () => {
                     }
                     const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
                     if (storedStartTime) {
-                        setStartTime(current => (!current ? storedStartTime : current));
+                        // Global state update is enough, but ensure local context sync
+                        updateWorkoutStartTime(storedStartTime);
                     } else {
-                        setStartTime(null);
+                        updateWorkoutStartTime(null);
                     }
                 } catch (e) {
                     console.error("Error recovering active workout state:", e);
@@ -574,8 +562,8 @@ const Current = () => {
         if (currentWorkout.length > 0) {
             saveWorkoutToAsyncStorage(currentWorkout);
         }
-        setWorkoutInProgress(currentWorkout.length > 0 || !!startTime);
-    }, [currentWorkout, startTime]);
+        setWorkoutInProgress(currentWorkout.length > 0 || !!workoutStartTime);
+    }, [currentWorkout, workoutStartTime]);
 
     const inputExercise = (item) => {
         actionSheetRef.current?.hide();
@@ -731,7 +719,7 @@ const Current = () => {
                     <View style={styles.loadingContainer} />
                 ) : (
                     <>
-                        {!startTime && currentWorkout.length === 0 && (
+                        {!workoutStartTime && currentWorkout.length === 0 && (
                             <View style={{ flex: 1 }}>
                                 <ScrollView contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false}>
                                     <View style={styles.emptyStateHeader}>
@@ -826,7 +814,7 @@ const Current = () => {
                             </View>
                         )}
 
-                        {(startTime || currentWorkout.length > 0) && (
+                        {(workoutStartTime || currentWorkout.length > 0) && (
                             <View style={{ flex: 1 }}>
                                 {/* Header */}
                                 <View style={styles.headerContainer}>
@@ -839,12 +827,11 @@ const Current = () => {
                                             placeholderTextColor={theme.textSecondary}
                                             keyboardType="text"
                                         />
-                                        {startTime && (
+                                        {workoutStartTime && (
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                                 <TouchableOpacity onPress={() => setPRMODE(!PRMODE)}>
                                                     <MaterialCommunityIcons name="trending-up" size={24} color={PRMODE ? theme.primary : theme.textSecondary} />
                                                 </TouchableOpacity>
-                                                <Timer startTime={startTime} />
                                                 <RestTimer ref={restTimerRef} onFirstStart={requestNotificationPermissionOnce} />
                                             </View>
                                         )}

@@ -325,7 +325,7 @@ const DEFAULT_DARK = {
     surface: "#121214",      // iOS Secondary System Background
     text: "#FFFFFF",         // Primary Label
     textSecondary: "#8E8E93",// Secondary Label
-    textAlternate: "#000000ff",
+    textAlternate: "#FFFFFF",
     border: "#2C2C2E",       // Thin, subtle separator
     success: "#32D74B",      // iOS System Green
     danger: "#FF453A",       // iOS System Red

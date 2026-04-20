@@ -19,6 +19,7 @@ export const ThemeProvider = ({ children }) => {
     const [repRangeMin, setRepRangeMin] = useState(DEFAULT_REP_RANGE.min);
     const [repRangeMax, setRepRangeMax] = useState(DEFAULT_REP_RANGE.max);
     const [workoutInProgress, setWorkoutInProgress] = useState(false);
+    const [workoutStartTime, setWorkoutStartTime] = useState(null);
     const [useImperial, setUseImperial] = useState(false);
 
     useEffect(() => {
@@ -34,7 +35,8 @@ export const ThemeProvider = ({ children }) => {
                 storedUnitPref,
                 storedRepRangePreset,
                 storedRepRangeMin,
-                storedRepRangeMax
+                storedRepRangeMax,
+                storedWorkoutStartTime
             ] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
@@ -42,7 +44,8 @@ export const ThemeProvider = ({ children }) => {
                 AsyncStorage.getItem('user_unit_imperial'),
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangePreset),
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangeMin),
-                AsyncStorage.getItem(SETTINGS_KEYS.repRangeMax)
+                AsyncStorage.getItem(SETTINGS_KEYS.repRangeMax),
+                AsyncStorage.getItem('@workoutStartTime')
             ]);
 
             if (storedThemeID && THEMES[storedThemeID]) {
@@ -66,6 +69,9 @@ export const ThemeProvider = ({ children }) => {
             }
             if (storedRepRangeMax !== null) {
                 setRepRangeMax(parseInt(storedRepRangeMax, 10));
+            }
+            if (storedWorkoutStartTime) {
+                setWorkoutStartTime(storedWorkoutStartTime);
             }
         } catch (error) {
             console.error("Failed to load settings:", error);
@@ -136,6 +142,19 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updateWorkoutStartTime = async (time) => {
+        setWorkoutStartTime(time);
+        try {
+            if (time) {
+                await AsyncStorage.setItem('@workoutStartTime', time);
+            } else {
+                await AsyncStorage.removeItem('@workoutStartTime');
+            }
+        } catch (error) {
+            console.error("Failed to save workout start time:", error);
+        }
+    };
+
     return (
         <ThemeContext.Provider value={{
             theme,
@@ -152,6 +171,8 @@ export const ThemeProvider = ({ children }) => {
             updateRepRange,
             workoutInProgress,
             setWorkoutInProgress,
+            workoutStartTime,
+            updateWorkoutStartTime,
             useImperial,
             updateUnitPref
         }}>
