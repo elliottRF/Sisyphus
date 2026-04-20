@@ -126,22 +126,6 @@ const Home = () => {
         };
     }, [accessoryWeight]);
 
-    const getMuscleRecoveryPercent = useCallback((muscleLabel) => {
-        const muscle = majorMuscleList.find(m => m.label === muscleLabel);
-        if (!muscle) return 100;
-
-        let maxScore = 0;
-        muscle.slugs.forEach(slug => {
-            const stats = muscleStatsData[slug];
-            if (stats) {
-                const score = stats.primarySets + (stats.accessorySets * accessoryWeight);
-                if (score > maxScore) maxScore = score;
-            }
-        });
-
-        return Math.max(0, Math.min(100, Math.round(100 - (maxScore / 6) * 100)));
-    }, [muscleStatsData, majorMuscleList, accessoryWeight]);
-
     const loadModulePrefs = async () => {
         try {
             const bwVal = await AsyncStorage.getItem('settings_showBodyWeight');
@@ -155,50 +139,66 @@ const Home = () => {
 
     const loadMuscleData = async () => {
         try {
+            // Fetching recent data
             const usageData = await fetchRecentMuscleUsage(5);
-            console.log('raw first row', usageData[0]);
 
             const muscleStats = {};
             const SETS_CAP = 6;
-
-            const getDaysAgo = (dateStr) => {
-                if (!dateStr) return 0;
-                const date = new Date(dateStr);
-                const now = new Date();
-                const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                const startExercise = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                return Math.floor((startToday - startExercise) / (1000 * 60 * 60 * 24));
-            };
+            const RECOVERY_WINDOW_DAYS = 4; // Muscles fully recover after 4 days
+            const now = new Date();
 
             usageData.forEach(exercise => {
-                const daysAgo = getDaysAgo(exercise.date);
-                if (daysAgo >= 4) return;  // fully recovered, skip entirely
+                if (!exercise.date) return;
 
-                const decayFactor = 1 - daysAgo / 4;
+                // 1. Calculate precise time difference
+                const exerciseDate = new Date(exercise.date);
+                const diffInMs = now - exerciseDate;
+                const hoursAgo = diffInMs / (1000 * 60 * 60);
+                const daysAgoDecimal = hoursAgo / 24;
+
+                // 2. Skip if the workout is outside our recovery window or in the future
+                if (daysAgoDecimal >= RECOVERY_WINDOW_DAYS || daysAgoDecimal < 0) return;
+
+                // 3. Calculate Linear Decay (e.g., at 2 days, impact is 0.5)
+                const decayFactor = 1 - (daysAgoDecimal / RECOVERY_WINDOW_DAYS);
+
                 const sets = parseInt(exercise.sets, 10) || 0;
                 if (sets === 0) return;
 
+                // 4. Process Target Muscles
                 if (exercise.targetMuscle) {
                     exercise.targetMuscle.split(',').map(m => m.trim()).forEach(tm => {
                         if (tm) {
                             const target = muscleMapping[tm] || tm.toLowerCase();
                             if (!muscleStats[target]) muscleStats[target] = 0;
-                            muscleStats[target] = Math.min(SETS_CAP, muscleStats[target] + sets * decayFactor);
+
+                            // Add to current score, capped at SETS_CAP
+                            muscleStats[target] = Math.min(
+                                SETS_CAP,
+                                muscleStats[target] + (sets * decayFactor)
+                            );
                         }
                     });
                 }
 
+                // 5. Process Accessory Muscles
                 if (exercise.accessoryMuscles) {
                     exercise.accessoryMuscles.split(',').map(m => m.trim()).forEach(acc => {
                         if (acc) {
                             const accTarget = muscleMapping[acc] || acc.toLowerCase();
                             if (!muscleStats[accTarget]) muscleStats[accTarget] = 0;
-                            muscleStats[accTarget] = Math.min(SETS_CAP, muscleStats[accTarget] + sets * decayFactor * accessoryWeight);
+
+                            // Add with accessory weight penalty, capped at SETS_CAP
+                            muscleStats[accTarget] = Math.min(
+                                SETS_CAP,
+                                muscleStats[accTarget] + (sets * decayFactor * accessoryWeight)
+                            );
                         }
                     });
                 }
             });
 
+            // 6. Define Major Muscle Groups for UI List
             const majorMuscles = [
                 { label: 'Chest', slugs: ['chest'] },
                 { label: 'Upper Back', slugs: ['upper-back', 'trapezius'] },
@@ -214,27 +214,39 @@ const Home = () => {
                 { label: 'Abs', slugs: ['abs', 'obliques'] },
             ];
 
+            // 7. Calculate Percentages for Readiness Bars
             const allMusclesWithPercent = majorMuscles.map(muscle => {
                 const maxScore = muscle.slugs.reduce((max, slug) => {
                     const score = muscleStats[slug] ?? 0;
                     return score > max ? score : max;
                 }, 0);
+
+                // Percentage is Inverse of Fatigue (0 score = 100% ready)
                 const percent = Math.max(0, Math.min(100, Math.round(100 - (maxScore / SETS_CAP) * 100)));
                 return { label: muscle.label, percent };
             });
 
+            // Sort by most fatigued (lowest percentage) first
             allMusclesWithPercent.sort((a, b) => a.percent - b.percent);
             setAllMusclesSorted(allMusclesWithPercent);
             setMajorMuscleList(majorMuscles);
 
-            const ALL_MUSCLE_SLUGS = ['chest', 'quadriceps', 'triceps', 'biceps', 'hamstring', 'upper-back', 'lower-back', 'deltoids', 'gluteal', 'forearm', 'trapezius', 'calves', 'abs', 'adductors', 'obliques', 'tibialis', 'abductors', 'neck', 'hands', 'feet', 'knees', 'ankles'];
+            // 8. Map to Visual Body Model Slugs
+            const ALL_MUSCLE_SLUGS = [
+                'chest', 'quadriceps', 'triceps', 'biceps', 'hamstring',
+                'upper-back', 'lower-back', 'deltoids', 'gluteal', 'forearm',
+                'trapezius', 'calves', 'abs', 'adductors', 'obliques',
+                'tibialis', 'abductors', 'neck', 'hands', 'feet', 'knees', 'ankles'
+            ];
 
             const newBodyData = ALL_MUSCLE_SLUGS.map(slug => {
                 const score = muscleStats[slug] ?? 0;
                 const percent = Math.max(0, Math.min(100, Math.round(100 - (score / SETS_CAP) * 100)));
-                if (percent <= 60) return { slug, intensity: 3 };
-                if (percent < 80) return { slug, intensity: 2 };
-                return { slug, intensity: 1 };
+
+                // Intensity mapping for the SVG/Model colors
+                if (percent <= 60) return { slug, intensity: 3 }; // High Fatigue
+                if (percent < 80) return { slug, intensity: 2 };  // Moderate Fatigue
+                return { slug, intensity: 1 };                   // Recovered
             });
 
             setBodyData(newBodyData);
@@ -367,7 +379,7 @@ const Home = () => {
                 <Animated.View entering={FadeInDown.duration(400).delay(0).springify()} style={styles.header}>
                     <View>
                         <Text style={styles.greeting}>Recovery Status</Text>
-                        <Text style={styles.subGreeting}>Last 3 Days Activity</Text>
+                        <Text style={styles.subGreeting}>Based on Recent Workouts</Text>
                     </View>
                     <View style={styles.headerButtons}>
                         <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton} disabled={isRefreshing}>
