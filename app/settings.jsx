@@ -1,8 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Animated } from 'react-native';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react'; // Added useMemo
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-// import { COLORS, FONTS, SHADOWS } from '../constants/theme'; // Removed static import
 import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -22,12 +21,10 @@ import {
 } from '../components/PreferenceControls';
 
 const AnimatedSwitch = ({ value, onValueChange, activeColor, inactiveColor, thumbColor }) => {
-    // 1. Initialize the value directly so it starts at the right spot
     const animation = useRef(new Animated.Value(value ? 1 : 0)).current;
     const isFirstRender = useRef(true);
 
     useEffect(() => {
-        // 2. Skip the animation on the first render
         if (isFirstRender.current) {
             isFirstRender.current = false;
             return;
@@ -80,8 +77,10 @@ const Settings = () => {
         updateRepRange,
         useImperial,
         updateUnitPref
-    } = useTheme(); // Use Theme Hook
-    const styles = getStyles(theme);
+    } = useTheme();
+
+    // PERFORMANCE FIX: Memoize styles so they don't recalculate on every slider movement
+    const styles = useMemo(() => getStyles(theme), [theme]);
 
     const [importingWorkouts, setImportingWorkouts] = useState(false);
     const [importingBodyWeight, setImportingBodyWeight] = useState(false);
@@ -90,9 +89,7 @@ const Settings = () => {
     const [isAutoTimerEnabled, setIsAutoTimerEnabled] = useState(true);
     const [isTimerMuted, setIsTimerMuted] = useState(false);
     const scrollRef = useRef(null);
-
-    const [isReady, setIsReady] = useState(false); // New state
-
+    const [isReady, setIsReady] = useState(false);
 
     useFocusEffect(
         React.useCallback(() => {
@@ -115,11 +112,10 @@ const Settings = () => {
             const savedMuted = await AsyncStorage.getItem('settings_timer_muted');
             if (savedMuted !== null) setIsTimerMuted(savedMuted === 'true');
 
-            // Settings are now loaded and accurate
             setIsReady(true);
         } catch (e) {
             console.error("Failed to load settings", e);
-            setIsReady(true); // Set to true even on error so the UI shows up
+            setIsReady(true);
         }
     };
 
@@ -142,7 +138,7 @@ const Settings = () => {
             if (result.canceled) return;
 
             setImportingWorkouts(true);
-            setImportProgress('Reading file (This could take a while)...');
+            setImportProgress('Reading file...');
             const fileUri = result.assets[0].uri;
             const fileContent = await FileSystem.readAsStringAsync(fileUri);
 
@@ -152,22 +148,18 @@ const Settings = () => {
                 } else if (progress.stage === 'preparing') {
                     setImportProgress('Preparing workouts...');
                 } else if (progress.stage === 'importing') {
-                    setImportProgress(`Importing workout ${progress.current} of ${progress.total} (${progress.setsImported} sets)`);
+                    setImportProgress(`Importing workout ${progress.current} of ${progress.total}...`);
                 } else if (progress.stage === 'complete') {
                     setImportProgress('Finalizing...');
                 }
             });
 
-            customAlert(
-                "Import Successful",
-                `Successfully imported ${count} workout sets.`,
-                [{ text: "OK" }]
-            );
+            customAlert("Import Successful", `Successfully imported ${count} workout sets.`, [{ text: "OK" }]);
             emit(AppEvents.WORKOUT_DATA_IMPORTED);
 
         } catch (error) {
             console.error("Import error:", error);
-            customAlert("Import Failed", "An error occurred while importing your data. Please check the CSV format.");
+            customAlert("Import Failed", "An error occurred while importing your data.");
         } finally {
             setImportingWorkouts(false);
             setImportProgress('');
@@ -184,23 +176,17 @@ const Settings = () => {
             if (result.canceled) return;
 
             setImportingBodyWeight(true);
-            setImportProgress('Reading file...');
             const fileUri = result.assets[0].uri;
             const fileContent = await FileSystem.readAsStringAsync(fileUri);
 
-            setImportProgress('Importing body weight data...');
             const count = await importBodyWeightData(fileContent);
 
-            customAlert(
-                "Import Successful",
-                `Successfully imported ${count} body weight entries.`,
-                [{ text: "OK" }]
-            );
+            customAlert("Import Successful", `Successfully imported ${count} body weight entries.`, [{ text: "OK" }]);
             emit(AppEvents.BODYWEIGHT_DATA_IMPORTED);
 
         } catch (error) {
             console.error("Import error:", error);
-            customAlert("Import Failed", "An error occurred while importing your data. Please check the CSV format.");
+            customAlert("Import Failed", "An error occurred while importing body weight data.");
         } finally {
             setImportingBodyWeight(false);
             setImportProgress('');
@@ -209,10 +195,9 @@ const Settings = () => {
 
     const handleExportData = async () => {
         try {
-            // Check if Sharing is available first
             const isSharingAvailable = await Sharing.isAvailableAsync().catch(() => false);
             if (!isSharingAvailable) {
-                customAlert("Feature Unavailable", "Sharing is not available on this device or the app needs to be rebuilt with native modules.");
+                customAlert("Feature Unavailable", "Sharing is not available on this device.");
                 return;
             }
 
@@ -224,7 +209,6 @@ const Settings = () => {
 
             const fileName = `sisyphus_workout_data_${new Date().toISOString().split('T')[0]}.csv`;
             const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-
             await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
 
             await Sharing.shareAsync(fileUri, {
@@ -254,7 +238,6 @@ const Settings = () => {
 
             const fileName = `sisyphus_weight_data_${new Date().toISOString().split('T')[0]}.csv`;
             const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-
             await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
 
             await Sharing.shareAsync(fileUri, {
@@ -282,23 +265,18 @@ const Settings = () => {
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
             >
-
-                {/* --- PREFERENCES SECTION --- */}
                 <Text style={styles.sectionTitle}>Preferences</Text>
 
-                {/* Theme Selector */}
                 <View style={[styles.card, { paddingVertical: 16 }]}>
                     <View style={[styles.cardHeader, { marginBottom: 16 }]}>
                         <Feather name="droplet" size={20} color={theme.primary} />
                         <Text style={styles.cardTitle}>App Theme</Text>
                     </View>
-
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.themeScroll}>
                         <AppThemeSelector theme={theme} themeID={themeID} onChange={updateTheme} compact />
                     </ScrollView>
                 </View>
 
-                {/* Timer Settings */}
                 <View style={styles.card}>
                     <View style={styles.timerHeader}>
                         <View style={styles.timerTitleRow}>
@@ -342,9 +320,7 @@ const Settings = () => {
                         </View>
                     </View>
 
-                    <Text style={styles.cardDescription}>
-                        Default duration for the rest timer in between sets.
-                    </Text>
+                    <Text style={styles.cardDescription}>Default duration for the rest timer in between sets.</Text>
                     <View style={styles.inputContainer}>
                         <TextInput
                             style={styles.input}
@@ -363,9 +339,7 @@ const Settings = () => {
                         <Feather name="sliders" size={20} color={theme.primary} />
                         <Text style={styles.cardTitle}>Target Rep Range</Text>
                     </View>
-                    <Text style={styles.cardDescription}>
-                        Set a rep range for progressive overload suggestions!
-                    </Text>
+                    <Text style={styles.cardDescription}>Set a rep range for progressive overload suggestions!</Text>
                     <RepRangeSelector
                         theme={theme}
                         value={repRangePreset}
@@ -376,26 +350,20 @@ const Settings = () => {
                     />
                 </View>
 
-                {/* Accessory Contribution */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <MaterialCommunityIcons name="chart-bell-curve-cumulative" size={20} color={theme.primary} />
                         <Text style={styles.cardTitle}>Secondary Volume</Text>
                     </View>
-                    <Text style={styles.cardDescription}>
-                        How much supporting muscles count toward a muscle’s weekly volume (0.0–1.0).
-                    </Text>
+                    <Text style={styles.cardDescription}>How much supporting muscles count toward weekly volume (0.0–1.0).</Text>
                     <SecondaryVolumeSlider
                         theme={theme}
                         value={accessoryWeight}
-                        onChange={(value) => {
-                            updateAccessoryWeight(value);
-                            emit(AppEvents.WORKOUT_DATA_IMPORTED);
-                        }}
+                        onChange={updateAccessoryWeight} // Fast local update
+                        onSlidingComplete={() => emit(AppEvents.WORKOUT_DATA_IMPORTED)} // Heavy global update only on release
                     />
                 </View>
 
-                {/* Weight Units */}
                 <View style={styles.card}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <View style={[styles.cardHeader, { marginBottom: 0 }]}>
@@ -416,20 +384,15 @@ const Settings = () => {
                     </View>
                 </View>
 
-
-                {/* Highlighter Gender */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <MaterialCommunityIcons name="human-male-female" size={20} color={theme.primary} />
                         <Text style={styles.cardTitle}>Muscle Model</Text>
                     </View>
-                    <Text style={styles.cardDescription}>
-                        Gender of the muscle highlighter model.
-                    </Text>
+                    <Text style={styles.cardDescription}>Gender of the muscle highlighter model.</Text>
                     <GenderSegment theme={theme} value={gender} onChange={updateGender} />
                 </View>
 
-                {/* --- DATA & BACKUP SECTION --- */}
                 <Text style={styles.sectionTitle}>Data & Backup</Text>
 
                 <View style={styles.card}>
@@ -437,23 +400,15 @@ const Settings = () => {
                         <Feather name="database" size={20} color={theme.primary} />
                         <Text style={styles.cardTitle}>Data & Backup</Text>
                     </View>
-                    <Text style={styles.cardDescription}>
-                        Export your workout data to a CSV file or import history from Sisyphus or Strong.
-                    </Text>
+                    <Text style={styles.cardDescription}>Export your workout data or import history from Sisyphus or Strong.</Text>
 
                     <View style={{ gap: 12 }}>
-                        <TouchableOpacity
-                            style={styles.importButton}
-                            onPress={handleExportData}
-                        >
+                        <TouchableOpacity style={styles.importButton} onPress={handleExportData}>
                             <Feather name="upload" size={18} color={theme.surface} />
                             <Text style={styles.importButtonText}>Export Workout Data</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={styles.importButton}
-                            onPress={handleExportBodyWeight}
-                        >
+                        <TouchableOpacity style={styles.importButton} onPress={handleExportBodyWeight}>
                             <Feather name="upload" size={18} color={theme.surface} />
                             <Text style={styles.importButtonText}>Export Body Weight Data</Text>
                         </TouchableOpacity>
@@ -495,7 +450,6 @@ const Settings = () => {
                                 <Feather name="help-circle" size={20} color={theme.textSecondary} />
                             </TouchableOpacity>
                         </View>
-
                     </View>
 
                     {(importingWorkouts || importingBodyWeight) && importProgress && (
@@ -507,151 +461,31 @@ const Settings = () => {
     );
 };
 
-// Dynamic Styles Generator
 const getStyles = (theme) => StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: theme.background,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.border,
-    },
-    backButton: {
-        padding: 8,
-        marginRight: 16,
-    },
-    title: {
-        fontSize: 20,
-        fontFamily: FONTS.bold,
-        color: theme.text,
-    },
-    content: {
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        paddingBottom: 60,
-    },
-    sectionTitle: {
-        fontSize: 14,
-        fontFamily: FONTS.semiBold,
-        color: theme.textSecondary,
-        marginBottom: 12,
-        marginTop: 8,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-    },
-    card: {
-        backgroundColor: theme.surface,
-        borderRadius: 16,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: theme.border,
-        ...SHADOWS.small,
-        marginBottom: 24,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-        gap: 12,
-    },
-    cardTitle: {
-        fontSize: 18,
-        fontFamily: FONTS.semiBold,
-        color: theme.text,
-    },
-    cardDescription: {
-        fontSize: 14,
-        fontFamily: FONTS.regular,
-        color: theme.textSecondary,
-        marginBottom: 20,
-        lineHeight: 20,
-    },
-    importButton: {
-        backgroundColor: theme.primary,
-        borderRadius: 12,
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-    },
-    importButtonText: {
-        fontSize: 16,
-        fontFamily: FONTS.semiBold,
-        color: theme.surface, // Text on primary
-    },
-    progressText: {
-        fontSize: 14,
-        fontFamily: FONTS.medium,
-        color: theme.textSecondary,
-        marginTop: 12,
-        textAlign: 'center',
-    },
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: theme.background,
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        borderWidth: 1,
-        borderColor: theme.border,
-    },
-    input: {
-        flex: 1,
-        color: theme.text,
-        fontFamily: FONTS.regular,
-        fontSize: 16,
-        paddingVertical: 12,
-    },
-    unitText: {
-        color: theme.textSecondary,
-        fontFamily: FONTS.regular,
-        fontSize: 14,
-        marginLeft: 8,
-    },
-    themeScroll: {
-        paddingHorizontal: 0,
-        paddingBottom: 4,
-        gap: 12,
-    },
-    buttonRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    infoButton: {
-        padding: 4,
-    },
-    timerHeader: {
-        marginBottom: 16,
-        gap: 12,
-    },
-    timerTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    switchRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        gap: 20, // Space between the two switch groups
-        marginTop: 4,
-    },
-    switchItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    switchLabel: {
-        color: theme.textSecondary,
-        fontFamily: FONTS.medium,
-        fontSize: 13,
-    },
+    container: { flex: 1, backgroundColor: theme.background },
+    header: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: theme.border },
+    backButton: { padding: 8, marginRight: 16 },
+    title: { fontSize: 20, fontFamily: FONTS.bold, color: theme.text },
+    content: { paddingVertical: 10, paddingHorizontal: 20, paddingBottom: 60 },
+    sectionTitle: { fontSize: 14, fontFamily: FONTS.semiBold, color: theme.textSecondary, marginBottom: 12, marginTop: 8, textTransform: 'uppercase', letterSpacing: 1 },
+    card: { backgroundColor: theme.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: theme.border, ...SHADOWS.small, marginBottom: 24 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 12 },
+    cardTitle: { fontSize: 18, fontFamily: FONTS.semiBold, color: theme.text },
+    cardDescription: { fontSize: 14, fontFamily: FONTS.regular, color: theme.textSecondary, marginBottom: 20, lineHeight: 20 },
+    importButton: { backgroundColor: theme.primary, borderRadius: 12, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    importButtonText: { fontSize: 16, fontFamily: FONTS.semiBold, color: theme.surface },
+    progressText: { fontSize: 14, fontFamily: FONTS.medium, color: theme.textSecondary, marginTop: 12, textAlign: 'center' },
+    inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.background, borderRadius: 8, paddingHorizontal: 16, borderWidth: 1, borderColor: theme.border },
+    input: { flex: 1, color: theme.text, fontFamily: FONTS.regular, fontSize: 16, paddingVertical: 12 },
+    unitText: { color: theme.textSecondary, fontFamily: FONTS.regular, fontSize: 14, marginLeft: 8 },
+    themeScroll: { paddingHorizontal: 0, paddingBottom: 4, gap: 12 },
+    buttonRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    infoButton: { padding: 4 },
+    timerHeader: { marginBottom: 16, gap: 12 },
+    timerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 20, marginTop: 4 },
+    switchItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    switchLabel: { color: theme.textSecondary, fontFamily: FONTS.medium, fontSize: 13 },
 });
 
 export default Settings;

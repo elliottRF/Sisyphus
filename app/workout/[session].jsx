@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-rou
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/db';
 import WorkoutSessionView from '../../components/WorkoutSessionView';
+import WorkoutSummaryOverview from '../../components/WorkoutSummaryOverview';
 import { useTheme } from '../../context/ThemeContext';
 import { setPreloadedData } from '../../constants/preloader';
 import { formatWeight } from '../../utils/units';
@@ -11,10 +12,12 @@ import { customAlert } from '../../utils/customAlert';
 
 const WorkoutDetail = () => {
     const insets = useSafeAreaInsets();
-    const { session, initialData, readOnly } = useLocalSearchParams();
+    const { session, initialData, readOnly, viewMode } = useLocalSearchParams();
     const router = useRouter();
     const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
+
+    const isSummary = viewMode === 'summary';
 
     const syncedInitialData = React.useMemo(() => {
         if (initialData) {
@@ -216,16 +219,24 @@ const WorkoutDetail = () => {
             <Stack.Screen options={{ headerShown: false }} />
 
             <View style={{ flex: 1 }}>
-                <WorkoutSessionView
-                    ref={sessionViewRef}
-                    workoutDetails={effectiveWorkoutDetails}
-                    exercisesList={exercisesList}
-                    onEdit={readOnly === 'true' ? null : showEditPage}
-                    onRepeat={readOnly === 'true' ? null : handleRepeat}
-                    onSaveAsTemplate={readOnly === 'true' ? null : handleSaveAsTemplate}
-                    onExerciseInfo={readOnly === 'true' ? null : showExerciseInfo}
-                    contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-                />
+                {isSummary ? (
+                    <WorkoutSummaryOverview
+                        workoutDetails={effectiveWorkoutDetails}
+                        exercisesList={exercisesList}
+                        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+                    />
+                ) : (
+                    <WorkoutSessionView
+                        ref={sessionViewRef}
+                        workoutDetails={effectiveWorkoutDetails}
+                        exercisesList={exercisesList}
+                        onEdit={readOnly === 'true' ? null : showEditPage}
+                        onRepeat={readOnly === 'true' ? null : handleRepeat}
+                        onSaveAsTemplate={readOnly === 'true' ? null : handleSaveAsTemplate}
+                        onExerciseInfo={readOnly === 'true' ? null : showExerciseInfo}
+                        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+                    />
+                )}
             </View>
 
             {(loading || isActionLoading) && (

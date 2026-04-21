@@ -194,14 +194,14 @@ const styles = StyleSheet.create({
         width: 38, height: 38, borderRadius: 19, borderWidth: 1,
         alignItems: 'center', justifyContent: 'center', marginBottom: 2,
     },
-    title: { fontSize: 16, fontFamily: FONTS.bold, textAlign: 'center', paddingHorizontal: 4, letterSpacing: -0.2 },
-    description: { fontSize: 13, fontFamily: FONTS.regular, textAlign: 'center', lineHeight: 18, marginBottom: 8 },
+    title: { fontSize: 18, fontFamily: FONTS.bold, textAlign: 'center', paddingHorizontal: 4, letterSpacing: -0.2 },
+    description: { fontSize: 14, fontFamily: FONTS.regular, textAlign: 'center', lineHeight: 18, marginBottom: 8 },
     buttonContainer: { width: '100%', gap: 8, marginTop: 2 },
     buttonRow: { flexDirection: 'row' },
     filledButton: { paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    filledButtonText: { fontSize: 14, fontFamily: FONTS.bold, color: '#fff', letterSpacing: 0.1 },
+    filledButtonText: { fontSize: 15, fontFamily: FONTS.bold, color: '#fff', letterSpacing: 0.1 },
     ghostButton: { paddingVertical: 10, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.04)' },
-    ghostButtonText: { fontSize: 14, fontFamily: FONTS.semiBold },
+    ghostButtonText: { fontSize: 15, fontFamily: FONTS.semiBold },
 });
 
 export default CustomAlert;

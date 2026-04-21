@@ -472,7 +472,8 @@ const Current = () => {
                 pathname: `/workout/${nextSessionNumber}`,
                 params: {
                     session: nextSessionNumber,
-                    initialData: JSON.stringify(workoutEntries) // This is the "bridge" that prevents the kick-out
+                    initialData: JSON.stringify(workoutEntries), // This is the "bridge" that prevents the kick-out
+                    viewMode: 'summary' // optional
                 }
             });
         }
