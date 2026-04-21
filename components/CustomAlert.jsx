@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, Modal, Pressable, Dimensions } from 'react-native';
+import {
+    StyleSheet,
+    Text,
+    View,
+    Modal,
+    Pressable,
+    Dimensions,
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform
+} from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -39,10 +49,7 @@ const AnimatedButton = ({ style, children, onPress }) => (
         onPress={onPress}
         style={({ pressed }) => [
             style,
-            {
-                opacity: pressed ? 0.7 : 1,
-                transform: [{ scale: pressed ? 0.97 : 1 }],
-            }
+            { opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }
         ]}
     >
         {children}
@@ -55,8 +62,10 @@ const CustomAlert = ({
     description,
     buttons = [],
     onClose,
-    iconType = 'default',
+    iconType,
     id,
+    children,
+    onShow,
 }) => {
     const { theme } = useTheme();
     const scale = useSharedValue(0.92);
@@ -67,8 +76,8 @@ const CustomAlert = ({
         if (visible) {
             setModalMounted(true);
             requestAnimationFrame(() => {
-                opacity.value = withTiming(1, { duration: 150 });
-                scale.value = withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) });
+                opacity.value = withTiming(1, { duration: 180 });
+                scale.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
             });
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         } else {
@@ -86,20 +95,31 @@ const CustomAlert = ({
 
     const handleButtonPress = (onPress) => {
         if (onPress) onPress();
-        setTimeout(() => onClose(id), 100);
+        setTimeout(() => onClose?.(id), 100);
     };
 
-    const resolvedIconType = iconType ?? (
-        buttons.some(b => b.style === 'destructive') ? 'destructive' : 'confirm'
-    );
+    const resolvedIconType = iconType !== undefined
+        ? iconType
+        : (buttons.some(b => b.style === 'destructive') ? 'destructive' : 'confirm');
 
     const isRow = buttons.length === 2;
+    const isShowing = visible || modalMounted;
 
     return (
-        <Modal transparent visible={modalMounted} animationType="none" onRequestClose={onClose}>
-            <View style={styles.container}>
+        <Modal 
+            transparent 
+            visible={isShowing} 
+            animationType="none" 
+            onRequestClose={() => onClose?.(id)}
+            onShow={onShow}
+        >
+            <KeyboardAvoidingView
+                style={styles.container}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+            >
                 <Animated.View style={[styles.backdrop, animatedBackdropStyle]}>
-                    <Pressable style={StyleSheet.absoluteFill} onPress={() => onClose(id)} />
+                    <Pressable style={StyleSheet.absoluteFill} onPress={() => onClose?.(id)} />
                 </Animated.View>
 
                 <Animated.View style={[
@@ -109,14 +129,14 @@ const CustomAlert = ({
                 ]}>
                     {resolvedIconType && <AlertIcon type={resolvedIconType} />}
 
-                    {title && (
-                        <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
-                    )}
+                    {title && <Text style={[styles.title, { color: theme.text }]}>{title}</Text>}
                     {description && (
                         <Text style={[styles.description, { color: theme.textSecondary }]}>
                             {description}
                         </Text>
                     )}
+
+                    {children}
 
                     <View style={[styles.buttonContainer, isRow && styles.buttonRow]}>
                         {buttons.map((button, index) => {
@@ -135,34 +155,31 @@ const CustomAlert = ({
                                     style={[...baseButtonStyle, rowStyle]}
                                     onPress={() => handleButtonPress(button.onPress)}
                                 >
-                                    <Text style={[
-                                        isCancel ? styles.ghostButtonText : styles.filledButtonText,
-                                        isCancel ? { color: theme.textSecondary } : (!isDestructive && { color: theme.textAlternate })
-                                    ]}>
-                                        {button.text}
-                                    </Text>
+                                    {button.loading ? (
+                                        <ActivityIndicator color={isCancel ? theme.textSecondary : theme.textAlternate} size="small" />
+                                    ) : (
+                                        <Text style={[
+                                            isCancel ? styles.ghostButtonText : styles.filledButtonText,
+                                            isCancel ? { color: theme.textSecondary } : (!isDestructive && { color: theme.textAlternate })
+                                        ]}>
+                                            {button.text}
+                                        </Text>
+                                    )}
                                 </AnimatedButton>
                             );
                         })}
                     </View>
                 </Animated.View>
-            </View>
+            </KeyboardAvoidingView>
         </Modal>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    backdrop: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.75)',
-    },
+    container: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.75)' },
     card: {
-        width: width * 0.72, // Much tighter width
+        width: width * 0.72,
         maxWidth: 320,
         borderRadius: 20,
         borderWidth: 1,
@@ -170,64 +187,21 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingBottom: 16,
         alignItems: 'center',
-        gap: 6, // Reduced internal gap
+        gap: 6,
         ...SHADOWS.medium,
     },
     iconCircle: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
-        borderWidth: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 2,
+        width: 38, height: 38, borderRadius: 19, borderWidth: 1,
+        alignItems: 'center', justifyContent: 'center', marginBottom: 2,
     },
-    title: {
-        fontSize: 16,
-        fontFamily: FONTS.bold,
-        textAlign: 'center',
-        paddingHorizontal: 4,
-        letterSpacing: -0.2,
-    },
-    description: {
-        fontSize: 13,
-        fontFamily: FONTS.regular,
-        textAlign: 'center',
-        lineHeight: 18,
-        marginBottom: 8,
-    },
-    buttonContainer: {
-        width: '100%',
-        gap: 8,
-        marginTop: 2,
-    },
-    buttonRow: {
-        flexDirection: 'row', // Places buttons side-by-side if there are exactly 2
-    },
-    filledButton: {
-        paddingVertical: 10,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    filledButtonText: {
-        fontSize: 14,
-        fontFamily: FONTS.bold,
-        color: '#fff',
-        letterSpacing: 0.1,
-    },
-    ghostButton: {
-        paddingVertical: 10,
-        borderRadius: 12,
-        borderWidth: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(255,255,255,0.04)',
-    },
-    ghostButtonText: {
-        fontSize: 14,
-        fontFamily: FONTS.semiBold,
-    },
+    title: { fontSize: 16, fontFamily: FONTS.bold, textAlign: 'center', paddingHorizontal: 4, letterSpacing: -0.2 },
+    description: { fontSize: 13, fontFamily: FONTS.regular, textAlign: 'center', lineHeight: 18, marginBottom: 8 },
+    buttonContainer: { width: '100%', gap: 8, marginTop: 2 },
+    buttonRow: { flexDirection: 'row' },
+    filledButton: { paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    filledButtonText: { fontSize: 14, fontFamily: FONTS.bold, color: '#fff', letterSpacing: 0.1 },
+    ghostButton: { paddingVertical: 10, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.04)' },
+    ghostButtonText: { fontSize: 14, fontFamily: FONTS.semiBold },
 });
 
 export default CustomAlert;

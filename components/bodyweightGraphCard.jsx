@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, TextInput, Keyboard, Pressable, Platform } from 'react-native';
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { LineGraph } from 'react-native-graph';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
@@ -12,7 +12,8 @@ import { AppEvents, on, off } from '../utils/events';
 import { useTheme } from '../context/ThemeContext';
 import { formatWeight, unitLabel, toStorageKg } from '../utils/units';
 import { customAlert } from '../utils/customAlert';
-
+import CustomAlert from './CustomAlert';   // ← Updated import (adjust path if your project structure differs)
+import Animated, { useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRAPH_HEIGHT = 100;
@@ -47,10 +48,9 @@ const GradientOrView = ({ colors, style, theme, children }) => {
         );
     }
 
-    // Ensure colors is an array of strings and never contains null/undefined
     const safeColors = Array.isArray(colors) && colors.every(c => !!c)
         ? colors
-        : ['#transparent', '#transparent']; // Or a theme default
+        : ['transparent', 'transparent'];
 
     return (
         <LinearGradient colors={safeColors} style={style}>
@@ -73,7 +73,7 @@ const BodyweightGraphCard = ({ theme }) => {
     const [selectedPoint, setSelectedPoint] = useState(null);
     const isTouching = useRef(false);
 
-    // Modal State
+    // Modal State (now powered by CustomAlert)
     const [modalVisible, setModalVisible] = useState(false);
     const [newWeight, setNewWeight] = useState('');
     const [saving, setSaving] = useState(false);
@@ -84,8 +84,6 @@ const BodyweightGraphCard = ({ theme }) => {
     const historySheetRef = useRef(null);
     const inputRef = useRef(null);
     const [editingEntry, setEditingEntry] = useState(null);
-
-
 
     const loadData = async (silent = false) => {
         try {
@@ -113,7 +111,7 @@ const BodyweightGraphCard = ({ theme }) => {
         };
     }, []);
 
-
+    // Remove auto-focus useEffect as it's now handled by CustomAlert.onShow
 
     const handleLogWeight = async () => {
         if (!newWeight) return;
@@ -124,7 +122,6 @@ const BodyweightGraphCard = ({ theme }) => {
                 setSaving(false);
                 return;
             }
-            // Always store in kg regardless of user's unit preference
             const weightKg = toStorageKg(weightVal, useImperial);
             const now = new Date();
             const timePart = now.toISOString().split('T')[1];
@@ -172,7 +169,6 @@ const BodyweightGraphCard = ({ theme }) => {
     };
 
     const handleEdit = (entry) => {
-        // Show the stored kg value converted to the user's preferred unit for editing
         setNewWeight(formatWeight(entry.weight, useImperial).toString());
         setLogDate(entry.datetime.split('T')[0]);
         setEditingEntry(entry);
@@ -204,7 +200,7 @@ const BodyweightGraphCard = ({ theme }) => {
                 date: new Date(r.datetime),
                 value: Number(r.weight)
             }))
-            .filter(r => !isNaN(r.date.getTime()) && r.value > 3) // 3 kg minimum — accommodates any unit
+            .filter(r => !isNaN(r.date.getTime()) && r.value > 3)
             .sort((a, b) => a.date - b.date)
             .filter(p => p.date >= startDate);
 
@@ -235,7 +231,6 @@ const BodyweightGraphCard = ({ theme }) => {
             }
         }
 
-        // Ensure the last actual data point is always included
         const finalPoints = densePoints.length > 0 ? densePoints : parsed;
         const lastParsedPoint = parsed[parsed.length - 1];
         const lastDensePoint = finalPoints[finalPoints.length - 1];
@@ -243,7 +238,6 @@ const BodyweightGraphCard = ({ theme }) => {
             finalPoints.push(lastParsedPoint);
         }
 
-        // Convert for display
         const displayFinalPoints = finalPoints.map(p => ({
             ...p,
             value: useImperial ? parseFloat((p.value * 2.20462).toFixed(1)) : p.value
@@ -314,7 +308,7 @@ const BodyweightGraphCard = ({ theme }) => {
         const diff = last.value - first.value;
         const percentChange = first.value > 0 ? (diff / first.value) * 100 : 0;
 
-        const EPSILON = 0.01; // treat anything under 0.01% as flat
+        const EPSILON = 0.01;
         const isFlat = Math.abs(percentChange) < EPSILON;
 
         return {
@@ -328,112 +322,106 @@ const BodyweightGraphCard = ({ theme }) => {
     const onGestureStart = useCallback(() => { isTouching.current = true; }, []);
     const onGestureEnd = useCallback(() => { isTouching.current = false; setSelectedPoint(null); }, []);
 
+    const sanitizeDecimal = (text) => {
+        let cleaned = text.replace(/[^0-9.]/g, '');
+        if (cleaned.startsWith('.')) cleaned = '0' + cleaned;
+        const parts = cleaned.split('.');
+        if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+        return cleaned;
+    };
+
+    const sanitizeInteger = (text) => text.replace(/[^0-9]/g, '');
+
+
     const renderModalsAndSheets = () => (
         <>
-            <Modal
-                animationType="fade"
-                transparent={true}
+            <CustomAlert
                 visible={modalVisible}
-                onRequestClose={() => setModalVisible(false)}
+                title="Log Body Weight"
+                iconType={null}
+                onClose={() => setModalVisible(false)}
                 onShow={() => {
-                    if (!showCalendar) {
-                        setTimeout(() => {
-                            inputRef.current?.focus();
-                            inputRef.current?.setNativeProps({ selection: { start: 0, end: 0 } });
-                        }, 180);
-                    }
+                    // Double-focus "hammer" pattern ensures focus works even if interrupted by transitions
+                    const focus = () => {
+                        if (inputRef.current) {
+                            inputRef.current.focus();
+                            // Only select text if we're editing an existing entry
+                            if (editingEntry && newWeight) {
+                                inputRef.current.setNativeProps({ 
+                                    selection: { start: 0, end: newWeight.length } 
+                                });
+                            }
+                        }
+                    };
+                    const t1 = setTimeout(focus, 200);
+                    return () => { clearTimeout(t1); };
                 }}
+                buttons={[
+                    { text: "Cancel", style: "cancel", onPress: () => { } },
+                    { text: "Save", onPress: handleLogWeight, loading: saving },
+                ]}
             >
-                <ScrollView
-                    contentContainerStyle={{ flex: 1 }}
-                    keyboardShouldPersistTaps="always"
-                    scrollEnabled={false}
-                >
-                    <Pressable
-                        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
-                        onPress={() => setModalVisible(false)}
+                <View style={[styles.inputContainer, { borderColor: theme.border }]}>
+                    <TextInput
+                        ref={inputRef}
+                        style={[styles.input, { color: theme.text }]}
+                        keyboardType="decimal-pad"
+                        value={newWeight}
+                        onChangeText={(text) => setNewWeight(sanitizeDecimal(text))}
+                        placeholder="0.0"
+                        placeholderTextColor={theme.textSecondary + '40'}
+                        returnKeyType="done"
+                        onSubmitEditing={handleLogWeight}
+                        multiline={Platform.OS === 'android'}
                     />
+                    <Text style={[styles.unitText, { color: theme.textSecondary }]}>{unitLabel(useImperial)}</Text>
+                </View>
 
-                    <View
-                        style={{ flex: 1, justifyContent: 'flex-start', alignItems: 'center', paddingTop: 80 }}
-                        pointerEvents="box-none"
-                    >
-                        <Pressable
-                            onPress={() => { }}
-                            style={[styles.modalCard, { backgroundColor: theme.surface }]}
-                        >
-                            <Text style={[styles.modalTitle, { color: theme.text }]}>Log Body Weight</Text>
-                            <View style={[styles.inputContainer, { borderColor: theme.border }]}>
-                                <TextInput
-                                    ref={inputRef}
-                                    style={[styles.input, { color: theme.text }]}
-                                    keyboardType="decimal-pad"
-                                    value={newWeight}
-                                    onChangeText={setNewWeight}
-                                    placeholder="0.0"
-                                    placeholderTextColor={theme.textSecondary + '40'}
-                                    returnKeyType="done"
-                                    onSubmitEditing={handleLogWeight}
-                                />
-                                <Text style={[styles.unitText, { color: theme.textSecondary }]}>{unitLabel(useImperial)}</Text>
-                            </View>
-                            <Pressable
-                                style={[styles.dateButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                                onPress={() => { Keyboard.dismiss(); setShowCalendar(!showCalendar); }}
-                            >
-                                <Feather name="calendar" size={16} color={theme.text} />
-                                <Text style={[styles.dateButtonText, { color: theme.text }]}>
-                                    {logDate === new Date().toISOString().split('T')[0] ? 'Today' : logDate}
-                                </Text>
-                            </Pressable>
-                            {showCalendar && (
-                                <View style={{ width: '100%', marginBottom: 20 }}>
-                                    <Calendar
-                                        current={logDate}
-                                        onDayPress={day => {
-                                            setLogDate(day.dateString);
-                                            setShowCalendar(false);
-                                            setTimeout(() => {
-                                                inputRef.current?.focus();
-                                                inputRef.current?.setNativeProps({ selection: { start: 0, end: 0 } });
-                                            }, 180);
-                                        }}
-                                        markedDates={{ [logDate]: { selected: true, selectedColor: theme.primary } }}
-                                        theme={{
-                                            backgroundColor: theme.surface,
-                                            calendarBackground: theme.surface,
-                                            textSectionTitleColor: theme.textSecondary,
-                                            selectedDayBackgroundColor: theme.primary,
-                                            selectedDayTextColor: theme.surface,
-                                            todayTextColor: theme.primary,
-                                            dayTextColor: theme.text,
-                                            arrowColor: theme.primary,
-                                            monthTextColor: theme.text,
-                                        }}
-                                    />
-                                </View>
-                            )}
-                            <View style={styles.modalButtons}>
-                                <Pressable
-                                    style={[styles.modalButton, { backgroundColor: theme.background }]}
-                                    onPress={() => setModalVisible(false)}
-                                >
-                                    <Text style={[styles.modalButtonText, { color: theme.textSecondary }]}>Cancel</Text>
-                                </Pressable>
-                                <Pressable
-                                    style={[styles.modalButton, { backgroundColor: theme.primary }]}
-                                    onPress={handleLogWeight}
-                                >
-                                    {saving
-                                        ? <ActivityIndicator color={theme.surface} size="small" />
-                                        : <Text style={[styles.modalButtonText, { color: theme.surface }]}>Save</Text>
-                                    }
-                                </Pressable>
-                            </View>
-                        </Pressable>
-                    </View>
-                </ScrollView>
-            </Modal>
+                <Pressable
+                    style={[styles.dateButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                    onPress={() => { Keyboard.dismiss(); setShowCalendar(!showCalendar); }}
+                >
+                    <Feather name="calendar" size={16} color={theme.text} />
+                    <Text style={[styles.dateButtonText, { color: theme.text }]}>
+                        {logDate === new Date().toISOString().split('T')[0] ? 'Today' : logDate}
+                    </Text>
+                </Pressable>
+
+                {/* Smooth animated calendar */}
+                <Animated.View
+                    style={[
+                        { width: '100%', marginBottom: 20, overflow: 'hidden' },
+                        useAnimatedStyle(() => ({
+                            height: withTiming(showCalendar ? 340 : 0, { duration: 320, easing: Easing.out(Easing.cubic) }),
+                            opacity: withTiming(showCalendar ? 1 : 0, { duration: 250 }),
+                        }))
+                    ]}
+                >
+                    <Calendar
+                        current={logDate}
+                        onDayPress={day => {
+                            setLogDate(day.dateString);
+                            setShowCalendar(false);
+                            setTimeout(() => {
+                                inputRef.current?.focus();
+                                inputRef.current?.setNativeProps({ selection: { start: 0, end: 0 } });
+                            }, 180);
+                        }}
+                        markedDates={{ [logDate]: { selected: true, selectedColor: theme.primary } }}
+                        theme={{
+                            backgroundColor: theme.surface,
+                            calendarBackground: theme.surface,
+                            textSectionTitleColor: theme.textSecondary,
+                            selectedDayBackgroundColor: theme.primary,
+                            selectedDayTextColor: theme.surface,
+                            todayTextColor: theme.primary,
+                            dayTextColor: theme.text,
+                            arrowColor: theme.primary,
+                            monthTextColor: theme.text,
+                        }}
+                    />
+                </Animated.View>
+            </CustomAlert>
 
             <ActionSheet
                 ref={historySheetRef}
@@ -483,11 +471,11 @@ const BodyweightGraphCard = ({ theme }) => {
                             {allData.length >= 2 && points.length >= 2 && (
                                 <View style={[
                                     styles.trendBadge,
-                                    { backgroundColor: `${theme.secondary}30` } // always neutral
+                                    { backgroundColor: `${theme.secondary}30` }
                                 ]}>
                                     <Text style={[
                                         styles.trendArrow,
-                                        { color: theme.secondary } // always neutral
+                                        { color: theme.secondary }
                                     ]}>
                                         {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
                                     </Text>
@@ -495,7 +483,7 @@ const BodyweightGraphCard = ({ theme }) => {
                                     <Text style={[
                                         styles.trendText,
                                         {
-                                            color: theme.secondary, // always neutral
+                                            color: theme.secondary,
                                             fontFamily: FONTS.bold
                                         }
                                     ]}>
@@ -514,7 +502,12 @@ const BodyweightGraphCard = ({ theme }) => {
                                 <TouchableOpacity style={[styles.logButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]} onPress={() => historySheetRef.current?.show()}>
                                     <Feather name="list" size={16} color={theme.text} />
                                 </TouchableOpacity>
-                                <TouchableOpacity style={styles.logButton} onPress={() => { setEditingEntry(null); setNewWeight(''); setLogDate(new Date().toISOString().split('T')[0]); setModalVisible(true); }}>
+                                <TouchableOpacity style={styles.logButton} onPress={() => {
+                                    setEditingEntry(null);
+                                    setNewWeight('');
+                                    setLogDate(new Date().toISOString().split('T')[0]);
+                                    setModalVisible(true);
+                                }}>
                                     <Feather name="plus" size={16} color={theme.textAlternate} />
                                     <Text style={styles.logButtonText}>Log</Text>
                                 </TouchableOpacity>
@@ -562,7 +555,6 @@ const BodyweightGraphCard = ({ theme }) => {
                                     })()}
                                 </View>
                                 <View style={{ paddingRight: GRAPH_RIGHT_PADDING }}>
-                                    {/* Horizontal grid lines at top, mid, bottom — matching y-axis labels */}
                                     <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: GRAPH_HEIGHT }}>
                                         {[0, 0.5, 1].map(fraction => (
                                             <View
@@ -654,10 +646,6 @@ const getStyles = (theme) => StyleSheet.create({
     activeTooltip: {
         paddingLeft: Y_AXIS_WIDTH,
     },
-    placeholderTooltip: {
-        paddingLeft: Y_AXIS_WIDTH,
-        opacity: 0.7,
-    },
     tooltipValue: {
         fontSize: 26,
         fontFamily: FONTS.bold,
@@ -702,7 +690,6 @@ const getStyles = (theme) => StyleSheet.create({
         justifyContent: 'space-between',
         paddingRight: 8,
         overflow: 'visible',
-        // Match height of graph only; X-axis is separate below
         height: GRAPH_HEIGHT,
     },
     yAxisText: {
@@ -732,11 +719,6 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.textSecondary,
         marginTop: 8,
         fontFamily: FONTS.medium,
-    },
-    emptySubText: {
-        fontSize: 12,
-        color: theme.textSecondary,
-        marginTop: 4,
     },
     trendBadge: {
         flexDirection: 'row',
@@ -776,22 +758,7 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 12,
         fontFamily: FONTS.bold,
     },
-    // Modal Styles
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-    },
-    modalContent: {
-        width: '100%',
-        alignItems: 'center',
-    },
-    modalCard: {
-        width: '85%',
-        padding: 24,
-        borderRadius: 24,
-        ...getThemedShadow(theme, 'medium'),
-        alignItems: 'center',
-    },
+    // Modal Styles (still used by children inside CustomAlert)
     modalTitle: {
         fontSize: 20,
         fontFamily: FONTS.bold,
@@ -800,23 +767,31 @@ const getStyles = (theme) => StyleSheet.create({
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         borderWidth: 1,
         borderRadius: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
         width: '100%',
         marginBottom: 24,
+        position: 'relative',
     },
     input: {
         flex: 1,
         fontSize: 24,
-        fontFamily: FONTS.medium,
+        fontFamily: FONTS.bold, // Switched to bold to match exerciseEditable
         textAlign: 'center',
+        textAlignVertical: 'center',
+        padding: 0,
+        margin: 0,
+        includeFontPadding: false,
+        height: 60, // Increased height for easier centering with multiline
     },
     unitText: {
         fontSize: 16,
         fontFamily: FONTS.medium,
-        marginLeft: 8,
+        position: 'absolute',
+        right: 16,
     },
     dateButton: {
         flexDirection: 'row',
@@ -830,22 +805,6 @@ const getStyles = (theme) => StyleSheet.create({
     dateButtonText: {
         fontFamily: FONTS.medium,
         fontSize: 14,
-    },
-    modalButtons: {
-        flexDirection: 'row',
-        gap: 12,
-        width: '100%',
-    },
-    modalButton: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    modalButtonText: {
-        fontSize: 16,
-        fontFamily: FONTS.bold,
     },
     // History Styles
     historyHeader: {
