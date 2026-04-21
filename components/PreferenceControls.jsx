@@ -28,25 +28,23 @@ export const RepRangeSelector = ({
   max = DEFAULT_REP_RANGE.max,
   onPresetChange,
   onRangeChange,
+  onRangeChangeComplete,
   compact = false,
 }) => {
   const styles = getStyles(theme);
 
-  // Keep a ref to track width so the PanResponder (created once) always sees
-  // the latest measurement without needing useState to re-render.
   const trackWidthRef = useRef(280);
   const activeThumbRef = useRef('min');
 
-  // Refs for all values the stable handler needs to read.
   const minRef = useRef(min);
   minRef.current = min;
   const maxRef = useRef(max);
   maxRef.current = max;
   const onRangeChangeRef = useRef(onRangeChange);
   onRangeChangeRef.current = onRangeChange;
+  const onRangeChangeCompleteRef = useRef(onRangeChangeComplete);
+  onRangeChangeCompleteRef.current = onRangeChangeComplete;
 
-  // A single mutable "move handler" ref — updated every render so it always
-  // closes over the latest props while the PanResponder itself never changes.
   const handleMoveRef = useRef(null);
   handleMoveRef.current = (locationX) => {
     const rangeSize = REP_RANGE_MAX - REP_RANGE_MIN;
@@ -67,7 +65,6 @@ export const RepRangeSelector = ({
     }
   };
 
-  // Created once — never recreated, so gesture tracking is never interrupted.
   const rangePanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -75,7 +72,6 @@ export const RepRangeSelector = ({
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: (evt) => {
-        // Decide which thumb to move based on proximity to the touch.
         const rangeSize = REP_RANGE_MAX - REP_RANGE_MIN;
         const width = Math.max(trackWidthRef.current, 1);
         const ratio = clamp(evt.nativeEvent.locationX / width, 0, 1);
@@ -91,6 +87,10 @@ export const RepRangeSelector = ({
         handleMoveRef.current(evt.nativeEvent.locationX);
       },
       onPanResponderMove: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
+      onPanResponderRelease: (evt) => {
+        handleMoveRef.current(evt.nativeEvent.locationX);
+        onRangeChangeCompleteRef.current?.();
+      },
     }),
   ).current;
 
@@ -115,6 +115,7 @@ export const RepRangeSelector = ({
                 const bounds = REP_PRESET_BOUNDS[preset.key];
                 onPresetChange?.(preset.key);
                 onRangeChange({ min: bounds.min, max: bounds.max, preset: preset.key });
+                onRangeChangeComplete?.();
               }}
             >
               <View style={styles.repHeader}>
@@ -215,13 +216,11 @@ export const RepRangeSelector = ({
 // SecondaryVolumeSlider
 // ---------------------------------------------------------------------------
 
-export const SecondaryVolumeSlider = ({ theme, value, onChange }) => {
+export const SecondaryVolumeSlider = ({ theme, value, onChange, onSlidingComplete }) => {
   const styles = getStyles(theme);
 
-  // Width stored in a ref — no need to re-render on layout measurement.
   const sliderWidthRef = useRef(220);
 
-  // Mutable handler ref so the stable PanResponder always uses latest props.
   const handleMoveRef = useRef(null);
   handleMoveRef.current = (locationX) => {
     const width = Math.max(sliderWidthRef.current, 1);
@@ -230,7 +229,9 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange }) => {
     onChange(parseFloat(stepped.toFixed(2)));
   };
 
-  // Created once.
+  const onSlidingCompleteRef = useRef(onSlidingComplete);
+  onSlidingCompleteRef.current = onSlidingComplete;
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -239,6 +240,10 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange }) => {
       onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
       onPanResponderMove: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
+      onPanResponderRelease: (evt) => {
+        handleMoveRef.current(evt.nativeEvent.locationX);
+        onSlidingCompleteRef.current?.();
+      },
     }),
   ).current;
 
@@ -281,7 +286,10 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange }) => {
                 styles.weightOption,
                 active && { backgroundColor: theme.primary, borderColor: theme.primary },
               ]}
-              onPress={() => onChange(preset)}
+              onPress={() => {
+                onChange(preset);
+                onSlidingComplete?.();
+              }}
             >
               <Text style={[styles.weightOptionText, active && { color: theme.surface }]}>
                 {preset}
@@ -295,7 +303,7 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange }) => {
 };
 
 // ---------------------------------------------------------------------------
-// GenderSegment (unchanged)
+// GenderSegment
 // ---------------------------------------------------------------------------
 
 export const GenderSegment = ({ theme, value, onChange }) => {
@@ -326,7 +334,7 @@ export const GenderSegment = ({ theme, value, onChange }) => {
 };
 
 // ---------------------------------------------------------------------------
-// AppThemeSelector (unchanged)
+// AppThemeSelector
 // ---------------------------------------------------------------------------
 
 export const AppThemeSelector = ({ theme, themeID, onChange, compact = false }) => {
@@ -368,7 +376,7 @@ export const AppThemeSelector = ({ theme, themeID, onChange, compact = false }) 
 };
 
 // ---------------------------------------------------------------------------
-// Styles (unchanged)
+// Styles
 // ---------------------------------------------------------------------------
 
 const getStyles = (theme) =>

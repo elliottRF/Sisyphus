@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Animated } from 'react-native';
-import React, { useState, useEffect, useRef, useMemo } from 'react'; // Added useMemo
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { FONTS, SHADOWS } from '../constants/theme';
@@ -79,8 +79,26 @@ const Settings = () => {
         updateUnitPref
     } = useTheme();
 
-    // PERFORMANCE FIX: Memoize styles so they don't recalculate on every slider movement
     const styles = useMemo(() => getStyles(theme), [theme]);
+
+    // --- Local slider state: re-renders stay inside this screen while dragging ---
+    const [localAccessoryWeight, setLocalAccessoryWeight] = useState(accessoryWeight);
+    const [localRepMin, setLocalRepMin] = useState(repRangeMin);
+    const [localRepMax, setLocalRepMax] = useState(repRangeMax);
+    const [localRepPreset, setLocalRepPreset] = useState(repRangePreset);
+
+    // Ref to hold the latest pending range so onRangeChangeComplete avoids stale closures
+    const pendingRangeRef = useRef({ min: repRangeMin, max: repRangeMax, preset: repRangePreset });
+
+    // Keep local state in sync if context changes externally (e.g. from Onboarding)
+    useEffect(() => { setLocalAccessoryWeight(accessoryWeight); }, [accessoryWeight]);
+    useEffect(() => {
+        setLocalRepMin(repRangeMin);
+        setLocalRepMax(repRangeMax);
+        setLocalRepPreset(repRangePreset);
+        pendingRangeRef.current = { min: repRangeMin, max: repRangeMax, preset: repRangePreset };
+    }, [repRangeMin, repRangeMax, repRangePreset]);
+    // --------------------------------------------------------------------------
 
     const [importingWorkouts, setImportingWorkouts] = useState(false);
     const [importingBodyWeight, setImportingBodyWeight] = useState(false);
@@ -342,10 +360,20 @@ const Settings = () => {
                     <Text style={styles.cardDescription}>Set a rep range for progressive overload suggestions!</Text>
                     <RepRangeSelector
                         theme={theme}
-                        value={repRangePreset}
-                        min={repRangeMin}
-                        max={repRangeMax}
-                        onRangeChange={updateRepRange}
+                        value={localRepPreset}
+                        min={localRepMin}
+                        max={localRepMax}
+                        onRangeChange={({ min, max, preset }) => {
+                            // Local-only update while dragging — no context write, no global re-renders
+                            pendingRangeRef.current = { min, max, preset };
+                            setLocalRepMin(min);
+                            setLocalRepMax(max);
+                            setLocalRepPreset(preset);
+                        }}
+                        onRangeChangeComplete={() => {
+                            // Commit to context only on finger-up
+                            updateRepRange(pendingRangeRef.current);
+                        }}
                         compact
                     />
                 </View>
@@ -358,9 +386,13 @@ const Settings = () => {
                     <Text style={styles.cardDescription}>How much supporting muscles count toward weekly volume (0.0–1.0).</Text>
                     <SecondaryVolumeSlider
                         theme={theme}
-                        value={accessoryWeight}
-                        onChange={updateAccessoryWeight} // Fast local update
-                        onSlidingComplete={() => emit(AppEvents.WORKOUT_DATA_IMPORTED)} // Heavy global update only on release
+                        value={localAccessoryWeight}
+                        onChange={setLocalAccessoryWeight}       // local only while dragging
+                        onSlidingComplete={() => {
+                            // Commit to context + emit only on finger-up
+                            updateAccessoryWeight(localAccessoryWeight);
+                            emit(AppEvents.WORKOUT_DATA_IMPORTED);
+                        }}
                     />
                 </View>
 
