@@ -106,10 +106,10 @@ const CustomAlert = ({
     const isShowing = visible || modalMounted;
 
     return (
-        <Modal 
-            transparent 
-            visible={isShowing} 
-            animationType="none" 
+        <Modal
+            transparent
+            visible={isShowing}
+            animationType="none"
             onRequestClose={() => onClose?.(id)}
             onShow={onShow}
         >

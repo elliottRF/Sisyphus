@@ -709,8 +709,8 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                                             style={{
                                                 position: 'absolute',
                                                 top: fraction * (graphHeight - 1),
-                                                left: 0,
-                                                right: 0,
+                                                left: 10,
+                                                right: 10,
                                                 height: 1,
                                                 backgroundColor: isLightTheme(theme) ? theme.overlayBorder : 'rgba(255,255,255,0.06)',
                                             }}

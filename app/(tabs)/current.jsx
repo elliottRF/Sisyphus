@@ -2,6 +2,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, Dimensions, Modal } from 'react-native'
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, Gesture } from 'react-native-gesture-handler';
 import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
@@ -56,7 +57,11 @@ const Current = () => {
     const actionSheetRef = useRef(null);
     const restTimerRef = useRef(null);
     const listRef = useRef(null);
+    const emptyStateScrollRef = useRef(null);
     const isFirstLaunch = useRef(true);
+
+    useScrollToTop(listRef);
+    useScrollToTop(emptyStateScrollRef);
 
 
     const [PRMODE, setPRMODE] = useState(false);
@@ -721,7 +726,7 @@ const Current = () => {
                     <>
                         {!workoutStartTime && currentWorkout.length === 0 && (
                             <View style={{ flex: 1 }}>
-                                <ScrollView contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false}>
+                                <ScrollView ref={emptyStateScrollRef} contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false}>
                                     <View style={styles.emptyStateHeader}>
                                         <Feather name="activity" size={48} color={theme.primary} style={{ marginBottom: 16, opacity: 0.8 }} />
                                         <Text style={styles.emptyStateTitle}>Ready to train?</Text>

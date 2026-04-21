@@ -16,7 +16,7 @@ import CustomAlert from './CustomAlert';   // ← Updated import (adjust path if
 import Animated, { useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GRAPH_HEIGHT = 100;
+const GRAPH_HEIGHT = 130;
 const CARD_MARGIN = 32;
 const CARD_PADDING = 40;
 const Y_AXIS_WIDTH = 40;
@@ -347,8 +347,8 @@ const BodyweightGraphCard = ({ theme }) => {
                             inputRef.current.focus();
                             // Only select text if we're editing an existing entry
                             if (editingEntry && newWeight) {
-                                inputRef.current.setNativeProps({ 
-                                    selection: { start: 0, end: newWeight.length } 
+                                inputRef.current.setNativeProps({
+                                    selection: { start: 0, end: newWeight.length }
                                 });
                             }
                         }
@@ -562,8 +562,8 @@ const BodyweightGraphCard = ({ theme }) => {
                                                 style={{
                                                     position: 'absolute',
                                                     top: fraction * (GRAPH_HEIGHT - 1),
-                                                    left: 0,
-                                                    right: 0,
+                                                    left: 10,
+                                                    right: 10,
                                                     height: 1,
                                                     backgroundColor: isLightTheme(theme) ? theme.overlayBorder : 'rgba(255,255,255,0.06)',
                                                 }}
