@@ -752,6 +752,22 @@ export const fetchMostRecentSession = async (exerciseID) => {
   );
 };
 
+export const fetchBest1RM = async (exerciseID) => {
+  const database = await getDb();
+
+  const best1RM = await database.getFirstAsync(
+    `SELECT oneRM
+     FROM workoutHistory
+     WHERE exerciseID = ? 
+       AND oneRM IS NOT NULL AND oneRM > 0
+     ORDER BY oneRM DESC
+     LIMIT 1;`,
+    [exerciseID]
+  );
+
+  return best1RM?.oneRM || 0;
+};
+
 
 // Fetch the best (PR) session where this exercise was performed with the exact same muscle occurrence index
 export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex) => {

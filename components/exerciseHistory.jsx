@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Animated, Alert } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
@@ -7,19 +7,20 @@ import Body from "react-native-body-highlighter";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession, getLatestBodyWeight } from './db';
+import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession, getLatestBodyWeight, fetchBest1RM } from './db';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import PRGraphCard from "./PRGraphCard";
 import { Stack } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
+import { customAlert } from '../utils/customAlert';
 
 
 
 const { width } = Dimensions.get('window');
 
 const TIER_LABELS = ['Beginner', 'Novice', 'Intermediate', 'Advanced', 'Elite'];
-const TIER_COLORS = ['#E05555', '#E08C38', '#D4B83A', '#52B56E', '#ba00df'];
+const TIER_COLORS = ['#E05555', '#E08C38', '#D4B83A', '#52B56E', '#8500b9'];
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -101,54 +102,83 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
-const StrengthLegend = React.memo(({ currentTier, theme }) => (
-    <View style={{
-        flexDirection: 'row',
-        justifyContent: 'center',
-        flexWrap: 'wrap',
-        rowGap: 6,
-        columnGap: 4,
-        paddingHorizontal: 16,
-        paddingTop: 10,
-        paddingBottom: 14,
-    }}>
-        {TIER_LABELS.map((label, i) => {
-            const tierNum = i + 1;
-            const isActive = currentTier === tierNum || (currentTier === 0 && tierNum === 1);
-            const isPast = currentTier != null && currentTier !== 0 && tierNum < currentTier;
-            const isFuture = currentTier != null && (currentTier === 0 ? tierNum > 1 : tierNum > currentTier);
-            return (
-                <View
-                    key={label}
-                    style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 5,
-                        paddingHorizontal: 10,
-                        paddingVertical: 5,
-                        borderRadius: 20,
-                        borderWidth: 1,
-                        borderColor: isActive ? TIER_COLORS[i] : 'transparent',
-                        backgroundColor: isActive ? `${TIER_COLORS[i]}22` : 'transparent',
-                        opacity: isFuture ? 0.38 : isPast ? 0.6 : 1,
-                    }}
-                >
-                    <View style={{
-                        width: 7, height: 7, borderRadius: 3.5,
-                        backgroundColor: TIER_COLORS[i],
-                    }} />
-                    <Text style={{
-                        fontSize: 11,
-                        fontFamily: isActive ? FONTS.bold : FONTS.medium,
-                        color: isActive ? TIER_COLORS[i] : theme.textSecondary,
-                    }}>
-                        {label}
-                    </Text>
-                </View>
+const StrengthLegend = React.memo(({ currentTier, theme, strengthRatios, bw }) => {
+
+    const handlePress = (index, label) => {
+        // 1. Safety check for missing data
+        if (!strengthRatios || strengthRatios[index] === undefined) {
+            customAlert(
+                "Information",
+                "Strength standards for this exercise haven't been added yet.",
+                [{ text: "OK", style: "default" }]
             );
-        })}
-    </View>
-));
+            return;
+        }
+
+        // 2. Calculation
+        const ratio = strengthRatios[index];
+        const requiredWeight = (bw * ratio).toFixed(1);
+
+        // 3. Trigger Global Alert
+        customAlert(
+            `${label} Target`,
+            `1RM of ${requiredWeight}kg required at ${bw}kg bw.`,
+            [{ text: "Got it", style: "default" }],
+            { iconType: 'confirm' } // Force the blue check icon
+        );
+    };
+    return (
+        <View style={{
+            flexDirection: 'row',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            rowGap: 6,
+            columnGap: 4,
+            paddingHorizontal: 16,
+            paddingTop: 10,
+            paddingBottom: 14,
+        }}>
+            {TIER_LABELS.map((label, i) => {
+                const tierNum = i + 1;
+                const isActive = currentTier === tierNum || (currentTier === 0 && tierNum === 1);
+                const isPast = currentTier != null && currentTier !== 0 && tierNum < currentTier;
+                const isFuture = currentTier != null && (currentTier === 0 ? tierNum > 1 : tierNum > currentTier);
+
+                return (
+                    <TouchableOpacity
+                        key={label}
+                        activeOpacity={0.7}
+                        onPress={() => handlePress(i, label)}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 20,
+                            borderWidth: 1,
+                            borderColor: isActive ? TIER_COLORS[i] : 'transparent',
+                            backgroundColor: isActive ? `${TIER_COLORS[i]}22` : 'transparent',
+                            opacity: isFuture ? 0.38 : isPast ? 0.6 : 1,
+                        }}
+                    >
+                        <View style={{
+                            width: 7, height: 7, borderRadius: 3.5,
+                            backgroundColor: TIER_COLORS[i],
+                        }} />
+                        <Text style={{
+                            fontSize: 11,
+                            fontFamily: isActive ? FONTS.bold : FONTS.medium,
+                            color: isActive ? TIER_COLORS[i] : theme.textSecondary,
+                        }}>
+                            {label}
+                        </Text>
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
+    );
+});
 
 const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect, exercisesList, animationKey }) => {
     const [isLoading, setIsLoading] = useState(false);
@@ -395,6 +425,7 @@ const ExerciseHistory = (props) => {
     const [formattedTargets, setFormattedTargets] = useState(DEFAULT_MUSCLE_TARGETS);
     const [bodyWeight, setBodyWeight] = useState(null);
     const [strengthRatios, setStrengthRatios] = useState([]);
+    const [best1RM, setBest1RM] = useState(null);
 
     // Null rather than 0 so stat cards render '—' on mount instead of '0',
     // avoiding a jarring jump from a zero placeholder to the real value.
@@ -429,14 +460,14 @@ const ExerciseHistory = (props) => {
     // Derive strength tier (1–5) from personalBest ÷ bodyweight vs the ratio thresholds.
     // Returns null until we have all three pieces of data.
     const strengthTier = useMemo(() => {
-        if (!hasStrengthRatios || !bodyWeight?.weight || stats.personalBest == null) return null;
+        if (!hasStrengthRatios || !bodyWeight?.weight || best1RM == null) return null;
         const bw = bodyWeight.weight;
         let tier = 0;
         for (let i = 0; i < strengthRatios.length; i++) {
-            if (stats.personalBest >= bw * strengthRatios[i]) tier = i + 1;
+            if (best1RM >= bw * strengthRatios[i]) tier = i + 1;
         }
         return tier; // 0 = working but below beginner threshold, 1-5 = named tiers
-    }, [hasStrengthRatios, strengthRatios, bodyWeight, stats.personalBest]);
+    }, [hasStrengthRatios, strengthRatios, bodyWeight, best1RM]);
 
     const showEditSheet = () => {
         router.push(`/exercise/new?id=${props.exerciseID}`);
@@ -530,6 +561,8 @@ const ExerciseHistory = (props) => {
             const history = await fetchExerciseHistory(props.exerciseID);
             const groupedHistory = groupBySession(history);
             setWorkoutHistory(groupedHistory);
+            const best1RM = await fetchBest1RM(props.exerciseID);
+            setBest1RM(best1RM);
         } catch (error) {
             console.error("Error loading workout history:", error);
         } finally {
@@ -733,7 +766,7 @@ const ExerciseHistory = (props) => {
 
                                 {hasStrengthRatios && hasBodyWeight && (
                                     <View style={{ width: '100%', borderTopWidth: 1, borderTopColor: safeBorder }}>
-                                        <StrengthLegend currentTier={strengthTier} theme={theme} />
+                                        <StrengthLegend currentTier={strengthTier} theme={theme} strengthRatios={strengthRatios} bw={bodyWeight.weight} />
                                     </View>
                                 )}
                             </View>
