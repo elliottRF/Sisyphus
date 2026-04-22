@@ -3,25 +3,53 @@
     "exerciseID": 1,
     "name": "Bench Press (Barbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Triceps,Deltoids"
+    "accessoryMuscles": "Triceps,Deltoids",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.75,
+      2
+    ]
   },
   {
     "exerciseID": 2,
     "name": "Incline Curl (Dumbbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.1,
+      0.15,
+      0.25,
+      0.4,
+      0.55
+    ]
   },
   {
     "exerciseID": 3,
     "name": "Incline Bench Press (Dumbbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids,Triceps"
+    "accessoryMuscles": "Deltoids,Triceps",
+    "strengthRatios": [
+      0.25,
+      0.35,
+      0.5,
+      0.65,
+      0.85
+    ]
   },
   {
     "exerciseID": 4,
     "name": "Leg Extension (Machine)",
     "targetMuscle": "Quadriceps",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.75,
+      2.5
+    ]
   },
   {
     "exerciseID": 5,
@@ -33,13 +61,27 @@
     "exerciseID": 6,
     "name": "Lat Pulldown (Cable)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Forearm"
+    "accessoryMuscles": "Biceps,Forearm",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      1.75
+    ]
   },
   {
     "exerciseID": 7,
     "name": "Lateral Raise (Dumbbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Trapezius"
+    "accessoryMuscles": "Trapezius",
+    "strengthRatios": [
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.45
+    ]
   },
   {
     "exerciseID": 8,
@@ -51,7 +93,14 @@
     "exerciseID": 9,
     "name": "Seated Row (Cable)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Forearm,Trapezius"
+    "accessoryMuscles": "Biceps,Forearm,Trapezius",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 10,
@@ -63,7 +112,14 @@
     "exerciseID": 11,
     "name": "Neutral Grip Lat Pulldown",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Forearm"
+    "accessoryMuscles": "Biceps,Forearm",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 12,
@@ -123,7 +179,14 @@
     "exerciseID": 21,
     "name": "Squat (Barbell)",
     "targetMuscle": "Quadriceps,Gluteal",
-    "accessoryMuscles": "Hamstring,Lower-Back"
+    "accessoryMuscles": "Hamstring,Lower-Back",
+    "strengthRatios": [
+      0.75,
+      1.25,
+      1.5,
+      2.25,
+      2.75
+    ]
   },
   {
     "exerciseID": 22,
@@ -141,7 +204,14 @@
     "exerciseID": 24,
     "name": "Seated Overhead Press (Dumbbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps"
+    "accessoryMuscles": "Triceps",
+    "strengthRatios": [
+      0.15,
+      0.25,
+      0.4,
+      0.55,
+      0.75
+    ]
   },
   {
     "exerciseID": 25,
@@ -159,7 +229,14 @@
     "exerciseID": 27,
     "name": "Preacher Curl (Barbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.2,
+      0.35,
+      0.6,
+      0.85,
+      1.1
+    ]
   },
   {
     "exerciseID": 28,
@@ -171,7 +248,14 @@
     "exerciseID": 29,
     "name": "Seated Lateral Raise (Dumbbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.45
+    ]
   },
   {
     "exerciseID": 30,
@@ -195,19 +279,40 @@
     "exerciseID": 33,
     "name": "Seated Leg Curl (Machine)",
     "targetMuscle": "Hamstring",
-    "accessoryMuscles": "Calves"
+    "accessoryMuscles": "Calves",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 34,
     "name": "Strict Military Press (Barbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps,Abs,Trapezius"
+    "accessoryMuscles": "Triceps,Abs,Trapezius",
+    "strengthRatios": [
+      0.4,
+      0.55,
+      0.8,
+      1.05,
+      1.35
+    ]
   },
   {
     "exerciseID": 35,
     "name": "Standing Bicep Curl (Ez Bar)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.25,
+      0.4,
+      0.6,
+      0.85,
+      1.1
+    ]
   },
   {
     "exerciseID": 36,
@@ -243,7 +348,14 @@
     "exerciseID": 41,
     "name": "Incline Bench Press (Barbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids,Triceps"
+    "accessoryMuscles": "Deltoids,Triceps",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      1.75
+    ]
   },
   {
     "exerciseID": 42,
@@ -267,7 +379,14 @@
     "exerciseID": 45,
     "name": "Lying Leg Curl (Machine)",
     "targetMuscle": "Hamstring",
-    "accessoryMuscles": "Calves"
+    "accessoryMuscles": "Calves",
+    "strengthRatios": [
+      0.25,
+      0.5,
+      0.75,
+      1.25,
+      1.75
+    ]
   },
   {
     "exerciseID": 46,
@@ -315,7 +434,14 @@
     "exerciseID": 53,
     "name": "Bicep Curl (Barbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.2,
+      0.4,
+      0.6,
+      0.85,
+      1.15
+    ]
   },
   {
     "exerciseID": 54,
@@ -369,7 +495,14 @@
     "exerciseID": 62,
     "name": "Decline Bench Press (Barbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Triceps,Deltoids"
+    "accessoryMuscles": "Triceps,Deltoids",
+    "strengthRatios": [
+      0.5,
+      1,
+      1.25,
+      1.75,
+      2.25
+    ]
   },
   {
     "exerciseID": 63,
@@ -393,7 +526,14 @@
     "exerciseID": 66,
     "name": "Deadlift (Barbell)",
     "targetMuscle": "Lower-Back,Gluteal,Hamstring",
-    "accessoryMuscles": "Quadriceps,Trapezius,Upper-Back,Abs,Forearm"
+    "accessoryMuscles": "Quadriceps,Trapezius,Upper-Back,Abs,Forearm",
+    "strengthRatios": [
+      1,
+      1.5,
+      2,
+      2.5,
+      3
+    ]
   },
   {
     "exerciseID": 67,
@@ -405,7 +545,14 @@
     "exerciseID": 68,
     "name": "Bench Press (Dumbbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Triceps,Deltoids"
+    "accessoryMuscles": "Triceps,Deltoids",
+    "strengthRatios": [
+      0.2,
+      0.35,
+      0.5,
+      0.75,
+      1
+    ]
   },
   {
     "exerciseID": 69,
@@ -513,7 +660,14 @@
     "exerciseID": 86,
     "name": "Preacher Curl (Dumbbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.05,
+      0.15,
+      0.3,
+      0.45,
+      0.65
+    ]
   },
   {
     "exerciseID": 87,

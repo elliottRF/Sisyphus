@@ -19,12 +19,13 @@ export const setupDatabase = async () => {
     // Create the tables if they don't exist
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS exercises (
-        exerciseID INTEGER PRIMARY KEY,
+        exerciseID INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
         targetMuscle TEXT NOT NULL,
         accessoryMuscles TEXT,
         isCardio INTEGER DEFAULT 0,
-        isAssisted INTEGER DEFAULT 0
+        isAssisted INTEGER DEFAULT 0,
+        strengthRatios TEXT 
       );
       
       CREATE TABLE IF NOT EXISTS workoutHistory (
@@ -52,15 +53,10 @@ export const setupDatabase = async () => {
 
     // Helper to ensure column exists
     const ensureColumnExists = async (tableName, columnName, formattedDefinition) => {
-      try {
-        const tableInfo = await database.getAllAsync(`PRAGMA table_info(${tableName});`);
-        const columnExists = tableInfo.some(col => col.name === columnName);
-        if (!columnExists) {
-          console.log(`Adding missing column ${columnName} to ${tableName}...`);
-          await database.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${formattedDefinition};`);
-        }
-      } catch (e) {
-        console.log(`Error checking/adding column ${columnName} to ${tableName}:`, e);
+      const tableInfo = await database.getAllAsync(`PRAGMA table_info(${tableName});`);
+      if (!tableInfo.some(col => col.name === columnName)) {
+        console.log(`Adding missing column ${columnName}...`);
+        await database.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${formattedDefinition};`);
       }
     };
 
@@ -78,22 +74,6 @@ export const setupDatabase = async () => {
         );
       }
     }
-
-    // Migrations using helper
-    await ensureColumnExists('workoutHistory', 'duration', 'INTEGER');
-    await ensureColumnExists('workoutHistory', 'setType', 'TEXT');
-    await ensureColumnExists('workoutHistory', 'notes', 'TEXT');
-    await ensureColumnExists('workoutHistory', 'is1rmPR', 'INTEGER DEFAULT 0');
-    await ensureColumnExists('workoutHistory', 'isVolumePR', 'INTEGER DEFAULT 0');
-    await ensureColumnExists('workoutHistory', 'isWeightPR', 'INTEGER DEFAULT 0');
-    await ensureColumnExists('exercises', 'isCardio', 'INTEGER DEFAULT 0');
-    await ensureColumnExists('exercises', 'isAssisted', 'INTEGER DEFAULT 0');
-    await ensureColumnExists('workoutHistory', 'distance', 'FLOAT');
-    await ensureColumnExists('workoutHistory', 'seconds', 'INTEGER');
-
-    // Body Weight Migrations
-    await ensureColumnExists('bodyWeight', 'datetime', 'TEXT');
-    await ensureColumnExists('bodyWeight', 'weight', 'REAL');
 
     // Create pinnedExercises table
     await database.execAsync(`
@@ -122,7 +102,48 @@ export const setupDatabase = async () => {
       );
     `);
 
-    console.log('Database setup completed successfully');
+
+
+
+    // Migrations using helper
+    await ensureColumnExists('workoutHistory', 'duration', 'INTEGER');
+    await ensureColumnExists('workoutHistory', 'setType', 'TEXT');
+    await ensureColumnExists('workoutHistory', 'notes', 'TEXT');
+    await ensureColumnExists('workoutHistory', 'is1rmPR', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('workoutHistory', 'isVolumePR', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('workoutHistory', 'isWeightPR', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('exercises', 'isCardio', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('exercises', 'isAssisted', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('workoutHistory', 'distance', 'FLOAT');
+    await ensureColumnExists('workoutHistory', 'seconds', 'INTEGER');
+    await ensureColumnExists('exercises', 'strengthRatios', 'TEXT');
+
+    // Body Weight Migrations
+    await ensureColumnExists('bodyWeight', 'datetime', 'TEXT');
+    await ensureColumnExists('bodyWeight', 'weight', 'REAL');
+
+
+
+    // We loop through the JSON and update existing entries or insert new ones
+    for (const item of exerciseData) {
+      const { name, targetMuscle, accessoryMuscles, cardio, strengthRatios } = item;
+
+      // Convert array to string for SQLite storage
+      const ratiosString = strengthRatios ? JSON.stringify(strengthRatios) : null;
+
+      await database.runAsync(
+        `INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio, strengthRatios)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(name) DO UPDATE SET
+            targetMuscle = excluded.targetMuscle,
+            accessoryMuscles = excluded.accessoryMuscles,
+            isCardio = excluded.isCardio,
+            strengthRatios = excluded.strengthRatios;`,
+        [name, targetMuscle, accessoryMuscles || '', cardio ? 1 : 0, ratiosString]
+      );
+    }
+
+    console.log('Database synced with latest exercise data');
   } catch (error) {
     console.error('Database setup error:', error);
     throw error;
@@ -735,7 +756,7 @@ export const fetchMostRecentSession = async (exerciseID) => {
 // Fetch the best (PR) session where this exercise was performed with the exact same muscle occurrence index
 export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex) => {
   const database = await getDb();
-  
+
   const recentSessions = await database.getAllAsync(`
     SELECT workoutSession
     FROM workoutHistory
@@ -747,7 +768,7 @@ export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex
 
   for (const sessionRow of recentSessions) {
     const sessionNum = sessionRow.workoutSession;
-    
+
     // Fetch all exercises from that session in order
     const sessionExercises = await database.getAllAsync(`
       SELECT wh.exerciseID, e.targetMuscle
@@ -762,35 +783,35 @@ export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex
     let occurrenceIndex = -1;
 
     for (const ex of sessionExercises) {
-       const targets = (ex.targetMuscle || '')
-           .split(',')
-           .map(m => m.trim().toLowerCase())
-           .filter(Boolean);
+      const targets = (ex.targetMuscle || '')
+        .split(',')
+        .map(m => m.trim().toLowerCase())
+        .filter(Boolean);
 
-       let maxOcc = 0;
-       targets.forEach(m => {
-           if ((seenMuscles[m] || 0) > maxOcc) maxOcc = seenMuscles[m];
-       });
+      let maxOcc = 0;
+      targets.forEach(m => {
+        if ((seenMuscles[m] || 0) > maxOcc) maxOcc = seenMuscles[m];
+      });
 
-       const curOcc = maxOcc + 1;
+      const curOcc = maxOcc + 1;
 
-       targets.forEach(m => {
-           seenMuscles[m] = (seenMuscles[m] || 0) + 1;
-       });
+      targets.forEach(m => {
+        seenMuscles[m] = (seenMuscles[m] || 0) + 1;
+      });
 
-       if (ex.exerciseID === exerciseID) {
-           occurrenceIndex = curOcc;
-           break;
-       }
+      if (ex.exerciseID === exerciseID) {
+        occurrenceIndex = curOcc;
+        break;
+      }
     }
 
     if (occurrenceIndex >= targetIndex) {
-       validSessions.push(sessionNum);
+      validSessions.push(sessionNum);
     }
   }
 
   if (validSessions.length === 0) {
-      return [];
+    return [];
   }
 
   const sessionListStr = validSessions.join(',');

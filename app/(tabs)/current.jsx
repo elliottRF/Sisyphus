@@ -727,7 +727,7 @@ const Current = () => {
                     <>
                         {!workoutStartTime && currentWorkout.length === 0 && (
                             <View style={{ flex: 1 }}>
-                                <ScrollView ref={emptyStateScrollRef} contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false}>
+                                <ScrollView ref={emptyStateScrollRef} contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false} >
                                     <View style={styles.emptyStateHeader}>
                                         <Feather name="activity" size={48} color={theme.primary} style={{ marginBottom: 16, opacity: 0.8 }} />
                                         <Text style={styles.emptyStateTitle}>Ready to train?</Text>
@@ -962,7 +962,7 @@ const getStyles = (theme) => {
         },
         emptyStateHeader: {
             alignItems: 'center',
-            marginTop: 40,
+            marginTop: 20,
             marginBottom: 32,
         },
         emptyStateTitle: {

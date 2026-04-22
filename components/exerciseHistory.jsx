@@ -7,7 +7,7 @@ import Body from "react-native-body-highlighter";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession } from './db';
+import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession, getLatestBodyWeight } from './db';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import PRGraphCard from "./PRGraphCard";
@@ -17,6 +17,9 @@ import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 
 
 const { width } = Dimensions.get('window');
+
+const TIER_LABELS = ['Beginner', 'Novice', 'Intermediate', 'Advanced', 'Elite'];
+const TIER_COLORS = ['#E05555', '#E08C38', '#D4B83A', '#52B56E', '#ba00df'];
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -95,7 +98,57 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
         </View>
     );
 });
+
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
+const StrengthLegend = React.memo(({ currentTier, theme }) => (
+    <View style={{
+        flexDirection: 'row',
+        justifyContent: 'center',
+        flexWrap: 'wrap',
+        rowGap: 6,
+        columnGap: 4,
+        paddingHorizontal: 16,
+        paddingTop: 10,
+        paddingBottom: 14,
+    }}>
+        {TIER_LABELS.map((label, i) => {
+            const tierNum = i + 1;
+            const isActive = currentTier === tierNum || (currentTier === 0 && tierNum === 1);
+            const isPast = currentTier != null && currentTier !== 0 && tierNum < currentTier;
+            const isFuture = currentTier != null && (currentTier === 0 ? tierNum > 1 : tierNum > currentTier);
+            return (
+                <View
+                    key={label}
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 5,
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 20,
+                        borderWidth: 1,
+                        borderColor: isActive ? TIER_COLORS[i] : 'transparent',
+                        backgroundColor: isActive ? `${TIER_COLORS[i]}22` : 'transparent',
+                        opacity: isFuture ? 0.38 : isPast ? 0.6 : 1,
+                    }}
+                >
+                    <View style={{
+                        width: 7, height: 7, borderRadius: 3.5,
+                        backgroundColor: TIER_COLORS[i],
+                    }} />
+                    <Text style={{
+                        fontSize: 11,
+                        fontFamily: isActive ? FONTS.bold : FONTS.medium,
+                        color: isActive ? TIER_COLORS[i] : theme.textSecondary,
+                    }}>
+                        {label}
+                    </Text>
+                </View>
+            );
+        })}
+    </View>
+));
 
 const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect, exercisesList, animationKey }) => {
     const [isLoading, setIsLoading] = useState(false);
@@ -180,107 +233,107 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
             opacity: entranceOpacity,
             transform: [{ translateY: entranceTranslateY }],
         }}>
-        <AnimatedTouchableOpacity
-            activeOpacity={0.8}
-            onPress={handlePress}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
-            disabled={isLoading}
-        >
-            <View style={styles.sessionCard}>
-                <View style={styles.sessionHeader}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.sessionTitle}>{workoutName}</Text>
-                        <View style={styles.sessionDateContainer}>
-                            <Feather name="calendar" size={12} color={theme.textSecondary} />
-                            <Text style={styles.sessionDate}>
-                                {formatDate(exercises[0].time)}
-                            </Text>
-                            <View style={styles.dot} />
-                            <Text style={styles.sessionDate}>Session {session}</Text>
+            <AnimatedTouchableOpacity
+                activeOpacity={0.8}
+                onPress={handlePress}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
+                disabled={isLoading}
+            >
+                <View style={styles.sessionCard}>
+                    <View style={styles.sessionHeader}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.sessionTitle}>{workoutName}</Text>
+                            <View style={styles.sessionDateContainer}>
+                                <Feather name="calendar" size={12} color={theme.textSecondary} />
+                                <Text style={styles.sessionDate}>
+                                    {formatDate(exercises[0].time)}
+                                </Text>
+                                <View style={styles.dot} />
+                                <Text style={styles.sessionDate}>Session {session}</Text>
+                            </View>
+                        </View>
+                        <View style={styles.iconButton}>
+                            <Feather name="chevron-right" size={18} color={theme.textSecondary} />
                         </View>
                     </View>
-                    <View style={styles.iconButton}>
-                        <Feather name="chevron-right" size={18} color={theme.textSecondary} />
-                    </View>
-                </View>
 
-                {!!sessionNote && (
-                    <View style={styles.noteContainer}>
-                        <MaterialCommunityIcons name="comment-text-outline" size={14} color={theme.textSecondary} style={{ marginTop: 2 }} />
-                        <Text style={styles.noteText}>{sessionNote}</Text>
-                    </View>
-                )}
+                    {!!sessionNote && (
+                        <View style={styles.noteContainer}>
+                            <MaterialCommunityIcons name="comment-text-outline" size={14} color={theme.textSecondary} style={{ marginTop: 2 }} />
+                            <Text style={styles.noteText}>{sessionNote}</Text>
+                        </View>
+                    )}
 
-                <View style={styles.setsContainer}>
-                    <View style={styles.setsHeaderRow}>
-                        <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
-                        <Text style={[styles.colHeader, styles.colHeaderLift]}>{isCardio ? "DIST / TIME" : "LIFT"}</Text>
-                        {!isAssisted && <Text style={[styles.colHeader, styles.colHeader1RM]}>{isCardio ? "PACE" : "1RM"}</Text>}
-                    </View>
+                    <View style={styles.setsContainer}>
+                        <View style={styles.setsHeaderRow}>
+                            <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
+                            <Text style={[styles.colHeader, styles.colHeaderLift]}>{isCardio ? "DIST / TIME" : "LIFT"}</Text>
+                            {!isAssisted && <Text style={[styles.colHeader, styles.colHeader1RM]}>{isCardio ? "PACE" : "1RM"}</Text>}
+                        </View>
 
-                    {(() => {
-                        let workingIndex = 0;
-                        return setsWithDisplayNumbers.map((set, setIndex) => {
-                            const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
-                            const setType = set.setType || 'N';
-                            const isWarmup = setType === 'W';
+                        {(() => {
+                            let workingIndex = 0;
+                            return setsWithDisplayNumbers.map((set, setIndex) => {
+                                const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+                                const setType = set.setType || 'N';
+                                const isWarmup = setType === 'W';
 
-                            const isOdd = !isWarmup && (workingIndex % 2 === 1);
-                            if (!isWarmup) workingIndex++;
+                                const isOdd = !isWarmup && (workingIndex % 2 === 1);
+                                if (!isWarmup) workingIndex++;
 
-                            return (
-                                <View
-                                    key={`${set.exerciseHistoryID ?? ''}-${setIndex}`}
-                                    style={[
-                                        styles.setRowContainer,
-                                        isOdd && styles.setRowOdd,
-                                        isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.04)' },
-                                    ]}
-                                >
-                                    <View style={styles.setRow}>
-                                        <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
+                                return (
+                                    <View
+                                        key={`${set.exerciseHistoryID ?? ''}-${setIndex}`}
+                                        style={[
+                                            styles.setRowContainer,
+                                            isOdd && styles.setRowOdd,
+                                            isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.04)' },
+                                        ]}
+                                    >
+                                        <View style={styles.setRow}>
+                                            <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
 
-                                        <Text
-                                            style={[
-                                                styles.setLift,
-                                                isWarmup && styles.setLiftWarmup,
-                                            ]}
-                                        >
-                                            {isCardio ? (
-                                                `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)} mins`
-                                            ) : (
-                                                `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} x ${set.reps}`
-                                            )}
-                                        </Text>
-
-                                        {!isAssisted && (
-                                            <Text style={styles.setOneRM}>
+                                            <Text
+                                                style={[
+                                                    styles.setLift,
+                                                    isWarmup && styles.setLiftWarmup,
+                                                ]}
+                                            >
                                                 {isCardio ? (
-                                                    set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} min/km` : '-'
+                                                    `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)} mins`
                                                 ) : (
-                                                    set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))}` : '-'
+                                                    `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} x ${set.reps}`
                                                 )}
                                             </Text>
+
+                                            {!isAssisted && (
+                                                <Text style={styles.setOneRM}>
+                                                    {isCardio ? (
+                                                        set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} min/km` : '-'
+                                                    ) : (
+                                                        set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))}` : '-'
+                                                    )}
+                                                </Text>
+                                            )}
+                                        </View>
+
+                                        {isPR && (
+                                            <View style={styles.badgeRow}>
+                                                <View style={{ width: 34 }} />
+                                                {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
+                                                {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
+                                                {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
+                                            </View>
                                         )}
                                     </View>
-
-                                    {isPR && (
-                                        <View style={styles.badgeRow}>
-                                            <View style={{ width: 34 }} />
-                                            {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
-                                            {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
-                                            {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
-                                        </View>
-                                    )}
-                                </View>
-                            );
-                        });
-                    })()}
+                                );
+                            });
+                        })()}
+                    </View>
                 </View>
-            </View>
-        </AnimatedTouchableOpacity>
+            </AnimatedTouchableOpacity>
         </Animated.View>
     );
 });
@@ -340,6 +393,8 @@ const ExerciseHistory = (props) => {
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
     const [formattedTargets, setFormattedTargets] = useState(DEFAULT_MUSCLE_TARGETS);
+    const [bodyWeight, setBodyWeight] = useState(null);
+    const [strengthRatios, setStrengthRatios] = useState([]);
 
     // Null rather than 0 so stat cards render '—' on mount instead of '0',
     // avoiding a jarring jump from a zero placeholder to the real value.
@@ -368,6 +423,21 @@ const ExerciseHistory = (props) => {
             .filter(Boolean);
     }, [workoutHistory, showOnlyPRs]);
 
+    const hasStrengthRatios = !!strengthRatios?.length;
+    const hasBodyWeight = bodyWeight != null;
+
+    // Derive strength tier (1–5) from personalBest ÷ bodyweight vs the ratio thresholds.
+    // Returns null until we have all three pieces of data.
+    const strengthTier = useMemo(() => {
+        if (!hasStrengthRatios || !bodyWeight?.weight || stats.personalBest == null) return null;
+        const bw = bodyWeight.weight;
+        let tier = 0;
+        for (let i = 0; i < strengthRatios.length; i++) {
+            if (stats.personalBest >= bw * strengthRatios[i]) tier = i + 1;
+        }
+        return tier; // 0 = working but below beginner threshold, 1-5 = named tiers
+    }, [hasStrengthRatios, strengthRatios, bodyWeight, stats.personalBest]);
+
     const showEditSheet = () => {
         router.push(`/exercise/new?id=${props.exerciseID}`);
     };
@@ -385,10 +455,11 @@ const ExerciseHistory = (props) => {
     useEffect(() => {
         if (exercisesList.length > 0) {
             const { targetMuscles, accessoryMuscles } = getExerciseMuscles(props.exerciseID, exercisesList);
-            handleMuscleStrings(targetMuscles, accessoryMuscles);
+            handleMuscleStrings(targetMuscles, accessoryMuscles, strengthTier);
             setExerciseName(currentExerciseDetails.name);
+            setStrengthRatios(JSON.parse(currentExerciseDetails.strengthRatios || "[]"));
         }
-    }, [exercisesList]);
+    }, [exercisesList, strengthTier]);
 
     const getExerciseMuscles = (exerciseID, exerciseLog) => {
         const exercise = exerciseLog.find(ex => ex.exerciseID === exerciseID);
@@ -398,13 +469,25 @@ const ExerciseHistory = (props) => {
         return { targetMuscles, accessoryMuscles };
     };
 
-    const handleMuscleStrings = (targetSelected, accessorySelected) => {
+    const handleMuscleStrings = (targetSelected, accessorySelected, tier = null) => {
         const workedSlugs = new Set();
+
+        // When strength ratios are provided, map tier → body highlighter intensity:
+        //   tier 0 (below beginner) → 3  (TIER_COLORS[0], red)
+        //   tier 1 (beginner)       → 3
+        //   tier 2 (novice)         → 4
+        //   tier 3 (intermediate)   → 5
+        //   tier 4 (advanced)       → 6
+        //   tier 5 (elite)          → 7
+        // Without ratios, fall back to intensity 3 (matches existing primary-color theming).
+        const targetIntensity = (hasStrengthRatios && tier != null)
+            ? Math.max(3, tier + 2)
+            : 3;
 
         const sluggedTargets = targetSelected.map(target => {
             const slug = typeof target === 'string' ? target.trim().toLowerCase() : '';
             workedSlugs.add(slug);
-            return { slug, intensity: 3 };
+            return { slug, intensity: targetIntensity };
         });
 
         const sluggedAccessories = accessorySelected.map(accessory => {
@@ -432,6 +515,14 @@ const ExerciseHistory = (props) => {
         useCallback(() => {
             loadWorkoutHistory();
         }, [props.exerciseID])
+    );
+
+    useFocusEffect(
+        useCallback(() => {
+            getLatestBodyWeight()
+                .then(bw => setBodyWeight(bw))
+                .catch(() => { });
+        }, [])
     );
 
     const loadWorkoutHistory = async () => {
@@ -504,9 +595,29 @@ const ExerciseHistory = (props) => {
     };
 
     const isDynamic = theme.type === 'dynamic';
-    const bodyColors = isDynamic
-        ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
-        : [theme.bodyFill, `${theme.primary}60`, theme.primary];
+
+    const bodyColors = useMemo(() => {
+        if (hasStrengthRatios && strengthTier !== null) {
+            // 1. Identify which tier color is currently being used for "Targets"
+            // Based on your Math.max(3, tier + 2) logic:
+            // Tier 0 or 1 uses TIER_COLORS[0]
+            // Tier 2 uses TIER_COLORS[1], etc.
+            const activeTierIdx = Math.max(0, strengthTier - 1);
+            const activeColor = TIER_COLORS[activeTierIdx];
+
+            return [
+                theme.bodyFill,         // Intensity 1: Unworked
+                `${activeColor}60`,     // Intensity 2: Accessory (Dimmed version of current Target)
+                ...TIER_COLORS          // Intensity 3-7: The solid tiered colors
+            ];
+        }
+
+        // Default logic for when strength ratios aren't present
+        return isDynamic
+            ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
+            : [theme.bodyFill, `${theme.primary}60`, theme.primary];
+    }, [hasStrengthRatios, strengthTier, theme, isDynamic]);
+
     const safeBorder = isDynamic ? '#4d4d4d' : theme.border;
 
     const currentExerciseDetails = exercisesList.find(e => e.exerciseID === props.exerciseID);
@@ -619,6 +730,12 @@ const ExerciseHistory = (props) => {
                                     colors={bodyColors}
                                     defaultFill={theme.bodyFill}
                                 />
+
+                                {hasStrengthRatios && hasBodyWeight && (
+                                    <View style={{ width: '100%', borderTopWidth: 1, borderTopColor: safeBorder }}>
+                                        <StrengthLegend currentTier={strengthTier} theme={theme} />
+                                    </View>
+                                )}
                             </View>
                         )}
 
@@ -777,6 +894,7 @@ const getStyles = (theme) => StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-evenly',
         alignItems: 'center',
+        flexWrap: 'wrap',
         backgroundColor: theme.surface,
         borderRadius: 20,
         borderWidth: 1,
