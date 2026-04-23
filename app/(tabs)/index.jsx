@@ -511,7 +511,6 @@ const Home = () => {
                 </Animated.View>
             </ScrollView>
 
-            {/* ActionSheet - keep your original content here */}
             <ActionSheet ref={actionSheetRef} gestureEnabled={true} containerStyle={styles.actionSheetContainer} indicatorStyle={styles.indicator} onClose={() => setSearchQuery('')}>
                 <View style={styles.contentContainer}>
                     <View style={styles.actionSheetHeader}>
@@ -599,7 +598,6 @@ const Home = () => {
                             </View>
                         }
                         keyboardShouldPersistTaps="always"
-                        showsVerticalScrollIndicator={false}
                         style={styles.list}
                         nestedScrollEnabled={true}
                         bounces={false}

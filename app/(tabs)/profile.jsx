@@ -146,7 +146,6 @@ const Profile = () => {
                 <View style={styles.exerciseContent}>
                     <Text style={styles.exerciseName} numberOfLines={1} ellipsizeMode="tail">
                         {item.name}
-                        {item.exerciseID}
                     </Text>
                     <View style={styles.exerciseRight}>
                         {!hasMuscles && !item.isCardio && (

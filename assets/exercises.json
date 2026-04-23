@@ -1095,5 +1095,18 @@
       1.75,
       2.1
     ]
+  },
+  {
+    "exerciseID": 94,
+    "name": "Triceps Extension Rope",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.20,
+      0.35,
+      0.6,
+      0.9,
+      1.25
+    ]
   }
 ]

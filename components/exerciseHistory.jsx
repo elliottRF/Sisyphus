@@ -20,7 +20,7 @@ import { customAlert } from '../utils/customAlert';
 const { width } = Dimensions.get('window');
 
 const TIER_LABELS = ['Beginner', 'Novice', 'Intermediate', 'Advanced', 'Elite'];
-const TIER_COLORS = ['#E05555', '#E08C38', '#D4B83A', '#52B56E', '#8500b9'];
+const TIER_COLORS = ['#E05555', '#E08C38', '#ffdd47', '#52B56E', '#8500b9'];
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -104,8 +104,8 @@ const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpaci
 
 const StrengthLegend = React.memo(({ currentTier, theme, strengthRatios, bw }) => {
     const { useImperial } = useTheme();
+
     const handlePress = (index, label) => {
-        // 1. Safety check for missing data
         if (!strengthRatios || strengthRatios[index] === undefined) {
             customAlert(
                 "Information",
@@ -115,18 +115,17 @@ const StrengthLegend = React.memo(({ currentTier, theme, strengthRatios, bw }) =
             return;
         }
 
-        // 2. Calculation
         const ratio = strengthRatios[index];
         const requiredWeight = (bw * ratio).toFixed(1);
 
-        // 3. Trigger Global Alert
         customAlert(
             `${label} Target`,
             `1RM of ${formatWeight(requiredWeight, useImperial)}${unitLabel(useImperial)} required at ${formatWeight(bw, useImperial)}${unitLabel(useImperial)} bodyweight.`,
             [{ text: "Got it", style: "default" }],
-            { iconType: 'confirm' } // Force the blue check icon
+            { iconType: 'confirm' }
         );
     };
+
     return (
         <View style={{
             flexDirection: 'row',
@@ -140,9 +139,15 @@ const StrengthLegend = React.memo(({ currentTier, theme, strengthRatios, bw }) =
         }}>
             {TIER_LABELS.map((label, i) => {
                 const tierNum = i + 1;
+
+                // Active if match found
                 const isActive = currentTier === tierNum || (currentTier === 0 && tierNum === 1);
-                const isPast = currentTier != null && currentTier !== 0 && tierNum < currentTier;
-                const isFuture = currentTier != null && (currentTier === 0 ? tierNum > 1 : tierNum > currentTier);
+
+                // Only mark as past if we actually have a valid currentTier
+                const isPast = currentTier !== null && currentTier !== 0 && tierNum < currentTier;
+
+                // If currentTier is null, everything is treated as 'future' (dimmed)
+                const isFuture = currentTier === null || (currentTier === 0 ? tierNum > 1 : tierNum > currentTier);
 
                 return (
                     <TouchableOpacity
@@ -163,7 +168,9 @@ const StrengthLegend = React.memo(({ currentTier, theme, strengthRatios, bw }) =
                         }}
                     >
                         <View style={{
-                            width: 7, height: 7, borderRadius: 3.5,
+                            width: 7,
+                            height: 7,
+                            borderRadius: 3.5,
                             backgroundColor: TIER_COLORS[i],
                         }} />
                         <Text style={{
@@ -200,7 +207,6 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
     const entranceOpacity = useRef(new Animated.Value(0)).current;
     const entranceTranslateY = useRef(new Animated.Value(18)).current;
 
-    // Replay entrance animation whenever the filter key changes (PR toggle)
     useEffect(() => {
         entranceOpacity.setValue(0);
         entranceTranslateY.setValue(18);
@@ -367,8 +373,6 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
     );
 });
 
-// Defined at module level so DEFAULT_MUSCLE_TARGETS is a stable reference
-// that doesn't cause re-renders and isn't recreated per instance.
 const ALL_MUSCLE_SLUGS = [
     'chest', 'quadriceps', 'triceps', 'biceps', 'hamstring',
     'upper-back', 'lower-back', 'deltoids', 'gluteal', 'forearm',
@@ -376,9 +380,6 @@ const ALL_MUSCLE_SLUGS = [
     'tibialis', 'abductors', 'neck', 'hands', 'feet', 'knees', 'ankles'
 ];
 
-// Every muscle starts at intensity 1 (unworked). The body diagram renders
-// immediately with the correct base colour scheme on mount; only the
-// highlighted muscles change once exercise data loads — no full colour pop.
 const DEFAULT_MUSCLE_TARGETS = ALL_MUSCLE_SLUGS.map(slug => ({ slug, intensity: 1 }));
 
 
@@ -387,16 +388,13 @@ const FadingStatText = React.memo(({ text, style }) => {
     const [displayText, setDisplayText] = useState(text);
 
     useEffect(() => {
-        // Only trigger the animation if the text actually changes
         if (text !== displayText) {
             Animated.timing(fadeAnim, {
                 toValue: 0,
-                duration: 150, // Quick fade out
+                duration: 150,
                 useNativeDriver: true,
             }).start(() => {
-                // Swap the text while invisible
                 setDisplayText(text);
-                // Fade back in
                 Animated.timing(fadeAnim, {
                     toValue: 1,
                     duration: 250,
@@ -428,8 +426,6 @@ const ExerciseHistory = (props) => {
 
     const bodyOpacity = useRef(new Animated.Value(0)).current;
 
-    // Null rather than 0 so stat cards render '—' on mount instead of '0',
-    // avoiding a jarring jump from a zero placeholder to the real value.
     const [stats, setStats] = useState({
         totalSets: null,
         personalBest: null,
@@ -455,12 +451,25 @@ const ExerciseHistory = (props) => {
             .filter(Boolean);
     }, [workoutHistory, showOnlyPRs]);
 
-
-
     const hasStrengthRatios = !!strengthRatios?.length;
     const hasBodyWeight = bodyWeight != null;
 
+    // FIX 1: strengthTier MUST be declared before isMuscleDataReady.
+    // Previously isMuscleDataReady referenced strengthTier before its declaration;
+    // Babel hoists const→var so it evaluated to undefined, making the ready-check
+    // fire a render too early and causing the body highlighter color flash.
+    const strengthTier = useMemo(() => {
+        if (!hasStrengthRatios || !bodyWeight?.weight || best1RM == null) return null;
+        const bw = bodyWeight.weight;
+        let tier = 0;
+        for (let i = 0; i < strengthRatios.length; i++) {
+            if (best1RM >= bw * strengthRatios[i]) tier = i + 1;
+        }
+        return tier;
+    }, [hasStrengthRatios, strengthRatios, bodyWeight, best1RM]);
 
+    // FIX 1 cont.: now strengthTier is a real value (not hoisted-undefined) when
+    // this memo runs, so the body only becomes "ready" once all three inputs exist.
     const isMuscleDataReady = useMemo(() => {
         return (
             exercisesList.length > 0 &&
@@ -470,19 +479,6 @@ const ExerciseHistory = (props) => {
             )
         );
     }, [exercisesList, hasStrengthRatios, strengthTier, bodyWeight]);
-
-
-    // Derive strength tier (1–5) from personalBest ÷ bodyweight vs the ratio thresholds.
-    // Returns null until we have all three pieces of data.
-    const strengthTier = useMemo(() => {
-        if (!hasStrengthRatios || !bodyWeight?.weight || best1RM == null) return null;
-        const bw = bodyWeight.weight;
-        let tier = 0;
-        for (let i = 0; i < strengthRatios.length; i++) {
-            if (best1RM >= bw * strengthRatios[i]) tier = i + 1;
-        }
-        return tier; // 0 = working but below beginner threshold, 1-5 = named tiers
-    }, [hasStrengthRatios, strengthRatios, bodyWeight, best1RM]);
 
     const showEditSheet = () => {
         router.push(`/exercise/new?id=${props.exerciseID}`);
@@ -517,6 +513,12 @@ const ExerciseHistory = (props) => {
         handleMuscleStrings(targetMuscles, accessoryMuscles, strengthTier);
     }, [isMuscleDataReady, strengthTier, exercisesList]);
 
+    // FIX 2: Body is always rendered (opacity 0→1). Previously the component
+    // swapped between a placeholder <View> and the <Body> mount, which caused
+    // a fresh mount every time isMuscleDataReady flipped, triggering Body's own
+    // internal colour transition and the layout height jumping.
+    // Now Body mounts once at opacity 0 (invisible but taking correct space),
+    // and fades in when the colours are finalised.
     useEffect(() => {
         if (isMuscleDataReady) {
             Animated.timing(bodyOpacity, {
@@ -541,14 +543,6 @@ const ExerciseHistory = (props) => {
     const handleMuscleStrings = (targetSelected, accessorySelected, tier = null) => {
         const workedSlugs = new Set();
 
-        // When strength ratios are provided, map tier → body highlighter intensity:
-        //   tier 0 (below beginner) → 3  (TIER_COLORS[0], red)
-        //   tier 1 (beginner)       → 3
-        //   tier 2 (novice)         → 4
-        //   tier 3 (intermediate)   → 5
-        //   tier 4 (advanced)       → 6
-        //   tier 5 (elite)          → 7
-        // Without ratios, fall back to intensity 3 (matches existing primary-color theming).
         const targetIntensity = (hasStrengthRatios && tier != null)
             ? Math.max(3, tier + 2)
             : 3;
@@ -669,21 +663,16 @@ const ExerciseHistory = (props) => {
 
     const bodyColors = useMemo(() => {
         if (hasStrengthRatios && strengthTier !== null) {
-            // 1. Identify which tier color is currently being used for "Targets"
-            // Based on your Math.max(3, tier + 2) logic:
-            // Tier 0 or 1 uses TIER_COLORS[0]
-            // Tier 2 uses TIER_COLORS[1], etc.
             const activeTierIdx = Math.max(0, strengthTier - 1);
             const activeColor = TIER_COLORS[activeTierIdx];
 
             return [
-                theme.bodyFill,         // Intensity 1: Unworked
-                `${activeColor}60`,     // Intensity 2: Accessory (Dimmed version of current Target)
-                ...TIER_COLORS          // Intensity 3-7: The solid tiered colors
+                theme.bodyFill,
+                `${activeColor}60`,
+                ...TIER_COLORS
             ];
         }
 
-        // Default logic for when strength ratios aren't present
         return isDynamic
             ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
             : [theme.bodyFill, `${theme.primary}60`, theme.primary];
@@ -695,7 +684,6 @@ const ExerciseHistory = (props) => {
     const isCardioHeader = !!currentExerciseDetails?.isCardio;
     const isAssistedHeader = !!currentExerciseDetails?.isAssisted;
 
-    // Null-safe formatters — show '—' until real data arrives
     const fmtWeight = (val) =>
         val == null
             ? '—'
@@ -781,69 +769,63 @@ const ExerciseHistory = (props) => {
                         </View>
 
                         {!isCardioHeader && (
+                            // FIX 2 cont.: bodyWrapper is now a column so the legend always
+                            // sits below the body pair without flexWrap hacks.
                             <View style={styles.bodyWrapper}>
 
-                                {!isMuscleDataReady ? (
-                                    // Placeholder (empty box, no spinner)
-                                    <View style={{
-                                        height: 180,
-                                        width: '100%',
-                                        justifyContent: 'center',
+                                {/* Body always rendered — opacity animated 0→1 once colours are
+                                    finalised. No mount/unmount swap means no layout jump and no
+                                    Body-internal colour transition on first paint. */}
+                                <Animated.View
+                                    style={{
+                                        flexDirection: 'row',
+                                        justifyContent: 'space-evenly',
                                         alignItems: 'center',
-                                    }}>
-                                        {/* Optional subtle placeholder */}
-                                        <View style={{
-                                            width: '80%',
-                                            height: 140,
-                                            borderRadius: 16,
-                                            backgroundColor: theme.surface,
-                                            opacity: 0.6
-                                        }} />
-                                    </View>
-                                ) : (
-                                    <Animated.View
-                                        style={{
-                                            flexDirection: 'row',
-                                            justifyContent: 'space-evenly',
-                                            alignItems: 'center',
-                                            width: '100%',
-                                            opacity: bodyOpacity
-                                        }}
-                                    >
-                                        <Body
-                                            data={formattedTargets}
-                                            gender={gender}
-                                            side="front"
-                                            scale={0.75}
-                                            border={safeBorder}
-                                            colors={bodyColors}
-                                            defaultFill={theme.bodyFill}
-                                        />
+                                        width: '100%',
+                                        paddingVertical: 8,
+                                        opacity: bodyOpacity,
+                                    }}
+                                >
+                                    <Body
+                                        data={formattedTargets}
+                                        gender={gender}
+                                        side="front"
+                                        scale={0.75}
+                                        border={safeBorder}
+                                        colors={bodyColors}
+                                        defaultFill={theme.bodyFill}
+                                    />
 
-                                        <View style={styles.bodyDivider} />
+                                    <View style={styles.bodyDivider} />
 
-                                        <Body
-                                            data={formattedTargets}
-                                            gender={gender}
-                                            side="back"
-                                            scale={0.75}
-                                            border={safeBorder}
-                                            colors={bodyColors}
-                                            defaultFill={theme.bodyFill}
-                                        />
-                                    </Animated.View>
-                                )}
+                                    <Body
+                                        data={formattedTargets}
+                                        gender={gender}
+                                        side="back"
+                                        scale={0.75}
+                                        border={safeBorder}
+                                        colors={bodyColors}
+                                        defaultFill={theme.bodyFill}
+                                    />
+                                </Animated.View>
 
-                                {hasStrengthRatios && hasBodyWeight && isMuscleDataReady && (
-                                    <View style={{ width: '100%', borderTopWidth: 1, borderTopColor: safeBorder }}>
-                                        <StrengthLegend
-                                            currentTier={strengthTier}
-                                            theme={theme}
-                                            strengthRatios={strengthRatios}
-                                            bw={bodyWeight.weight}
-                                        />
-                                    </View>
-                                )}
+                                <View style={{
+                                    width: '100%',
+                                    borderTopWidth: 1,
+                                    borderTopColor: safeBorder,
+                                    opacity: isMuscleDataReady ? 1 : 0.35,
+                                }}>
+                                    <StrengthLegend
+                                        currentTier={
+                                            hasStrengthRatios && hasBodyWeight && isMuscleDataReady
+                                                ? strengthTier
+                                                : null
+                                        }
+                                        theme={theme}
+                                        strengthRatios={hasStrengthRatios ? strengthRatios : null}
+                                        bw={hasBodyWeight ? bodyWeight.weight : null}
+                                    />
+                                </View>
                             </View>
                         )}
 
@@ -998,22 +980,23 @@ const getStyles = (theme) => StyleSheet.create({
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
+    // FIX 2 cont.: column layout so Body pair and StrengthLegend stack cleanly
+    // without needing flexWrap tricks.
     bodyWrapper: {
-        flexDirection: 'row',
-        justifyContent: 'space-evenly',
+        flexDirection: 'column',
         alignItems: 'center',
-        flexWrap: 'wrap',
         backgroundColor: theme.surface,
         borderRadius: 20,
         borderWidth: 1,
         borderColor: theme.border,
         marginBottom: 24,
         marginHorizontal: 12,
+        overflow: 'hidden',
         ...SHADOWS.small,
     },
     bodyDivider: {
         width: 1,
-        height: '80%',
+        alignSelf: 'stretch',
         backgroundColor: theme.border,
         opacity: 0.5,
     },

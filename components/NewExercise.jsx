@@ -3,7 +3,6 @@ import {
     View, Text, StyleSheet, TextInput, TouchableOpacity,
     ScrollView as RNScrollView, Animated
 } from 'react-native';
-// Import ActionSheet components
 import ActionSheet, {
     SheetManager,
     FlatList as SheetFlatList
@@ -23,7 +22,6 @@ import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { emit, AppEvents } from '../utils/events';
 
-// ... (MUSCLE_OPTIONS, MUSCLE_LABEL_MAP, getMuscleLabel, RATIO_LABELS stay same)
 
 const MUSCLE_OPTIONS = [
     'Chest', 'Triceps', 'Deltoids', 'Trapezius', 'Upper-Back', 'Lower-Back',
