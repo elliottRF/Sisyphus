@@ -16,7 +16,6 @@ export const setupDatabase = async () => {
     const database = await getDb();
     await database.execAsync('PRAGMA foreign_keys = ON;');
 
-    // Create the tables if they don't exist
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS exercises (
         exerciseID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +24,7 @@ export const setupDatabase = async () => {
         accessoryMuscles TEXT,
         isCardio INTEGER DEFAULT 0,
         isAssisted INTEGER DEFAULT 0,
-        strengthRatios TEXT 
+        strengthRatios TEXT
       );
       
       CREATE TABLE IF NOT EXISTS workoutHistory (
@@ -51,7 +50,6 @@ export const setupDatabase = async () => {
       );
     `);
 
-    // Helper to ensure column exists
     const ensureColumnExists = async (tableName, columnName, formattedDefinition) => {
       const tableInfo = await database.getAllAsync(`PRAGMA table_info(${tableName});`);
       if (!tableInfo.some(col => col.name === columnName)) {
@@ -60,22 +58,6 @@ export const setupDatabase = async () => {
       }
     };
 
-    // Check if exercises table is empty before populating
-    const result = await database.getFirstAsync('SELECT COUNT(*) as count FROM exercises;');
-    const count = result?.count || 0;
-
-    // Only populate if the table is empty
-    if (count === 0) {
-      for (const { exerciseID, name, targetMuscle, accessoryMuscles, cardio } of exerciseData) {
-        await database.runAsync(
-          `INSERT OR REPLACE INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles, isCardio) 
-           VALUES (?, ?, ?, ?, ?);`,
-          [exerciseID, name, targetMuscle, accessoryMuscles, cardio ? 1 : 0]
-        );
-      }
-    }
-
-    // Create pinnedExercises table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS pinnedExercises (
         exerciseID INTEGER PRIMARY KEY,
@@ -83,7 +65,6 @@ export const setupDatabase = async () => {
       );
     `);
 
-    // Create workoutTemplates table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS workoutTemplates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,7 +74,6 @@ export const setupDatabase = async () => {
       );
     `);
 
-    // Create bodyWeight table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS bodyWeight (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,10 +82,10 @@ export const setupDatabase = async () => {
       );
     `);
 
+    // 1. Migrate exercise IDs to be canonical before anything else
+    await migrateExerciseIDs(database);
 
-
-
-    // Migrations using helper
+    // 2. Column migrations
     await ensureColumnExists('workoutHistory', 'duration', 'INTEGER');
     await ensureColumnExists('workoutHistory', 'setType', 'TEXT');
     await ensureColumnExists('workoutHistory', 'notes', 'TEXT');
@@ -117,31 +97,89 @@ export const setupDatabase = async () => {
     await ensureColumnExists('workoutHistory', 'distance', 'FLOAT');
     await ensureColumnExists('workoutHistory', 'seconds', 'INTEGER');
     await ensureColumnExists('exercises', 'strengthRatios', 'TEXT');
-
-    // Body Weight Migrations
     await ensureColumnExists('bodyWeight', 'datetime', 'TEXT');
     await ensureColumnExists('bodyWeight', 'weight', 'REAL');
+    await ensureColumnExists('exercises', 'userCustomised', 'INTEGER DEFAULT 0');
 
+    // 3. Detect and flag exercises existing users have already customised,
+    //    before the sync loop would overwrite them.
+    const jsonByName = new Map(exerciseData.map(ex => [ex.name, ex]));
+    const uncustomisedExercises = await database.getAllAsync(
+      'SELECT * FROM exercises WHERE userCustomised = 0;'
+    );
+    for (const dbEx of uncustomisedExercises) {
+      const jsonEx = jsonByName.get(dbEx.name);
+      if (!jsonEx) continue;
+      const targetChanged = dbEx.targetMuscle !== (jsonEx.targetMuscle || '');
+      const accessoryChanged = (dbEx.accessoryMuscles || '') !== (jsonEx.accessoryMuscles || '');
+      if (targetChanged || accessoryChanged) {
+        await database.runAsync(
+          'UPDATE exercises SET userCustomised = 1 WHERE exerciseID = ?;',
+          [dbEx.exerciseID]
+        );
+      }
+    }
 
+    // 4. Fresh install — populate from JSON if table is empty
+    const result = await database.getFirstAsync('SELECT COUNT(*) as count FROM exercises;');
+    const count = result?.count || 0;
 
-    // We loop through the JSON and update existing entries or insert new ones
-    for (const item of exerciseData) {
-      const { name, targetMuscle, accessoryMuscles, cardio, strengthRatios } = item;
+    if (count === 0) {
+      for (const { exerciseID, name, targetMuscle, accessoryMuscles, isCardio, isAssisted } of exerciseData) {
+        await database.runAsync(
+          `INSERT OR REPLACE INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles, isCardio, isAssisted) 
+           VALUES (?, ?, ?, ?, ?, ?);`,
+          [exerciseID, name, targetMuscle, accessoryMuscles || '', isCardio ? 1 : 0, isAssisted ? 1 : 0]
+        );
+      }
+    }
 
-      // Convert array to string for SQLite storage
+    // 5. Sync loop — respects userCustomised flag for muscle fields,
+    //    tracks isAssisted changes for PR recalculation.
+    const assistedFlipped = [];
+
+    for (const { exerciseID, name, targetMuscle, accessoryMuscles, isCardio, isAssisted, strengthRatios } of exerciseData) {
       const ratiosString = strengthRatios ? JSON.stringify(strengthRatios) : null;
 
-      await database.runAsync(
-        `INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio, strengthRatios)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(name) DO UPDATE SET
-            targetMuscle = excluded.targetMuscle,
-            accessoryMuscles = excluded.accessoryMuscles,
-            isCardio = excluded.isCardio,
-            strengthRatios = excluded.strengthRatios;`,
-        [name, targetMuscle, accessoryMuscles || '', cardio ? 1 : 0, ratiosString]
+      // Snapshot isAssisted before the upsert
+      const before = await database.getFirstAsync(
+        'SELECT isAssisted FROM exercises WHERE exerciseID = ?;',
+        [exerciseID]
       );
+
+      await database.runAsync(
+        `INSERT INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles, isCardio, isAssisted, strengthRatios, userCustomised)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+         ON CONFLICT(name) DO UPDATE SET
+            exerciseID = excluded.exerciseID,
+            isCardio = excluded.isCardio,
+            isAssisted = excluded.isAssisted,
+            strengthRatios = excluded.strengthRatios,
+            targetMuscle = CASE WHEN userCustomised = 1 THEN targetMuscle ELSE excluded.targetMuscle END,
+            accessoryMuscles = CASE WHEN userCustomised = 1 THEN accessoryMuscles ELSE excluded.accessoryMuscles END;`,
+        [exerciseID, name, targetMuscle, accessoryMuscles || '', isCardio ? 1 : 0, isAssisted ? 1 : 0, ratiosString]
+      );
+
+      // If this exercise existed before and isAssisted changed, queue a recalc
+      const newIsAssisted = isAssisted ? 1 : 0;
+      if (before && before.isAssisted !== newIsAssisted) {
+        assistedFlipped.push(exerciseID);
+      }
     }
+
+    // Recalculate PRs for any exercise whose isAssisted flag changed
+    if (assistedFlipped.length > 0) {
+      console.log(`Recalculating PRs for ${assistedFlipped.length} exercise(s) with changed isAssisted...`);
+      for (const id of assistedFlipped) {
+        await recalculateExercisePRs(id);
+      }
+    }
+
+    // 6. Ensure AUTOINCREMENT floor stays at >= 1000 for user exercises
+    await database.runAsync(
+      `INSERT OR REPLACE INTO sqlite_sequence (name, seq)
+       SELECT 'exercises', MAX(MAX(exerciseID), 999) FROM exercises;`
+    );
 
     console.log('Database synced with latest exercise data');
   } catch (error) {
@@ -149,6 +187,102 @@ export const setupDatabase = async () => {
     throw error;
   }
 };
+
+
+export const fetchExercisesWithRatios = async () => {
+  const database = await getDb();
+  return await database.getAllAsync(
+    `SELECT exerciseID, name, strengthRatios FROM exercises 
+     WHERE strengthRatios IS NOT NULL AND strengthRatios != 'null'
+     ORDER BY name ASC;`
+  );
+};
+
+export const updateExerciseStrengthRatios = async (exerciseID, ratios) => {
+  const database = await getDb();
+  const ratiosString = ratios ? JSON.stringify(ratios) : null;
+  await database.runAsync(
+    `UPDATE exercises SET strengthRatios = ? WHERE exerciseID = ?;`,
+    [ratiosString, exerciseID]
+  );
+};
+
+const migrateExerciseIDs = async (database) => {
+  const dbExercises = await database.getAllAsync('SELECT * FROM exercises;');
+  if (dbExercises.length === 0) return;
+
+  const jsonNameToID = new Map(exerciseData.map(ex => [ex.name, ex.exerciseID]));
+  const remap = new Map();
+  const claimedIDs = new Set(exerciseData.map(ex => ex.exerciseID));
+
+  for (const ex of dbExercises) {
+    if (!jsonNameToID.has(ex.name) && ex.exerciseID >= 1000) {
+      claimedIDs.add(ex.exerciseID);
+    }
+  }
+
+  for (const ex of dbExercises) {
+    if (jsonNameToID.has(ex.name)) {
+      const correctID = jsonNameToID.get(ex.name);
+      if (ex.exerciseID !== correctID) {
+        remap.set(ex.exerciseID, correctID);
+      }
+    }
+  }
+
+  let nextUserID = 1000;
+  for (const ex of dbExercises) {
+    if (!jsonNameToID.has(ex.name) && ex.exerciseID < 1000) {
+      while (claimedIDs.has(nextUserID)) nextUserID++;
+      remap.set(ex.exerciseID, nextUserID);
+      claimedIDs.add(nextUserID);
+      nextUserID++;
+    }
+  }
+
+  if (remap.size === 0) {
+    console.log('Exercise ID migration: already correct, nothing to do.');
+    return;
+  }
+
+  console.log(`Exercise ID migration: remapping ${remap.size} exercise(s)...`);
+
+  const TEMP_OFFSET = 100_000;
+  await database.execAsync('PRAGMA foreign_keys = OFF;');
+
+  try {
+    await database.withTransactionAsync(async () => {
+      for (const [oldID] of remap) {
+        const tempID = oldID + TEMP_OFFSET;
+        await database.runAsync('UPDATE exercises       SET exerciseID = ? WHERE exerciseID = ?;', [tempID, oldID]);
+        await database.runAsync('UPDATE workoutHistory  SET exerciseID = ? WHERE exerciseID = ?;', [tempID, oldID]);
+        await database.runAsync('UPDATE pinnedExercises SET exerciseID = ? WHERE exerciseID = ?;', [tempID, oldID]);
+      }
+
+      for (const [oldID, newID] of remap) {
+        const tempID = oldID + TEMP_OFFSET;
+        await database.runAsync('UPDATE exercises       SET exerciseID = ? WHERE exerciseID = ?;', [newID, tempID]);
+        await database.runAsync('UPDATE workoutHistory  SET exerciseID = ? WHERE exerciseID = ?;', [newID, tempID]);
+        await database.runAsync('UPDATE pinnedExercises SET exerciseID = ? WHERE exerciseID = ?;', [newID, tempID]);
+      }
+    });
+
+    const maxRow = await database.getFirstAsync('SELECT MAX(exerciseID) as maxID FROM exercises;');
+    const newSeq = Math.max(maxRow?.maxID ?? 0, 999);
+    await database.runAsync(
+      `INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES ('exercises', ?);`,
+      [newSeq]
+    );
+
+    console.log(`Exercise ID migration complete. ${remap.size} exercise(s) remapped.`);
+  } catch (error) {
+    console.error('Exercise ID migration failed:', error);
+    throw error;
+  } finally {
+    await database.execAsync('PRAGMA foreign_keys = ON;');
+  }
+};
+
 
 // Fetch all exercises from the database
 export const fetchExercises = async () => {
@@ -180,13 +314,13 @@ export const updateExercise = async (exerciseID, exerciseName, targetMuscles, ac
   try {
     await database.runAsync(
       `UPDATE exercises 
-       SET name = ?, targetMuscle = ?, accessoryMuscles = ?, isCardio = ?, isAssisted = ? 
+       SET name = ?, targetMuscle = ?, accessoryMuscles = ?, isCardio = ?, isAssisted = ?, userCustomised = 1
        WHERE exerciseID = ?;`,
       [exerciseName, targetMuscles, accessoryMuscles, isCardio, isAssisted, exerciseID]
     );
     return "Exercise updated successfully!";
   } catch (error) {
-    if (error.message && error.message.includes("UNIQUE constraint failed")) {
+    if (error.message?.includes("UNIQUE constraint failed")) {
       throw new Error("Exercise name must be unique.");
     }
     throw error;

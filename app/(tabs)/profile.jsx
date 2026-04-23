@@ -120,18 +120,15 @@ const Profile = () => {
             .map(r => r.item); // Map to item at the VERY end
     }, [searchQuery, exercises, workoutCounts, fuse]);
 
-    const showExerciseInfo = async (item) => {
+    const showExerciseInfo = (item) => {
         if (loadingExerciseID) return;
+
         setLoadingExerciseID(item.exerciseID);
-        try {
-            const history = await fetchExerciseProgress(item.exerciseID);
-            primeGraphData(computeGraphPoints(history, !!item.isAssisted));
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoadingExerciseID(null);
-            router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
-        }
+
+        router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
+
+        // small delay to avoid stuck loading state if user comes back fast
+        setTimeout(() => setLoadingExerciseID(null), 300);
     };
 
 
@@ -149,6 +146,7 @@ const Profile = () => {
                 <View style={styles.exerciseContent}>
                     <Text style={styles.exerciseName} numberOfLines={1} ellipsizeMode="tail">
                         {item.name}
+                        {item.exerciseID}
                     </Text>
                     <View style={styles.exerciseRight}>
                         {!hasMuscles && !item.isCardio && (

@@ -507,13 +507,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         };
     }, [theme]);
 
-    if (loading) {
-        return (
-            <View style={styles.container}>
-                <ActivityIndicator color={theme.primary} style={{ marginTop: 50 }} />
-            </View>
-        );
-    }
+
 
     const hasEnoughData = allData.length >= 2 && points.length >= 2;
     const currentValue = points[points.length - 1]?.value || 0;

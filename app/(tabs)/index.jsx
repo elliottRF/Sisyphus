@@ -34,7 +34,7 @@ const muscleMapping = {
 };
 
 const shortMuscleNames = {
-    "Upper Back": "U. Back",
+    "Upper Back": "Back",
     "Lower Back": "L. Back",
     "Shoulders": "Delts",
     "Forearms": "Forearms",

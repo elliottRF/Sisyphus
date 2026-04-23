@@ -103,7 +103,7 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 const StrengthLegend = React.memo(({ currentTier, theme, strengthRatios, bw }) => {
-
+    const { useImperial } = useTheme();
     const handlePress = (index, label) => {
         // 1. Safety check for missing data
         if (!strengthRatios || strengthRatios[index] === undefined) {
@@ -122,7 +122,7 @@ const StrengthLegend = React.memo(({ currentTier, theme, strengthRatios, bw }) =
         // 3. Trigger Global Alert
         customAlert(
             `${label} Target`,
-            `1RM of ${requiredWeight}kg required at ${bw}kg bw.`,
+            `1RM of ${formatWeight(requiredWeight, useImperial)}${unitLabel(useImperial)} required at ${formatWeight(bw, useImperial)}${unitLabel(useImperial)} bodyweight.`,
             [{ text: "Got it", style: "default" }],
             { iconType: 'confirm' } // Force the blue check icon
         );
@@ -196,7 +196,6 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
             setIsLoading(false);
         }
     };
-
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const entranceOpacity = useRef(new Animated.Value(0)).current;
     const entranceTranslateY = useRef(new Animated.Value(18)).current;
@@ -427,6 +426,8 @@ const ExerciseHistory = (props) => {
     const [strengthRatios, setStrengthRatios] = useState([]);
     const [best1RM, setBest1RM] = useState(null);
 
+    const bodyOpacity = useRef(new Animated.Value(0)).current;
+
     // Null rather than 0 so stat cards render '—' on mount instead of '0',
     // avoiding a jarring jump from a zero placeholder to the real value.
     const [stats, setStats] = useState({
@@ -454,8 +455,22 @@ const ExerciseHistory = (props) => {
             .filter(Boolean);
     }, [workoutHistory, showOnlyPRs]);
 
+
+
     const hasStrengthRatios = !!strengthRatios?.length;
     const hasBodyWeight = bodyWeight != null;
+
+
+    const isMuscleDataReady = useMemo(() => {
+        return (
+            exercisesList.length > 0 &&
+            (
+                !hasStrengthRatios ||
+                (strengthTier !== null && bodyWeight?.weight != null)
+            )
+        );
+    }, [exercisesList, hasStrengthRatios, strengthTier, bodyWeight]);
+
 
     // Derive strength tier (1–5) from personalBest ÷ bodyweight vs the ratio thresholds.
     // Returns null until we have all three pieces of data.
@@ -484,13 +499,36 @@ const ExerciseHistory = (props) => {
     };
 
     useEffect(() => {
-        if (exercisesList.length > 0) {
-            const { targetMuscles, accessoryMuscles } = getExerciseMuscles(props.exerciseID, exercisesList);
-            handleMuscleStrings(targetMuscles, accessoryMuscles, strengthTier);
-            setExerciseName(currentExerciseDetails.name);
-            setStrengthRatios(JSON.parse(currentExerciseDetails.strengthRatios || "[]"));
+        if (exercisesList.length === 0) return;
+
+        const current = exercisesList.find(e => e.exerciseID === props.exerciseID);
+        if (!current) return;
+
+        setExerciseName(current.name);
+        setStrengthRatios(JSON.parse(current.strengthRatios || "[]"));
+    }, [exercisesList]);
+
+    useEffect(() => {
+        if (!isMuscleDataReady) return;
+
+        const { targetMuscles, accessoryMuscles } =
+            getExerciseMuscles(props.exerciseID, exercisesList);
+
+        handleMuscleStrings(targetMuscles, accessoryMuscles, strengthTier);
+    }, [isMuscleDataReady, strengthTier, exercisesList]);
+
+    useEffect(() => {
+        if (isMuscleDataReady) {
+            Animated.timing(bodyOpacity, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true,
+            }).start();
+        } else {
+            bodyOpacity.setValue(0);
         }
-    }, [exercisesList, strengthTier]);
+    }, [isMuscleDataReady]);
+
 
     const getExerciseMuscles = (exerciseID, exerciseLog) => {
         const exercise = exerciseLog.find(ex => ex.exerciseID === exerciseID);
@@ -744,29 +782,66 @@ const ExerciseHistory = (props) => {
 
                         {!isCardioHeader && (
                             <View style={styles.bodyWrapper}>
-                                <Body
-                                    data={formattedTargets}
-                                    gender={gender}
-                                    side="front"
-                                    scale={0.75}
-                                    border={safeBorder}
-                                    colors={bodyColors}
-                                    defaultFill={theme.bodyFill}
-                                />
-                                <View style={styles.bodyDivider} />
-                                <Body
-                                    data={formattedTargets}
-                                    gender={gender}
-                                    side="back"
-                                    scale={0.75}
-                                    border={safeBorder}
-                                    colors={bodyColors}
-                                    defaultFill={theme.bodyFill}
-                                />
 
-                                {hasStrengthRatios && hasBodyWeight && (
+                                {!isMuscleDataReady ? (
+                                    // Placeholder (empty box, no spinner)
+                                    <View style={{
+                                        height: 180,
+                                        width: '100%',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                    }}>
+                                        {/* Optional subtle placeholder */}
+                                        <View style={{
+                                            width: '80%',
+                                            height: 140,
+                                            borderRadius: 16,
+                                            backgroundColor: theme.surface,
+                                            opacity: 0.6
+                                        }} />
+                                    </View>
+                                ) : (
+                                    <Animated.View
+                                        style={{
+                                            flexDirection: 'row',
+                                            justifyContent: 'space-evenly',
+                                            alignItems: 'center',
+                                            width: '100%',
+                                            opacity: bodyOpacity
+                                        }}
+                                    >
+                                        <Body
+                                            data={formattedTargets}
+                                            gender={gender}
+                                            side="front"
+                                            scale={0.75}
+                                            border={safeBorder}
+                                            colors={bodyColors}
+                                            defaultFill={theme.bodyFill}
+                                        />
+
+                                        <View style={styles.bodyDivider} />
+
+                                        <Body
+                                            data={formattedTargets}
+                                            gender={gender}
+                                            side="back"
+                                            scale={0.75}
+                                            border={safeBorder}
+                                            colors={bodyColors}
+                                            defaultFill={theme.bodyFill}
+                                        />
+                                    </Animated.View>
+                                )}
+
+                                {hasStrengthRatios && hasBodyWeight && isMuscleDataReady && (
                                     <View style={{ width: '100%', borderTopWidth: 1, borderTopColor: safeBorder }}>
-                                        <StrengthLegend currentTier={strengthTier} theme={theme} strengthRatios={strengthRatios} bw={bodyWeight.weight} />
+                                        <StrengthLegend
+                                            currentTier={strengthTier}
+                                            theme={theme}
+                                            strengthRatios={strengthRatios}
+                                            bw={bodyWeight.weight}
+                                        />
                                     </View>
                                 )}
                             </View>
