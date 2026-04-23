@@ -513,6 +513,43 @@ const ExerciseHistory = (props) => {
         handleMuscleStrings(targetMuscles, accessoryMuscles, strengthTier);
     }, [isMuscleDataReady, strengthTier, exercisesList]);
 
+
+
+    const stableBodyColors = useRef(null);
+
+    useEffect(() => {
+        if (!isBodyReady) return;
+
+        const hasFinalStrength =
+            hasStrengthRatios &&
+            strengthTier !== null &&
+            bodyWeight?.weight != null;
+
+        const computed = hasFinalStrength
+            ? [
+                theme.bodyFill,
+                TIER_COLORS[Math.max(0, strengthTier - 1)] + '60',
+                ...TIER_COLORS
+            ]
+            : isDynamic
+                ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
+                : [theme.bodyFill, theme.primary + '60', theme.primary];
+
+        // overwrite only when transitioning from fallback → final
+        if (!stableBodyColors.current || hasFinalStrength) {
+            stableBodyColors.current = computed;
+        }
+
+    }, [isBodyReady, strengthTier, bodyWeight, hasStrengthRatios]);
+
+
+    useEffect(() => {
+        stableBodyColors.current = null;
+    }, [props.exerciseID]);
+
+
+
+
     // FIX 2: Body is always rendered (opacity 0→1). Previously the component
     // swapped between a placeholder <View> and the <Body> mount, which caused
     // a fresh mount every time isMuscleDataReady flipped, triggering Body's own
@@ -684,6 +721,14 @@ const ExerciseHistory = (props) => {
     const isCardioHeader = !!currentExerciseDetails?.isCardio;
     const isAssistedHeader = !!currentExerciseDetails?.isAssisted;
 
+    const isBodyReady = useMemo(() => {
+        if (exercisesList.length === 0) return false;
+
+        const isBodyReady = exercisesList.length > 0 && formattedTargets.length > 0;
+
+        return true;
+    }, [exercisesList, hasStrengthRatios, strengthTier, bodyWeight]);
+
     const fmtWeight = (val) =>
         val == null
             ? '—'
@@ -776,38 +821,43 @@ const ExerciseHistory = (props) => {
                                 {/* Body always rendered — opacity animated 0→1 once colours are
                                     finalised. No mount/unmount swap means no layout jump and no
                                     Body-internal colour transition on first paint. */}
-                                <Animated.View
+                                <View
                                     style={{
                                         flexDirection: 'row',
                                         justifyContent: 'space-evenly',
                                         alignItems: 'center',
                                         width: '100%',
                                         paddingVertical: 8,
-                                        opacity: bodyOpacity,
                                     }}
                                 >
-                                    <Body
-                                        data={formattedTargets}
-                                        gender={gender}
-                                        side="front"
-                                        scale={0.75}
-                                        border={safeBorder}
-                                        colors={bodyColors}
-                                        defaultFill={theme.bodyFill}
-                                    />
+                                    {!stableBodyColors.current ? (
+                                        <View style={{ height: 300 }} />
+                                    ) : (
+                                        <>
+                                            <Body
+                                                data={formattedTargets}
+                                                gender={gender}
+                                                side="front"
+                                                scale={0.75}
+                                                border={safeBorder}
+                                                colors={stableBodyColors.current}
+                                                defaultFill={theme.bodyFill}
+                                            />
 
-                                    <View style={styles.bodyDivider} />
+                                            <View style={styles.bodyDivider} />
 
-                                    <Body
-                                        data={formattedTargets}
-                                        gender={gender}
-                                        side="back"
-                                        scale={0.75}
-                                        border={safeBorder}
-                                        colors={bodyColors}
-                                        defaultFill={theme.bodyFill}
-                                    />
-                                </Animated.View>
+                                            <Body
+                                                data={formattedTargets}
+                                                gender={gender}
+                                                side="back"
+                                                scale={0.75}
+                                                border={safeBorder}
+                                                colors={stableBodyColors.current}
+                                                defaultFill={theme.bodyFill}
+                                            />
+                                        </>
+                                    )}
+                                </View>
 
                                 <View style={{
                                     width: '100%',
