@@ -23,7 +23,8 @@ import {
     setupDatabase,
     getExercisePRs,
     fetchWorkoutHistoryBySession,
-    overwriteWorkoutSession // FIXED: Changed from updateWorkoutHistory
+    overwriteWorkoutSession, // FIXED: Changed from updateWorkoutHistory
+    getExerciseSnapshot
 } from '../../components/db';
 
 import ExerciseEditable from '../../components/exerciseEditable'
@@ -35,6 +36,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { toStorageKg, formatWeight } from '../../utils/units';
 import { customAlert } from '../../utils/customAlert';
+import { emit, AppEvents } from '../../utils/events';
 
 // FIXED: Component now uses route params instead of props
 const EditWorkout = () => {
@@ -108,8 +110,13 @@ const EditWorkout = () => {
         actionSheetRef.current?.show();
     };
 
-    const showExerciseInfo = (exerciseDetails) => {
+    const showExerciseInfo = async (exerciseDetails) => {
         if (exerciseDetails) {
+            try {
+                await getExerciseSnapshot(exerciseDetails.exerciseID);
+            } catch (error) {
+                console.error('Error prewarming exercise snapshot:', error);
+            }
             setSelectedExerciseId(exerciseDetails.exerciseID);
             setCurrentExerciseName(exerciseDetails.name);
             exerciseInfoActionSheetRef.current?.show();
@@ -304,6 +311,8 @@ const EditWorkout = () => {
                 originalDurationMinutes
             );
 
+            emit(AppEvents.WORKOUT_DATA_IMPORTED);
+
             customAlert("Success", "Workout updated successfully!", [
                 { text: "OK", onPress: () => router.back() }
             ]);
@@ -327,6 +336,7 @@ const EditWorkout = () => {
                     onPress: async () => {
                         try {
                             await deleteWorkoutSession(WORKOUT_SESSION_NUMBER);
+                            emit(AppEvents.WORKOUT_DATA_IMPORTED);
                             // Brief delay to allow the confirmation alert to dismiss smoothly
                             setTimeout(() => {
                                 customAlert("Deleted", "Workout deleted.", [

@@ -7,13 +7,14 @@ import Body from "react-native-body-highlighter";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession, getLatestBodyWeight, fetchBest1RM } from './db';
+import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession, getLatestBodyWeight, getExerciseSnapshot } from './db';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import PRGraphCard from "./PRGraphCard";
 import { Stack } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 import { customAlert } from '../utils/customAlert';
+import { getExerciseSnapshotSync, parseStrengthRatios } from '../utils/exerciseSnapshots';
 
 
 
@@ -133,7 +134,7 @@ const StrengthLegend = React.memo(({ currentTier, theme, strengthRatios, bw }) =
             flexWrap: 'wrap',
             rowGap: 6,
             columnGap: 4,
-            paddingHorizontal: 16,
+            paddingHorizontal: 20,
             paddingTop: 10,
             paddingBottom: 14,
         }}>
@@ -381,14 +382,71 @@ const ALL_MUSCLE_SLUGS = [
 ];
 
 const DEFAULT_MUSCLE_TARGETS = ALL_MUSCLE_SLUGS.map(slug => ({ slug, intensity: 1 }));
+const EMPTY_STATS = {
+    totalSets: null,
+    personalBest: null,
+    totalVolume: null,
+    maxDistance: null,
+    bestPace: null,
+};
+
+const splitMuscleString = (value) =>
+    value
+        ? value.split(',').map(muscle => muscle.trim()).filter(Boolean)
+        : [];
+
+const buildFormattedTargets = (targetSelected = [], accessorySelected = []) => {
+    const workedSlugs = new Set();
+
+    const targetIntensity = 3;
+
+    const sluggedTargets = targetSelected.map(target => {
+        const slug = typeof target === 'string' ? target.trim().toLowerCase() : '';
+        workedSlugs.add(slug);
+        return { slug, intensity: targetIntensity, key: slug };
+    });
+
+    const sluggedAccessories = accessorySelected.map(accessory => {
+        const slug = typeof accessory === 'string' ? accessory.trim().toLowerCase() : '';
+        workedSlugs.add(slug);
+        return { slug, intensity: 2, key: slug };
+    });
+
+    const unworked = ALL_MUSCLE_SLUGS
+        .filter(slug => !workedSlugs.has(slug))
+        .map(slug => ({ slug, intensity: 1 }));
+
+    return [...sluggedTargets, ...sluggedAccessories, ...unworked];
+};
+
+const snapshotToExerciseRecord = (snapshot) => {
+    if (!snapshot) return null;
+
+    return {
+        exerciseID: snapshot.exerciseID,
+        name: snapshot.name,
+        targetMuscle: snapshot.targetMuscle || '',
+        accessoryMuscles: snapshot.accessoryMuscles || '',
+        isCardio: snapshot.isCardio ? 1 : 0,
+        isAssisted: snapshot.isAssisted ? 1 : 0,
+        strengthRatios: JSON.stringify(snapshot.strengthRatios || []),
+    };
+};
 
 
-const FadingStatText = React.memo(({ text, style }) => {
+const FadingStatText = React.memo(({ text, style, animateInitialPlaceholder = true }) => {
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const [displayText, setDisplayText] = useState(text);
 
     useEffect(() => {
         if (text !== displayText) {
+            const isInitialPlaceholder = displayText == null || displayText === '—' || displayText === 'â€”';
+            if (isInitialPlaceholder && !animateInitialPlaceholder) {
+                setDisplayText(text);
+                fadeAnim.setValue(1);
+                return;
+            }
+
             Animated.timing(fadeAnim, {
                 toValue: 0,
                 duration: 150,
@@ -415,28 +473,34 @@ const ExerciseHistory = (props) => {
     const { theme, gender, useImperial } = useTheme();
     const router = useRouter();
     const styles = getStyles(theme);
+    const initialSnapshot = getExerciseSnapshotSync(props.exerciseID);
+    const hasInitialSnapshot = !!initialSnapshot;
+    const initialSnapshotExercise = snapshotToExerciseRecord(initialSnapshot);
+    const initialSnapshotHasStrengthRatios = !!initialSnapshot?.strengthRatios?.length;
+    const initialCanShowBodyOverlay = !!initialSnapshotExercise && !initialSnapshotHasStrengthRatios;
 
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [exercisesList, setExercises] = useState([]);
-    const [formattedTargets, setFormattedTargets] = useState(DEFAULT_MUSCLE_TARGETS);
+    const [exercisesList, setExercises] = useState(initialSnapshotExercise ? [initialSnapshotExercise] : []);
+    const [formattedTargets, setFormattedTargets] = useState(() => initialSnapshotExercise
+        ? buildFormattedTargets(
+            splitMuscleString(initialSnapshotExercise.targetMuscle),
+            splitMuscleString(initialSnapshotExercise.accessoryMuscles)
+        )
+        : DEFAULT_MUSCLE_TARGETS);
     const [bodyWeight, setBodyWeight] = useState(null);
-    const [strengthRatios, setStrengthRatios] = useState([]);
-    const [best1RM, setBest1RM] = useState(null);
+    const [strengthRatios, setStrengthRatios] = useState(initialSnapshot?.strengthRatios || []);
+    const [best1RM, setBest1RM] = useState(initialSnapshot?.best1RM ?? null);
+    const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
+    const [hasLoadedBodyWeight, setHasLoadedBodyWeight] = useState(false);
 
-    const bodyOpacity = useRef(new Animated.Value(0)).current;
+    const bodyOpacity = useRef(new Animated.Value(initialCanShowBodyOverlay ? 1 : 0)).current;
 
-    const [stats, setStats] = useState({
-        totalSets: null,
-        personalBest: null,
-        totalVolume: null,
-        maxDistance: null,
-        bestPace: null,
-    });
+    const [stats, setStats] = useState(initialSnapshot?.stats || EMPTY_STATS);
     const [showOnlyPRs, setShowOnlyPRs] = useState(false);
     const [filterAnimKey, setFilterAnimKey] = useState(0);
 
-    const [exerciseName, setExerciseName] = useState(props.exerciseName);
+    const [exerciseName, setExerciseName] = useState(initialSnapshot?.name || props.exerciseName);
 
     const filteredWorkoutHistory = useMemo(() => {
         if (!showOnlyPRs) return workoutHistory;
@@ -494,6 +558,55 @@ const ExerciseHistory = (props) => {
         });
     };
 
+    const applySnapshot = useCallback((snapshot) => {
+        if (!snapshot) return;
+
+        setExerciseName(snapshot.name || props.exerciseName);
+        setStrengthRatios(Array.isArray(snapshot.strengthRatios) ? snapshot.strengthRatios : []);
+        setBest1RM(snapshot.best1RM ?? 0);
+        setStats(snapshot.stats || EMPTY_STATS);
+        const snapshotExercise = snapshotToExerciseRecord(snapshot);
+
+        setExercises(prev => {
+            const rest = (prev || []).filter(ex => ex.exerciseID !== snapshot.exerciseID);
+            return [snapshotExercise, ...rest];
+        });
+        setFormattedTargets(buildFormattedTargets(
+            splitMuscleString(snapshot.targetMuscle),
+            splitMuscleString(snapshot.accessoryMuscles),
+            !!snapshot.strengthRatios?.length
+        ));
+    }, [props.exerciseName]);
+
+    useEffect(() => {
+        let isActive = true;
+        const syncSnapshot = getExerciseSnapshotSync(props.exerciseID);
+
+        if (syncSnapshot) {
+            applySnapshot(syncSnapshot);
+        } else {
+            setExerciseName(props.exerciseName);
+            setStrengthRatios([]);
+            setBest1RM(null);
+            setStats(EMPTY_STATS);
+            setExercises([]);
+            setFormattedTargets(DEFAULT_MUSCLE_TARGETS);
+        }
+        setHasLoadedHistory(false);
+        setHasLoadedBodyWeight(false);
+        bodyOpacity.setValue(initialCanShowBodyOverlay ? 1 : 0);
+
+        getExerciseSnapshot(props.exerciseID)
+            .then(snapshot => {
+                if (isActive) applySnapshot(snapshot);
+            })
+            .catch(error => console.error('Error loading cached exercise snapshot:', error));
+
+        return () => {
+            isActive = false;
+        };
+    }, [props.exerciseID, applySnapshot]);
+
     useEffect(() => {
         if (exercisesList.length === 0) return;
 
@@ -501,7 +614,7 @@ const ExerciseHistory = (props) => {
         if (!current) return;
 
         setExerciseName(current.name);
-        setStrengthRatios(JSON.parse(current.strengthRatios || "[]"));
+        setStrengthRatios(parseStrengthRatios(current.strengthRatios));
     }, [exercisesList]);
 
     useEffect(() => {
@@ -514,50 +627,48 @@ const ExerciseHistory = (props) => {
     }, [isMuscleDataReady, strengthTier, exercisesList]);
 
 
+    const hasResolvedMuscles = exercisesList.some(exercise =>
+        exercise.exerciseID === props.exerciseID && (
+            !!exercise.targetMuscle?.trim() || !!exercise.accessoryMuscles?.trim()
+        )
+    );
 
-    const stableBodyColors = useRef(null);
+    const canResolveStrengthColor = !hasStrengthRatios || (
+        hasLoadedHistory &&
+        hasLoadedBodyWeight &&
+        strengthTier !== null &&
+        bodyWeight?.weight != null
+    );
 
-    useEffect(() => {
-        if (!isBodyReady) return;
+    const overlayBodyColors = useMemo(() => {
+        if (!hasResolvedMuscles) return null;
+        if (!canResolveStrengthColor) return null;
 
-        const hasFinalStrength =
-            hasStrengthRatios &&
-            strengthTier !== null &&
-            bodyWeight?.weight != null;
-
-        const computed = hasFinalStrength
-            ? [
+        if (hasStrengthRatios && strengthTier !== null) {
+            return [
                 theme.bodyFill,
                 TIER_COLORS[Math.max(0, strengthTier - 1)] + '60',
-                ...TIER_COLORS
-            ]
-            : isDynamic
-                ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
-                : [theme.bodyFill, theme.primary + '60', theme.primary];
-
-        // overwrite only when transitioning from fallback → final
-        if (!stableBodyColors.current || hasFinalStrength) {
-            stableBodyColors.current = computed;
+                TIER_COLORS[Math.max(0, strengthTier - 1)]
+            ];
         }
 
-    }, [isBodyReady, strengthTier, bodyWeight, hasStrengthRatios]);
+        return isDynamic
+            ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
+            : [theme.bodyFill, theme.primary + '60', theme.primary];
+    }, [hasResolvedMuscles, canResolveStrengthColor, hasStrengthRatios, strengthTier, theme, isDynamic]);
+
+    const isStrengthReady = !hasStrengthRatios || (
+        strengthTier !== null && bodyWeight?.weight != null
+    );
+
+    const canShowBodyOverlay =
+        hasResolvedMuscles &&
+        !!overlayBodyColors &&
+        isStrengthReady;
 
 
     useEffect(() => {
-        stableBodyColors.current = null;
-    }, [props.exerciseID]);
-
-
-
-
-    // FIX 2: Body is always rendered (opacity 0→1). Previously the component
-    // swapped between a placeholder <View> and the <Body> mount, which caused
-    // a fresh mount every time isMuscleDataReady flipped, triggering Body's own
-    // internal colour transition and the layout height jumping.
-    // Now Body mounts once at opacity 0 (invisible but taking correct space),
-    // and fades in when the colours are finalised.
-    useEffect(() => {
-        if (isMuscleDataReady) {
+        if (canShowBodyOverlay) {
             Animated.timing(bodyOpacity, {
                 toValue: 1,
                 duration: 300,
@@ -566,7 +677,7 @@ const ExerciseHistory = (props) => {
         } else {
             bodyOpacity.setValue(0);
         }
-    }, [isMuscleDataReady]);
+    }, [canShowBodyOverlay]);
 
 
     const getExerciseMuscles = (exerciseID, exerciseLog) => {
@@ -578,29 +689,7 @@ const ExerciseHistory = (props) => {
     };
 
     const handleMuscleStrings = (targetSelected, accessorySelected, tier = null) => {
-        const workedSlugs = new Set();
-
-        const targetIntensity = (hasStrengthRatios && tier != null)
-            ? Math.max(3, tier + 2)
-            : 3;
-
-        const sluggedTargets = targetSelected.map(target => {
-            const slug = typeof target === 'string' ? target.trim().toLowerCase() : '';
-            workedSlugs.add(slug);
-            return { slug, intensity: targetIntensity };
-        });
-
-        const sluggedAccessories = accessorySelected.map(accessory => {
-            const slug = typeof accessory === 'string' ? accessory.trim().toLowerCase() : '';
-            workedSlugs.add(slug);
-            return { slug, intensity: 2 };
-        });
-
-        const unworked = ALL_MUSCLE_SLUGS
-            .filter(slug => !workedSlugs.has(slug))
-            .map(slug => ({ slug, intensity: 1 }));
-
-        setFormattedTargets([...sluggedTargets, ...sluggedAccessories, ...unworked]);
+        setFormattedTargets(buildFormattedTargets(targetSelected, accessorySelected, hasStrengthRatios, tier));
     };
 
     useFocusEffect(
@@ -620,8 +709,11 @@ const ExerciseHistory = (props) => {
     useFocusEffect(
         useCallback(() => {
             getLatestBodyWeight()
-                .then(bw => setBodyWeight(bw))
-                .catch(() => { });
+                .then(bw => {
+                    setBodyWeight(bw);
+                })
+                .catch(() => { })
+                .finally(() => setHasLoadedBodyWeight(true));
         }, [])
     );
 
@@ -630,11 +722,15 @@ const ExerciseHistory = (props) => {
             const history = await fetchExerciseHistory(props.exerciseID);
             const groupedHistory = groupBySession(history);
             setWorkoutHistory(groupedHistory);
-            const best1RM = await fetchBest1RM(props.exerciseID);
-            setBest1RM(best1RM);
+            const nextBest1RM = history.reduce((max, entry) => {
+                const value = Number(entry.oneRM) || 0;
+                return value > max ? value : max;
+            }, 0);
+            setBest1RM(nextBest1RM);
         } catch (error) {
             console.error("Error loading workout history:", error);
         } finally {
+            setHasLoadedHistory(true);
             setLoading(false);
         }
     };
@@ -716,6 +812,8 @@ const ExerciseHistory = (props) => {
     }, [hasStrengthRatios, strengthTier, theme, isDynamic]);
 
     const safeBorder = isDynamic ? '#4d4d4d' : theme.border;
+    const fallbackBodyColors = [theme.bodyFill, theme.bodyFill, theme.bodyFill];
+    const resolvedBodyColors = overlayBodyColors || fallbackBodyColors;
 
     const currentExerciseDetails = exercisesList.find(e => e.exerciseID === props.exerciseID);
     const isCardioHeader = !!currentExerciseDetails?.isCardio;
@@ -771,7 +869,7 @@ const ExerciseHistory = (props) => {
                             {isCardioHeader ? (
                                 <View style={styles.statCard}>
                                     <Feather name="map-pin" size={16} color={theme.primary} style={styles.statIcon} />
-                                    <FadingStatText text={fmtDist(stats.maxDistance)} style={styles.statValue} />
+                                    <FadingStatText text={fmtDist(stats.maxDistance)} style={styles.statValue} animateInitialPlaceholder={!hasInitialSnapshot} />
                                     <Text style={styles.statLabel}>Longest Dist</Text>
                                 </View>
                             ) : (
@@ -784,6 +882,7 @@ const ExerciseHistory = (props) => {
                                                 : `${isAssistedHeader && stats.personalBest > 0 ? '-' : ''}${fmtWeight(stats.personalBest)}`
                                             }
                                             style={styles.statValue}
+                                            animateInitialPlaceholder={!hasInitialSnapshot}
                                         />
                                         <Text style={styles.statLabel}>Weight PR</Text>
                                     </View>
@@ -792,21 +891,21 @@ const ExerciseHistory = (props) => {
 
                             <View style={styles.statCard}>
                                 <Feather name="layers" size={16} color={theme.primary} style={styles.statIcon} />
-                                <FadingStatText text={fmtSets(stats.totalSets)} style={styles.statValue} />
+                                <FadingStatText text={fmtSets(stats.totalSets)} style={styles.statValue} animateInitialPlaceholder={!hasInitialSnapshot} />
                                 <Text style={styles.statLabel}>Total Sets</Text>
                             </View>
 
                             {isCardioHeader ? (
                                 <View style={styles.statCard}>
                                     <Feather name="zap" size={16} color={theme.primary} style={styles.statIcon} />
-                                    <FadingStatText text={fmtPace(stats.bestPace)} style={styles.statValue} />
+                                    <FadingStatText text={fmtPace(stats.bestPace)} style={styles.statValue} animateInitialPlaceholder={!hasInitialSnapshot} />
                                     <Text style={styles.statLabel}>Fastest Pace</Text>
                                 </View>
                             ) : (
                                 !isAssistedHeader && (
                                     <View style={styles.statCard}>
                                         <Feather name="activity" size={16} color={theme.primary} style={styles.statIcon} />
-                                        <FadingStatText text={fmtVolume(stats.totalVolume)} style={styles.statValue} />
+                                        <FadingStatText text={fmtVolume(stats.totalVolume)} style={styles.statValue} animateInitialPlaceholder={!hasInitialSnapshot} />
                                         <Text style={styles.statLabel}>Volume</Text>
                                     </View>
                                 )
@@ -823,40 +922,82 @@ const ExerciseHistory = (props) => {
                                     Body-internal colour transition on first paint. */}
                                 <View
                                     style={{
+                                        position: 'relative',
                                         flexDirection: 'row',
                                         justifyContent: 'space-evenly',
                                         alignItems: 'center',
                                         width: '100%',
                                         paddingVertical: 8,
+                                        minHeight: 300,
                                     }}
                                 >
-                                    {!stableBodyColors.current ? (
-                                        <View style={{ height: 300 }} />
-                                    ) : (
-                                        <>
-                                            <Body
-                                                data={formattedTargets}
-                                                gender={gender}
-                                                side="front"
-                                                scale={0.75}
-                                                border={safeBorder}
-                                                colors={stableBodyColors.current}
-                                                defaultFill={theme.bodyFill}
-                                            />
+                                    <View
+                                        style={{
+                                            flexDirection: 'row',
+                                            justifyContent: 'space-evenly',
+                                            alignItems: 'center',
+                                            width: '100%',
+                                        }}
+                                    >
+                                        <Body
+                                            data={DEFAULT_MUSCLE_TARGETS}
+                                            gender={gender}
+                                            side="front"
+                                            scale={0.75}
+                                            border={safeBorder}
+                                            colors={fallbackBodyColors}
+                                            defaultFill={theme.bodyFill}
+                                        />
 
-                                            <View style={styles.bodyDivider} />
+                                        <View style={styles.bodyDivider} />
 
-                                            <Body
-                                                data={formattedTargets}
-                                                gender={gender}
-                                                side="back"
-                                                scale={0.75}
-                                                border={safeBorder}
-                                                colors={stableBodyColors.current}
-                                                defaultFill={theme.bodyFill}
-                                            />
-                                        </>
-                                    )}
+                                        <Body
+                                            data={DEFAULT_MUSCLE_TARGETS}
+                                            gender={gender}
+                                            side="back"
+                                            scale={0.75}
+                                            border={safeBorder}
+                                            colors={fallbackBodyColors}
+                                            defaultFill={theme.bodyFill}
+                                        />
+                                    </View>
+
+                                    <Animated.View
+                                        pointerEvents="none"
+                                        style={{
+                                            position: 'absolute',
+                                            top: 8,
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 8,
+                                            flexDirection: 'row',
+                                            justifyContent: 'space-evenly',
+                                            alignItems: 'center',
+                                            opacity: bodyOpacity,
+                                        }}
+                                    >
+                                        <Body
+                                            data={canShowBodyOverlay ? formattedTargets : DEFAULT_MUSCLE_TARGETS}
+                                            gender={gender}
+                                            side="front"
+                                            scale={0.75}
+                                            border={safeBorder}
+                                            colors={resolvedBodyColors}
+                                            defaultFill={theme.bodyFill}
+                                        />
+
+                                        <View style={styles.bodyDivider} />
+
+                                        <Body
+                                            data={canShowBodyOverlay ? formattedTargets : DEFAULT_MUSCLE_TARGETS}
+                                            gender={gender}
+                                            side="back"
+                                            scale={0.75}
+                                            border={safeBorder}
+                                            colors={resolvedBodyColors}
+                                            defaultFill={theme.bodyFill}
+                                        />
+                                    </Animated.View>
                                 </View>
 
                                 <View style={{

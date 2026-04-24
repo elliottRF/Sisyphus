@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, fetchExerciseWorkoutCounts } from '../../components/db';
+import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, fetchExerciseWorkoutCounts, getExerciseSnapshot } from '../../components/db';
 import ActionSheet from "react-native-actions-sheet";
 
 import NewExercise from "../../components/NewExercise"
@@ -15,8 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { useRouter } from 'expo-router';
-import { primeGraphData, computeGraphPoints } from '../../components/PRGraphCard';
-import { fetchExerciseProgress } from '../../components/db';
+import { primeGraphData } from '../../components/PRGraphCard';
 import Fuse from 'fuse.js';
 
 const Profile = () => {
@@ -120,15 +119,23 @@ const Profile = () => {
             .map(r => r.item); // Map to item at the VERY end
     }, [searchQuery, exercises, workoutCounts, fuse]);
 
-    const showExerciseInfo = (item) => {
+    const showExerciseInfo = async (item) => {
         if (loadingExerciseID) return;
 
         setLoadingExerciseID(item.exerciseID);
 
-        router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
-
-        // small delay to avoid stuck loading state if user comes back fast
-        setTimeout(() => setLoadingExerciseID(null), 300);
+        try {
+            const snapshot = await getExerciseSnapshot(item.exerciseID);
+            if (snapshot?.graphData) {
+                primeGraphData(snapshot.graphData);
+            }
+            router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
+        } catch (error) {
+            console.error('Error prewarming exercise snapshot:', error);
+            router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
+        } finally {
+            setTimeout(() => setLoadingExerciseID(null), 300);
+        }
     };
 
 

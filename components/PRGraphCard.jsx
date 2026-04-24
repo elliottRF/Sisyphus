@@ -1,14 +1,15 @@
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { LineGraph } from 'react-native-graph';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
-import { fetchExerciseProgress, unpinExercise, fetchExercises } from './db';
+import { getExerciseSnapshot, unpinExercise } from './db';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, on, off } from '../utils/events';
 import { formatWeight, unitLabel } from '../utils/units';
+import { computeGraphPoints as computeSnapshotGraphPoints } from '../utils/exerciseSnapshots';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DEFAULT_GRAPH_HEIGHT = 130;
@@ -23,38 +24,12 @@ const DEBUG_INTERPOLATE = true;
 // --- Cache ---
 let _cachedData = null;
 export const primeGraphData = (data) => { _cachedData = data; };
-
-export const computeGraphPoints = (history, isAssisted = false) => {
-    if (!history?.length) return [];
-
-    const dailyData = {};
-    history.forEach(entry => {
-        const date = new Date(entry.time);
-        if (isNaN(date.getTime())) return;
-        if (entry.setType === 'W') return;
-
-        const reps = Number(entry.reps) || 0;
-        if (reps <= 0) return;
-
-        const dateKey = date.toISOString().split('T')[0];
-        const oneRM = Number(entry.oneRM) || 0;
-        const weight = Number(entry.weight) || 0;
-
-        if (!dailyData[dateKey]) {
-            dailyData[dateKey] = { date: entry.time, max1RM: 0, maxWeight: isAssisted ? Infinity : 0 };
-        }
-        if (oneRM > dailyData[dateKey].max1RM && !isAssisted) dailyData[dateKey].max1RM = Math.round(oneRM);
-        if (isAssisted) {
-            if (weight < dailyData[dateKey].maxWeight) dailyData[dateKey].maxWeight = Math.round(weight);
-        } else {
-            if (weight > dailyData[dateKey].maxWeight) dailyData[dateKey].maxWeight = Math.round(weight);
-        }
-    });
-
-    return Object.values(dailyData)
-        .filter(d => d.max1RM > 0 || (isAssisted ? d.maxWeight !== Infinity : d.maxWeight > 0))
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
+const consumePrimedGraphData = () => {
+    const data = _cachedData;
+    _cachedData = null;
+    return data;
 };
+export const computeGraphPoints = computeSnapshotGraphPoints;
 
 // -------------
 
@@ -124,14 +99,19 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
     const { theme, useImperial } = useTheme();
     const router = useRouter();
     const styles = getStyles(theme, isCompact);
+    const primedDataRef = useRef(null);
+
+    if (primedDataRef.current === null) {
+        primedDataRef.current = consumePrimedGraphData();
+    }
 
     const graphWidth = isCompact
         ? SCREEN_WIDTH - 24 - 24 - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING
         : SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING;
     const graphHeight = isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT;
 
-    const [allData, setAllData] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [allData, setAllData] = useState(() => primedDataRef.current || []);
+    const [loading, setLoading] = useState(() => !primedDataRef.current?.length);
     const [graphMode, setGraphMode] = useState('history');
     const [timeRange, setTimeRange] = useState('ALL');
     const [selectedPoint, setSelectedPoint] = useState(null);
@@ -164,23 +144,19 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
 
     const loadData = async () => {
         try {
-            setLoading(true);
-
-            const exercises = await fetchExercises();
-            const exercise = exercises.find(e => e.exerciseID === exerciseID);
-            const assisted = !!exercise?.isAssisted;
-            setIsAssisted(assisted);
-            if (assisted) setGraphMode('maxWeight');
-
-            // Use primed cache if available (set by Profile before navigating)
-            if (_cachedData) {
-                setAllData(_cachedData);
-                _cachedData = null;
-                return;
+            if (allData.length === 0) {
+                setLoading(true);
             }
 
-            const history = await fetchExerciseProgress(exerciseID);
-            setAllData(computeGraphPoints(history, assisted));
+            const snapshot = await getExerciseSnapshot(exerciseID);
+            const assisted = !!snapshot?.isAssisted;
+            setIsAssisted(assisted);
+            setGraphMode(prev => {
+                if (assisted) return 'maxWeight';
+                return prev === 'maxWeight' ? 'history' : prev;
+            });
+
+            setAllData(snapshot?.graphData || []);
         } catch (error) {
             console.error("Error loading graph data:", error);
             setAllData([]);
@@ -218,8 +194,8 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         const now = new Date();
 
         let processed = [];
-        const useValue = (p) => graphMode === 'maxWeight' ? p.maxWeight : p.max1RM;
-        let tempProcessed = filtered.map(p => ({ date: p.date, value: useValue(p) }))
+        const getPointValue = (p) => graphMode === 'maxWeight' ? p.maxWeight : p.max1RM;
+        let tempProcessed = filtered.map(p => ({ date: p.date, value: getPointValue(p) }))
             .filter(p => isAssisted ? (p.value !== null && p.value !== undefined && p.value !== Infinity && p.value >= 0) : p.value > 0);
 
         if (graphMode === 'truePR') {
@@ -523,8 +499,14 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                     <View style={styles.header}>
                         <View style={{ flex: 1, marginRight: 8 }}>
                             <TouchableOpacity
-                                onPress={() => {
-                                    primeDataForNavigation();
+                                onPress={async () => {
+                                    try {
+                                        const snapshot = await getExerciseSnapshot(exerciseID);
+                                        primeGraphData(snapshot?.graphData || allData);
+                                    } catch (error) {
+                                        console.error("Error prewarming exercise snapshot:", error);
+                                        primeDataForNavigation();
+                                    }
                                     router.push(`/exercise/${exerciseID}?name=${encodeURIComponent(exerciseName)}`);
                                 }}
                                 activeOpacity={0.7}
@@ -660,7 +642,11 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                     </View>
                 )}
 
-                {hasEnoughData ? (
+                {loading && allData.length === 0 ? (
+                    <View style={[styles.emptyState, isCompact ? { height: 100 } : { height: 100 }]}>
+                        <ActivityIndicator size="small" color={theme.primary} />
+                    </View>
+                ) : hasEnoughData ? (
                     <>
                         <View style={[styles.tooltipContainer, isCompact && { height: 44, marginBottom: 4 }]}>
                             {selectedPoint?.date ? (

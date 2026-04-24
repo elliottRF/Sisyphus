@@ -1,6 +1,13 @@
 import * as SQLite from 'expo-sqlite';
 import exerciseData from '../assets/exercises.json';
 import Papa from 'papaparse';
+import {
+  buildExerciseSnapshot,
+  readExerciseSnapshotCache,
+  removeExerciseSnapshotCache,
+  removeExerciseSnapshotCaches,
+  writeExerciseSnapshotCache,
+} from '../utils/exerciseSnapshots';
 let db;
 
 const getDb = async () => {
@@ -8,6 +15,58 @@ const getDb = async () => {
     db = await SQLite.openDatabaseAsync('sisyphus.db');
   }
   return db;
+};
+
+const getExerciseSnapshotExercise = async (database, exerciseID) => {
+  return await database.getFirstAsync(
+    'SELECT * FROM exercises WHERE exerciseID = ?;',
+    [exerciseID]
+  );
+};
+
+const getExerciseSnapshotHistory = async (database, exerciseID) => {
+  return await database.getAllAsync(
+    `SELECT * FROM workoutHistory
+     WHERE exerciseID = ?
+     ORDER BY time ASC, workoutSession ASC, exerciseNum ASC, setNum ASC;`,
+    [exerciseID]
+  );
+};
+
+const rebuildExerciseSnapshot = async (exerciseID) => {
+  const database = await getDb();
+  const exercise = await getExerciseSnapshotExercise(database, exerciseID);
+
+  if (!exercise) {
+    await removeExerciseSnapshotCache(exerciseID);
+    return null;
+  }
+
+  const history = await getExerciseSnapshotHistory(database, exerciseID);
+  const snapshot = buildExerciseSnapshot(exercise, history);
+  return await writeExerciseSnapshotCache(exerciseID, snapshot);
+};
+
+const refreshExerciseSnapshots = async (exerciseIDs = []) => {
+  const uniqueExerciseIDs = [...new Set(exerciseIDs.filter(id => id || id === 0))];
+  for (const exerciseID of uniqueExerciseIDs) {
+    await rebuildExerciseSnapshot(exerciseID);
+  }
+};
+
+export const getExerciseSnapshot = async (exerciseID, options = {}) => {
+  const { preferCache = true } = options;
+
+  if (preferCache) {
+    const cached = await readExerciseSnapshotCache(exerciseID);
+    if (cached) return cached;
+  }
+
+  return await rebuildExerciseSnapshot(exerciseID);
+};
+
+export const refreshExerciseSnapshot = async (exerciseID) => {
+  return await rebuildExerciseSnapshot(exerciseID);
 };
 
 // Create and populate the exercises table
@@ -173,6 +232,7 @@ export const setupDatabase = async () => {
       for (const id of assistedFlipped) {
         await recalculateExercisePRs(id);
       }
+      await refreshExerciseSnapshots(assistedFlipped);
     }
 
     // 6. Ensure AUTOINCREMENT floor stays at >= 1000 for user exercises
@@ -205,6 +265,7 @@ export const updateExerciseStrengthRatios = async (exerciseID, ratios) => {
     `UPDATE exercises SET strengthRatios = ? WHERE exerciseID = ?;`,
     [ratiosString, exerciseID]
   );
+  await rebuildExerciseSnapshot(exerciseID);
 };
 
 const migrateExerciseIDs = async (database) => {
@@ -299,6 +360,7 @@ export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscl
        VALUES (?, ?, ?, ?, ?);`,
       [exerciseName, targetMuscles, accessoryMuscles, isCardio, isAssisted]
     );
+    await rebuildExerciseSnapshot(result.lastInsertRowId);
     return result.lastInsertRowId;
   } catch (error) {
     if (error.message && error.message.includes("UNIQUE constraint failed")) {
@@ -312,12 +374,23 @@ export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscl
 export const updateExercise = async (exerciseID, exerciseName, targetMuscles, accessoryMuscles, isCardio = 0, isAssisted = 0) => {
   const database = await getDb();
   try {
+    const currentExercise = await database.getFirstAsync(
+      'SELECT isAssisted FROM exercises WHERE exerciseID = ?;',
+      [exerciseID]
+    );
+
     await database.runAsync(
       `UPDATE exercises 
        SET name = ?, targetMuscle = ?, accessoryMuscles = ?, isCardio = ?, isAssisted = ?, userCustomised = 1
        WHERE exerciseID = ?;`,
       [exerciseName, targetMuscles, accessoryMuscles, isCardio, isAssisted, exerciseID]
     );
+
+    if ((currentExercise?.isAssisted || 0) !== isAssisted) {
+      await recalculateExercisePRs(exerciseID);
+    }
+
+    await rebuildExerciseSnapshot(exerciseID);
     return "Exercise updated successfully!";
   } catch (error) {
     if (error.message?.includes("UNIQUE constraint failed")) {
@@ -378,6 +451,8 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
       );
     }
   });
+
+  await refreshExerciseSnapshots(workoutEntries.map(entry => entry.exerciseID));
 };
 
 // Fetch workout history for a specific session
@@ -451,6 +526,8 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
       await recalculateExercisePRs(exerciseID);
     }
 
+    await refreshExerciseSnapshots(affectedExerciseIDs);
+
     return setsOverwritten;
   } catch (error) {
     console.error('Error in overwriteWorkoutSession:', error);
@@ -489,6 +566,8 @@ export const deleteWorkoutSession = async (sessionNumber) => {
   for (const exerciseID of affectedExerciseIDs) {
     await recalculateExercisePRs(exerciseID);
   }
+
+  await refreshExerciseSnapshots(affectedExerciseIDs);
 };
 
 // Fetch exercise history for a specific exerciseID
@@ -1212,6 +1291,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           let importedCount = 0;
 
           const processedExercises = new Set();
+          const touchedExerciseIDs = new Set();
 
           await database.withTransactionAsync(async () => {
             for (const entry of bodyWeightEntries) {
@@ -1258,6 +1338,8 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                   );
                   exerciseID = result.lastInsertRowId;
                 }
+
+                touchedExerciseIDs.add(exerciseID);
 
                 const note = sessionNotes ? sessionNotes.get(exerciseName) : '';
 
@@ -1367,6 +1449,8 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           if (progressCallback) {
             progressCallback({ stage: 'complete', current: importedCount, total: importedCount });
           }
+
+          await removeExerciseSnapshotCaches([...touchedExerciseIDs]);
 
           resolve(importedCount);
         } catch (error) {

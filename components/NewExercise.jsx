@@ -10,7 +10,7 @@ import ActionSheet, {
 import Body from 'react-native-body-highlighter';
 import {
     insertExercise, updateExercise, fetchExercises,
-    recalculateExercisePRs, fetchExercisesWithRatios,
+    fetchExercisesWithRatios,
     updateExerciseStrengthRatios
 } from '../components/db';
 import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
@@ -197,7 +197,6 @@ const NewExercise = (props) => {
     const [accessorySelected, setAccessorySelected] = useState([]);
     const [isCardio, setIsCardio] = useState(false);
     const [isAssisted, setIsAssisted] = useState(false);
-    const [originalIsAssisted, setOriginalIsAssisted] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [isCanonical, setIsCanonical] = useState(false);
 
@@ -219,7 +218,6 @@ const NewExercise = (props) => {
                     setExerciseName(exercise.name);
                     setIsCardio(!!exercise.isCardio);
                     setIsAssisted(!!exercise.isAssisted);
-                    setOriginalIsAssisted(!!exercise.isAssisted);
                     setIsCanonical(exercise.exerciseID < 1000);
 
                     const targets = exercise.targetMuscle ? exercise.targetMuscle.split(',').map((m) => m.trim()) : [];
@@ -277,7 +275,6 @@ const NewExercise = (props) => {
 
         if (isEditMode && props.exerciseID) {
             await updateExercise(props.exerciseID, newExerciseObj.name, newExerciseObj.targetMuscle, newExerciseObj.accessoryMuscles, newExerciseObj.isCardio, newExerciseObj.isAssisted);
-            if (originalIsAssisted !== isAssisted) await recalculateExercisePRs(props.exerciseID);
             if (!isCanonical) await updateExerciseStrengthRatios(props.exerciseID, borrowedRatioSource?.ratios ?? null);
             newExerciseObj.exerciseID = props.exerciseID;
         } else {
