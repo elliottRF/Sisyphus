@@ -313,6 +313,8 @@ const NewExercise = (props) => {
                     contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 20 }]}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
+
                 >
                     <View style={styles.bodyWrapper}>
                         <Body data={formattedTargets} gender={gender} side="front" scale={0.75} border={safeBorder} colors={safeBodyColors} defaultFill={theme.bodyFill} />

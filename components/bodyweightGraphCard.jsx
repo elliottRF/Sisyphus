@@ -568,17 +568,11 @@ const BodyweightGraphCard = ({ theme }) => {
                                 </View>
                                 <LineGraph
                                     points={points}
-                                    animated
+                                    animated={true}
                                     color={accentColor}
                                     gradientFillColors={isDynamic ? ['#2DC4B6CC', '#2DC4B600'] : [`${theme.primary}CC`, `${theme.primary}00`]}
-                                    enablePanGesture
+                                    enablePanGesture={true}
                                     enableIndicator
-                                    SelectionDot={(props) => (
-                                        <CustomSelectionDot
-                                            {...props}
-                                            borderColor={isLightTheme(theme) ? theme.background : theme.surface}
-                                        />
-                                    )}
                                     onPointSelected={onPointSelected}
                                     onGestureStart={onGestureStart}
                                     onGestureEnd={onGestureEnd}

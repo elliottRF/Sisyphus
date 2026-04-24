@@ -711,6 +711,7 @@ const ExerciseHistory = (props) => {
             getLatestBodyWeight()
                 .then(bw => {
                     setBodyWeight(bw);
+                    console.log("Latest body weight:", bw);
                 })
                 .catch(() => { })
                 .finally(() => setHasLoadedBodyWeight(true));
