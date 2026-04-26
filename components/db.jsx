@@ -1142,6 +1142,12 @@ export const updateTemplate = async (id, name, workoutData) => {
 export const importStrongData = async (csvContent, progressCallback = null) => {
   const database = await getDb();
 
+  const maxIdResult = await database.getFirstAsync(
+    'SELECT MAX(exerciseID) as maxId FROM exercises;'
+  );
+
+  let nextCustomExerciseId = Math.max(1000, (maxIdResult?.maxId || 0) + 1);
+
   const cleanFloat = (val) => {
     if (!val) return 0;
     if (typeof val === 'number') return val;
@@ -1332,11 +1338,14 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                     await database.runAsync('UPDATE exercises SET isCardio = 1 WHERE exerciseID = ?', [exerciseID]);
                   }
                 } else {
-                  const result = await database.runAsync(
-                    'INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio) VALUES (?, ?, ?, ?)',
-                    [exerciseName, '', '', hasCardioData ? 1 : 0]
+                  // --- HOT FIX APPLIED HERE ---
+                  exerciseID = nextCustomExerciseId++;
+
+                  await database.runAsync(
+                    'INSERT INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles, isCardio, userCustomised) VALUES (?, ?, ?, ?, ?, ?)',
+                    [exerciseID, exerciseName, '', '', hasCardioData ? 1 : 0, 1]
                   );
-                  exerciseID = result.lastInsertRowId;
+                  // -----------------------------
                 }
 
                 touchedExerciseIDs.add(exerciseID);
