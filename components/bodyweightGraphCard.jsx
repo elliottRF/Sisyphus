@@ -13,7 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import { formatWeight, unitLabel, toStorageKg } from '../utils/units';
 import { customAlert } from '../utils/customAlert';
 import CustomAlert from './CustomAlert';   // ← Updated import (adjust path if your project structure differs)
-import Animated, { useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming, Easing, FadeIn } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRAPH_HEIGHT = 130;
@@ -452,7 +452,7 @@ const BodyweightGraphCard = ({ theme }) => {
     );
 
     return (
-        <View style={styles.container}>
+        <Animated.View entering={FadeIn.duration(400)} style={styles.container}>
 
             <GradientOrView colors={[theme.surface, theme.surface]} style={styles.content} theme={theme}>
                 <View style={styles.header}>
@@ -566,19 +566,21 @@ const BodyweightGraphCard = ({ theme }) => {
                                         />
                                     ))}
                                 </View>
-                                <LineGraph
-                                    points={points}
-                                    animated={true}
-                                    color={accentColor}
-                                    gradientFillColors={isDynamic ? ['#2DC4B6CC', '#2DC4B600'] : [`${theme.primary}CC`, `${theme.primary}00`]}
-                                    enablePanGesture={true}
-                                    enableIndicator
-                                    onPointSelected={onPointSelected}
-                                    onGestureStart={onGestureStart}
-                                    onGestureEnd={onGestureEnd}
-                                    range={{ y: { min: yRange[0], max: yRange[1] } }}
-                                    style={{ width: graphWidth, height: GRAPH_HEIGHT }}
-                                />
+                                <Animated.View entering={FadeIn.duration(500).delay(300)}>
+                                    <LineGraph
+                                        points={points}
+                                        animated={true}
+                                        color={accentColor}
+                                        gradientFillColors={isDynamic ? ['#2DC4B6CC', '#2DC4B600'] : [`${theme.primary}CC`, `${theme.primary}00`]}
+                                        enablePanGesture={true}
+                                        enableIndicator
+                                        onPointSelected={onPointSelected}
+                                        onGestureStart={onGestureStart}
+                                        onGestureEnd={onGestureEnd}
+                                        range={{ y: { min: yRange[0], max: yRange[1] } }}
+                                        style={{ width: graphWidth, height: GRAPH_HEIGHT }}
+                                    />
+                                </Animated.View>
                                 <View style={[styles.xAxisRow, { width: graphWidth }]}>
                                     {xAxisLabels.map((date, index) => (
                                         <Text key={index} style={[styles.xAxisText, { textAlign: index === 0 ? 'left' : index === xAxisLabels.length - 1 ? 'right' : 'center' }]}>
@@ -592,7 +594,7 @@ const BodyweightGraphCard = ({ theme }) => {
                 )}
             </GradientOrView>
             {renderModalsAndSheets()}
-        </View>
+        </Animated.View>
     );
 };
 

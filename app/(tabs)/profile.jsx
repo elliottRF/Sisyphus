@@ -4,17 +4,12 @@ import { useScrollToTop } from '@react-navigation/native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchExercises, fetchLatestWorkoutSession, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, fetchExerciseWorkoutCounts, getExerciseSnapshot } from '../../components/db';
-import ActionSheet from "react-native-actions-sheet";
 
-import NewExercise from "../../components/NewExercise"
-
-import ExerciseHistory from "../../components/exerciseHistory"
 import Feather from '@expo/vector-icons/Feather';
 import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter, useSegments } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
-import { useRouter } from 'expo-router';
 import { primeGraphData } from '../../components/PRGraphCard';
 import Fuse from 'fuse.js';
 
@@ -29,10 +24,14 @@ const Profile = () => {
     const [exercises, setExercises] = useState([]);
     const [workoutCounts, setWorkoutCounts] = useState(new Map());
 
-    // New ref for create exercise action sheet
-    const createExerciseActionSheetRef = useRef(null);
-    const actionSheetRef = useRef(null);
     const router = useRouter();
+    const segments = useSegments();
+
+    useEffect(() => {
+        if (segments[0] === '(tabs)' && segments[1] !== 'profile') {
+            setSearchQuery('');
+        }
+    }, [segments]);
 
     // Pre-load on mount
     useEffect(() => {
@@ -52,10 +51,6 @@ const Profile = () => {
                     setWorkoutCounts(counts);
                 })
                 .catch(err => console.error(err));
-
-            return () => {
-                setSearchQuery('');
-            };
         }, [])
     );
 
@@ -69,16 +64,6 @@ const Profile = () => {
 
     const [loadingExerciseID, setLoadingExerciseID] = useState(null);
 
-    const handleCloseCreateExerciseSheet = () => {
-        createExerciseActionSheetRef.current?.hide();
-
-        Promise.all([fetchExercises(), fetchExerciseWorkoutCounts()])
-            .then(([data, counts]) => {
-                setExercises(data);
-                setWorkoutCounts(counts);
-            })
-            .catch(err => console.error(err));
-    };
 
 
     const fuse = useMemo(() => {
@@ -248,20 +233,6 @@ const Profile = () => {
             />
 
 
-
-            {/* New Create Exercise ActionSheet */}
-            <ActionSheet
-                ref={createExerciseActionSheetRef}
-                containerStyle={[styles.actionSheetContainer, { backgroundColor: safeBackground }]}
-            >
-                <View style={styles.closeIconContainerUpperPosition}>
-                    <TouchableOpacity onPress={handleCloseCreateExerciseSheet} style={styles.closeIcon}>
-                        <Feather name="x" size={24} color="#fff" />
-                    </TouchableOpacity>
-                </View>
-
-                <NewExercise close={handleCloseCreateExerciseSheet} />
-            </ActionSheet>
         </View>
     )
 }
@@ -350,12 +321,6 @@ const getStyles = (theme) => StyleSheet.create({
         fontFamily: FONTS.semiBold,
         flex: 1,           // takes all available space
         marginRight: 8,
-    },
-    actionSheetContainer: {
-        height: '100%',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        // backgroundColor removed from here to be dynamic inline
     },
     closeIconContainerUpperPosition: {
         position: 'absolute',

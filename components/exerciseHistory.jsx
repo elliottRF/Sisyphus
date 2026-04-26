@@ -12,6 +12,7 @@ import PRGraphCard from './PRGraphCard';
 import { formatWeight, unitLabel } from '../utils/units';
 import { customAlert } from '../utils/customAlert';
 import { getExerciseSnapshotSync, parseStrengthRatios } from '../utils/exerciseSnapshots';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -332,7 +333,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, onSe
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const ExerciseHistory = (props) => {
-    const { theme, gender, useImperial } = useTheme();
+    const { theme, gender, useImperial, isRankingsEnabled } = useTheme();
     const router = useRouter();
     const styles = useMemo(() => getStyles(theme), [theme]);
 
@@ -403,7 +404,7 @@ const ExerciseHistory = (props) => {
         );
         if (!hasResolvedMuscles || !isMuscleDataReady) return null;
 
-        if (hasStrengthRatios && hasBodyWeight && strengthTier !== null) {
+        if (isRankingsEnabled && hasStrengthRatios && hasBodyWeight && strengthTier !== null) {
             const color = TIER_COLORS[Math.max(0, strengthTier - 1)];
             return [theme.bodyFill, `${color}60`, color];
         }
@@ -411,7 +412,7 @@ const ExerciseHistory = (props) => {
         return isDynamic
             ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
             : [theme.bodyFill, `${theme.primary}60`, theme.primary];
-    }, [exercisesList, props.exerciseID, isMuscleDataReady, hasStrengthRatios, hasBodyWeight, strengthTier, theme, isDynamic]);
+    }, [exercisesList, props.exerciseID, isMuscleDataReady, hasStrengthRatios, hasBodyWeight, strengthTier, theme, isDynamic, isRankingsEnabled]);
 
     const fallbackBodyColors = [theme.bodyFill, theme.bodyFill, theme.bodyFill];
     const resolvedBodyColors = overlayBodyColors ?? fallbackBodyColors;
@@ -666,14 +667,16 @@ const ExerciseHistory = (props) => {
                                     </Animated.View>
                                 </View>
 
-                                <View style={{ width: '100%', borderTopWidth: 1, borderTopColor: safeBorder, opacity: isMuscleDataReady ? 1 : 0.35 }}>
-                                    <StrengthLegend
-                                        currentTier={hasStrengthRatios && hasBodyWeight && isMuscleDataReady ? strengthTier : null}
-                                        theme={theme}
-                                        strengthRatios={hasStrengthRatios ? strengthRatios : null}
-                                        bw={hasBodyWeight ? bodyWeight.weight : null}
-                                    />
-                                </View>
+                                {isRankingsEnabled && (
+                                    <View style={{ width: '100%', borderTopWidth: 1, borderTopColor: safeBorder, opacity: isMuscleDataReady ? 1 : 0.35 }}>
+                                        <StrengthLegend
+                                            currentTier={hasStrengthRatios && hasBodyWeight && isMuscleDataReady ? strengthTier : null}
+                                            theme={theme}
+                                            strengthRatios={hasStrengthRatios ? strengthRatios : null}
+                                            bw={hasBodyWeight ? bodyWeight.weight : null}
+                                        />
+                                    </View>
+                                )}
                             </View>
                         )}
 

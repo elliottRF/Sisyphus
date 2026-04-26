@@ -76,7 +76,9 @@ const Settings = () => {
         repRangeMax,
         updateRepRange,
         useImperial,
-        updateUnitPref
+        updateUnitPref,
+        isRankingsEnabled,
+        updateRankingsEnabled
     } = useTheme();
 
     const styles = useMemo(() => getStyles(theme), [theme]);
@@ -423,6 +425,31 @@ const Settings = () => {
                     </View>
                     <Text style={styles.cardDescription}>Gender of the muscle highlighter model.</Text>
                     <GenderSegment theme={theme} value={gender} onChange={updateGender} />
+                </View>
+
+                <View style={styles.card}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={{ flex: 1, paddingRight: 16 }}>
+                            <View style={[styles.cardHeader, { marginBottom: 4 }]}>
+                                <MaterialCommunityIcons name="podium" size={20} color={theme.primary} />
+                                <Text style={styles.cardTitle}>Beginner-Elite Rankings</Text>
+                            </View>
+                            <Text style={[styles.cardDescription, { marginBottom: 0 }]}>
+                                Compare your strength against standards. Requires a bodyweight log.
+                            </Text>
+                        </View>
+                        {isReady ? (
+                            <AnimatedSwitch
+                                value={isRankingsEnabled}
+                                onValueChange={updateRankingsEnabled}
+                                activeColor={theme.primary}
+                                inactiveColor={theme.type === 'dynamic' ? '#555555' : theme.overlayInputFocused}
+                                thumbColor={theme.surface}
+                            />
+                        ) : (
+                            <ActivityIndicator size="small" color={theme.primary} />
+                        )}
+                    </View>
                 </View>
 
                 <Text style={styles.sectionTitle}>Data & Backup</Text>

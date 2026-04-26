@@ -21,6 +21,7 @@ export const ThemeProvider = ({ children }) => {
     const [workoutInProgress, setWorkoutInProgress] = useState(false);
     const [workoutStartTime, setWorkoutStartTime] = useState(null);
     const [useImperial, setUseImperial] = useState(false);
+    const [isRankingsEnabled, setIsRankingsEnabled] = useState(false);
 
     useEffect(() => {
         loadSettings();
@@ -36,7 +37,8 @@ export const ThemeProvider = ({ children }) => {
                 storedRepRangePreset,
                 storedRepRangeMin,
                 storedRepRangeMax,
-                storedWorkoutStartTime
+                storedWorkoutStartTime,
+                storedRankingsEnabled
             ] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
@@ -45,7 +47,8 @@ export const ThemeProvider = ({ children }) => {
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangePreset),
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangeMin),
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangeMax),
-                AsyncStorage.getItem('@workoutStartTime')
+                AsyncStorage.getItem('@workoutStartTime'),
+                AsyncStorage.getItem('settings_enable_rankings')
             ]);
 
             if (storedThemeID && THEMES[storedThemeID]) {
@@ -72,6 +75,9 @@ export const ThemeProvider = ({ children }) => {
             }
             if (storedWorkoutStartTime) {
                 setWorkoutStartTime(storedWorkoutStartTime);
+            }
+            if (storedRankingsEnabled !== null) {
+                setIsRankingsEnabled(storedRankingsEnabled === 'true');
             }
         } catch (error) {
             console.error("Failed to load settings:", error);
@@ -155,6 +161,15 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updateRankingsEnabled = async (enabled) => {
+        setIsRankingsEnabled(enabled);
+        try {
+            await AsyncStorage.setItem('settings_enable_rankings', enabled.toString());
+        } catch (error) {
+            console.error("Failed to save rankings setting:", error);
+        }
+    };
+
     return (
         <ThemeContext.Provider value={{
             theme,
@@ -174,7 +189,9 @@ export const ThemeProvider = ({ children }) => {
             workoutStartTime,
             updateWorkoutStartTime,
             useImperial,
-            updateUnitPref
+            updateUnitPref,
+            isRankingsEnabled,
+            updateRankingsEnabled
         }}>
             {children}
         </ThemeContext.Provider>

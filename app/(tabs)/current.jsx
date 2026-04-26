@@ -546,8 +546,7 @@ const Current = () => {
                             return current;
                         });
                     } else {
-                        setCurrentWorkout([]);
-                        setWorkoutTitle("New Workout");
+                        setCurrentWorkout(current => current.length === 0 ? [] : current);
                     }
                     const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
                     if (storedStartTime) {
