@@ -245,7 +245,7 @@ export const setupDatabase = async () => {
     );
 
     console.log('Database synced with latest exercise data');
-    
+
     // Initialize bodyweight cache
     await getLatestBodyWeight({ forceRefresh: true });
   } catch (error) {

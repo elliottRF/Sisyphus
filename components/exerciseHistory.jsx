@@ -137,11 +137,29 @@ const StrengthLegend = React.memo(({ currentTier, theme, strengthRatios, bw }) =
     const { useImperial } = useTheme();
 
     const handlePress = (index, label) => {
-        if (!strengthRatios?.[index]) {
-            customAlert('Information', "Strength standards for this exercise haven't been added yet.", [{ text: 'OK', style: 'default' }]);
+        // 1. Check if bodyweight is missing or zero
+        if (!bw) {
+            customAlert(
+                'Bodyweight Missing',
+                'Please log your bodyweight in your profile to calculate strength targets.',
+                [{ text: 'OK', style: 'default' }]
+            );
             return;
         }
+
+        // 2. Check if strength ratios exist for the exercise
+        if (!strengthRatios?.[index]) {
+            customAlert(
+                'Information',
+                "Strength standards for this exercise haven't been added yet.",
+                [{ text: 'OK', style: 'default' }]
+            );
+            return;
+        }
+
+        // 3. Perform calculation
         const required = (bw * strengthRatios[index]).toFixed(1);
+
         customAlert(
             `${label} Target`,
             `1RM of ${formatWeight(required, useImperial)}${unitLabel(useImperial)} required at ${formatWeight(bw, useImperial)}${unitLabel(useImperial)} bodyweight.`,
@@ -358,7 +376,7 @@ const ExerciseHistory = (props) => {
         snapshot
             ? buildFormattedTargets(splitMuscleString(targetMuscle), splitMuscleString(accessoryMuscles))
             : DEFAULT_MUSCLE_TARGETS
-    , [targetMuscle, accessoryMuscles]);
+        , [targetMuscle, accessoryMuscles]);
 
     // ── Derived flags ──────────────────────────────────────────────────────────
     const isDynamic = theme.type === 'dynamic';
