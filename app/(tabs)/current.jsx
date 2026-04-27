@@ -490,10 +490,17 @@ const Current = () => {
         actionSheetRef.current?.show();
     };
 
-    const showExerciseInfo = (exerciseDetails) => {
-        if (exerciseDetails) {
-            router.push(`/exercise/${exerciseDetails.exerciseID}?name=${encodeURIComponent(exerciseDetails.name || '')}`);
-        }
+    const showExerciseInfo = async (exerciseDetails) => {
+        if (!exerciseDetails) return;
+        try {
+            const { getExerciseSnapshot } = await import('../../components/db');
+            const { primeGraphData } = await import('../../components/PRGraphCard');
+            const snapshot = await getExerciseSnapshot(exerciseDetails.exerciseID);
+            if (snapshot?.graphData) {
+                primeGraphData(snapshot.graphData, !!snapshot.isAssisted);
+            }
+        } catch (_) { /* non-fatal — navigate anyway */ }
+        router.push(`/exercise/${exerciseDetails.exerciseID}?name=${encodeURIComponent(exerciseDetails.name || '')}`);
     };
 
     const saveWorkoutToAsyncStorage = async (workout) => {

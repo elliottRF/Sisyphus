@@ -2,13 +2,14 @@ import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import React, { useState, useRef, useCallback } from 'react';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/db';
+import { fetchWorkoutHistoryBySession, fetchExercises, getExerciseSnapshot } from '../../components/db';
 import WorkoutSessionView from '../../components/WorkoutSessionView';
 import WorkoutSummaryOverview from '../../components/WorkoutSummaryOverview';
 import { useTheme } from '../../context/ThemeContext';
 import { setPreloadedData } from '../../constants/preloader';
 import { formatWeight } from '../../utils/units';
 import { customAlert } from '../../utils/customAlert';
+import { primeGraphData } from '../../components/PRGraphCard';
 
 const WorkoutDetail = () => {
     const insets = useSafeAreaInsets();
@@ -106,8 +107,14 @@ const WorkoutDetail = () => {
         }, [hasAttemptedFetch, effectiveWorkoutDetails.length, router])
     );
 
-    const showExerciseInfo = useCallback((exerciseId, exerciseName) => {
+    const showExerciseInfo = useCallback(async (exerciseId, exerciseName) => {
         if (!exerciseId || !isReadyToShow) return;
+        try {
+            const snapshot = await getExerciseSnapshot(exerciseId);
+            if (snapshot?.graphData) {
+                primeGraphData(snapshot.graphData, !!snapshot.isAssisted);
+            }
+        } catch (_) { /* non-fatal */ }
         router.push(`/exercise/${exerciseId}?name=${encodeURIComponent(exerciseName || '')}`);
     }, [router, isReadyToShow]);
 

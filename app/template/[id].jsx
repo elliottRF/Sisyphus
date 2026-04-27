@@ -16,7 +16,8 @@ import {
     updateTemplate,
     getTemplate,
     deleteTemplate,
-    setupDatabase
+    setupDatabase,
+    getExerciseSnapshot,
 } from '../../components/db';
 
 import ExerciseEditable from '../../components/exerciseEditable'
@@ -27,6 +28,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { customAlert } from '../../utils/customAlert';
 import { formatWeight, toStorageKg } from '../../utils/units';
+import { primeGraphData } from '../../components/PRGraphCard';
 
 const EditTemplate = () => {
     const insets = useSafeAreaInsets();
@@ -132,10 +134,15 @@ const EditTemplate = () => {
         actionSheetRef.current?.show();
     };
 
-    const showExerciseInfo = (exerciseDetails) => {
-        if (exerciseDetails) {
-            router.push(`/exercise/${exerciseDetails.exerciseID}?name=${encodeURIComponent(exerciseDetails.name || '')}`);
-        }
+    const showExerciseInfo = async (exerciseDetails) => {
+        if (!exerciseDetails) return;
+        try {
+            const snapshot = await getExerciseSnapshot(exerciseDetails.exerciseID);
+            if (snapshot?.graphData) {
+                primeGraphData(snapshot.graphData, !!snapshot.isAssisted);
+            }
+        } catch (_) { /* non-fatal */ }
+        router.push(`/exercise/${exerciseDetails.exerciseID}?name=${encodeURIComponent(exerciseDetails.name || '')}`);
     };
 
     const handleReorder = useCallback(({ from, to }) => {

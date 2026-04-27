@@ -76,15 +76,6 @@ const snapshotToExerciseRecord = (snapshot) => {
     };
 };
 
-const groupBySession = (history) => {
-    const grouped = {};
-    history.forEach(entry => {
-        if (!grouped[entry.workoutSession]) grouped[entry.workoutSession] = [];
-        grouped[entry.workoutSession].push(entry);
-    });
-    return Object.entries(grouped).sort((a, b) => b[0] - a[0]);
-};
-
 const formatDate = (dateString) =>
     new Date(dateString).toLocaleDateString('en-US', {
         weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
@@ -130,7 +121,7 @@ const FadingStatText = React.memo(({ text, style, animateInitialPlaceholder = tr
             setDisplayText(text);
             return;
         }
-        Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => {
+        Animated.timing(fadeAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start(() => {
             setDisplayText(text);
             Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start();
         });
@@ -356,7 +347,7 @@ const ExerciseHistory = (props) => {
             )
             : DEFAULT_MUSCLE_TARGETS
     );
-    const [workoutHistory, setWorkoutHistory] = useState([]);
+    const [workoutHistory, setWorkoutHistory] = useState(initialSnapshot?.groupedHistory ?? []);
     const [stats, setStats] = useState(initialSnapshot?.stats ?? EMPTY_STATS);
     const [strengthRatios, setStrengthRatios] = useState(initialSnapshot?.strengthRatios ?? []);
     const [best1RM, setBest1RM] = useState(initialSnapshot?.best1RM ?? null);
@@ -406,12 +397,12 @@ const ExerciseHistory = (props) => {
 
         if (isRankingsEnabled && hasStrengthRatios && hasBodyWeight && strengthTier !== null) {
             const color = TIER_COLORS[Math.max(0, strengthTier - 1)];
-            return [theme.bodyFill, `${color}60`, color];
+            return [theme.bodyFill, `${color}20`, color];
         }
 
         return isDynamic
             ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
-            : [theme.bodyFill, `${theme.primary}60`, theme.primary];
+            : [theme.bodyFill, `${theme.primary}20`, theme.primary];
     }, [exercisesList, props.exerciseID, isMuscleDataReady, hasStrengthRatios, hasBodyWeight, strengthTier, theme, isDynamic, isRankingsEnabled]);
 
     const fallbackBodyColors = [theme.bodyFill, theme.bodyFill, theme.bodyFill];
@@ -442,6 +433,9 @@ const ExerciseHistory = (props) => {
             splitMuscleString(snapshot.targetMuscle),
             splitMuscleString(snapshot.accessoryMuscles),
         ));
+        if (snapshot.groupedHistory) {
+            setWorkoutHistory(snapshot.groupedHistory);
+        }
     }, [props.exerciseName]);
 
     // ── Effects ────────────────────────────────────────────────────────────────
@@ -483,14 +477,17 @@ const ExerciseHistory = (props) => {
         ));
     }, [exercisesList, props.exerciseID]);
 
-    // Fade body overlay in once colors are resolved; snap out immediately on reset
+    // Fade body overlay in once colors AND muscle data are both fully resolved.
+    // Gating on isMuscleDataReady prevents a double-fire (and the resulting flash)
+    // that would otherwise occur when bodyweight loads after muscles are ready.
+    const shouldShowOverlay = canShowBodyOverlay && isMuscleDataReady;
     useEffect(() => {
         Animated.timing(bodyOpacity, {
-            toValue: canShowBodyOverlay ? 1 : 0,
-            duration: canShowBodyOverlay ? 300 : 0,
+            toValue: shouldShowOverlay ? 1 : 0,
+            duration: shouldShowOverlay ? 150 : 0,
             useNativeDriver: true,
         }).start();
-    }, [canShowBodyOverlay]);
+    }, [shouldShowOverlay]);
 
     // Recalculate stats from authoritative history data
     useEffect(() => {
@@ -533,18 +530,28 @@ const ExerciseHistory = (props) => {
 
     useFocusEffect(useCallback(() => {
         let isActive = true;
-        (async () => {
-            try {
-                const history = await fetchExerciseHistory(props.exerciseID);
+        getExerciseSnapshot(props.exerciseID)
+            .then(snapshot => {
                 if (!isActive) return;
-                setWorkoutHistory(groupBySession(history));
-                setBest1RM(history.reduce((max, e) => Math.max(max, Number(e.oneRM) || 0), 0));
-            } catch (err) {
-                console.error('Error loading workout history:', err);
-            }
-        })();
+                if (snapshot) {
+                    applySnapshot(snapshot);
+                }
+
+                // Fallback check: If the snapshot is old (missing groupedHistory) 
+                // or it indicates no data, force a fresh DB pull to be absolutely sure.
+                if (!snapshot || !snapshot.groupedHistory || snapshot.groupedHistory.length === 0) {
+                    getExerciseSnapshot(props.exerciseID, { preferCache: false })
+                        .then(freshSnapshot => {
+                            if (isActive && freshSnapshot) {
+                                applySnapshot(freshSnapshot);
+                            }
+                        })
+                        .catch(console.error);
+                }
+            })
+            .catch(console.error);
         return () => { isActive = false; };
-    }, [props.exerciseID]));
+    }, [props.exerciseID, applySnapshot]));
 
     useFocusEffect(useCallback(() => {
         getLatestBodyWeight()

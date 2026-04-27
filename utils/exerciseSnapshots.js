@@ -64,6 +64,16 @@ export const computeGraphPoints = (history, isAssisted = false) => {
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 };
 
+export const computeHistoryGroups = (history) => {
+  if (!history?.length) return [];
+  const grouped = {};
+  history.forEach((entry) => {
+    if (!grouped[entry.workoutSession]) grouped[entry.workoutSession] = [];
+    grouped[entry.workoutSession].push(entry);
+  });
+  return Object.entries(grouped).sort((a, b) => Number(b[0]) - Number(a[0]));
+};
+
 export const computeExerciseStats = (history, isAssisted = false) => {
   if (!history?.length) {
     return {
@@ -130,6 +140,7 @@ export const buildExerciseSnapshot = (exercise, history = []) => {
     strengthRatios: parseStrengthRatios(exercise.strengthRatios),
     stats: computeExerciseStats(history, isAssisted),
     graphData: computeGraphPoints(history, isAssisted),
+    groupedHistory: computeHistoryGroups(history),
     best1RM,
     updatedAt: new Date().toISOString(),
   };

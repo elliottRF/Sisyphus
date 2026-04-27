@@ -112,7 +112,7 @@ const Profile = () => {
         try {
             const snapshot = await getExerciseSnapshot(item.exerciseID);
             if (snapshot?.graphData) {
-                primeGraphData(snapshot.graphData);
+                primeGraphData(snapshot.graphData, !!snapshot.isAssisted);
             }
             router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
         } catch (error) {

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions, Animated } from 'react-native';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { LineGraph } from 'react-native-graph';
@@ -22,8 +22,11 @@ const GRAPH_RIGHT_PADDING = 0;
 const DEBUG_INTERPOLATE = true;
 
 // --- Cache ---
+// Stores { graphData, isAssisted } primed by the calling screen before navigation.
 let _cachedData = null;
-export const primeGraphData = (data) => { _cachedData = data; };
+export const primeGraphData = (graphData, isAssisted = false) => {
+    _cachedData = { graphData, isAssisted };
+};
 const consumePrimedGraphData = () => {
     const data = _cachedData;
     _cachedData = null;
@@ -110,17 +113,42 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         : SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING;
     const graphHeight = isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT;
 
-    const [allData, setAllData] = useState(() => primedDataRef.current || []);
-    const [loading, setLoading] = useState(() => !primedDataRef.current?.length);
+    const [allData, setAllData] = useState(() => primedDataRef.current?.graphData || []);
+    const [loading, setLoading] = useState(() => !primedDataRef.current?.graphData?.length);
     const [graphMode, setGraphMode] = useState('history');
     const [timeRange, setTimeRange] = useState('ALL');
     const [selectedPoint, setSelectedPoint] = useState(null);
-    const [isAssisted, setIsAssisted] = useState(false);
+    const [isAssisted, setIsAssisted] = useState(() => primedDataRef.current?.isAssisted ?? false);
+    // graphOpacity fades from 0→1 on mount (deferred one frame via RAF) so the
+    // graph always fades in smoothly rather than popping in instantly.
+    const graphOpacity = useRef(new Animated.Value(0)).current;
 
     const isTouching = useRef(false);
 
     useEffect(() => {
-        loadData();
+        const rafId = requestAnimationFrame(() => {
+            Animated.timing(graphOpacity, {
+                toValue: 1,
+                duration: 350,
+                useNativeDriver: true,
+            }).start();
+        });
+        return () => cancelAnimationFrame(rafId);
+    }, []);
+
+    useEffect(() => {
+        // When navigating from a screen that primed the cache, skip the initial
+        // DB fetch — the primed data is identical and re-fetching would call
+        // setAllData() mid-animation, killing it. The event handlers below
+        // ensure we still refresh after a workout is logged.
+        const wasPrimed = !!primedDataRef.current;
+        if (!wasPrimed) {
+            loadData();
+        } else {
+            // Still need to clear loading and call onReady.
+            setLoading(false);
+            onReady?.();
+        }
         const handler = () => loadData();
         on(AppEvents.REFRESH_HOME, handler);
         on(AppEvents.WORKOUT_COMPLETED, handler);
@@ -168,7 +196,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
 
     const primeDataForNavigation = () => {
         // Prime the cache so the history screen doesn't have to re-fetch/re-compute the graph data
-        primeGraphData(allData);
+        primeGraphData(allData, isAssisted);
     };
 
     const handleUnpin = async () => {
@@ -502,7 +530,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                                 onPress={async () => {
                                     try {
                                         const snapshot = await getExerciseSnapshot(exerciseID);
-                                        primeGraphData(snapshot?.graphData || allData);
+                                        primeGraphData(snapshot?.graphData || allData, !!snapshot?.isAssisted ?? isAssisted);
                                     } catch (error) {
                                         console.error("Error prewarming exercise snapshot:", error);
                                         primeDataForNavigation();
@@ -698,19 +726,21 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                                     ))}
                                 </View>
 
-                                <LineGraph
-                                    points={points}
-                                    animated={true}
-                                    color={graphMode === 'maxWeight' ? maxWeightColor : graphColor}
-                                    gradientFillColors={graphMode === 'maxWeight' ? maxWeightGradient : gradientFill}
-                                    enablePanGesture={true}
-                                    onPointSelected={onPointSelected}
-                                    onGestureStart={onGestureStart}
-                                    onGestureEnd={onGestureEnd}
-                                    enableIndicator
-                                    range={{ y: { min: yRange[0], max: yRange[1] } }}
-                                    style={{ width: graphWidth, height: graphHeight }}
-                                />
+                                <Animated.View style={{ opacity: graphOpacity, width: graphWidth, height: graphHeight }}>
+                                    <LineGraph
+                                        points={points}
+                                        animated={true}
+                                        color={graphMode === 'maxWeight' ? maxWeightColor : graphColor}
+                                        gradientFillColors={graphMode === 'maxWeight' ? maxWeightGradient : gradientFill}
+                                        enablePanGesture={true}
+                                        onPointSelected={onPointSelected}
+                                        onGestureStart={onGestureStart}
+                                        onGestureEnd={onGestureEnd}
+                                        enableIndicator
+                                        range={{ y: { min: yRange[0], max: yRange[1] } }}
+                                        style={{ width: graphWidth, height: graphHeight }}
+                                    />
+                                </Animated.View>
 
                                 <View style={[styles.xAxisContainer, { top: graphHeight + 8 }]}>
                                     {axisLabels.map((label, index) => (

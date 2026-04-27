@@ -149,8 +149,6 @@ const RatioPickerSheet = ({ sheetRef, onSelect, exercises, theme }) => {
     );
 };
 
-// ... (MuscleChips and GradientOrView stay same)
-
 const MuscleChips = ({ type, selectedData, handleMuscleToggle, accessorySelected, targetSelected, styles, theme, inactiveBg }) => (
     <View style={styles.chipContainer}>
         {MUSCLE_OPTIONS.map((muscle) => {
@@ -189,7 +187,6 @@ const NewExercise = (props) => {
     const handlers = useScrollHandlers();
     const insets = useSafeAreaInsets();
 
-    // Action Sheet Ref
     const ratioSheetRef = useRef(null);
 
     const [exerciseName, setExerciseName] = useState('');
@@ -209,29 +206,49 @@ const NewExercise = (props) => {
 
     useEffect(() => {
         const loadExercise = async () => {
-            if (props.exerciseID) {
-                setIsEditMode(true);
-                const exercises = await fetchExercises();
-                const exercise = exercises.find((ex) => ex.exerciseID === props.exerciseID);
+            if (!props.exerciseID) return;
+            setIsEditMode(true);
 
-                if (exercise) {
-                    setExerciseName(exercise.name);
-                    setIsCardio(!!exercise.isCardio);
-                    setIsAssisted(!!exercise.isAssisted);
-                    setIsCanonical(exercise.exerciseID < 1000);
+            const [exercises, ratioExs] = await Promise.all([
+                fetchExercises(),
+                fetchExercisesWithRatios(),
+            ]);
 
-                    const targets = exercise.targetMuscle ? exercise.targetMuscle.split(',').map((m) => m.trim()) : [];
-                    const accessories = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',').map((m) => m.trim()) : [];
-                    setTargetSelected(targets);
-                    setAccessorySelected(accessories);
+            const exercise = exercises.find((ex) => ex.exerciseID === props.exerciseID);
+            if (!exercise) return;
 
-                    if (exercise.strengthRatios) {
-                        try {
-                            const parsed = JSON.parse(exercise.strengthRatios);
-                            if (parsed) setBorrowedRatioSource({ name: 'Custom', ratios: parsed });
-                        } catch (_) { }
+            setExerciseName(exercise.name);
+            setIsCardio(!!exercise.isCardio);
+            setIsAssisted(!!exercise.isAssisted);
+            setIsCanonical(exercise.exerciseID < 1000);
+
+            const targets = exercise.targetMuscle ? exercise.targetMuscle.split(',').map((m) => m.trim()) : [];
+            const accessories = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',').map((m) => m.trim()) : [];
+            setTargetSelected(targets);
+            setAccessorySelected(accessories);
+
+            if (exercise.strengthRatios) {
+                try {
+                    const parsed = JSON.parse(exercise.strengthRatios);
+                    if (parsed) {
+                        const canonicalExercises = ratioExs.filter(ex => ex.exerciseID < 1000);
+                        const matches = canonicalExercises.filter(ex => ex.strengthRatios === exercise.strengthRatios);
+                        let matched = matches[0];
+                        if (matches.length > 1) {
+                            const customWords = exercise.name.toLowerCase().split(/\W+/).filter(Boolean);
+                            let bestScore = -1;
+                            for (const m of matches) {
+                                const mWords = m.name.toLowerCase().split(/\W+/).filter(Boolean);
+                                const score = customWords.filter(w => mWords.includes(w)).length;
+                                if (score > bestScore) {
+                                    bestScore = score;
+                                    matched = m;
+                                }
+                            }
+                        }
+                        setBorrowedRatioSource({ name: matched ? matched.name : 'Custom', ratios: parsed });
                     }
-                }
+                } catch (_) { }
             }
         };
         loadExercise();
@@ -314,7 +331,6 @@ const NewExercise = (props) => {
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
-
                 >
                     <View style={styles.bodyWrapper}>
                         <Body data={formattedTargets} gender={gender} side="front" scale={0.75} border={safeBorder} colors={safeBodyColors} defaultFill={theme.bodyFill} />
@@ -371,16 +387,28 @@ const NewExercise = (props) => {
                             <View style={styles.ratioCardHeader}>
                                 <View style={styles.ratioCardHeaderLeft}>
                                     <Text style={styles.label}>Strength Standards</Text>
-                                    <Text style={styles.subtext}>{borrowedRatioSource ? `Based on ${borrowedRatioSource.name}` : 'Compare your lifts to benchmarks'}</Text>
-                                </View>
-                                <TouchableOpacity
-                                    style={[styles.ratioSelectBtn, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}
-                                    onPress={() => ratioSheetRef.current?.show()}
-                                >
-                                    <Text style={[styles.ratioSelectBtnText, { color: theme.primary }]}>
-                                        {borrowedRatioSource ? 'Change' : 'Select'}
+                                    <Text style={styles.subtext}>
+                                        {borrowedRatioSource ? `Based on ${borrowedRatioSource.name}` : 'Compare your lifts to benchmarks'}
                                     </Text>
-                                </TouchableOpacity>
+                                </View>
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    {borrowedRatioSource && (
+                                        <TouchableOpacity
+                                            style={[styles.ratioSelectBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                                            onPress={() => setBorrowedRatioSource(null)}
+                                        >
+                                            <Text style={[styles.ratioSelectBtnText, { color: theme.textSecondary }]}>Remove</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    <TouchableOpacity
+                                        style={[styles.ratioSelectBtn, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}
+                                        onPress={() => ratioSheetRef.current?.show()}
+                                    >
+                                        <Text style={[styles.ratioSelectBtnText, { color: theme.primary }]}>
+                                            {borrowedRatioSource ? 'Change' : 'Select'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </View>
                     )}
@@ -406,7 +434,7 @@ const NewExercise = (props) => {
 
             <RatioPickerSheet
                 sheetRef={ratioSheetRef}
-                exercises={ratioExercises}
+                exercises={ratioExercises.filter(ex => ex.exerciseID < 1000)}
                 theme={theme}
                 onSelect={(ex, ratios) => setBorrowedRatioSource({ name: ex.name, ratios })}
             />
