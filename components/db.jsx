@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import exerciseData from '../assets/exercises.json';
 import Papa from 'papaparse';
 import {
@@ -8,7 +9,9 @@ import {
   removeExerciseSnapshotCaches,
   writeExerciseSnapshotCache,
 } from '../utils/exerciseSnapshots';
+import { AppEvents, emit } from '../utils/events';
 let db;
+
 
 const getDb = async () => {
   if (!db) {
@@ -242,6 +245,9 @@ export const setupDatabase = async () => {
     );
 
     console.log('Database synced with latest exercise data');
+    
+    // Initialize bodyweight cache
+    await getLatestBodyWeight({ forceRefresh: true });
   } catch (error) {
     console.error('Database setup error:', error);
     throw error;
@@ -453,6 +459,7 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
   });
 
   await refreshExerciseSnapshots(workoutEntries.map(entry => entry.exerciseID));
+  await refreshBodyWeightCache();
 };
 
 // Fetch workout history for a specific session
@@ -568,6 +575,7 @@ export const deleteWorkoutSession = async (sessionNumber) => {
   }
 
   await refreshExerciseSnapshots(affectedExerciseIDs);
+  await refreshBodyWeightCache();
 };
 
 // Fetch exercise history for a specific exerciseID
@@ -1455,11 +1463,13 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             }
           });
 
+          await refreshBodyWeightCache();
           if (progressCallback) {
             progressCallback({ stage: 'complete', current: importedCount, total: importedCount });
           }
 
           await removeExerciseSnapshotCaches([...touchedExerciseIDs]);
+          await refreshBodyWeightCache();
 
           resolve(importedCount);
         } catch (error) {
@@ -1530,7 +1540,10 @@ export const insertBodyWeight = async (date, weight) => {
       `INSERT OR REPLACE INTO bodyWeight (datetime, weight) VALUES (?, ?);`,
       [date, weight]
     );
+    await refreshBodyWeightCache();
+    emit(AppEvents.BODYWEIGHT_UPDATED);
     return "Weight logged successfully!";
+
   } catch (error) {
     console.error("Error logging body weight:", error);
     throw error;
@@ -1547,10 +1560,46 @@ export const getBodyWeightHistory = async () => {
   }
 };
 
-export const getLatestBodyWeight = async () => {
+let memoryBodyWeight = null;
+const BW_CACHE_KEY = 'cached_latest_bodyweight';
+
+export const getCachedBodyWeight = () => memoryBodyWeight;
+
+export const refreshBodyWeightCache = async () => {
+  return await getLatestBodyWeight({ forceRefresh: true });
+};
+
+export const getLatestBodyWeight = async (options = {}) => {
+  const { forceRefresh = false } = options;
+
+  if (!forceRefresh && memoryBodyWeight) {
+    return memoryBodyWeight;
+  }
+
+  // Try to load from AsyncStorage if memory is empty
+  if (!forceRefresh) {
+    try {
+      const stored = await AsyncStorage.getItem(BW_CACHE_KEY);
+      if (stored) {
+        memoryBodyWeight = JSON.parse(stored);
+        return memoryBodyWeight;
+      }
+    } catch (e) {
+      console.warn('Failed to load bodyweight from AsyncStorage:', e);
+    }
+  }
+
   const database = await getDb();
   try {
-    return await database.getFirstAsync('SELECT * FROM bodyWeight ORDER BY datetime DESC LIMIT 1;');
+    const result = await database.getFirstAsync('SELECT * FROM bodyWeight ORDER BY datetime DESC LIMIT 1;');
+    if (result) {
+      memoryBodyWeight = result;
+      await AsyncStorage.setItem(BW_CACHE_KEY, JSON.stringify(result));
+    } else {
+      memoryBodyWeight = null;
+      await AsyncStorage.removeItem(BW_CACHE_KEY);
+    }
+    return result;
   } catch (error) {
     console.error("Error fetching latest body weight:", error);
     return null;
@@ -1601,7 +1650,10 @@ export const importBodyWeightData = async (csvContent) => {
             }
           });
 
+          await refreshBodyWeightCache();
+          emit(AppEvents.BODYWEIGHT_UPDATED);
           resolve(importedCount);
+
         } catch (error) {
           console.error("Error importing body weight data:", error);
           reject(error);
@@ -1622,7 +1674,10 @@ export const deleteBodyWeight = async (date) => {
       `DELETE FROM bodyWeight WHERE datetime = ?;`,
       [date]
     );
+    await refreshBodyWeightCache();
+    emit(AppEvents.BODYWEIGHT_UPDATED);
     return "Weight deleted successfully!";
+
   } catch (error) {
     console.error("Error deleting body weight:", error);
     throw error;

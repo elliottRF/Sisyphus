@@ -685,7 +685,7 @@
     "exerciseID": 56,
     "name": "Hip Adductor (Machine)",
     "targetMuscle": "Adductors",
-    "accessoryMuscles": "Gluteal",
+    "accessoryMuscles": "",
     "strengthRatios": [
       0.5,
       0.75,

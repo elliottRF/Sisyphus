@@ -105,10 +105,13 @@ const BodyweightGraphCard = ({ theme }) => {
         const handler = () => loadData();
         on(AppEvents.REFRESH_HOME, handler);
         on(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler);
+        on(AppEvents.BODYWEIGHT_UPDATED, handler);
         return () => {
             off(AppEvents.REFRESH_HOME, handler);
             off(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler);
+            off(AppEvents.BODYWEIGHT_UPDATED, handler);
         };
+
     }, []);
 
     // Remove auto-focus useEffect as it's now handled by CustomAlert.onShow

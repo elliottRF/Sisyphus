@@ -21,6 +21,8 @@ import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { emit, AppEvents } from '../utils/events';
+import Fuse from 'fuse.js';
+
 
 
 const MUSCLE_OPTIONS = [
@@ -73,18 +75,34 @@ const RatioPickerSheet = ({ sheetRef, onSelect, exercises, theme }) => {
     const [search, setSearch] = useState('');
     const styles = getStyles(theme);
 
-    const filtered = useMemo(() => {
-        if (!search.trim()) return exercises;
-        const query = search.toLowerCase();
-        return exercises.filter(ex => {
-            const name = ex.name.toLowerCase();
-            return (
-                name.includes(query) ||
-                name.replace(/\s/g, '').includes(query) ||
-                name.split(' ').some(word => word.startsWith(query))
-            );
+    const fuse = useMemo(() => {
+        return new Fuse(exercises, {
+            keys: ['name'],
+            threshold: 0.35,
+            includeScore: true,
+            ignoreLocation: true,
         });
-    }, [search, exercises]);
+    }, [exercises]);
+
+    const filtered = useMemo(() => {
+        if (!search.trim()) {
+            return [...exercises].sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        const results = fuse.search(search);
+
+        return results
+            .sort((a, b) => {
+                // Priority 1: Fuzzy Match Strength (Score)
+                if (Math.abs(a.score - b.score) > 0.1) {
+                    return a.score - b.score;
+                }
+                // Priority 2: Alphabetical Tie-breaker
+                return a.item.name.localeCompare(b.item.name);
+            })
+            .map(r => r.item);
+    }, [search, exercises, fuse]);
+
 
     return (
         <ActionSheet
@@ -120,7 +138,10 @@ const RatioPickerSheet = ({ sheetRef, onSelect, exercises, theme }) => {
                 data={filtered}
                 keyExtractor={item => String(item.exerciseID)}
                 style={styles.sheetList}
+                keyboardDismissMode="on-drag"
+                keyboardShouldPersistTaps="always"
                 contentContainerStyle={{ paddingBottom: 40 }}
+
                 renderItem={({ item }) => {
                     const ratios = JSON.parse(item.strengthRatios);
                     return (

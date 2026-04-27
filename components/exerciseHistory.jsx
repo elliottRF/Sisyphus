@@ -5,14 +5,17 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import Body from 'react-native-body-highlighter';
 
-import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession, getLatestBodyWeight, getExerciseSnapshot } from './db';
+import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession, getLatestBodyWeight, getExerciseSnapshot, getCachedBodyWeight } from './db';
 import { FONTS, SHADOWS } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import PRGraphCard from './PRGraphCard';
 import { formatWeight, unitLabel } from '../utils/units';
 import { customAlert } from '../utils/customAlert';
 import { getExerciseSnapshotSync, parseStrengthRatios } from '../utils/exerciseSnapshots';
+import { AppEvents, on, off } from '../utils/events';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -329,38 +332,44 @@ const ExerciseHistory = (props) => {
     const styles = useMemo(() => getStyles(theme), [theme]);
 
     // ── Snapshot-seeded initial state ──────────────────────────────────────────
-    const initialSnapshot = getExerciseSnapshotSync(props.exerciseID);
-    const initialSnapshotExercise = snapshotToExerciseRecord(initialSnapshot);
-    const hasInitialSnapshot = !!initialSnapshot;
-    // Can show the overlay immediately only if we have snapshot muscles but no
-    // strength ratios (which require bodyweight to resolve a tier colour).
-    const initialCanShowBodyOverlay = !!initialSnapshotExercise && !initialSnapshot?.strengthRatios?.length;
+    const [snapshot, setSnapshot] = useState(() => getExerciseSnapshotSync(props.exerciseID));
+    const hasInitialSnapshot = !!snapshot;
 
     // ── State ──────────────────────────────────────────────────────────────────
-    const [exerciseName, setExerciseName] = useState(initialSnapshot?.name ?? props.exerciseName);
-    const [exercisesList, setExercises] = useState(initialSnapshotExercise ? [initialSnapshotExercise] : []);
-    const [formattedTargets, setFormattedTargets] = useState(() =>
-        initialSnapshotExercise
-            ? buildFormattedTargets(
-                splitMuscleString(initialSnapshotExercise.targetMuscle),
-                splitMuscleString(initialSnapshotExercise.accessoryMuscles),
-            )
-            : DEFAULT_MUSCLE_TARGETS
-    );
-    const [workoutHistory, setWorkoutHistory] = useState(initialSnapshot?.groupedHistory ?? []);
-    const [stats, setStats] = useState(initialSnapshot?.stats ?? EMPTY_STATS);
-    const [strengthRatios, setStrengthRatios] = useState(initialSnapshot?.strengthRatios ?? []);
-    const [best1RM, setBest1RM] = useState(initialSnapshot?.best1RM ?? null);
-    const [bodyWeight, setBodyWeight] = useState(null);
-    const [hasLoadedBodyWeight, setHasLoadedBodyWeight] = useState(false);
+    const [bodyWeight, setBodyWeight] = useState(() => getCachedBodyWeight());
+    const [hasLoadedBodyWeight, setHasLoadedBodyWeight] = useState(!!getCachedBodyWeight());
     const [showOnlyPRs, setShowOnlyPRs] = useState(false);
     const [filterAnimKey, setFilterAnimKey] = useState(0);
 
-    // ── Derived flags (declared early so memos below can reference them) ───────
+    // ── Derived Snapshot Values ────────────────────────────────────────────────
+    const {
+        name: exerciseName = snapshot?.name ?? props.exerciseName,
+        strengthRatios = snapshot?.strengthRatios ?? [],
+        best1RM = snapshot?.best1RM ?? 0,
+        stats = snapshot?.stats ?? EMPTY_STATS,
+        groupedHistory: workoutHistory = snapshot?.groupedHistory ?? [],
+        targetMuscle = snapshot?.targetMuscle ?? '',
+        accessoryMuscles = snapshot?.accessoryMuscles ?? '',
+        isCardio: isCardioHeader = snapshot?.isCardio ?? false,
+        isAssisted: isAssistedHeader = snapshot?.isAssisted ?? false,
+    } = snapshot || {};
+
+    const formattedTargets = useMemo(() =>
+        snapshot
+            ? buildFormattedTargets(splitMuscleString(targetMuscle), splitMuscleString(accessoryMuscles))
+            : DEFAULT_MUSCLE_TARGETS
+    , [targetMuscle, accessoryMuscles]);
+
+    // ── Derived flags ──────────────────────────────────────────────────────────
     const isDynamic = theme.type === 'dynamic';
     const safeBorder = isDynamic ? '#4d4d4d' : theme.border;
     const hasStrengthRatios = strengthRatios.length > 0;
     const hasBodyWeight = bodyWeight != null;
+
+    // Can show the overlay immediately only if we have snapshot muscles AND:
+    // - no strength ratios, OR
+    // - rankings are disabled.
+    const initialCanShowBodyOverlay = !!snapshot && (!strengthRatios.length || !isRankingsEnabled);
 
     // ── Body opacity ref ───────────────────────────────────────────────────────
     const bodyOpacity = useRef(new Animated.Value(initialCanShowBodyOverlay ? 1 : 0)).current;
@@ -379,21 +388,34 @@ const ExerciseHistory = (props) => {
 
     // Body data is ready once we have exercise details and have received the
     // bodyweight result (whether or not one was actually found).
+    // If rankings are disabled, we don't need bodyweight to be ready.
     const isMuscleDataReady = useMemo(() =>
-        exercisesList.length > 0 && (!hasStrengthRatios || hasLoadedBodyWeight),
-        [exercisesList, hasStrengthRatios, hasLoadedBodyWeight]
+        !!snapshot && (!(hasStrengthRatios && isRankingsEnabled) || hasLoadedBodyWeight),
+        [snapshot, hasStrengthRatios, isRankingsEnabled, hasLoadedBodyWeight]
     );
+
+    // Track readiness with a ref to prevent "flickering" if state updates rapidly.
+    // Once it becomes ready for a specific exerciseID, we keep it ready.
+    const isReadyRef = useRef(false);
+    const lastIDRef = useRef(props.exerciseID);
+
+    if (lastIDRef.current !== props.exerciseID) {
+        isReadyRef.current = false;
+        lastIDRef.current = props.exerciseID;
+    }
+    if (isMuscleDataReady) {
+        isReadyRef.current = true;
+    }
+
+    const stableIsReady = isReadyRef.current;
 
     // ── Overlay body colors ────────────────────────────────────────────────────
     // Returns null until muscle data is ready (defers the fade-in).
     // When the exercise has strength ratios but the user has no bodyweight logged,
     // falls back to theme primary colors instead of hiding the overlay entirely.
     const overlayBodyColors = useMemo(() => {
-        const hasResolvedMuscles = exercisesList.some(e =>
-            e.exerciseID === props.exerciseID &&
-            (!!e.targetMuscle?.trim() || !!e.accessoryMuscles?.trim())
-        );
-        if (!hasResolvedMuscles || !isMuscleDataReady) return null;
+        const hasResolvedMuscles = !!targetMuscle?.trim() || !!accessoryMuscles?.trim();
+        if (!hasResolvedMuscles || !stableIsReady) return null;
 
         if (isRankingsEnabled && hasStrengthRatios && hasBodyWeight && strengthTier !== null) {
             const color = TIER_COLORS[Math.max(0, strengthTier - 1)];
@@ -403,7 +425,7 @@ const ExerciseHistory = (props) => {
         return isDynamic
             ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
             : [theme.bodyFill, `${theme.primary}20`, theme.primary];
-    }, [exercisesList, props.exerciseID, isMuscleDataReady, hasStrengthRatios, hasBodyWeight, strengthTier, theme, isDynamic, isRankingsEnabled]);
+    }, [targetMuscle, accessoryMuscles, stableIsReady, isRankingsEnabled, hasStrengthRatios, hasBodyWeight, strengthTier, theme, isDynamic]);
 
     const fallbackBodyColors = [theme.bodyFill, theme.bodyFill, theme.bodyFill];
     const resolvedBodyColors = overlayBodyColors ?? fallbackBodyColors;
@@ -420,23 +442,17 @@ const ExerciseHistory = (props) => {
             .filter(Boolean);
     }, [workoutHistory, showOnlyPRs]);
 
-    // ── Snapshot helpers ───────────────────────────────────────────────────────
-    const applySnapshot = useCallback((snapshot) => {
-        if (!snapshot) return;
-        const snapshotExercise = snapshotToExerciseRecord(snapshot);
-        setExerciseName(snapshot.name ?? props.exerciseName);
-        setStrengthRatios(Array.isArray(snapshot.strengthRatios) ? snapshot.strengthRatios : []);
-        setBest1RM(snapshot.best1RM ?? 0);
-        setStats(snapshot.stats ?? EMPTY_STATS);
-        setExercises(prev => [snapshotExercise, ...(prev ?? []).filter(e => e.exerciseID !== snapshot.exerciseID)]);
-        setFormattedTargets(buildFormattedTargets(
-            splitMuscleString(snapshot.targetMuscle),
-            splitMuscleString(snapshot.accessoryMuscles),
-        ));
-        if (snapshot.groupedHistory) {
-            setWorkoutHistory(snapshot.groupedHistory);
-        }
-    }, [props.exerciseName]);
+    // ── Snapshot helper ───────────────────────────────────────────────────────
+    const applySnapshot = useCallback((newSnapshot) => {
+        if (!newSnapshot) return;
+        setSnapshot(prev => {
+            // Only update if it's a different exercise or has a newer timestamp
+            if (prev?.exerciseID === newSnapshot.exerciseID && prev?.updatedAt === newSnapshot.updatedAt) {
+                return prev;
+            }
+            return newSnapshot;
+        });
+    }, []);
 
     // ── Effects ────────────────────────────────────────────────────────────────
 
@@ -444,18 +460,11 @@ const ExerciseHistory = (props) => {
     useEffect(() => {
         let isActive = true;
         const syncSnapshot = getExerciseSnapshotSync(props.exerciseID);
-
         if (syncSnapshot) {
             applySnapshot(syncSnapshot);
         } else {
-            setExerciseName(props.exerciseName);
-            setStrengthRatios([]);
-            setBest1RM(null);
-            setStats(EMPTY_STATS);
-            setExercises([]);
-            setFormattedTargets(DEFAULT_MUSCLE_TARGETS);
+            setSnapshot(null);
         }
-        bodyOpacity.setValue(initialCanShowBodyOverlay ? 1 : 0);
 
         getExerciseSnapshot(props.exerciseID)
             .then(snapshot => { if (isActive) applySnapshot(snapshot); })
@@ -464,69 +473,33 @@ const ExerciseHistory = (props) => {
         return () => { isActive = false; };
     }, [props.exerciseID, applySnapshot]);
 
-    // Sync name, ratios and muscle targets when the full exercise list refreshes
-    useEffect(() => {
-        if (exercisesList.length === 0) return;
-        const current = exercisesList.find(e => e.exerciseID === props.exerciseID);
-        if (!current) return;
-        setExerciseName(current.name);
-        setStrengthRatios(parseStrengthRatios(current.strengthRatios));
-        setFormattedTargets(buildFormattedTargets(
-            splitMuscleString(current.targetMuscle),
-            splitMuscleString(current.accessoryMuscles),
-        ));
-    }, [exercisesList, props.exerciseID]);
+    // Removed the redundant exercisesList sync effect
 
     // Fade body overlay in once colors AND muscle data are both fully resolved.
     // Gating on isMuscleDataReady prevents a double-fire (and the resulting flash)
     // that would otherwise occur when bodyweight loads after muscles are ready.
-    const shouldShowOverlay = canShowBodyOverlay && isMuscleDataReady;
+    const shouldShowOverlay = canShowBodyOverlay && stableIsReady;
+    const lastToValue = useRef(initialCanShowBodyOverlay ? 1 : 0);
+
     useEffect(() => {
+        const toValue = shouldShowOverlay ? 1 : 0;
+        if (toValue === lastToValue.current) return;
+        lastToValue.current = toValue;
+
+        const instant = !isRankingsEnabled || !hasStrengthRatios;
         Animated.timing(bodyOpacity, {
-            toValue: shouldShowOverlay ? 1 : 0,
-            duration: shouldShowOverlay ? 150 : 0,
+            toValue,
+            duration: (toValue === 1 && !instant) ? 150 : 0,
             useNativeDriver: true,
         }).start();
-    }, [shouldShowOverlay]);
+    }, [shouldShowOverlay, isRankingsEnabled, hasStrengthRatios]);
 
-    // Recalculate stats from authoritative history data
-    useEffect(() => {
-        if (!workoutHistory.length) return;
-
-        let maxWeight = 0, minWeight = Infinity, volume = 0, totalSetsCount = 0;
-        let maxDist = 0, bestP = Infinity;
-
-        workoutHistory.forEach(([, exercises]) => {
-            exercises.forEach(entry => {
-                totalSetsCount++;
-                if (entry.reps > 0) {
-                    if (entry.weight > maxWeight) maxWeight = entry.weight;
-                    if (entry.weight < minWeight) minWeight = entry.weight;
-                }
-                volume += entry.weight * entry.reps;
-                if (entry.distance > maxDist) maxDist = entry.distance;
-                if (entry.distance > 0 && entry.seconds > 0) {
-                    const pace = (entry.seconds / 60) / entry.distance;
-                    if (pace < bestP) bestP = pace;
-                }
-            });
-        });
-
-        const isAssisted = !!exercisesList.find(e => e.exerciseID === props.exerciseID)?.isAssisted;
-        setStats({
-            totalSets: totalSetsCount,
-            personalBest: isAssisted ? (minWeight === Infinity ? 0 : minWeight) : maxWeight,
-            totalVolume: volume,
-            maxDistance: maxDist,
-            bestPace: bestP,
-        });
-    }, [workoutHistory, exercisesList, props.exerciseID]);
+    // Recalculate stats from authoritative history data (if needed, though snapshot usually has them)
+    // Snapshot stats are usually preferred as they are pre-computed.
 
     // ── Focus effects ──────────────────────────────────────────────────────────
 
-    useFocusEffect(useCallback(() => {
-        fetchExercises().then(setExercises).catch(console.error);
-    }, []));
+    // Removed redundant fetchExercises call
 
     useFocusEffect(useCallback(() => {
         let isActive = true;
@@ -560,6 +533,19 @@ const ExerciseHistory = (props) => {
             .finally(() => setHasLoadedBodyWeight(true));
     }, []));
 
+    useEffect(() => {
+        const handler = (newBw) => {
+            if (newBw) {
+                setBodyWeight(newBw);
+            } else {
+                getLatestBodyWeight().then(setBodyWeight);
+            }
+        };
+        on(AppEvents.BODYWEIGHT_UPDATED, handler);
+        return () => off(AppEvents.BODYWEIGHT_UPDATED, handler);
+    }, []);
+
+
     // ── Handlers ───────────────────────────────────────────────────────────────
 
     const handleSessionSelect = (session, data) => {
@@ -570,10 +556,6 @@ const ExerciseHistory = (props) => {
     };
 
     // ── Derived display values ─────────────────────────────────────────────────
-
-    const currentExercise = exercisesList.find(e => e.exerciseID === props.exerciseID);
-    const isCardioHeader = !!currentExercise?.isCardio;
-    const isAssistedHeader = !!currentExercise?.isAssisted;
 
     const fmtWeight = (val) => val == null ? '—' : `${+formatWeight(val, useImperial, 1).toFixed(1)}${unitLabel(useImperial)}`;
     const fmtVolume = (val) => val == null ? '—' : `${(val / 1000).toFixed(1)}k`;
@@ -714,7 +696,7 @@ const ExerciseHistory = (props) => {
                         theme={theme}
                         styles={styles}
                         onSessionSelect={handleSessionSelect}
-                        exercisesList={exercisesList}
+                        exercisesList={snapshot ? [snapshot] : []}
                         animationKey={filterAnimKey}
                     />
                 )}
