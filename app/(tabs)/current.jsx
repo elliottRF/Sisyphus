@@ -490,14 +490,25 @@ const Current = () => {
         actionSheetRef.current?.show();
     };
 
+    const prewarmExercise = async (exerciseID) => {
+        try {
+            const { getExerciseSnapshot } = await import('../../components/db');
+            getExerciseSnapshot(exerciseID).catch(() => { });
+        } catch (_) { }
+    };
+
     const showExerciseInfo = async (exerciseDetails) => {
         if (!exerciseDetails) return;
         try {
             const { getExerciseSnapshot } = await import('../../components/db');
             const { primeGraphData } = await import('../../components/PRGraphCard');
             const snapshot = await getExerciseSnapshot(exerciseDetails.exerciseID);
-            if (snapshot?.graphData) {
-                primeGraphData(snapshot.graphData, !!snapshot.isAssisted);
+            if (snapshot) {
+                primeGraphData(
+                    snapshot.graphData,
+                    !!snapshot.isAssisted,
+                    snapshot.graphData3m
+                );
             }
         } catch (_) { /* non-fatal — navigate anyway */ }
         router.push(`/exercise/${exerciseDetails.exerciseID}?name=${encodeURIComponent(exerciseDetails.name || '')}`);
@@ -674,6 +685,7 @@ const Current = () => {
                             exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
                             updateCurrentWorkout={setCurrentWorkout}
                             onOpenDetails={() => showExerciseInfo(exerciseDetails)}
+                            onPrewarmDetails={() => prewarmExercise(exerciseDetails.exerciseID)}
                             simultaneousHandlers={listRef}
                             onSetComplete={handleSetComplete}
                             isCardio={!!exerciseDetails?.isCardio}

@@ -350,6 +350,7 @@ const ExerciseEditable = ({
     exerciseID,
     workoutID,
     onOpenDetails,
+    onPrewarmDetails,
     simultaneousHandlers,
     onSetComplete,
     isCardio,
@@ -532,6 +533,7 @@ const ExerciseEditable = ({
                     </TouchableOpacity>
                     <TouchableOpacity
                         onPress={onOpenDetails}
+                        onPressIn={onPrewarmDetails}
                         onLongPress={drag}
                         delayLongPress={100}
                         style={{ flex: 1 }}

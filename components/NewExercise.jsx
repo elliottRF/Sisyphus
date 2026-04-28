@@ -230,9 +230,8 @@ const NewExercise = (props) => {
             if (!props.exerciseID) return;
             setIsEditMode(true);
 
-            const [exercises, ratioExs] = await Promise.all([
+            const [exercises] = await Promise.all([
                 fetchExercises(),
-                fetchExercisesWithRatios(),
             ]);
 
             const exercise = exercises.find((ex) => ex.exerciseID === props.exerciseID);
@@ -252,22 +251,7 @@ const NewExercise = (props) => {
                 try {
                     const parsed = JSON.parse(exercise.strengthRatios);
                     if (parsed) {
-                        const canonicalExercises = ratioExs.filter(ex => ex.exerciseID < 1000);
-                        const matches = canonicalExercises.filter(ex => ex.strengthRatios === exercise.strengthRatios);
-                        let matched = matches[0];
-                        if (matches.length > 1) {
-                            const customWords = exercise.name.toLowerCase().split(/\W+/).filter(Boolean);
-                            let bestScore = -1;
-                            for (const m of matches) {
-                                const mWords = m.name.toLowerCase().split(/\W+/).filter(Boolean);
-                                const score = customWords.filter(w => mWords.includes(w)).length;
-                                if (score > bestScore) {
-                                    bestScore = score;
-                                    matched = m;
-                                }
-                            }
-                        }
-                        setBorrowedRatioSource({ name: matched ? matched.name : 'Custom', ratios: parsed });
+                        setBorrowedRatioSource({ name: 'Custom', ratios: parsed });
                     }
                 } catch (_) { }
             }

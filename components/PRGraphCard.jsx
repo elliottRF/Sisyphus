@@ -9,7 +9,7 @@ import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-ico
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, on, off } from '../utils/events';
 import { formatWeight, unitLabel } from '../utils/units';
-import { computeGraphPoints as computeSnapshotGraphPoints } from '../utils/exerciseSnapshots';
+import { computeGraphPoints as computeSnapshotGraphPoints, getExerciseSnapshotSync } from '../utils/exerciseSnapshots';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DEFAULT_GRAPH_HEIGHT = 130;
@@ -20,12 +20,12 @@ const Y_AXIS_WIDTH = 40;
 const GRAPH_RIGHT_PADDING = 0;
 
 const DEBUG_INTERPOLATE = true;
+const DEFAULT_TIME_RANGE = 'ALL'; // Options: '3M', '1Y', 'ALL'
 
-// --- Cache ---
-// Stores { graphData, isAssisted } primed by the calling screen before navigation.
+// Stores { graphData, isAssisted, graphData3m } primed by the calling screen before navigation.
 let _cachedData = null;
-export const primeGraphData = (graphData, isAssisted = false) => {
-    _cachedData = { graphData, isAssisted };
+export const primeGraphData = (graphData, isAssisted = false, graphData3m = null) => {
+    _cachedData = { graphData, isAssisted, graphData3m };
 };
 const consumePrimedGraphData = () => {
     const data = _cachedData;
@@ -113,10 +113,17 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         : SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING;
     const graphHeight = isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT;
 
-    const [allData, setAllData] = useState(() => primedDataRef.current?.graphData || []);
+    const [allData, setAllData] = useState(() => {
+        // Only initialize with the 3M subset if the default range is actually 3M.
+        // Otherwise, we want the full history from the start.
+        if (DEFAULT_TIME_RANGE === '3M' && primedDataRef.current?.graphData3m) {
+            return primedDataRef.current.graphData3m;
+        }
+        return primedDataRef.current?.graphData || [];
+    });
     const [loading, setLoading] = useState(() => !primedDataRef.current?.graphData?.length);
     const [graphMode, setGraphMode] = useState('history');
-    const [timeRange, setTimeRange] = useState('ALL');
+    const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE);
     const [selectedPoint, setSelectedPoint] = useState(null);
     const [isAssisted, setIsAssisted] = useState(() => primedDataRef.current?.isAssisted ?? false);
     // graphOpacity fades from 0→1 on mount (deferred one frame via RAF) so the
@@ -126,39 +133,43 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
     const isTouching = useRef(false);
 
     useEffect(() => {
+        const hasCache = !!primedDataRef.current || !!getExerciseSnapshotSync(exerciseID);
+        const duration = hasCache ? 250 : 350;
+
         const rafId = requestAnimationFrame(() => {
             Animated.timing(graphOpacity, {
                 toValue: 1,
-                duration: 350,
+                duration: duration,
                 useNativeDriver: true,
             }).start();
         });
         return () => cancelAnimationFrame(rafId);
-    }, []);
+    }, [exerciseID]);
 
     useEffect(() => {
-        // When navigating from a screen that primed the cache, skip the initial
-        // DB fetch — the primed data is identical and re-fetching would call
-        // setAllData() mid-animation, killing it. The event handlers below
-        // ensure we still refresh after a workout is logged.
-        const wasPrimed = !!primedDataRef.current;
-        if (!wasPrimed) {
+        // When navigating from a screen that primed the cache, we can skip the initial
+        // DB fetch ONLY IF we are in the default range and have the 3M subset ready.
+        // Otherwise, we need to load the full history to support 1Y/ALL ranges.
+        const canSkip = !!primedDataRef.current?.graphData3m && timeRange === DEFAULT_TIME_RANGE;
+
+        if (!canSkip) {
             loadData();
         } else {
             // Still need to clear loading and call onReady.
             setLoading(false);
             onReady?.();
         }
-        const handler = () => loadData();
-        on(AppEvents.REFRESH_HOME, handler);
-        on(AppEvents.WORKOUT_COMPLETED, handler);
-        on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+
+        const refreshHandler = () => loadData();
+        on(AppEvents.REFRESH_HOME, refreshHandler);
+        on(AppEvents.WORKOUT_COMPLETED, refreshHandler);
+        on(AppEvents.WORKOUT_DATA_IMPORTED, refreshHandler);
         return () => {
-            off(AppEvents.REFRESH_HOME, handler);
-            off(AppEvents.WORKOUT_COMPLETED, handler);
-            off(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+            off(AppEvents.REFRESH_HOME, refreshHandler);
+            off(AppEvents.WORKOUT_COMPLETED, refreshHandler);
+            off(AppEvents.WORKOUT_DATA_IMPORTED, refreshHandler);
         };
-    }, [exerciseID]);
+    }, [exerciseID, timeRange]);
 
     const downsample = (arr, maxPoints) => {
         if (arr.length <= maxPoints) return arr;
@@ -196,7 +207,12 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
 
     const primeDataForNavigation = () => {
         // Prime the cache so the history screen doesn't have to re-fetch/re-compute the graph data
-        primeGraphData(allData, isAssisted);
+        // For the 3M cache, we calculate it here if needed, or just pass the full set
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        const graphData3m = allData.filter(p => new Date(p.date) >= threeMonthsAgo);
+
+        primeGraphData(allData, isAssisted, graphData3m);
     };
 
     const handleUnpin = async () => {

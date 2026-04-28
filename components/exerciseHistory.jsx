@@ -358,6 +358,7 @@ const ExerciseHistory = (props) => {
     const [hasLoadedBodyWeight, setHasLoadedBodyWeight] = useState(!!getCachedBodyWeight());
     const [showOnlyPRs, setShowOnlyPRs] = useState(false);
     const [filterAnimKey, setFilterAnimKey] = useState(0);
+    const [isHistoryReady, setIsHistoryReady] = useState(false);
 
     // ── Derived Snapshot Values ────────────────────────────────────────────────
     const {
@@ -563,6 +564,12 @@ const ExerciseHistory = (props) => {
         return () => off(AppEvents.BODYWEIGHT_UPDATED, handler);
     }, []);
 
+    useEffect(() => {
+        // Delay rendering of history items to prioritize top-of-screen content (stats/graph)
+        const timer = setTimeout(() => setIsHistoryReady(true), 400);
+        return () => clearTimeout(timer);
+    }, [props.exerciseID]);
+
 
     // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -586,7 +593,7 @@ const ExerciseHistory = (props) => {
     return (
         <View style={styles.container}>
             <FlatList
-                data={filteredWorkoutHistory}
+                data={isHistoryReady ? filteredWorkoutHistory : []}
                 style={styles.list}
                 contentContainerStyle={styles.listContentContainer}
                 keyExtractor={([session]) => session.toString()}
@@ -719,13 +726,15 @@ const ExerciseHistory = (props) => {
                     />
                 )}
                 ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <View style={styles.emptyIconCircle}>
-                            <Feather name="activity" size={32} color={theme.textSecondary} />
+                    isHistoryReady ? (
+                        <View style={styles.emptyContainer}>
+                            <View style={styles.emptyIconCircle}>
+                                <Feather name="activity" size={32} color={theme.textSecondary} />
+                            </View>
+                            <Text style={styles.emptyText}>No history yet</Text>
+                            <Text style={styles.emptySubtext}>Complete a workout to see your progress.</Text>
                         </View>
-                        <Text style={styles.emptyText}>No history yet</Text>
-                        <Text style={styles.emptySubtext}>Complete a workout to see your progress.</Text>
-                    </View>
+                    ) : null
                 }
             />
         </View>

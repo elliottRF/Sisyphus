@@ -130,6 +130,11 @@ export const buildExerciseSnapshot = (exercise, history = []) => {
     return value > max ? value : max;
   }, 0);
 
+  const allGraphData = computeGraphPoints(history, isAssisted);
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const graphData3m = allGraphData.filter(p => new Date(p.date) >= threeMonthsAgo);
+
   return {
     exerciseID: exercise.exerciseID,
     name: exercise.name,
@@ -139,7 +144,8 @@ export const buildExerciseSnapshot = (exercise, history = []) => {
     isAssisted,
     strengthRatios: parseStrengthRatios(exercise.strengthRatios),
     stats: computeExerciseStats(history, isAssisted),
-    graphData: computeGraphPoints(history, isAssisted),
+    graphData: allGraphData,
+    graphData3m,
     groupedHistory: computeHistoryGroups(history),
     best1RM,
     updatedAt: new Date().toISOString(),

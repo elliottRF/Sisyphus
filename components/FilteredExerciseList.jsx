@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import ActionSheet from "react-native-actions-sheet";
-import { fetchExercises, fetchLastWorkoutSets } from '../components/db';
+import { fetchExercises, fetchLastWorkoutSets, fetchExerciseWorkoutCounts } from '../components/db';
 import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -19,6 +19,13 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
     const [isOpen, setIsOpen] = useState(false);
     const createExerciseActionSheetRef = useRef(null);
     const searchInputRef = useRef(null);
+    const [workoutCounts, setWorkoutCounts] = useState(new Map());
+
+    useEffect(() => {
+        fetchExerciseWorkoutCounts()
+            .then(counts => setWorkoutCounts(counts))
+            .catch(err => console.error(err));
+    }, [exercises]);
 
     useEffect(() => {
         if (isOpen) {
@@ -61,29 +68,39 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
     }, [exercises]);
 
     const sortedAndFilteredExercises = useMemo(() => {
-        // 1. If search is empty, return the full list sorted alphabetically
+        // 1. If search is empty, return the full list sorted by usage frequency
         if (!searchQuery.trim()) {
-            return [...exercises].sort((a, b) => a.name.localeCompare(b.name));
+            return [...exercises].sort((a, b) => {
+                const countA = workoutCounts.get(a.exerciseID) ?? 0;
+                const countB = workoutCounts.get(b.exerciseID) ?? 0;
+                if (countB !== countA) return countB - countA;
+                return a.name.localeCompare(b.name);
+            });
         }
 
         // 2. Perform the fuzzy search
         const results = fuse.search(searchQuery);
 
-        // 3. Sort by relevance, then alphabetical
+        // 3. Sort by relevance, then workout count as a tie-breaker
         return results
             .sort((a, b) => {
                 // Priority 1: Fuzzy Match Strength (Score)
-                // If one is clearly a better match, put it first
-                if (Math.abs(a.score - b.score) > 0.1) {
+                // If one is significantly better fuzzy match, prioritize it
+                // Score 0 is perfect. We give a 0.2 buffer.
+                if (Math.abs(a.score - b.score) > 0.2) {
                     return a.score - b.score;
                 }
 
-                // Priority 2: Alphabetical Tie-breaker
-                // If they are equally relevant, sort A-Z
+                // Priority 2: Workout count tie-breaker
+                const countA = workoutCounts.get(a.item.exerciseID) ?? 0;
+                const countB = workoutCounts.get(b.item.exerciseID) ?? 0;
+                if (countB !== countA) return countB - countA;
+
+                // Priority 3: Alphabetical Tie-breaker
                 return a.item.name.localeCompare(b.item.name);
             })
             .map(r => r.item);
-    }, [searchQuery, exercises, fuse]);
+    }, [searchQuery, exercises, fuse, workoutCounts]);
 
     const inputExercise = async (item) => {
         actionSheetRef.current?.hide();
@@ -133,20 +150,28 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
         ]);
     };
 
-    const renderItem = ({ item }) => (
-        <TouchableOpacity
-            style={styles.exerciseCard}
-            onPress={() => inputExercise(item)}
-            activeOpacity={0.7}
-        >
-            <View style={styles.exerciseContent}>
-                <Text style={styles.exerciseName} numberOfLines={2}>{item.name}</Text>
-                <View style={styles.plusIconContainer}>
-                    <Feather name="plus" size={20} color={theme.primary} />
+    const renderItem = ({ item }) => {
+        const count = workoutCounts.get(item.exerciseID) ?? 0;
+        return (
+            <TouchableOpacity
+                style={styles.exerciseCard}
+                onPress={() => inputExercise(item)}
+                activeOpacity={0.7}
+            >
+                <View style={styles.exerciseContent}>
+                    <Text style={styles.exerciseName} numberOfLines={2}>{item.name}</Text>
+                    <View style={styles.exerciseRight}>
+                        {count > 0 && (
+                            <Text style={styles.workoutCount}>{count}×</Text>
+                        )}
+                        <View style={styles.plusIconContainer}>
+                            <Feather name="plus" size={20} color={theme.primary} />
+                        </View>
+                    </View>
                 </View>
-            </View>
-        </TouchableOpacity>
-    );
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <ActionSheet
@@ -382,6 +407,16 @@ const getStyles = (theme) => {
         plusIconContainer: {
             justifyContent: 'center',
             alignItems: 'center',
+        },
+        exerciseRight: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+        },
+        workoutCount: {
+            color: safeTextSecondary,
+            fontFamily: FONTS.medium,
+            fontSize: 14,
         },
     });
 };

@@ -534,6 +534,7 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
     }
 
     await refreshExerciseSnapshots(affectedExerciseIDs);
+    emit(AppEvents.REFRESH_HOME);
 
     return setsOverwritten;
   } catch (error) {
@@ -576,6 +577,7 @@ export const deleteWorkoutSession = async (sessionNumber) => {
 
   await refreshExerciseSnapshots(affectedExerciseIDs);
   await refreshBodyWeightCache();
+  emit(AppEvents.REFRESH_HOME);
 };
 
 // Fetch exercise history for a specific exerciseID

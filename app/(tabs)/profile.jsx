@@ -104,6 +104,11 @@ const Profile = () => {
             .map(r => r.item); // Map to item at the VERY end
     }, [searchQuery, exercises, workoutCounts, fuse]);
 
+    const prewarmExercise = (exerciseID) => {
+        // Start loading from disk into memory cache as soon as the user touches the card
+        getExerciseSnapshot(exerciseID).catch(() => { });
+    };
+
     const showExerciseInfo = async (item) => {
         if (loadingExerciseID) return;
 
@@ -111,8 +116,12 @@ const Profile = () => {
 
         try {
             const snapshot = await getExerciseSnapshot(item.exerciseID);
-            if (snapshot?.graphData) {
-                primeGraphData(snapshot.graphData, !!snapshot.isAssisted);
+            if (snapshot) {
+                primeGraphData(
+                    snapshot.graphData,
+                    !!snapshot.isAssisted,
+                    snapshot.graphData3m
+                );
             }
             router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
         } catch (error) {
@@ -133,6 +142,7 @@ const Profile = () => {
             <TouchableOpacity
                 style={styles.exerciseCard}
                 onPress={() => showExerciseInfo(item)}
+                onPressIn={() => prewarmExercise(item.exerciseID)}
                 activeOpacity={0.7}
             >
                 <View style={styles.exerciseContent}>

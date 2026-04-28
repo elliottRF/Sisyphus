@@ -9,7 +9,7 @@ import { FlatList } from 'react-native-gesture-handler';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Body from "react-native-body-highlighter";
-import { fetchRecentMuscleUsage, getPinnedExercises, pinExercise, fetchExercises } from '../../components/db';
+import { fetchRecentMuscleUsage, getPinnedExercises, pinExercise, fetchExercises, fetchExerciseWorkoutCounts } from '../../components/db';
 import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -89,6 +89,7 @@ const Home = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [cardBodyWidth, setCardBodyWidth] = useState(0);
     const [allMusclesSorted, setAllMusclesSorted] = useState([]);
+    const [workoutCounts, setWorkoutCounts] = useState(new Map());
 
     const actionSheetRef = useRef(null);
     const router = useRouter();
@@ -104,6 +105,7 @@ const Home = () => {
         loadMuscleData();
         loadPinnedExercises();
         loadModulePrefs();
+        fetchExerciseWorkoutCounts().then(setWorkoutCounts).catch(console.error);
     }, [accessoryWeight]);
 
     // Correct useFocusEffect
@@ -111,6 +113,7 @@ const Home = () => {
         React.useCallback(() => {
             loadModulePrefs();
             loadMuscleData();
+            fetchExerciseWorkoutCounts().then(setWorkoutCounts).catch(console.error);
         }, [accessoryWeight]) // 👈 was []
     );
 
@@ -333,10 +336,13 @@ const Home = () => {
 
     const filteredExercises = useMemo(() => {
         if (!searchQuery.trim()) {
-            // Default state: strictly alphabetical
-            return [...allExercises].sort((a, b) =>
-                a.name.localeCompare(b.name)
-            );
+            // Default state: Sort by usage frequency
+            return [...allExercises].sort((a, b) => {
+                const countA = workoutCounts.get(a.exerciseID) ?? 0;
+                const countB = workoutCounts.get(b.exerciseID) ?? 0;
+                if (countB !== countA) return countB - countA;
+                return a.name.localeCompare(b.name);
+            });
         }
 
         const searchResults = fuse.search(searchQuery);
@@ -344,17 +350,21 @@ const Home = () => {
         return searchResults
             .sort((a, b) => {
                 // 1. Sort by Fuse score (Relevance)
-                // If the score difference is significant (e.g., > 0.1), use it.
-                if (Math.abs(a.score - b.score) > 0.1) {
+                // If the score difference is significant (e.g., > 0.2), use it.
+                if (Math.abs(a.score - b.score) > 0.2) {
                     return a.score - b.score;
                 }
 
-                // 2. Tie-breaker: Alphabetical
-                // If the matches are roughly equal in quality, then go A-Z.
+                // 2. Tie-breaker: Workout count
+                const countA = workoutCounts.get(a.item.exerciseID) ?? 0;
+                const countB = workoutCounts.get(b.item.exerciseID) ?? 0;
+                if (countB !== countA) return countB - countA;
+
+                // 3. Alphabetical
                 return a.item.name.localeCompare(b.item.name);
             })
             .map(r => r.item); // Always map at the end
-    }, [searchQuery, allExercises, fuse]);
+    }, [searchQuery, allExercises, fuse, workoutCounts]);
 
 
 
@@ -577,18 +587,26 @@ const Home = () => {
                         keyExtractor={item => item.exerciseID.toString()}
                         showsVerticalScrollIndicator={false}
                         keyboardDismissMode="on-drag"
-                        renderItem={({ item }) => (
-                            <TouchableOpacity
-                                style={styles.exerciseCard}
-                                onPress={() => handlePinExercise(item)}
-                                activeOpacity={0.7}
-                            >
-                                <View style={styles.exerciseContent}>
-                                    <Text style={styles.exerciseName}>{item.name}</Text>
-                                    <Feather name="plus" size={20} color={theme.primary} />
-                                </View>
-                            </TouchableOpacity>
-                        )}
+                        renderItem={({ item }) => {
+                            const count = workoutCounts.get(item.exerciseID) ?? 0;
+                            return (
+                                <TouchableOpacity
+                                    style={styles.exerciseCard}
+                                    onPress={() => handlePinExercise(item)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.exerciseContent}>
+                                        <Text style={styles.exerciseName}>{item.name}</Text>
+                                        <View style={styles.exerciseRight}>
+                                            {count > 0 && (
+                                                <Text style={styles.workoutCount}>{count}×</Text>
+                                            )}
+                                            <Feather name="plus" size={20} color={theme.primary} />
+                                        </View>
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        }}
                         contentContainerStyle={styles.listContent}
                         ListEmptyComponent={
                             <View style={{ padding: 20, alignItems: 'center' }}>
@@ -864,6 +882,18 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.text,
         fontSize: 16,
         fontFamily: FONTS.semiBold,
+        flex: 1,
+        marginRight: 12,
+    },
+    exerciseRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    workoutCount: {
+        color: theme.textSecondary,
+        fontFamily: FONTS.medium,
+        fontSize: 14,
     },
     actionSheetHeader: {
         padding: 20,
