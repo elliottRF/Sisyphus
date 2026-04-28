@@ -314,11 +314,23 @@ const migrateExerciseIDs = async (database) => {
 
   console.log(`Exercise ID migration: remapping ${remap.size} exercise(s)...`);
 
+  const remapArray = (arr) => {
+    if (!Array.isArray(arr)) return arr;
+    return arr.map(group => ({
+      ...group,
+      exercises: group.exercises.map(ex => ({
+        ...ex,
+        exerciseID: remap.has(ex.exerciseID) ? remap.get(ex.exerciseID) : ex.exerciseID
+      }))
+    }));
+  };
+
   const TEMP_OFFSET = 100_000;
   await database.execAsync('PRAGMA foreign_keys = OFF;');
 
   try {
     await database.withTransactionAsync(async () => {
+      // Remap SQL tables
       for (const [oldID] of remap) {
         const tempID = oldID + TEMP_OFFSET;
         await database.runAsync('UPDATE exercises       SET exerciseID = ? WHERE exerciseID = ?;', [tempID, oldID]);
@@ -332,7 +344,37 @@ const migrateExerciseIDs = async (database) => {
         await database.runAsync('UPDATE workoutHistory  SET exerciseID = ? WHERE exerciseID = ?;', [newID, tempID]);
         await database.runAsync('UPDATE pinnedExercises SET exerciseID = ? WHERE exerciseID = ?;', [newID, tempID]);
       }
+
+      // Remap workoutTemplates JSON
+      const templates = await database.getAllAsync('SELECT id, data FROM workoutTemplates;');
+      for (const t of templates) {
+        try {
+          const data = JSON.parse(t.data);
+          const remappedData = remapArray(data);
+          await database.runAsync('UPDATE workoutTemplates SET data = ? WHERE id = ?;', [JSON.stringify(remappedData), t.id]);
+        } catch (e) {
+          console.error(`Failed to remap template ${t.id}:`, e);
+        }
+      }
     });
+
+    // Remap AsyncStorage @currentWorkout
+    try {
+      const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
+      if (storedWorkout) {
+        const parsed = JSON.parse(storedWorkout);
+        if (parsed.workout) {
+          parsed.workout = remapArray(parsed.workout);
+          await AsyncStorage.setItem('@currentWorkout', JSON.stringify(parsed));
+        }
+      }
+    } catch (e) {
+      console.error('Failed to remap @currentWorkout in AsyncStorage:', e);
+    }
+
+    // Clear snapshot caches for all affected exercises
+    const affectedIDs = [...new Set([...remap.keys(), ...remap.values()])];
+    await removeExerciseSnapshotCaches(affectedIDs);
 
     const maxRow = await database.getFirstAsync('SELECT MAX(exerciseID) as maxID FROM exercises;');
     const newSeq = Math.max(maxRow?.maxID ?? 0, 999);
