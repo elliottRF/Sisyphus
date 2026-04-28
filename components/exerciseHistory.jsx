@@ -124,9 +124,9 @@ const FadingStatText = React.memo(({ text, style, animateInitialPlaceholder = tr
             setDisplayText(text);
             return;
         }
-        Animated.timing(fadeAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start(() => {
+        Animated.timing(fadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start(() => {
             setDisplayText(text);
-            Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+            Animated.timing(fadeAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
         });
     }, [text]);
 
@@ -212,8 +212,8 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, onSe
         entranceOpacity.setValue(0);
         entranceTranslateY.setValue(18);
         Animated.parallel([
-            Animated.timing(entranceOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
-            Animated.spring(entranceTranslateY, { toValue: 0, speed: 14, bounciness: 4, useNativeDriver: true }),
+            Animated.timing(entranceOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+            Animated.spring(entranceTranslateY, { toValue: 0, speed: 18, bounciness: 4, useNativeDriver: true }),
         ]).start();
     }, [animationKey]);
 
@@ -566,7 +566,7 @@ const ExerciseHistory = (props) => {
 
     useEffect(() => {
         // Delay rendering of history items to prioritize top-of-screen content (stats/graph)
-        const timer = setTimeout(() => setIsHistoryReady(true), 400);
+        const timer = setTimeout(() => setIsHistoryReady(true), 150);
         return () => clearTimeout(timer);
     }, [props.exerciseID]);
 
