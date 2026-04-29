@@ -3,151 +3,320 @@
     "exerciseID": 1,
     "name": "Bench Press (Barbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Triceps,Deltoids"
+    "accessoryMuscles": "Triceps,Deltoids",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.75,
+      2
+    ]
   },
   {
     "exerciseID": 2,
     "name": "Incline Curl (Dumbbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.1,
+      0.15,
+      0.25,
+      0.4,
+      0.55
+    ]
   },
   {
     "exerciseID": 3,
     "name": "Incline Bench Press (Dumbbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids,Triceps"
+    "accessoryMuscles": "Deltoids,Triceps",
+    "strengthRatios": [
+      0.25,
+      0.35,
+      0.5,
+      0.65,
+      0.85
+    ]
   },
   {
     "exerciseID": 4,
     "name": "Leg Extension (Machine)",
     "targetMuscle": "Quadriceps",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.75,
+      2.5
+    ]
   },
   {
     "exerciseID": 5,
     "name": "Triceps Pushdown (Cable - V Bar)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.25,
+      0.5,
+      0.75,
+      1,
+      1.5
+    ]
   },
   {
     "exerciseID": 6,
     "name": "Lat Pulldown (Cable)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Forearm"
+    "accessoryMuscles": "Biceps,Forearm",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      1.75
+    ]
   },
   {
     "exerciseID": 7,
     "name": "Lateral Raise (Dumbbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Trapezius"
+    "accessoryMuscles": "Trapezius",
+    "strengthRatios": [
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.45
+    ]
   },
   {
     "exerciseID": 8,
     "name": "Incline Bench Press (Smith Machine)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids,Triceps"
+    "accessoryMuscles": "Deltoids,Triceps",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      1.75
+    ]
   },
   {
     "exerciseID": 9,
     "name": "Seated Row (Cable)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Forearm,Trapezius"
+    "accessoryMuscles": "Biceps,Forearm,Trapezius",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 10,
     "name": "Romanian Deadlift (Barbell)",
     "targetMuscle": "Hamstring,Gluteal",
-    "accessoryMuscles": "Lower-Back"
+    "accessoryMuscles": "Lower-Back,Abs,Trapezius",
+    "strengthRatios": [
+      0.75,
+      1,
+      1.5,
+      2,
+      2.75
+    ]
   },
   {
     "exerciseID": 11,
     "name": "Neutral Grip Lat Pulldown",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Forearm"
+    "accessoryMuscles": "Biceps,Forearm",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 12,
     "name": "Hammer Curl (Dumbbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.1,
+      0.2,
+      0.3,
+      0.45,
+      0.6
+    ]
   },
   {
     "exerciseID": 13,
     "name": "Triceps Extension",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.25,
+      0.5,
+      0.75,
+      1,
+      1.5
+    ]
   },
   {
     "exerciseID": 14,
     "name": "Hammer Curl (Cable)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.1,
+      0.15,
+      0.25,
+      0.4,
+      0.55
+    ]
   },
   {
     "exerciseID": 15,
     "name": "Triceps Pushdown (Cable - Straight Bar)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.25,
+      0.5,
+      0.75,
+      1,
+      1.5
+    ]
   },
   {
     "exerciseID": 16,
     "name": "Bent Over Row (Smith Machine)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Lower-Back,Trapezius"
+    "accessoryMuscles": "Biceps,Lower-Back,Trapezius",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      1.75
+    ]
   },
   {
     "exerciseID": 17,
     "name": "Incline Chest Press (Machine)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids,Triceps"
+    "accessoryMuscles": "Deltoids,Triceps",
+    "strengthRatios": [
+      0.6,
+      0.85,
+      1.35,
+      1.85,
+      2.35
+    ]
   },
   {
     "exerciseID": 18,
     "name": "Lateral Raise (Cable)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Trapezius"
+    "accessoryMuscles": "Trapezius",
+    "strengthRatios": [
+      0.00,
+      0.10,
+      0.25,
+      0.45,
+      0.75
+    ]
   },
   {
     "exerciseID": 19,
     "name": "Pull Up (Assisted)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Abs,Forearm,Trapezius"
+    "accessoryMuscles": "Biceps,Abs,Forearm,Trapezius",
+    "isAssisted": true
   },
   {
     "exerciseID": 20,
     "name": "Chest Fly",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids,Biceps"
+    "accessoryMuscles": "Deltoids,Biceps",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 21,
     "name": "Squat (Barbell)",
     "targetMuscle": "Quadriceps,Gluteal",
-    "accessoryMuscles": "Hamstring,Lower-Back"
+    "accessoryMuscles": "Hamstring,Lower-Back",
+    "strengthRatios": [
+      0.75,
+      1.25,
+      1.5,
+      2.25,
+      2.75
+    ]
   },
   {
     "exerciseID": 22,
     "name": "Skullcrusher (Dumbbell)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.1,
+      0.18,
+      0.28,
+      0.4,
+      0.55
+    ]
   },
   {
     "exerciseID": 23,
     "name": "Hip Abductor (Machine)",
     "targetMuscle": "Gluteal",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      2,
+      2.75
+    ]
   },
   {
     "exerciseID": 24,
     "name": "Seated Overhead Press (Dumbbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps"
+    "accessoryMuscles": "Triceps",
+    "strengthRatios": [
+      0.15,
+      0.25,
+      0.4,
+      0.55,
+      0.75
+    ]
   },
   {
     "exerciseID": 25,
     "name": "Iso-Lateral Row (Machine)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Forearm,Trapezius"
+    "accessoryMuscles": "Biceps,Forearm,Trapezius",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.75,
+      2.5
+    ]
   },
   {
     "exerciseID": 26,
@@ -159,67 +328,144 @@
     "exerciseID": 27,
     "name": "Preacher Curl (Barbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.2,
+      0.35,
+      0.6,
+      0.85,
+      1.1
+    ]
   },
   {
     "exerciseID": 28,
     "name": "Shoulder Press (Plate Loaded)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps,Trapezius"
+    "accessoryMuscles": "Triceps,Trapezius",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.5,
+      2,
+      2.5
+    ]
   },
   {
     "exerciseID": 29,
     "name": "Seated Lateral Raise (Dumbbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.45
+    ]
   },
   {
     "exerciseID": 30,
     "name": "Chest Press (Machine)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids,Triceps"
+    "accessoryMuscles": "Deltoids,Triceps",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.75,
+      2.25
+    ]
   },
   {
     "exerciseID": 31,
     "name": "Supinating Incline Curl (Dumbbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.1,
+      0.15,
+      0.25,
+      0.4,
+      0.55
+    ]
   },
   {
     "exerciseID": 32,
     "name": "Lateral Raise (Machine)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.25,
+      0.5,
+      0.75,
+      1.25,
+      1.5
+    ]
   },
   {
     "exerciseID": 33,
     "name": "Seated Leg Curl (Machine)",
     "targetMuscle": "Hamstring",
-    "accessoryMuscles": "Calves"
+    "accessoryMuscles": "Calves",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 34,
     "name": "Strict Military Press (Barbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps,Abs,Trapezius"
+    "accessoryMuscles": "Triceps,Abs,Trapezius",
+    "strengthRatios": [
+      0.4,
+      0.55,
+      0.8,
+      1.05,
+      1.35
+    ]
   },
   {
     "exerciseID": 35,
     "name": "Standing Bicep Curl (Ez Bar)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.25,
+      0.4,
+      0.6,
+      0.85,
+      1.1
+    ]
   },
   {
     "exerciseID": 36,
     "name": "Bicep Curl (Cable)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.15,
+      0.35,
+      0.65,
+      1.05,
+      1.5
+    ]
   },
   {
     "exerciseID": 37,
     "name": "Bent Over Row (Barbell)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Lower-Back,Trapezius"
+    "accessoryMuscles": "Biceps,Lower-Back,Trapezius",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      1.75
+    ]
   },
   {
     "exerciseID": 38,
@@ -231,67 +477,138 @@
     "exerciseID": 39,
     "name": "Seated Leg Press (Machine)",
     "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Hamstring"
+    "accessoryMuscles": "Gluteal,Hamstring",
+    "strengthRatios": [
+      1,
+      1.5,
+      2.5,
+      3.5,
+      4.75
+    ]
   },
   {
     "exerciseID": 40,
     "name": "Close Grip Bench Press (Smith Machine)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": "Chest,Deltoids"
+    "accessoryMuscles": "Chest,Deltoids",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 41,
     "name": "Incline Bench Press (Barbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids,Triceps"
+    "accessoryMuscles": "Deltoids,Triceps",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      1.75
+    ]
   },
   {
     "exerciseID": 42,
     "name": "Wide Grip Seated Row (Cable)",
     "targetMuscle": "Upper-Back,Trapezius",
-    "accessoryMuscles": "Biceps,Forearm"
+    "accessoryMuscles": "Biceps,Forearm",
+    "strengthRatios": [
+      0.4,
+      0.65,
+      0.9,
+      1.25,
+      1.75
+    ]
   },
   {
     "exerciseID": 43,
     "name": "Bayesian Curl (Cable)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.1,
+      0.2,
+      0.35,
+      0.5,
+      0.7
+    ]
   },
   {
     "exerciseID": 44,
     "name": "Incline Chest Fly (Dumbbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids,Biceps"
+    "accessoryMuscles": "Deltoids,Biceps",
+    "strengthRatios": [
+      0.1,
+      0.15,
+      0.3,
+      0.5,
+      0.7
+    ]
   },
   {
     "exerciseID": 45,
     "name": "Lying Leg Curl (Machine)",
     "targetMuscle": "Hamstring",
-    "accessoryMuscles": "Calves"
+    "accessoryMuscles": "Calves",
+    "strengthRatios": [
+      0.25,
+      0.5,
+      0.75,
+      1.25,
+      1.75
+    ]
   },
   {
     "exerciseID": 46,
     "name": "Neutral Grip Pull Up (Assisted)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Abs,Forearm,Trapezius"
+    "accessoryMuscles": "Biceps,Abs,Forearm,Trapezius",
+    "isAssisted": true
   },
   {
     "exerciseID": 47,
     "name": "JM Press (Smith Machine)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": "Chest,Deltoids"
+    "accessoryMuscles": "Chest,Deltoids",
+    "strengthRatios": [
+      0.25,
+      0.5,
+      0.75,
+      1,
+      1.5
+    ]
   },
   {
     "exerciseID": 48,
     "name": "Rear Delt Lateral Raise (Dumbbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Trapezius"
+    "accessoryMuscles": "Trapezius",
+    "strengthRatios": [
+      0.05,
+      0.1,
+      0.18,
+      0.28,
+      0.4
+    ]
   },
   {
     "exerciseID": 49,
     "name": "Reverse Curl (Cable)",
     "targetMuscle": "Forearm",
-    "accessoryMuscles": "Biceps"
+    "accessoryMuscles": "Biceps",
+    "strengthRatios": [
+      0.15,
+      0.25,
+      0.4,
+      0.55,
+      0.75
+    ]
   },
   {
     "exerciseID": 50,
@@ -303,43 +620,92 @@
     "exerciseID": 51,
     "name": "Bench Press (Smith Machine)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Triceps,Deltoids"
+    "accessoryMuscles": "Triceps,Deltoids",
+    "strengthRatios": [
+      0.5,
+      1,
+      1.25,
+      1.75,
+      2.25
+    ]
   },
   {
     "exerciseID": 52,
     "name": "Cable Curl (Ez Bar)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.15,
+      0.35,
+      0.65,
+      1.05,
+      1.5
+    ]
   },
   {
     "exerciseID": 53,
     "name": "Bicep Curl (Barbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.2,
+      0.4,
+      0.6,
+      0.85,
+      1.15
+    ]
   },
   {
     "exerciseID": 54,
     "name": "Seated Calf Raise (Plate Loaded)",
     "targetMuscle": "Calves",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.25,
+      0.75,
+      1.25,
+      2,
+      3
+    ]
   },
   {
     "exerciseID": 55,
     "name": "Overhead Tricep Extension (Cable)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.15,
+      0.3,
+      0.55,
+      0.85,
+      1.25
+    ]
   },
   {
     "exerciseID": 56,
     "name": "Hip Adductor (Machine)",
     "targetMuscle": "Adductors",
-    "accessoryMuscles": "Gluteal"
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.5,
+      2.25,
+      3
+    ]
   },
   {
     "exerciseID": 57,
     "name": "Skullcrusher (Barbell)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.2,
+      0.35,
+      0.55,
+      0.8,
+      1.1
+    ]
   },
   {
     "exerciseID": 58,
@@ -351,79 +717,164 @@
     "exerciseID": 59,
     "name": "Seated Dip",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": "Chest,Deltoids"
+    "accessoryMuscles": "Chest,Deltoids",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      2,
+      2.75
+    ]
   },
   {
     "exerciseID": 60,
     "name": "Lat Pulldown (Plate Loaded)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Forearm"
+    "accessoryMuscles": "Biceps,Forearm",
+    "strengthRatios": [
+      0.55,
+      0.8,
+      1.1,
+      1.6,
+      1.9
+    ]
   },
   {
     "exerciseID": 61,
     "name": "Bicep Curl (Machine)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.25,
+      0.45,
+      0.75,
+      1.05,
+      1.4
+    ]
   },
   {
     "exerciseID": 62,
     "name": "Decline Bench Press (Barbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Triceps,Deltoids"
+    "accessoryMuscles": "Triceps,Deltoids",
+    "strengthRatios": [
+      0.5,
+      1,
+      1.25,
+      1.75,
+      2.25
+    ]
   },
   {
     "exerciseID": 63,
     "name": "Face Pull (Cable)",
     "targetMuscle": "Trapezius,Deltoids",
-    "accessoryMuscles": "Upper-Back"
+    "accessoryMuscles": "Upper-Back",
+    "strengthRatios": [
+      0.15,
+      0.35,
+      0.6,
+      0.9,
+      1.3
+    ]
   },
   {
     "exerciseID": 64,
     "name": "T Bar Row",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Lower-Back,Trapezius"
+    "accessoryMuscles": "Biceps,Lower-Back,Trapezius",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 65,
     "name": "Triceps Extension (Cable)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.25,
+      0.5,
+      0.75,
+      1,
+      1.5
+    ]
   },
   {
     "exerciseID": 66,
     "name": "Deadlift (Barbell)",
     "targetMuscle": "Lower-Back,Gluteal,Hamstring",
-    "accessoryMuscles": "Quadriceps,Trapezius,Upper-Back,Abs,Forearm"
+    "accessoryMuscles": "Quadriceps,Trapezius,Upper-Back,Abs,Forearm",
+    "strengthRatios": [
+      1,
+      1.5,
+      2,
+      2.5,
+      3
+    ]
   },
   {
     "exerciseID": 67,
     "name": "Triceps Dip (Assisted)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": "Chest,Deltoids"
+    "accessoryMuscles": "Chest,Deltoids",
+    "isAssisted": true
   },
   {
     "exerciseID": 68,
     "name": "Bench Press (Dumbbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Triceps,Deltoids"
+    "accessoryMuscles": "Triceps,Deltoids",
+    "strengthRatios": [
+      0.2,
+      0.35,
+      0.5,
+      0.75,
+      1
+    ]
   },
   {
     "exerciseID": 69,
     "name": "Chest Fly (Dumbbell)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Deltoids,Biceps"
+    "accessoryMuscles": "Deltoids,Biceps",
+    "strengthRatios": [
+      0.1,
+      0.15,
+      0.3,
+      0.5,
+      0.7
+    ]
   },
   {
     "exerciseID": 70,
     "name": "Close Grip Bench Press (Barbell)",
     "targetMuscle": "Triceps",
-    "accessoryMuscles": "Chest,Deltoids"
+    "accessoryMuscles": "Chest,Deltoids",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 71,
     "name": "Standing Calf Raise (Smith Machine)",
     "targetMuscle": "Calves",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.5,
+      1,
+      1.75,
+      2.75,
+      4
+    ]
   },
   {
     "exerciseID": 72,
@@ -441,19 +892,40 @@
     "exerciseID": 74,
     "name": "Shoulder Press (Machine)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps,Trapezius"
+    "accessoryMuscles": "Triceps,Trapezius",
+    "strengthRatios": [
+      0.25,
+      0.5,
+      1,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 75,
     "name": "Lat Pulldown (Single Arm)",
     "targetMuscle": "Upper-Back",
-    "accessoryMuscles": "Biceps,Abs,Forearm"
+    "accessoryMuscles": "Biceps,Abs,Forearm",
+    "strengthRatios": [
+      0.15,
+      0.3,
+      0.5,
+      0.75,
+      1.05
+    ]
   },
   {
     "exerciseID": 76,
     "name": "Leg Press",
     "targetMuscle": "Quadriceps",
-    "accessoryMuscles": "Gluteal,Hamstring"
+    "accessoryMuscles": "Gluteal,Hamstring",
+    "strengthRatios": [
+      1,
+      1.75,
+      2.75,
+      4,
+      5.25
+    ]
   },
   {
     "exerciseID": 77,
@@ -471,13 +943,27 @@
     "exerciseID": 79,
     "name": "Calf Press on Seated Leg Press",
     "targetMuscle": "Calves",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.5,
+      1,
+      1.75,
+      2.75,
+      4
+    ]
   },
   {
     "exerciseID": 80,
     "name": "Crunch (Machine)",
     "targetMuscle": "Abs",
-    "accessoryMuscles": "Obliques"
+    "accessoryMuscles": "Obliques",
+    "strengthRatios": [
+      0.25,
+      0.75,
+      1,
+      1.75,
+      2.25
+    ]
   },
   {
     "exerciseID": 81,
@@ -495,30 +981,132 @@
     "exerciseID": 83,
     "name": "Iso-Lateral Chest Press (Machine)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": "Triceps,Deltoids"
+    "accessoryMuscles": "Triceps,Deltoids",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1.25,
+      1.75,
+      2.25
+    ]
   },
   {
     "exerciseID": 84,
     "name": "Pec Deck (Machine)",
     "targetMuscle": "Chest",
-    "accessoryMuscles": ""
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2
+    ]
   },
   {
     "exerciseID": 85,
     "name": "Bicep Curl (Dumbbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.1,
+      0.15,
+      0.3,
+      0.5,
+      0.65
+    ]
   },
   {
     "exerciseID": 86,
     "name": "Preacher Curl (Dumbbell)",
     "targetMuscle": "Biceps",
-    "accessoryMuscles": "Forearm"
+    "accessoryMuscles": "Forearm",
+    "strengthRatios": [
+      0.05,
+      0.15,
+      0.3,
+      0.45,
+      0.65
+    ]
   },
   {
     "exerciseID": 87,
     "name": "Overhead Press (Barbell)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps,Abs,Trapezius"
+    "accessoryMuscles": "Triceps,Abs,Trapezius",
+    "strengthRatios": [
+      0.35,
+      0.55,
+      0.8,
+      1.1,
+      1.4
+    ]
+  },
+  {
+    "exerciseID": 88,
+    "name": "Running (Treadmill)",
+    "targetMuscle": "",
+    "accessoryMuscles": "",
+    "isCardio": true
+  },
+  {
+    "exerciseID": 89,
+    "name": "Elliptical Machine",
+    "targetMuscle": "",
+    "accessoryMuscles": "",
+    "isCardio": true
+  },
+  {
+    "exerciseID": 90,
+    "name": "Rowing (Machine)",
+    "targetMuscle": "",
+    "accessoryMuscles": "",
+    "isCardio": true
+  },
+  {
+    "exerciseID": 91,
+    "name": "Stair Master",
+    "targetMuscle": "",
+    "accessoryMuscles": "",
+    "isCardio": true
+  },
+  {
+    "exerciseID": 92,
+    "name": "Hip Thrust (Barbell)",
+    "targetMuscle": "Gluteal",
+    "accessoryMuscles": "Hamstring,Quadriceps,Adductors,Lower-Back",
+    "strengthRatios": [
+      0.5,
+      1,
+      1.75,
+      2.5,
+      3.5
+    ]
+  },
+  {
+    "exerciseID": 93,
+    "name": "Lat Pullover Machine",
+    "targetMuscle": "Upper-Back",
+    "accessoryMuscles": "Chest",
+    "strengthRatios": [
+      0.6,
+      0.9,
+      1.25,
+      1.75,
+      2.1
+    ]
+  },
+  {
+    "exerciseID": 94,
+    "name": "Triceps Extension Rope",
+    "targetMuscle": "Triceps",
+    "accessoryMuscles": "",
+    "strengthRatios": [
+      0.20,
+      0.35,
+      0.6,
+      0.9,
+      1.25
+    ]
   }
 ]

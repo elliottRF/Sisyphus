@@ -180,107 +180,107 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
             opacity: entranceOpacity,
             transform: [{ translateY: entranceTranslateY }],
         }}>
-        <AnimatedTouchableOpacity
-            activeOpacity={0.8}
-            onPress={handlePress}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
-            disabled={isLoading}
-        >
-            <View style={styles.sessionCard}>
-                <View style={styles.sessionHeader}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.sessionTitle}>{workoutName}</Text>
-                        <View style={styles.sessionDateContainer}>
-                            <Feather name="calendar" size={12} color={theme.textSecondary} />
-                            <Text style={styles.sessionDate}>
-                                {formatDate(exercises[0].time)}
-                            </Text>
-                            <View style={styles.dot} />
-                            <Text style={styles.sessionDate}>Session {session}</Text>
+            <AnimatedTouchableOpacity
+                activeOpacity={0.8}
+                onPress={handlePress}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
+                disabled={isLoading}
+            >
+                <View style={styles.sessionCard}>
+                    <View style={styles.sessionHeader}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.sessionTitle}>{workoutName}</Text>
+                            <View style={styles.sessionDateContainer}>
+                                <Feather name="calendar" size={12} color={theme.textSecondary} />
+                                <Text style={styles.sessionDate}>
+                                    {formatDate(exercises[0].time)}
+                                </Text>
+                                <View style={styles.dot} />
+                                <Text style={styles.sessionDate}>Session {session}</Text>
+                            </View>
+                        </View>
+                        <View style={styles.iconButton}>
+                            <Feather name="chevron-right" size={18} color={theme.textSecondary} />
                         </View>
                     </View>
-                    <View style={styles.iconButton}>
-                        <Feather name="chevron-right" size={18} color={theme.textSecondary} />
-                    </View>
-                </View>
 
-                {!!sessionNote && (
-                    <View style={styles.noteContainer}>
-                        <MaterialCommunityIcons name="comment-text-outline" size={14} color={theme.textSecondary} style={{ marginTop: 2 }} />
-                        <Text style={styles.noteText}>{sessionNote}</Text>
-                    </View>
-                )}
+                    {!!sessionNote && (
+                        <View style={styles.noteContainer}>
+                            <MaterialCommunityIcons name="comment-text-outline" size={14} color={theme.textSecondary} style={{ marginTop: 2 }} />
+                            <Text style={styles.noteText}>{sessionNote}</Text>
+                        </View>
+                    )}
 
-                <View style={styles.setsContainer}>
-                    <View style={styles.setsHeaderRow}>
-                        <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
-                        <Text style={[styles.colHeader, styles.colHeaderLift]}>{isCardio ? "DIST / TIME" : "LIFT"}</Text>
-                        {!isAssisted && <Text style={[styles.colHeader, styles.colHeader1RM]}>{isCardio ? "PACE" : "1RM"}</Text>}
-                    </View>
+                    <View style={styles.setsContainer}>
+                        <View style={styles.setsHeaderRow}>
+                            <Text style={[styles.colHeader, styles.colHeaderSet]}>SET</Text>
+                            <Text style={[styles.colHeader, styles.colHeaderLift]}>{isCardio ? "DIST / TIME" : "LIFT"}</Text>
+                            {!isAssisted && <Text style={[styles.colHeader, styles.colHeader1RM]}>{isCardio ? "PACE" : "1RM"}</Text>}
+                        </View>
 
-                    {(() => {
-                        let workingIndex = 0;
-                        return setsWithDisplayNumbers.map((set, setIndex) => {
-                            const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
-                            const setType = set.setType || 'N';
-                            const isWarmup = setType === 'W';
+                        {(() => {
+                            let workingIndex = 0;
+                            return setsWithDisplayNumbers.map((set, setIndex) => {
+                                const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+                                const setType = set.setType || 'N';
+                                const isWarmup = setType === 'W';
 
-                            const isOdd = !isWarmup && (workingIndex % 2 === 1);
-                            if (!isWarmup) workingIndex++;
+                                const isOdd = !isWarmup && (workingIndex % 2 === 1);
+                                if (!isWarmup) workingIndex++;
 
-                            return (
-                                <View
-                                    key={`${set.exerciseHistoryID ?? ''}-${setIndex}`}
-                                    style={[
-                                        styles.setRowContainer,
-                                        isOdd && styles.setRowOdd,
-                                        isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.04)' },
-                                    ]}
-                                >
-                                    <View style={styles.setRow}>
-                                        <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
+                                return (
+                                    <View
+                                        key={`${set.exerciseHistoryID ?? ''}-${setIndex}`}
+                                        style={[
+                                            styles.setRowContainer,
+                                            isOdd && styles.setRowOdd,
+                                            isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.04)' },
+                                        ]}
+                                    >
+                                        <View style={styles.setRow}>
+                                            <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
 
-                                        <Text
-                                            style={[
-                                                styles.setLift,
-                                                isWarmup && styles.setLiftWarmup,
-                                            ]}
-                                        >
-                                            {isCardio ? (
-                                                `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)} mins`
-                                            ) : (
-                                                `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} x ${set.reps}`
-                                            )}
-                                        </Text>
-
-                                        {!isAssisted && (
-                                            <Text style={styles.setOneRM}>
+                                            <Text
+                                                style={[
+                                                    styles.setLift,
+                                                    isWarmup && styles.setLiftWarmup,
+                                                ]}
+                                            >
                                                 {isCardio ? (
-                                                    set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} min/km` : '-'
+                                                    `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)} mins`
                                                 ) : (
-                                                    set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))}` : '-'
+                                                    `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} x ${set.reps}`
                                                 )}
                                             </Text>
+
+                                            {!isAssisted && (
+                                                <Text style={styles.setOneRM}>
+                                                    {isCardio ? (
+                                                        set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} min/km` : '-'
+                                                    ) : (
+                                                        set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))}` : '-'
+                                                    )}
+                                                </Text>
+                                            )}
+                                        </View>
+
+                                        {isPR && (
+                                            <View style={styles.badgeRow}>
+                                                <View style={{ width: 34 }} />
+                                                {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
+                                                {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
+                                                {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
+                                            </View>
                                         )}
                                     </View>
-
-                                    {isPR && (
-                                        <View style={styles.badgeRow}>
-                                            <View style={{ width: 34 }} />
-                                            {set.is1rmPR === 1 && <PRBadge type="1RM" theme={theme} />}
-                                            {set.isVolumePR === 1 && <PRBadge type="VOL" theme={theme} />}
-                                            {set.isWeightPR === 1 && <PRBadge type="KG" theme={theme} />}
-                                        </View>
-                                    )}
-                                </View>
-                            );
-                        });
-                    })()}
+                                );
+                            });
+                        })()}
+                    </View>
                 </View>
-            </View>
-        </AnimatedTouchableOpacity>
+            </AnimatedTouchableOpacity>
         </Animated.View>
     );
 });
@@ -300,36 +300,6 @@ const ALL_MUSCLE_SLUGS = [
 const DEFAULT_MUSCLE_TARGETS = ALL_MUSCLE_SLUGS.map(slug => ({ slug, intensity: 1 }));
 
 
-const FadingStatText = React.memo(({ text, style }) => {
-    const fadeAnim = useRef(new Animated.Value(1)).current;
-    const [displayText, setDisplayText] = useState(text);
-
-    useEffect(() => {
-        // Only trigger the animation if the text actually changes
-        if (text !== displayText) {
-            Animated.timing(fadeAnim, {
-                toValue: 0,
-                duration: 150, // Quick fade out
-                useNativeDriver: true,
-            }).start(() => {
-                // Swap the text while invisible
-                setDisplayText(text);
-                // Fade back in
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 250,
-                    useNativeDriver: true,
-                }).start();
-            });
-        }
-    }, [text]);
-
-    return (
-        <Animated.Text style={[style, { opacity: fadeAnim }]}>
-            {displayText}
-        </Animated.Text>
-    );
-});
 
 const ExerciseHistory = (props) => {
     const { theme, gender, useImperial } = useTheme();
@@ -516,16 +486,16 @@ const ExerciseHistory = (props) => {
     // Null-safe formatters — show '—' until real data arrives
     const fmtWeight = (val) =>
         val == null
-            ? '—'
+            ? ''
             : `${+formatWeight(val, useImperial, 1).toFixed(1)}${unitLabel(useImperial)}`;
     const fmtVolume = (val) =>
-        val == null ? '—' : `${(val / 1000).toFixed(1)}k`;
+        val == null ? '' : `${(val / 1000).toFixed(1)}k`;
     const fmtDist = (val) =>
-        val == null ? '—' : `${val}km`;
+        val == null ? '' : `${val}km`;
     const fmtPace = (val) =>
-        val == null || val === Infinity ? '—' : val.toFixed(1);
+        val == null || val === Infinity ? '' : val.toFixed(1);
     const fmtSets = (val) =>
-        val == null ? '—' : String(val);
+        val == null ? '' : String(val);
 
     return (
         <View style={styles.container}>
@@ -556,20 +526,19 @@ const ExerciseHistory = (props) => {
                             {isCardioHeader ? (
                                 <View style={styles.statCard}>
                                     <Feather name="map-pin" size={16} color={theme.primary} style={styles.statIcon} />
-                                    <FadingStatText text={fmtDist(stats.maxDistance)} style={styles.statValue} />
+                                    <Text style={styles.statValue}>{fmtDist(stats.maxDistance)}</Text>
                                     <Text style={styles.statLabel}>Longest Dist</Text>
                                 </View>
                             ) : (
                                 !isCardioHeader && (
                                     <View style={styles.statCard}>
                                         <Feather name="award" size={16} color={theme.primary} style={styles.statIcon} />
-                                        <FadingStatText
-                                            text={stats.personalBest == null
-                                                ? '—'
+                                        <Text style={styles.statValue}>
+                                            {stats.personalBest == null
+                                                ? ''
                                                 : `${isAssistedHeader && stats.personalBest > 0 ? '-' : ''}${fmtWeight(stats.personalBest)}`
                                             }
-                                            style={styles.statValue}
-                                        />
+                                        </Text>
                                         <Text style={styles.statLabel}>Weight PR</Text>
                                     </View>
                                 )
@@ -577,21 +546,21 @@ const ExerciseHistory = (props) => {
 
                             <View style={styles.statCard}>
                                 <Feather name="layers" size={16} color={theme.primary} style={styles.statIcon} />
-                                <FadingStatText text={fmtSets(stats.totalSets)} style={styles.statValue} />
+                                <Text style={styles.statValue}>{fmtSets(stats.totalSets)}</Text>
                                 <Text style={styles.statLabel}>Total Sets</Text>
                             </View>
 
                             {isCardioHeader ? (
                                 <View style={styles.statCard}>
                                     <Feather name="zap" size={16} color={theme.primary} style={styles.statIcon} />
-                                    <FadingStatText text={fmtPace(stats.bestPace)} style={styles.statValue} />
+                                    <Text style={styles.statValue}>{fmtPace(stats.bestPace)}</Text>
                                     <Text style={styles.statLabel}>Fastest Pace</Text>
                                 </View>
                             ) : (
                                 !isAssistedHeader && (
                                     <View style={styles.statCard}>
                                         <Feather name="activity" size={16} color={theme.primary} style={styles.statIcon} />
-                                        <FadingStatText text={fmtVolume(stats.totalVolume)} style={styles.statValue} />
+                                        <Text style={styles.statValue}>{fmtVolume(stats.totalVolume)}</Text>
                                         <Text style={styles.statLabel}>Volume</Text>
                                     </View>
                                 )
