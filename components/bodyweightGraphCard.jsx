@@ -13,7 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import { formatWeight, unitLabel, toStorageKg } from '../utils/units';
 import { customAlert } from '../utils/customAlert';
 import CustomAlert from './CustomAlert';   // ← Updated import (adjust path if your project structure differs)
-import Animated, { useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+import Reanimated, { useAnimatedStyle, withTiming, Easing, useSharedValue } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRAPH_HEIGHT = 130;
@@ -72,6 +72,8 @@ const BodyweightGraphCard = ({ theme }) => {
     const [timeRange, setTimeRange] = useState('1M');
     const [selectedPoint, setSelectedPoint] = useState(null);
     const isTouching = useRef(false);
+    const graphOpacity = useSharedValue(0);
+
 
     // Modal State (now powered by CustomAlert)
     const [modalVisible, setModalVisible] = useState(false);
@@ -274,6 +276,18 @@ const BodyweightGraphCard = ({ theme }) => {
         };
     }, [allData, timeRange, useImperial]);
 
+    useEffect(() => {
+        if (!loading && points && points.length > 0) {
+            graphOpacity.value = withTiming(1, { duration: 200 });
+        } else if (loading) {
+            graphOpacity.value = 0;
+        }
+    }, [loading, points]);
+
+    const rGraphStyle = useAnimatedStyle(() => ({
+        opacity: graphOpacity.value
+    }));
+
     const durationDays = useMemo(() => {
         if (!points || points.length < 2) return 0;
         return (points[points.length - 1].date.getTime() - points[0].date.getTime()) / (1000 * 60 * 60 * 24);
@@ -388,7 +402,7 @@ const BodyweightGraphCard = ({ theme }) => {
                 </Pressable>
 
                 {/* Smooth animated calendar */}
-                <Animated.View
+                <Reanimated.View
                     style={[
                         { width: '100%', marginBottom: 20, overflow: 'hidden' },
                         useAnimatedStyle(() => ({
@@ -420,7 +434,7 @@ const BodyweightGraphCard = ({ theme }) => {
                             monthTextColor: theme.text,
                         }}
                     />
-                </Animated.View>
+                </Reanimated.View>
             </CustomAlert>
 
             <ActionSheet
@@ -453,12 +467,7 @@ const BodyweightGraphCard = ({ theme }) => {
 
     return (
         <View style={styles.container}>
-            {loading ? (
-                <View style={{ height: 260, justifyContent: 'center', alignItems: 'center' }}>
-                    <ActivityIndicator color={theme.primary} />
-                </View>
-            ) : (
-                <GradientOrView colors={[theme.surface, theme.surface]} style={styles.content} theme={theme}>
+            <GradientOrView colors={[theme.surface, theme.surface]} style={styles.content} theme={theme}>
                     <View style={styles.header}>
                         <View style={{ flex: 1, marginRight: 8 }}>
                             <Text style={styles.title}>Body Weight</Text>
@@ -523,12 +532,14 @@ const BodyweightGraphCard = ({ theme }) => {
                     </View>
 
                     {points.length < 2 ? (
-                        <View style={[styles.emptyState, { height: GRAPH_HEIGHT + 60, justifyContent: 'center', alignItems: 'center' }]}>
-                            <Feather name="activity" size={40} color={theme.textSecondary} style={{ opacity: 0.2, marginBottom: 10 }} />
-                            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                                {allData.length === 0 ? 'Log weight to see your progress graph' : 'No logs found for this period'}
-                            </Text>
-                        </View>
+                        !loading && (
+                            <View style={[styles.emptyState, { height: GRAPH_HEIGHT + 60, justifyContent: 'center', alignItems: 'center' }]}>
+                                <Feather name="activity" size={40} color={theme.textSecondary} style={{ opacity: 0.2, marginBottom: 10 }} />
+                                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                                    {allData.length === 0 ? 'Log weight to see your progress graph' : 'No logs found for this period'}
+                                </Text>
+                            </View>
+                        )
                     ) : (
                         <>
                             <View style={styles.tooltipContainer}>
@@ -570,25 +581,21 @@ const BodyweightGraphCard = ({ theme }) => {
                                             />
                                         ))}
                                     </View>
-                                    <LineGraph
-                                        points={points}
-                                        animated
-                                        color={accentColor}
-                                        gradientFillColors={isDynamic ? ['#2DC4B6CC', '#2DC4B600'] : [`${theme.primary}CC`, `${theme.primary}00`]}
-                                        enablePanGesture
-                                        enableIndicator
-                                        SelectionDot={(props) => (
-                                            <CustomSelectionDot
-                                                {...props}
-                                                borderColor={isLightTheme(theme) ? theme.background : theme.surface}
-                                            />
-                                        )}
-                                        onPointSelected={onPointSelected}
-                                        onGestureStart={onGestureStart}
-                                        onGestureEnd={onGestureEnd}
-                                        range={{ y: { min: yRange[0], max: yRange[1] } }}
-                                        style={{ width: graphWidth, height: GRAPH_HEIGHT }}
-                                    />
+                                    <Reanimated.View style={rGraphStyle}>
+                                        <LineGraph
+                                            points={points}
+                                            animated
+                                            color={accentColor}
+                                            gradientFillColors={isDynamic ? ['#2DC4B6CC', '#2DC4B600'] : [`${theme.primary}CC`, `${theme.primary}00`]}
+                                            enablePanGesture={true}
+                                            enableIndicator
+                                            onPointSelected={onPointSelected}
+                                            onGestureStart={onGestureStart}
+                                            onGestureEnd={onGestureEnd}
+                                            range={{ y: { min: yRange[0], max: yRange[1] } }}
+                                            style={{ width: graphWidth, height: GRAPH_HEIGHT }}
+                                        />
+                                    </Reanimated.View>
                                     <View style={[styles.xAxisRow, { width: graphWidth }]}>
                                         {xAxisLabels.map((date, index) => (
                                             <Text key={index} style={[styles.xAxisText, { textAlign: index === 0 ? 'left' : index === xAxisLabels.length - 1 ? 'right' : 'center' }]}>
@@ -601,7 +608,6 @@ const BodyweightGraphCard = ({ theme }) => {
                         </>
                     )}
                 </GradientOrView>
-            )}
             {renderModalsAndSheets()}
         </View>
     );

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions, Animated } from 'react-native';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LineGraph } from 'react-native-graph';
@@ -138,6 +138,8 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
     const [isAssisted, setIsAssisted] = useState(false);
 
     const isTouching = useRef(false);
+    const graphOpacity = useRef(new Animated.Value(0)).current;
+
 
     useEffect(() => {
         loadData();
@@ -401,6 +403,18 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         };
     }, [allData, timeRange, graphMode, useImperial]);
 
+    useEffect(() => {
+        if (!loading && points && points.length > 0) {
+            Animated.timing(graphOpacity, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+            }).start();
+        } else if (loading) {
+            graphOpacity.setValue(0);
+        }
+    }, [loading, points]);
+
     const trendData = useMemo(() => {
         if (points.length < 2) return { direction: 'flat', label: '0%', period: 'all time' };
 
@@ -507,13 +521,13 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         };
     }, [theme]);
 
-    if (loading) {
-        return (
-            <View style={styles.container}>
-                <ActivityIndicator color={theme.primary} style={{ marginTop: 50 }} />
-            </View>
-        );
-    }
+    // if (loading) {
+    //     return (
+    //         <View style={styles.container}>
+    //             <ActivityIndicator color={theme.primary} style={{ marginTop: 50 }} />
+    //         </View>
+    //     );
+    // }
 
     const hasEnoughData = allData.length >= 2 && points.length >= 2;
     const currentValue = points[points.length - 1]?.value || 0;
@@ -718,19 +732,21 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                                     ))}
                                 </View>
 
-                                <LineGraph
-                                    points={points}
-                                    animated={true}
-                                    color={graphMode === 'maxWeight' ? maxWeightColor : graphColor}
-                                    gradientFillColors={graphMode === 'maxWeight' ? maxWeightGradient : gradientFill}
-                                    enablePanGesture={true}
-                                    onPointSelected={onPointSelected}
-                                    onGestureStart={onGestureStart}
-                                    onGestureEnd={onGestureEnd}
-                                    enableIndicator
-                                    range={{ y: { min: yRange[0], max: yRange[1] } }}
-                                    style={{ width: graphWidth, height: graphHeight }}
-                                />
+                                <Animated.View style={{ opacity: graphOpacity }}>
+                                    <LineGraph
+                                        points={points}
+                                        animated={true}
+                                        color={graphMode === 'maxWeight' ? maxWeightColor : graphColor}
+                                        gradientFillColors={graphMode === 'maxWeight' ? maxWeightGradient : gradientFill}
+                                        enablePanGesture={true}
+                                        onPointSelected={onPointSelected}
+                                        onGestureStart={onGestureStart}
+                                        onGestureEnd={onGestureEnd}
+                                        enableIndicator
+                                        range={{ y: { min: yRange[0], max: yRange[1] } }}
+                                        style={{ width: graphWidth, height: graphHeight }}
+                                    />
+                                </Animated.View>
 
                                 <View style={[styles.xAxisContainer, { top: graphHeight + 8 }]}>
                                     {axisLabels.map((label, index) => (
@@ -742,7 +758,7 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                             </View>
                         </View>
                     </>
-                ) : (
+                ) : !loading && (
                     <View style={[styles.emptyState, isCompact ? { height: 100 } : { height: 100 }]}>
                         <Feather name="bar-chart-2" size={isCompact ? 32 : 48} color={theme.textSecondary} style={{ opacity: 0.3, marginBottom: 12 }} />
                         <Text style={styles.emptyText}>Not enough data for this period</Text>

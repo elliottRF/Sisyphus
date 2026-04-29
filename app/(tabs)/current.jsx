@@ -547,7 +547,10 @@ const Current = () => {
                         });
                     } else {
                         setCurrentWorkout([]);
-                        setWorkoutTitle("New Workout");
+                        // Only reset to "New Workout" if we aren't currently loading a template via params
+                        if (!params.template) {
+                            setWorkoutTitle("New Workout");
+                        }
                     }
                     const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
                     if (storedStartTime) {
@@ -962,7 +965,7 @@ const getStyles = (theme) => {
         },
         emptyStateHeader: {
             alignItems: 'center',
-            marginTop: 40,
+            marginTop: 20,
             marginBottom: 32,
         },
         emptyStateTitle: {

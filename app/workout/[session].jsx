@@ -197,7 +197,7 @@ const WorkoutDetail = () => {
             });
 
             setPreloadedData({
-                template: { name: '', data: Array.from(grouped.values()) },
+                template: { name: effectiveWorkoutDetails[0]?.name || '', data: Array.from(grouped.values()) },
                 exercises: []
             });
 

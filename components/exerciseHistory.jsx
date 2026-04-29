@@ -309,19 +309,20 @@ const ExerciseHistory = (props) => {
     const styles = getStyles(theme);
 
     const initialSnapshot = useMemo(() => getExerciseSnapshotSync(props.exerciseID), [props.exerciseID]);
+    const statsOpacity = useRef(new Animated.Value(initialSnapshot ? 1 : 0)).current;
 
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
-    
+
     // Seed initial muscle targets from snapshot if available
-    const [formattedTargets, setFormattedTargets] = useState(() => 
-        initialSnapshot?.muscles 
+    const [formattedTargets, setFormattedTargets] = useState(() =>
+        initialSnapshot?.muscles
             ? [
                 ...initialSnapshot.muscles.target.map(slug => ({ slug, intensity: 3 })),
                 ...initialSnapshot.muscles.accessory.map(slug => ({ slug, intensity: 2 })),
-                ...ALL_MUSCLE_SLUGS.filter(slug => 
-                    !initialSnapshot.muscles.target.includes(slug) && 
+                ...ALL_MUSCLE_SLUGS.filter(slug =>
+                    !initialSnapshot.muscles.target.includes(slug) &&
                     !initialSnapshot.muscles.accessory.includes(slug)
                 ).map(slug => ({ slug, intensity: 1 }))
             ]
@@ -440,25 +441,39 @@ const ExerciseHistory = (props) => {
     );
 
     const loadWorkoutHistory = async () => {
-        try {
-            const history = await fetchExerciseHistory(props.exerciseID);
-            const groupedHistory = groupBySession(history);
-            setWorkoutHistory(groupedHistory);
-            
-            // Update snapshot for next time
-            if (exercisesList.length > 0) {
-                const currentEx = exercisesList.find(e => e.exerciseID === props.exerciseID);
-                const snapshot = calculateSnapshotFromHistory(props.exerciseID, history, currentEx);
-                if (snapshot) {
-                    updateExerciseSnapshot(props.exerciseID, snapshot);
+        // Small delay to ensure top stats (which load instantly from cache) 
+        // are prioritized and the screen feels snappy.
+        setTimeout(async () => {
+            try {
+                const history = await fetchExerciseHistory(props.exerciseID);
+                const groupedHistory = groupBySession(history);
+                setWorkoutHistory(groupedHistory);
+
+                // Update snapshot for next time
+                if (exercisesList.length > 0) {
+                    const currentEx = exercisesList.find(e => e.exerciseID === props.exerciseID);
+                    const snapshot = calculateSnapshotFromHistory(props.exerciseID, history, currentEx);
+                    if (snapshot) {
+                        updateExerciseSnapshot(props.exerciseID, snapshot);
+                    }
                 }
+            } catch (error) {
+                console.error("Error loading workout history:", error);
+            } finally {
+                setLoading(false);
             }
-        } catch (error) {
-            console.error("Error loading workout history:", error);
-        } finally {
-            setLoading(false);
-        }
+        }, 100);
     };
+
+    useEffect(() => {
+        if (!loading && !initialSnapshot) {
+            Animated.timing(statsOpacity, {
+                toValue: 1,
+                duration: 400,
+                useNativeDriver: true,
+            }).start();
+        }
+    }, [loading]);
 
     useEffect(() => {
         if (!workoutHistory || workoutHistory.length === 0) return;
@@ -570,19 +585,23 @@ const ExerciseHistory = (props) => {
                             {isCardioHeader ? (
                                 <View style={styles.statCard}>
                                     <Feather name="map-pin" size={16} color={theme.primary} style={styles.statIcon} />
-                                    <Text style={styles.statValue}>{fmtDist(stats.maxDistance)}</Text>
+                                    <Animated.View style={{ opacity: statsOpacity }}>
+                                        <Text style={styles.statValue}>{fmtDist(stats.maxDistance)}</Text>
+                                    </Animated.View>
                                     <Text style={styles.statLabel}>Longest Dist</Text>
                                 </View>
                             ) : (
                                 !isCardioHeader && (
                                     <View style={styles.statCard}>
                                         <Feather name="award" size={16} color={theme.primary} style={styles.statIcon} />
-                                        <Text style={styles.statValue}>
-                                            {stats.personalBest == null
-                                                ? ''
-                                                : `${isAssistedHeader && stats.personalBest > 0 ? '-' : ''}${fmtWeight(stats.personalBest)}`
-                                            }
-                                        </Text>
+                                        <Animated.View style={{ opacity: statsOpacity }}>
+                                            <Text style={styles.statValue}>
+                                                {stats.personalBest == null
+                                                    ? ''
+                                                    : `${isAssistedHeader && stats.personalBest > 0 ? '-' : ''}${fmtWeight(stats.personalBest)}`
+                                                }
+                                            </Text>
+                                        </Animated.View>
                                         <Text style={styles.statLabel}>Weight PR</Text>
                                     </View>
                                 )
@@ -590,21 +609,27 @@ const ExerciseHistory = (props) => {
 
                             <View style={styles.statCard}>
                                 <Feather name="layers" size={16} color={theme.primary} style={styles.statIcon} />
-                                <Text style={styles.statValue}>{fmtSets(stats.totalSets)}</Text>
+                                <Animated.View style={{ opacity: statsOpacity }}>
+                                    <Text style={styles.statValue}>{fmtSets(stats.totalSets)}</Text>
+                                </Animated.View>
                                 <Text style={styles.statLabel}>Total Sets</Text>
                             </View>
 
                             {isCardioHeader ? (
                                 <View style={styles.statCard}>
                                     <Feather name="zap" size={16} color={theme.primary} style={styles.statIcon} />
-                                    <Text style={styles.statValue}>{fmtPace(stats.bestPace)}</Text>
+                                    <Animated.View style={{ opacity: statsOpacity }}>
+                                        <Text style={styles.statValue}>{fmtPace(stats.bestPace)}</Text>
+                                    </Animated.View>
                                     <Text style={styles.statLabel}>Fastest Pace</Text>
                                 </View>
                             ) : (
                                 !isAssistedHeader && (
                                     <View style={styles.statCard}>
                                         <Feather name="activity" size={16} color={theme.primary} style={styles.statIcon} />
-                                        <Text style={styles.statValue}>{fmtVolume(stats.totalVolume)}</Text>
+                                        <Animated.View style={{ opacity: statsOpacity }}>
+                                            <Text style={styles.statValue}>{fmtVolume(stats.totalVolume)}</Text>
+                                        </Animated.View>
                                         <Text style={styles.statLabel}>Volume</Text>
                                     </View>
                                 )

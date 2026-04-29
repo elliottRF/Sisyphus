@@ -35,6 +35,9 @@ const Profile = () => {
     const actionSheetRef = useRef(null);
     const router = useRouter();
 
+    const isNavigatingForward = useRef(false);
+    const [loadingExerciseID, setLoadingExerciseID] = useState(null);
+
     // Pre-load on mount
     useEffect(() => {
         Promise.all([fetchExercises(), fetchExerciseWorkoutCounts()])
@@ -55,20 +58,18 @@ const Profile = () => {
                 .catch(err => console.error(err));
 
             return () => {
-                setSearchQuery('');
+                if (!isNavigatingForward.current) {
+                    setSearchQuery('');
+                }
+                isNavigatingForward.current = false;
             };
         }, [])
     );
 
-
-
-
-
     const openCreateExerciseSheet = () => {
+        isNavigatingForward.current = true;
         router.push('/exercise/new');
     };
-
-    const [loadingExerciseID, setLoadingExerciseID] = useState(null);
 
     const handleCloseCreateExerciseSheet = () => {
         createExerciseActionSheetRef.current?.hide();
@@ -80,7 +81,6 @@ const Profile = () => {
             })
             .catch(err => console.error(err));
     };
-
 
     const fuse = useMemo(() => {
         return new Fuse(exercises, {
@@ -130,6 +130,7 @@ const Profile = () => {
             console.error(e);
         } finally {
             setLoadingExerciseID(null);
+            isNavigatingForward.current = true;
             router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
         }
     };
