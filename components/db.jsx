@@ -141,7 +141,6 @@ export const setupDatabase = async () => {
     const database = await getDb();
     await database.execAsync('PRAGMA foreign_keys = ON;');
 
-    // Create the tables if they don't exist
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS exercises (
         exerciseID INTEGER PRIMARY KEY,
@@ -177,7 +176,6 @@ export const setupDatabase = async () => {
       );
     `);
 
-    // Helper to ensure column exists
     const ensureColumnExists = async (tableName, columnName, formattedDefinition) => {
       try {
         const tableInfo = await database.getAllAsync(`PRAGMA table_info(${tableName});`);
@@ -191,8 +189,6 @@ export const setupDatabase = async () => {
       }
     };
 
-
-    // Migrations using helper
     await ensureColumnExists('workoutHistory', 'duration', 'INTEGER');
     await ensureColumnExists('workoutHistory', 'setType', 'TEXT');
     await ensureColumnExists('workoutHistory', 'notes', 'TEXT');
@@ -206,9 +202,6 @@ export const setupDatabase = async () => {
     await ensureColumnExists('exercises', 'strengthRatios', 'TEXT');
     await ensureColumnExists('exercises', 'userCustomised', 'INTEGER DEFAULT 0');
 
-
-
-    // Create pinnedExercises table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS pinnedExercises (
         exerciseID INTEGER PRIMARY KEY,
@@ -216,7 +209,6 @@ export const setupDatabase = async () => {
       );
     `);
 
-    // Create workoutTemplates table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS workoutTemplates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -226,7 +218,6 @@ export const setupDatabase = async () => {
       );
     `);
 
-    // Create bodyWeight table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS bodyWeight (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -235,7 +226,7 @@ export const setupDatabase = async () => {
       );
     `);
 
-    // Body Weight Migrations
+    // Body Weight column migrations must come AFTER the table is created
     await ensureColumnExists('bodyWeight', 'datetime', 'TEXT');
     await ensureColumnExists('bodyWeight', 'weight', 'REAL');
 
@@ -280,7 +271,6 @@ export const setupDatabase = async () => {
     for (const { exerciseID, name, targetMuscle, accessoryMuscles, isCardio, isAssisted, strengthRatios } of exerciseData) {
       const ratiosString = strengthRatios ? JSON.stringify(strengthRatios) : null;
 
-      // Snapshot isAssisted before the upsert
       const before = await database.getFirstAsync(
         'SELECT isAssisted FROM exercises WHERE exerciseID = ?;',
         [exerciseID]
@@ -305,7 +295,7 @@ export const setupDatabase = async () => {
       }
     }
 
-    // Recalculate PRs for any exercise whose isAssisted flag changed
+    // Recalculate PRs for any exercise whose isAssisted flag changed this run
     if (assistedFlipped.length > 0) {
       for (const id of assistedFlipped) {
         await recalculateExercisePRs(id);
@@ -313,7 +303,17 @@ export const setupDatabase = async () => {
       }
     }
 
-    // 5. Ensure AUTOINCREMENT floor stays at >= 1000 for user exercises
+    // 5. One-time fix: recalculate PRs for all assisted exercises to correct
+    // any bad flags written by the old import path (which ignored isAssisted).
+    const assistedExercises = await database.getAllAsync(
+      'SELECT exerciseID FROM exercises WHERE isAssisted = 1;'
+    );
+    for (const { exerciseID } of assistedExercises) {
+      await recalculateExercisePRs(exerciseID);
+      await invalidateExerciseSnapshot(exerciseID);
+    }
+
+    // 6. Ensure AUTOINCREMENT floor stays at >= 1000 for user exercises
     await database.runAsync(
       `INSERT OR REPLACE INTO sqlite_sequence (name, seq)
        SELECT 'exercises', MAX(MAX(exerciseID), 999) FROM exercises;`
@@ -1147,10 +1147,6 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               continue;
             }
 
-            // FIX: Group by minute precision so that rows with millisecond-differing
-            // timestamps (from Sisyphus exports) all land in the same session.
-            // Strong exports use identical timestamps; Sisyphus exports use per-row
-            // timestamps milliseconds apart — both collapse correctly to the same minute bucket.
             const d = new Date(row['Date']);
             const dateKey = Math.floor(d.getTime() / 60000) * 60000;
 
@@ -1190,7 +1186,6 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
             const isCardioSet = (distanceRaw > 0 || cardiosSeconds > 0) && !setOrderRaw.toLowerCase().includes('timer');
 
-            // Detect warmup/drop set type from Set Order
             let setType = 'N';
             if (setOrderRaw.toUpperCase() === 'W') {
               setType = 'W';
@@ -1198,7 +1193,6 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               setType = 'D';
             }
 
-            // Calculate 1RM
             let oneRM;
             if (reps === 0) {
               oneRM = 0;
@@ -1259,6 +1253,9 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
           );
           let nextCustomExerciseId = Math.max(1000, (maxIdResult?.maxId || 0) + 1);
 
+          // Build a lookup of canonical exercise names so we never reset their isCardio flag
+          const canonicalNames = new Set(exerciseData.map(ex => ex.name));
+
           await database.withTransactionAsync(async () => {
             for (const entry of bodyWeightEntries) {
               await database.runAsync(
@@ -1280,7 +1277,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               for (const [exerciseName, sets] of exerciseMap.entries()) {
                 let exerciseID;
                 const existingExercise = await database.getFirstAsync(
-                  'SELECT exerciseID, isCardio FROM exercises WHERE name = ?',
+                  'SELECT exerciseID, isCardio, isAssisted FROM exercises WHERE name = ?',
                   [exerciseName]
                 );
 
@@ -1289,13 +1286,15 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                 if (existingExercise) {
                   exerciseID = existingExercise.exerciseID;
 
-                  const isCanonical = !!exerciseData.find(e => e.exerciseID === exerciseID);
-                  if (!processedExercises.has(exerciseName) && !isCanonical) {
-                    await database.runAsync('UPDATE exercises SET isCardio = 0 WHERE exerciseID = ?', [exerciseID]);
-                  }
-
-                  if (hasCardioData) {
-                    await database.runAsync('UPDATE exercises SET isCardio = 1 WHERE exerciseID = ?', [exerciseID]);
+                  // Only reset/update isCardio for non-canonical exercises
+                  if (!canonicalNames.has(exerciseName)) {
+                    if (!processedExercises.has(exerciseName)) {
+                      await database.runAsync('UPDATE exercises SET isCardio = 0 WHERE exerciseID = ?', [exerciseID]);
+                      processedExercises.add(exerciseName);
+                    }
+                    if (hasCardioData) {
+                      await database.runAsync('UPDATE exercises SET isCardio = 1 WHERE exerciseID = ?', [exerciseID]);
+                    }
                   }
                 } else {
                   exerciseID = nextCustomExerciseId++;
@@ -1306,48 +1305,70 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                   );
                 }
 
+                // Fetch isAssisted now that exerciseID is resolved
+                const exerciseMetaRow = await database.getFirstAsync(
+                  'SELECT isAssisted FROM exercises WHERE exerciseID = ?',
+                  [exerciseID]
+                );
+                const isAssistedEx = exerciseMetaRow?.isAssisted === 1;
+
                 const note = sessionNotes ? sessionNotes.get(exerciseName) : '';
 
                 const historicalBestOneRM = exerciseBestOneRM.get(exerciseID) || 0;
                 const historicalBestVolume = exerciseBestVolume.get(exerciseID) || 0;
-                const historicalBestWeight = exerciseBestWeight.get(exerciseID) || 0;
+                const historicalBestWeight = exerciseBestWeight.has(exerciseID)
+                  ? exerciseBestWeight.get(exerciseID)
+                  : (isAssistedEx ? Infinity : 0);
                 const historicalBestRepsAtMaxWeight = exerciseBestRepsAtMaxWeight.get(exerciseID) || 0;
 
                 let maxOneRMInWorkout = 0;
                 let maxVolumeInWorkout = 0;
-                let maxWeightInWorkout = 0;
+                let maxWeightInWorkout = isAssistedEx ? Infinity : 0;
                 let maxRepsAtMaxWeight = 0;
                 let bestSetIndexOneRM = -1;
                 let bestSetIndexVolume = -1;
                 let bestSetIndexWeight = -1;
 
                 sets.forEach((set, idx) => {
-                  if (set.oneRM > maxOneRMInWorkout) {
+                  if (set.oneRM > maxOneRMInWorkout && !isAssistedEx) {
                     maxOneRMInWorkout = set.oneRM;
                     bestSetIndexOneRM = idx;
                   }
                   const volume = set.weight * set.reps;
-                  if (volume > maxVolumeInWorkout) {
+                  if (volume > maxVolumeInWorkout && !isAssistedEx) {
                     maxVolumeInWorkout = volume;
                     bestSetIndexVolume = idx;
                   }
                   if (set.reps > 0) {
-                    if (set.weight > maxWeightInWorkout) {
-                      maxWeightInWorkout = set.weight;
-                      maxRepsAtMaxWeight = set.reps;
-                      bestSetIndexWeight = idx;
-                    } else if (set.weight === maxWeightInWorkout && set.reps > maxRepsAtMaxWeight) {
-                      maxRepsAtMaxWeight = set.reps;
-                      bestSetIndexWeight = idx;
+                    if (isAssistedEx) {
+                      if (set.weight < maxWeightInWorkout) {
+                        maxWeightInWorkout = set.weight;
+                        maxRepsAtMaxWeight = set.reps;
+                        bestSetIndexWeight = idx;
+                      } else if (set.weight === maxWeightInWorkout && set.reps > maxRepsAtMaxWeight) {
+                        maxRepsAtMaxWeight = set.reps;
+                        bestSetIndexWeight = idx;
+                      }
+                    } else {
+                      if (set.weight > maxWeightInWorkout) {
+                        maxWeightInWorkout = set.weight;
+                        maxRepsAtMaxWeight = set.reps;
+                        bestSetIndexWeight = idx;
+                      } else if (set.weight === maxWeightInWorkout && set.reps > maxRepsAtMaxWeight) {
+                        maxRepsAtMaxWeight = set.reps;
+                        bestSetIndexWeight = idx;
+                      }
                     }
                   }
                 });
 
-                const is1rmPR = maxOneRMInWorkout > historicalBestOneRM;
-                const isVolumePR = maxVolumeInWorkout > historicalBestVolume;
-                const isWeightPR =
-                  maxWeightInWorkout > historicalBestWeight ||
-                  (maxWeightInWorkout === historicalBestWeight && maxRepsAtMaxWeight > historicalBestRepsAtMaxWeight);
+                const is1rmPR = isAssistedEx ? false : maxOneRMInWorkout > historicalBestOneRM;
+                const isVolumePR = isAssistedEx ? false : maxVolumeInWorkout > historicalBestVolume;
+                const isWeightPR = isAssistedEx
+                  ? (maxWeightInWorkout < historicalBestWeight ||
+                    (maxWeightInWorkout === historicalBestWeight && maxRepsAtMaxWeight > historicalBestRepsAtMaxWeight))
+                  : (maxWeightInWorkout > historicalBestWeight ||
+                    (maxWeightInWorkout === historicalBestWeight && maxRepsAtMaxWeight > historicalBestRepsAtMaxWeight));
 
                 if (is1rmPR) exerciseBestOneRM.set(exerciseID, maxOneRMInWorkout);
                 if (isVolumePR) exerciseBestVolume.set(exerciseID, maxVolumeInWorkout);
@@ -1356,10 +1377,6 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                   exerciseBestRepsAtMaxWeight.set(exerciseID, maxRepsAtMaxWeight);
                 }
 
-                // FIX: Use array index (i + 1) for setNum — format-agnostic.
-                // The CSV's Set Order values (W, 2, 3, 4 or W, 1, 2, 3) are unreliable
-                // across export formats, so we ignore them for ordering and just sequence
-                // sets in the order they appeared in the CSV.
                 for (let i = 0; i < sets.length; i++) {
                   const set = sets[i];
                   const setNum = i + 1;
