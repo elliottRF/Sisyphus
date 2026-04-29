@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Dimensions } from 'react-native'
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn, FadeOutDown, LinearTransition } from 'react-native-reanimated';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useScrollToTop } from '@react-navigation/native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -492,18 +492,23 @@ const Home = () => {
                 </Animated.View>
 
                 {showMuscleRadar && (
-                    <Animated.View entering={FadeInDown.duration(400).delay(300).springify()}>
+                    <Animated.View layout={LinearTransition} entering={FadeInDown.duration(400).delay(300).springify()}>
                         <MuscleRadarChart />
                     </Animated.View>
                 )}
                 {showBodyWeight && (
-                    <Animated.View entering={FadeInDown.duration(400).delay(320).springify()}>
+                    <Animated.View layout={LinearTransition} entering={FadeInDown.duration(400).delay(320).springify()}>
                         <BodyweightGraphCard theme={theme} />
                     </Animated.View>
                 )}
 
                 {pinnedExercises.map((exercise, index) => (
-                    <Animated.View key={exercise.exerciseID} entering={FadeInDown.duration(400).delay(340 + index * 60).springify()}>
+                    <Animated.View 
+                        key={exercise.exerciseID} 
+                        entering={FadeInDown.duration(400).delay(340 + index * 60).springify()}
+                        exiting={FadeOutDown.duration(300)}
+                        layout={LinearTransition}
+                    >
                         <PRGraphCard
                             exerciseID={exercise.exerciseID}
                             exerciseName={exercise.name}
@@ -513,7 +518,7 @@ const Home = () => {
                     </Animated.View>
                 ))}
 
-                <Animated.View entering={FadeInDown.duration(400).delay(400).springify()}>
+                <Animated.View layout={LinearTransition} entering={FadeInDown.duration(400).delay(400).springify()}>
                     <TouchableOpacity onPress={handleAddGraph} style={styles.addGraphButton}>
                         <GradientOrView colors={[theme.surface, theme.surface]} style={styles.addGraphGradient} theme={theme}>
                             <Feather name="plus-circle" size={24} color={theme.primary} />

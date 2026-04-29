@@ -438,7 +438,8 @@ const Current = () => {
 
             try {
                 const { sound } = await Audio.Sound.createAsync(
-                    require('../../assets/notifications/greatSuccess.mp3')
+                    require('../../assets/notifications/greatSuccess.mp3'),
+                    { volume: 0.6 }
                 );
 
                 await sound.playAsync();
