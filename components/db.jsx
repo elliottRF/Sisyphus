@@ -1,6 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import exerciseData from '../assets/exercises.json';
 import Papa from 'papaparse';
+import { emit, AppEvents } from '../utils/events';
 let db;
 
 const getDb = async () => {
@@ -223,6 +224,7 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
       );
     }
   });
+  emit(AppEvents.WORKOUT_COMPLETED);
 };
 
 // Fetch workout history for a specific session
@@ -296,6 +298,7 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
       await recalculateExercisePRs(exerciseID);
     }
 
+    emit(AppEvents.WORKOUT_COMPLETED);
     return setsOverwritten;
   } catch (error) {
     console.error('Error in overwriteWorkoutSession:', error);
@@ -334,6 +337,7 @@ export const deleteWorkoutSession = async (sessionNumber) => {
   for (const exerciseID of affectedExerciseIDs) {
     await recalculateExercisePRs(exerciseID);
   }
+  emit(AppEvents.WORKOUT_COMPLETED);
 };
 
 // Fetch exercise history for a specific exerciseID
@@ -1197,6 +1201,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             progressCallback({ stage: 'complete', current: importedCount, total: importedCount });
           }
 
+          emit(AppEvents.WORKOUT_DATA_IMPORTED);
           resolve(importedCount);
         } catch (error) {
           reject(error);

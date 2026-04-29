@@ -12,6 +12,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { SETTINGS_KEYS } from '../constants/preferences';
 import { AppEvents, on, off } from '../utils/events';
+import { primeExerciseSnapshots } from '../utils/exerciseSnapshots';
 import LottieView from 'lottie-react-native';
 import { StyleSheet, Modal } from 'react-native';
 import CustomAlert from '../components/CustomAlert';
@@ -31,6 +32,7 @@ const _layout = () => {
         const initDb = async () => {
             try {
                 await setupDatabase();
+                await primeExerciseSnapshots();
             } catch (e) {
                 console.error("DB Setup Failed:", e);
             } finally {

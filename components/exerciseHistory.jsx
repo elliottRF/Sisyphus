@@ -13,6 +13,8 @@ import { useTheme } from '../context/ThemeContext';
 import PRGraphCard from "./PRGraphCard";
 import { Stack } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
+import { getExerciseSnapshotSync, updateExerciseSnapshot, calculateSnapshotFromHistory } from '../utils/exerciseSnapshots';
+import { AppEvents, on, off } from '../utils/events';
 
 
 
@@ -306,14 +308,28 @@ const ExerciseHistory = (props) => {
     const router = useRouter();
     const styles = getStyles(theme);
 
+    const initialSnapshot = useMemo(() => getExerciseSnapshotSync(props.exerciseID), [props.exerciseID]);
+
     const [workoutHistory, setWorkoutHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
-    const [formattedTargets, setFormattedTargets] = useState(DEFAULT_MUSCLE_TARGETS);
+    
+    // Seed initial muscle targets from snapshot if available
+    const [formattedTargets, setFormattedTargets] = useState(() => 
+        initialSnapshot?.muscles 
+            ? [
+                ...initialSnapshot.muscles.target.map(slug => ({ slug, intensity: 3 })),
+                ...initialSnapshot.muscles.accessory.map(slug => ({ slug, intensity: 2 })),
+                ...ALL_MUSCLE_SLUGS.filter(slug => 
+                    !initialSnapshot.muscles.target.includes(slug) && 
+                    !initialSnapshot.muscles.accessory.includes(slug)
+                ).map(slug => ({ slug, intensity: 1 }))
+            ]
+            : DEFAULT_MUSCLE_TARGETS
+    );
 
-    // Null rather than 0 so stat cards render '—' on mount instead of '0',
-    // avoiding a jarring jump from a zero placeholder to the real value.
-    const [stats, setStats] = useState({
+    // Seed initial stats from snapshot if available
+    const [stats, setStats] = useState(() => initialSnapshot?.stats || {
         totalSets: null,
         personalBest: null,
         totalVolume: null,
@@ -356,9 +372,18 @@ const ExerciseHistory = (props) => {
         if (exercisesList.length > 0) {
             const { targetMuscles, accessoryMuscles } = getExerciseMuscles(props.exerciseID, exercisesList);
             handleMuscleStrings(targetMuscles, accessoryMuscles);
-            setExerciseName(currentExerciseDetails.name);
+            const currentEx = exercisesList.find(e => e.exerciseID === props.exerciseID);
+            if (currentEx) {
+                setExerciseName(currentEx.name);
+                // Also update snapshot if we have history
+                if (workoutHistory.length > 0) {
+                    const history = workoutHistory.flatMap(([_, sets]) => sets);
+                    const snapshot = calculateSnapshotFromHistory(props.exerciseID, history, currentEx);
+                    if (snapshot) updateExerciseSnapshot(props.exerciseID, snapshot);
+                }
+            }
         }
-    }, [exercisesList]);
+    }, [exercisesList, workoutHistory]);
 
     const getExerciseMuscles = (exerciseID, exerciseLog) => {
         const exercise = exerciseLog.find(ex => ex.exerciseID === exerciseID);
@@ -401,6 +426,16 @@ const ExerciseHistory = (props) => {
     useFocusEffect(
         useCallback(() => {
             loadWorkoutHistory();
+
+            // Refresh when data changes elsewhere
+            const handleRefresh = () => loadWorkoutHistory();
+            on(AppEvents.WORKOUT_COMPLETED, handleRefresh);
+            on(AppEvents.WORKOUT_DATA_IMPORTED, handleRefresh);
+
+            return () => {
+                off(AppEvents.WORKOUT_COMPLETED, handleRefresh);
+                off(AppEvents.WORKOUT_DATA_IMPORTED, handleRefresh);
+            };
         }, [props.exerciseID])
     );
 
@@ -409,6 +444,15 @@ const ExerciseHistory = (props) => {
             const history = await fetchExerciseHistory(props.exerciseID);
             const groupedHistory = groupBySession(history);
             setWorkoutHistory(groupedHistory);
+            
+            // Update snapshot for next time
+            if (exercisesList.length > 0) {
+                const currentEx = exercisesList.find(e => e.exerciseID === props.exerciseID);
+                const snapshot = calculateSnapshotFromHistory(props.exerciseID, history, currentEx);
+                if (snapshot) {
+                    updateExerciseSnapshot(props.exerciseID, snapshot);
+                }
+            }
         } catch (error) {
             console.error("Error loading workout history:", error);
         } finally {

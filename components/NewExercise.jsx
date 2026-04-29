@@ -13,6 +13,7 @@ import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Added this import
 import { emit, AppEvents } from '../utils/events';
+import { updateExerciseSnapshot, getExerciseSnapshotSync } from '../utils/exerciseSnapshots';
 
 const MUSCLE_OPTIONS = [
     'Chest', 'Triceps', 'Deltoids', 'Trapezius', 'Upper-Back', 'Lower-Back',
@@ -231,6 +232,16 @@ const NewExercise = (props) => {
             );
             newExerciseObj.exerciseID = newId;
         }
+
+        // Update snapshot cache for muscles and name so history screen is instant
+        const existingSnapshot = getExerciseSnapshotSync(props.exerciseID || newExerciseObj.exerciseID);
+        await updateExerciseSnapshot(props.exerciseID || newExerciseObj.exerciseID, {
+            name: newExerciseObj.name,
+            muscles: {
+                target: targetSelected,
+                accessory: accessorySelected
+            }
+        });
 
         emit(AppEvents.WORKOUT_DATA_IMPORTED);
         props.close(newExerciseObj);
