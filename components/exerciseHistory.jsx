@@ -337,6 +337,7 @@ const ExerciseHistory = (props) => {
         maxDistance: null,
         bestPace: null,
     });
+    const [displayStats, setDisplayStats] = useState(stats);
     const [showOnlyPRs, setShowOnlyPRs] = useState(false);
     const [filterAnimKey, setFilterAnimKey] = useState(0);
 
@@ -466,14 +467,23 @@ const ExerciseHistory = (props) => {
     };
 
     useEffect(() => {
-        if (!loading && !initialSnapshot) {
+        const changed = JSON.stringify(displayStats) !== JSON.stringify(stats);
+        if (!changed) return;
+
+        Animated.timing(statsOpacity, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true,
+        }).start(() => {
+            setDisplayStats(stats);
+
             Animated.timing(statsOpacity, {
                 toValue: 1,
-                duration: 400,
+                duration: 250,
                 useNativeDriver: true,
             }).start();
-        }
-    }, [loading]);
+        });
+    }, [stats]);
 
     useEffect(() => {
         if (!workoutHistory || workoutHistory.length === 0) return;
@@ -586,7 +596,7 @@ const ExerciseHistory = (props) => {
                                 <View style={styles.statCard}>
                                     <Feather name="map-pin" size={16} color={theme.primary} style={styles.statIcon} />
                                     <Animated.View style={{ opacity: statsOpacity }}>
-                                        <Text style={styles.statValue}>{fmtDist(stats.maxDistance)}</Text>
+                                        <Text style={styles.statValue}>{fmtDist(displayStats.maxDistance)}</Text>
                                     </Animated.View>
                                     <Text style={styles.statLabel}>Longest Dist</Text>
                                 </View>
@@ -596,9 +606,9 @@ const ExerciseHistory = (props) => {
                                         <Feather name="award" size={16} color={theme.primary} style={styles.statIcon} />
                                         <Animated.View style={{ opacity: statsOpacity }}>
                                             <Text style={styles.statValue}>
-                                                {stats.personalBest == null
+                                                {displayStats.personalBest == null
                                                     ? ''
-                                                    : `${isAssistedHeader && stats.personalBest > 0 ? '-' : ''}${fmtWeight(stats.personalBest)}`
+                                                    : `${isAssistedHeader && displayStats.personalBest > 0 ? '-' : ''}${fmtWeight(displayStats.personalBest)}`
                                                 }
                                             </Text>
                                         </Animated.View>
@@ -610,7 +620,7 @@ const ExerciseHistory = (props) => {
                             <View style={styles.statCard}>
                                 <Feather name="layers" size={16} color={theme.primary} style={styles.statIcon} />
                                 <Animated.View style={{ opacity: statsOpacity }}>
-                                    <Text style={styles.statValue}>{fmtSets(stats.totalSets)}</Text>
+                                    <Text style={styles.statValue}>{fmtSets(displayStats.totalSets)}</Text>
                                 </Animated.View>
                                 <Text style={styles.statLabel}>Total Sets</Text>
                             </View>
@@ -619,7 +629,7 @@ const ExerciseHistory = (props) => {
                                 <View style={styles.statCard}>
                                     <Feather name="zap" size={16} color={theme.primary} style={styles.statIcon} />
                                     <Animated.View style={{ opacity: statsOpacity }}>
-                                        <Text style={styles.statValue}>{fmtPace(stats.bestPace)}</Text>
+                                        <Text style={styles.statValue}>{fmtPace(displayStats.bestPace)}</Text>
                                     </Animated.View>
                                     <Text style={styles.statLabel}>Fastest Pace</Text>
                                 </View>
@@ -628,7 +638,7 @@ const ExerciseHistory = (props) => {
                                     <View style={styles.statCard}>
                                         <Feather name="activity" size={16} color={theme.primary} style={styles.statIcon} />
                                         <Animated.View style={{ opacity: statsOpacity }}>
-                                            <Text style={styles.statValue}>{fmtVolume(stats.totalVolume)}</Text>
+                                            <Text style={styles.statValue}>{fmtVolume(displayStats.totalVolume)}</Text>
                                         </Animated.View>
                                         <Text style={styles.statLabel}>Volume</Text>
                                     </View>

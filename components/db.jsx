@@ -1,7 +1,11 @@
 import * as SQLite from 'expo-sqlite';
 import exerciseData from '../assets/exercises.json';
 import Papa from 'papaparse';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { emit, AppEvents } from '../utils/events';
+import {
+  invalidateExerciseSnapshot
+} from '../utils/exerciseSnapshots';
 let db;
 
 const getDb = async () => {
@@ -9,6 +13,126 @@ const getDb = async () => {
     db = await SQLite.openDatabaseAsync('sisyphus.db');
   }
   return db;
+};
+
+const migrateExerciseIDs = async (database) => {
+  const dbExercises = await database.getAllAsync('SELECT * FROM exercises;');
+  if (dbExercises.length === 0) return;
+
+  const jsonNameToID = new Map(exerciseData.map(ex => [ex.name, ex.exerciseID]));
+  const remap = new Map();
+  const claimedIDs = new Set(exerciseData.map(ex => ex.exerciseID));
+
+  for (const ex of dbExercises) {
+    if (!jsonNameToID.has(ex.name) && ex.exerciseID >= 1000) {
+      claimedIDs.add(ex.exerciseID);
+    }
+  }
+
+  for (const ex of dbExercises) {
+    if (jsonNameToID.has(ex.name)) {
+      const correctID = jsonNameToID.get(ex.name);
+      if (ex.exerciseID !== correctID) {
+        remap.set(ex.exerciseID, correctID);
+      }
+    }
+  }
+
+  let nextUserID = 1000;
+  for (const ex of dbExercises) {
+    if (!jsonNameToID.has(ex.name) && ex.exerciseID < 1000) {
+      while (claimedIDs.has(nextUserID)) nextUserID++;
+      remap.set(ex.exerciseID, nextUserID);
+      claimedIDs.add(nextUserID);
+      nextUserID++;
+    }
+  }
+
+  if (remap.size === 0) {
+    console.log('Exercise ID migration: already correct, nothing to do.');
+    return;
+  }
+
+  console.log(`Exercise ID migration: remapping ${remap.size} exercise(s)...`);
+
+  const remapArray = (arr) => {
+    if (!Array.isArray(arr)) return arr;
+    return arr.map(group => ({
+      ...group,
+      exercises: (group.exercises ?? []).map(ex => ({
+        ...ex,
+        exerciseID: remap.has(ex.exerciseID) ? remap.get(ex.exerciseID) : ex.exerciseID
+      }))
+    }));
+  };
+
+  const TEMP_OFFSET = 100_000;
+  await database.execAsync('PRAGMA foreign_keys = OFF;');
+
+  try {
+    await database.withTransactionAsync(async () => {
+      // Remap SQL tables
+      for (const [oldID] of remap) {
+        const tempID = oldID + TEMP_OFFSET;
+        await database.runAsync('UPDATE exercises       SET exerciseID = ? WHERE exerciseID = ?;', [tempID, oldID]);
+        await database.runAsync('UPDATE workoutHistory  SET exerciseID = ? WHERE exerciseID = ?;', [tempID, oldID]);
+        await database.runAsync('UPDATE pinnedExercises SET exerciseID = ? WHERE exerciseID = ?;', [tempID, oldID]);
+      }
+
+      for (const [oldID, newID] of remap) {
+        const tempID = oldID + TEMP_OFFSET;
+        await database.runAsync('UPDATE exercises       SET exerciseID = ? WHERE exerciseID = ?;', [newID, tempID]);
+        await database.runAsync('UPDATE workoutHistory  SET exerciseID = ? WHERE exerciseID = ?;', [newID, tempID]);
+        await database.runAsync('UPDATE pinnedExercises SET exerciseID = ? WHERE exerciseID = ?;', [newID, tempID]);
+      }
+
+      // Remap workoutTemplates JSON
+      const templates = await database.getAllAsync('SELECT id, data FROM workoutTemplates;');
+      for (const t of templates) {
+        try {
+          const data = JSON.parse(t.data);
+          const remappedData = remapArray(data);
+          await database.runAsync('UPDATE workoutTemplates SET data = ? WHERE id = ?;', [JSON.stringify(remappedData), t.id]);
+        } catch (e) {
+          console.error(`Failed to remap template ${t.id}:`, e);
+        }
+      }
+    });
+
+    // Remap AsyncStorage @currentWorkout
+    try {
+      const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
+      if (storedWorkout) {
+        const parsed = JSON.parse(storedWorkout);
+        if (parsed.workout) {
+          parsed.workout = remapArray(parsed.workout);
+          await AsyncStorage.setItem('@currentWorkout', JSON.stringify(parsed));
+        }
+      }
+    } catch (e) {
+      console.error('Failed to remap @currentWorkout in AsyncStorage:', e);
+    }
+
+    // Invalidate snapshots for all affected exercises
+    const affectedIDs = [...new Set([...remap.keys(), ...remap.values()])];
+    for (const id of affectedIDs) {
+      await invalidateExerciseSnapshot(id);
+    }
+
+    const maxRow = await database.getFirstAsync('SELECT MAX(exerciseID) as maxID FROM exercises;');
+    const newSeq = Math.max(maxRow?.maxID ?? 0, 999);
+    await database.runAsync(
+      `INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES ('exercises', ?);`,
+      [newSeq]
+    );
+
+    console.log(`Exercise ID migration complete. ${remap.size} exercise(s) remapped.`);
+  } catch (error) {
+    console.error('Exercise ID migration failed:', error);
+    throw error;
+  } finally {
+    await database.execAsync('PRAGMA foreign_keys = ON;');
+  }
 };
 
 // Create and populate the exercises table
@@ -25,7 +149,9 @@ export const setupDatabase = async () => {
         targetMuscle TEXT NOT NULL,
         accessoryMuscles TEXT,
         isCardio INTEGER DEFAULT 0,
-        isAssisted INTEGER DEFAULT 0
+        isAssisted INTEGER DEFAULT 0,
+        strengthRatios TEXT,
+        userCustomised INTEGER DEFAULT 0
       );
       
       CREATE TABLE IF NOT EXISTS workoutHistory (
@@ -65,20 +191,6 @@ export const setupDatabase = async () => {
       }
     };
 
-    // Check if exercises table is empty before populating
-    const result = await database.getFirstAsync('SELECT COUNT(*) as count FROM exercises;');
-    const count = result?.count || 0;
-
-    // Only populate if the table is empty
-    if (count === 0) {
-      for (const { exerciseID, name, targetMuscle, accessoryMuscles, cardio } of exerciseData) {
-        await database.runAsync(
-          `INSERT OR REPLACE INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles, isCardio) 
-           VALUES (?, ?, ?, ?, ?);`,
-          [exerciseID, name, targetMuscle, accessoryMuscles, cardio ? 1 : 0]
-        );
-      }
-    }
 
     // Migrations using helper
     await ensureColumnExists('workoutHistory', 'duration', 'INTEGER');
@@ -91,10 +203,10 @@ export const setupDatabase = async () => {
     await ensureColumnExists('exercises', 'isAssisted', 'INTEGER DEFAULT 0');
     await ensureColumnExists('workoutHistory', 'distance', 'FLOAT');
     await ensureColumnExists('workoutHistory', 'seconds', 'INTEGER');
+    await ensureColumnExists('exercises', 'strengthRatios', 'TEXT');
+    await ensureColumnExists('exercises', 'userCustomised', 'INTEGER DEFAULT 0');
 
-    // Body Weight Migrations
-    await ensureColumnExists('bodyWeight', 'datetime', 'TEXT');
-    await ensureColumnExists('bodyWeight', 'weight', 'REAL');
+
 
     // Create pinnedExercises table
     await database.execAsync(`
@@ -123,6 +235,90 @@ export const setupDatabase = async () => {
       );
     `);
 
+    // Body Weight Migrations
+    await ensureColumnExists('bodyWeight', 'datetime', 'TEXT');
+    await ensureColumnExists('bodyWeight', 'weight', 'REAL');
+
+    // 1. Migrate exercise IDs to be canonical before anything else
+    await migrateExerciseIDs(database);
+
+    // 2. Detect and flag exercises existing users have already customised
+    const jsonByName = new Map(exerciseData.map(ex => [ex.name, ex]));
+    const uncustomisedExercises = await database.getAllAsync(
+      'SELECT * FROM exercises WHERE userCustomised = 0;'
+    );
+    for (const dbEx of uncustomisedExercises) {
+      const jsonEx = jsonByName.get(dbEx.name);
+      if (!jsonEx) continue;
+      const targetChanged = dbEx.targetMuscle !== (jsonEx.targetMuscle || '');
+      const accessoryChanged = (dbEx.accessoryMuscles || '') !== (jsonEx.accessoryMuscles || '');
+      if (targetChanged || accessoryChanged) {
+        await database.runAsync(
+          'UPDATE exercises SET userCustomised = 1 WHERE exerciseID = ?;',
+          [dbEx.exerciseID]
+        );
+      }
+    }
+
+    // 3. Fresh install — populate from JSON if table is empty
+    const countResult = await database.getFirstAsync('SELECT COUNT(*) as count FROM exercises;');
+    const count = countResult?.count || 0;
+
+    if (count === 0) {
+      for (const { exerciseID, name, targetMuscle, accessoryMuscles, isCardio, isAssisted } of exerciseData) {
+        await database.runAsync(
+          `INSERT OR REPLACE INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles, isCardio, isAssisted) 
+           VALUES (?, ?, ?, ?, ?, ?);`,
+          [exerciseID, name, targetMuscle, accessoryMuscles || '', isCardio ? 1 : 0, isAssisted ? 1 : 0]
+        );
+      }
+    }
+
+    // 4. Sync loop — respects userCustomised flag for muscle fields
+    const assistedFlipped = [];
+
+    for (const { exerciseID, name, targetMuscle, accessoryMuscles, isCardio, isAssisted, strengthRatios } of exerciseData) {
+      const ratiosString = strengthRatios ? JSON.stringify(strengthRatios) : null;
+
+      // Snapshot isAssisted before the upsert
+      const before = await database.getFirstAsync(
+        'SELECT isAssisted FROM exercises WHERE exerciseID = ?;',
+        [exerciseID]
+      );
+
+      await database.runAsync(
+        `INSERT INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles, isCardio, isAssisted, strengthRatios, userCustomised)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+         ON CONFLICT(name) DO UPDATE SET
+            exerciseID = excluded.exerciseID,
+            isCardio = excluded.isCardio,
+            isAssisted = excluded.isAssisted,
+            strengthRatios = excluded.strengthRatios,
+            targetMuscle = CASE WHEN userCustomised = 1 THEN targetMuscle ELSE excluded.targetMuscle END,
+            accessoryMuscles = CASE WHEN userCustomised = 1 THEN accessoryMuscles ELSE excluded.accessoryMuscles END;`,
+        [exerciseID, name, targetMuscle, accessoryMuscles || '', isCardio ? 1 : 0, isAssisted ? 1 : 0, ratiosString]
+      );
+
+      const newIsAssisted = isAssisted ? 1 : 0;
+      if (before && before.isAssisted !== newIsAssisted) {
+        assistedFlipped.push(exerciseID);
+      }
+    }
+
+    // Recalculate PRs for any exercise whose isAssisted flag changed
+    if (assistedFlipped.length > 0) {
+      for (const id of assistedFlipped) {
+        await recalculateExercisePRs(id);
+        await invalidateExerciseSnapshot(id);
+      }
+    }
+
+    // 5. Ensure AUTOINCREMENT floor stays at >= 1000 for user exercises
+    await database.runAsync(
+      `INSERT OR REPLACE INTO sqlite_sequence (name, seq)
+       SELECT 'exercises', MAX(MAX(exerciseID), 999) FROM exercises;`
+    );
+
     console.log('Database setup completed successfully');
   } catch (error) {
     console.error('Database setup error:', error);
@@ -141,10 +337,11 @@ export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscl
   const database = await getDb();
   try {
     const result = await database.runAsync(
-      `INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio, isAssisted) 
-       VALUES (?, ?, ?, ?, ?);`,
+      `INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio, isAssisted, userCustomised) 
+       VALUES (?, ?, ?, ?, ?, 1);`,
       [exerciseName, targetMuscles, accessoryMuscles, isCardio, isAssisted]
     );
+    await invalidateExerciseSnapshot(result.lastInsertRowId);
     return result.lastInsertRowId;
   } catch (error) {
     if (error.message && error.message.includes("UNIQUE constraint failed")) {
@@ -158,12 +355,23 @@ export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscl
 export const updateExercise = async (exerciseID, exerciseName, targetMuscles, accessoryMuscles, isCardio = 0, isAssisted = 0) => {
   const database = await getDb();
   try {
+    const currentExercise = await database.getFirstAsync(
+      'SELECT isAssisted FROM exercises WHERE exerciseID = ?;',
+      [exerciseID]
+    );
+
     await database.runAsync(
       `UPDATE exercises 
-       SET name = ?, targetMuscle = ?, accessoryMuscles = ?, isCardio = ?, isAssisted = ? 
+       SET name = ?, targetMuscle = ?, accessoryMuscles = ?, isCardio = ?, isAssisted = ?, userCustomised = 1
        WHERE exerciseID = ?;`,
       [exerciseName, targetMuscles, accessoryMuscles, isCardio, isAssisted, exerciseID]
     );
+
+    if ((currentExercise?.isAssisted || 0) !== isAssisted) {
+      await recalculateExercisePRs(exerciseID);
+    }
+
+    await invalidateExerciseSnapshot(exerciseID);
     return "Exercise updated successfully!";
   } catch (error) {
     if (error.message && error.message.includes("UNIQUE constraint failed")) {
@@ -298,7 +506,7 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
       await recalculateExercisePRs(exerciseID);
     }
 
-    emit(AppEvents.WORKOUT_COMPLETED);
+    emit(AppEvents.WORKOUT_COMPLETED, { showCelebration: false });
     return setsOverwritten;
   } catch (error) {
     console.error('Error in overwriteWorkoutSession:', error);
@@ -337,7 +545,7 @@ export const deleteWorkoutSession = async (sessionNumber) => {
   for (const exerciseID of affectedExerciseIDs) {
     await recalculateExercisePRs(exerciseID);
   }
-  emit(AppEvents.WORKOUT_COMPLETED);
+  emit(AppEvents.WORKOUT_COMPLETED, { showCelebration: false });
 };
 
 // Fetch exercise history for a specific exerciseID
@@ -739,7 +947,7 @@ export const fetchMostRecentSession = async (exerciseID) => {
 // Fetch the best (PR) session where this exercise was performed with the exact same muscle occurrence index
 export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex) => {
   const database = await getDb();
-  
+
   const recentSessions = await database.getAllAsync(`
     SELECT workoutSession
     FROM workoutHistory
@@ -751,7 +959,7 @@ export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex
 
   for (const sessionRow of recentSessions) {
     const sessionNum = sessionRow.workoutSession;
-    
+
     // Fetch all exercises from that session in order
     const sessionExercises = await database.getAllAsync(`
       SELECT wh.exerciseID, e.targetMuscle
@@ -766,35 +974,35 @@ export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex
     let occurrenceIndex = -1;
 
     for (const ex of sessionExercises) {
-       const targets = (ex.targetMuscle || '')
-           .split(',')
-           .map(m => m.trim().toLowerCase())
-           .filter(Boolean);
+      const targets = (ex.targetMuscle || '')
+        .split(',')
+        .map(m => m.trim().toLowerCase())
+        .filter(Boolean);
 
-       let maxOcc = 0;
-       targets.forEach(m => {
-           if ((seenMuscles[m] || 0) > maxOcc) maxOcc = seenMuscles[m];
-       });
+      let maxOcc = 0;
+      targets.forEach(m => {
+        if ((seenMuscles[m] || 0) > maxOcc) maxOcc = seenMuscles[m];
+      });
 
-       const curOcc = maxOcc + 1;
+      const curOcc = maxOcc + 1;
 
-       targets.forEach(m => {
-           seenMuscles[m] = (seenMuscles[m] || 0) + 1;
-       });
+      targets.forEach(m => {
+        seenMuscles[m] = (seenMuscles[m] || 0) + 1;
+      });
 
-       if (ex.exerciseID === exerciseID) {
-           occurrenceIndex = curOcc;
-           break;
-       }
+      if (ex.exerciseID === exerciseID) {
+        occurrenceIndex = curOcc;
+        break;
+      }
     }
 
     if (occurrenceIndex >= targetIndex) {
-       validSessions.push(sessionNum);
+      validSessions.push(sessionNum);
     }
   }
 
   if (validSessions.length === 0) {
-      return [];
+    return [];
   }
 
   const sessionListStr = validSessions.join(',');
@@ -1046,6 +1254,11 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
           const processedExercises = new Set();
 
+          const maxIdResult = await database.getFirstAsync(
+            'SELECT MAX(exerciseID) as maxId FROM exercises;'
+          );
+          let nextCustomExerciseId = Math.max(1000, (maxIdResult?.maxId || 0) + 1);
+
           await database.withTransactionAsync(async () => {
             for (const entry of bodyWeightEntries) {
               await database.runAsync(
@@ -1076,20 +1289,21 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                 if (existingExercise) {
                   exerciseID = existingExercise.exerciseID;
 
-                  if (!processedExercises.has(exerciseName)) {
+                  const isCanonical = !!exerciseData.find(e => e.exerciseID === exerciseID);
+                  if (!processedExercises.has(exerciseName) && !isCanonical) {
                     await database.runAsync('UPDATE exercises SET isCardio = 0 WHERE exerciseID = ?', [exerciseID]);
-                    processedExercises.add(exerciseName);
                   }
 
                   if (hasCardioData) {
                     await database.runAsync('UPDATE exercises SET isCardio = 1 WHERE exerciseID = ?', [exerciseID]);
                   }
                 } else {
-                  const result = await database.runAsync(
-                    'INSERT INTO exercises (name, targetMuscle, accessoryMuscles, isCardio) VALUES (?, ?, ?, ?)',
-                    [exerciseName, '', '', hasCardioData ? 1 : 0]
+                  exerciseID = nextCustomExerciseId++;
+
+                  await database.runAsync(
+                    'INSERT INTO exercises (exerciseID, name, targetMuscle, accessoryMuscles, isCardio, userCustomised) VALUES (?, ?, ?, ?, ?, ?)',
+                    [exerciseID, exerciseName, '', '', hasCardioData ? 1 : 0, 1]
                   );
-                  exerciseID = result.lastInsertRowId;
                 }
 
                 const note = sessionNotes ? sessionNotes.get(exerciseName) : '';

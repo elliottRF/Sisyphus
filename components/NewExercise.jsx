@@ -125,6 +125,7 @@ const NewExercise = (props) => {
     const [isAssisted, setIsAssisted] = useState(false);
     const [originalIsAssisted, setOriginalIsAssisted] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    const isCanonical = props.exerciseID && props.exerciseID < 1000;
 
     // Load exercise data if exerciseID is provided
     useEffect(() => {
@@ -337,8 +338,8 @@ const NewExercise = (props) => {
                     {/* Rest of content slides + fades in */}
                     <Animated.View style={{ opacity: entranceOpacity, transform: [{ translateY: entranceY }] }}>
 
-                        <View style={styles.inputContainer}>
-                            <Feather name="edit-2" size={20} color={theme.textSecondary} style={styles.inputIcon} />
+                        <View style={[styles.inputContainer, isCanonical && { opacity: 0.6 }]}>
+                            <Feather name={isCanonical ? "lock" : "edit-2"} size={20} color={theme.textSecondary} style={styles.inputIcon} />
                             <TextInput
                                 style={styles.input}
                                 onChangeText={setExerciseName}
@@ -346,13 +347,15 @@ const NewExercise = (props) => {
                                 placeholder="Exercise Name"
                                 placeholderTextColor={theme.textSecondary}
                                 keyboardType="default"
+                                editable={!isCanonical}
                             />
                         </View>
 
                         <AnimatedCard
-                            style={[styles.cardioToggleCard, { transform: [{ scale: cardioScale }] }]}
+                            style={[styles.cardioToggleCard, { transform: [{ scale: cardioScale }] }, isCanonical && { opacity: 0.6 }]}
                             activeOpacity={0.85}
                             onPress={() => {
+                                if (isCanonical) return;
                                 punchScale(cardioScale);
                                 setIsCardio(!isCardio);
                                 if (!isCardio) setIsAssisted(false);
@@ -361,17 +364,22 @@ const NewExercise = (props) => {
                             <View style={styles.cardioTextWrapper}>
                                 <Text style={styles.label}>Cardio Exercise</Text>
                             </View>
-                            <Feather
-                                name={isCardio ? "check-circle" : "circle"}
-                                size={26}
-                                color={isCardio ? theme.primary : theme.textSecondary}
-                            />
+                            {isCanonical ? (
+                                <Feather name="lock" size={20} color={theme.textSecondary} />
+                            ) : (
+                                <Feather
+                                    name={isCardio ? "check-circle" : "circle"}
+                                    size={26}
+                                    color={isCardio ? theme.primary : theme.textSecondary}
+                                />
+                            )}
                         </AnimatedCard>
 
                         <AnimatedCard
-                            style={[styles.cardioToggleCard, { transform: [{ scale: assistedScale }] }]}
+                            style={[styles.cardioToggleCard, { transform: [{ scale: assistedScale }] }, isCanonical && { opacity: 0.6 }]}
                             activeOpacity={0.85}
                             onPress={() => {
+                                if (isCanonical) return;
                                 punchScale(assistedScale);
                                 setIsAssisted(!isAssisted);
                                 if (!isAssisted) setIsCardio(false);
@@ -380,11 +388,15 @@ const NewExercise = (props) => {
                             <View style={styles.cardioTextWrapper}>
                                 <Text style={styles.label}>Assisted Machine</Text>
                             </View>
-                            <Feather
-                                name={isAssisted ? "check-circle" : "circle"}
-                                size={26}
-                                color={isAssisted ? theme.primary : theme.textSecondary}
-                            />
+                            {isCanonical ? (
+                                <Feather name="lock" size={20} color={theme.textSecondary} />
+                            ) : (
+                                <Feather
+                                    name={isAssisted ? "check-circle" : "circle"}
+                                    size={26}
+                                    color={isAssisted ? theme.primary : theme.textSecondary}
+                                />
+                            )}
                         </AnimatedCard>
 
                         {/* Muscle sections – animate out when Cardio is enabled */}

@@ -82,11 +82,14 @@ const ThemeConsumer = () => {
     const [isWorkoutFinishing, setIsWorkoutFinishing] = useState(false);
 
     useEffect(() => {
-        const handleWorkoutCompleted = () => {
+        const handleWorkoutCompleted = (data) => {
+            // Only show the trophy if showCelebration is not explicitly false
+            if (data?.showCelebration === false) return;
+
             setIsWorkoutFinishing(true);
             setTimeout(() => {
                 setIsWorkoutFinishing(false);
-            }, 2500); // Overlay duration
+            }, 2500);
         };
 
         on(AppEvents.WORKOUT_COMPLETED, handleWorkoutCompleted);
