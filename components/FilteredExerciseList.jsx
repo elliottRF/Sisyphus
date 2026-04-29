@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import ActionSheet from "react-native-actions-sheet";
-import { fetchExercises, fetchLastWorkoutSets } from '../components/db';
+import { fetchExercises, fetchLastWorkoutSets, fetchExerciseWorkoutCounts } from '../components/db';
 import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -19,12 +19,17 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
     const [isOpen, setIsOpen] = useState(false);
     const createExerciseActionSheetRef = useRef(null);
     const searchInputRef = useRef(null);
+    const [workoutCounts, setWorkoutCounts] = useState(new Map());
 
     useEffect(() => {
         if (isOpen) {
             const timer = setTimeout(() => {
                 searchInputRef.current?.focus();
             }, 150);
+            
+            // Refresh counts when opening
+            fetchExerciseWorkoutCounts().then(setWorkoutCounts);
+
             return () => clearTimeout(timer);
         }
     }, [isOpen]);
@@ -61,9 +66,14 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
     }, [exercises]);
 
     const sortedAndFilteredExercises = useMemo(() => {
-        // 1. If search is empty, return the full list sorted alphabetically
+        // 1. If search is empty, return the full list sorted by frequency (workoutCount), then alphabetically
         if (!searchQuery.trim()) {
-            return [...exercises].sort((a, b) => a.name.localeCompare(b.name));
+            return [...exercises].sort((a, b) => {
+                const countA = workoutCounts.get(a.exerciseID) || 0;
+                const countB = workoutCounts.get(b.exerciseID) || 0;
+                if (countB !== countA) return countB - countA;
+                return a.name.localeCompare(b.name);
+            });
         }
 
         // 2. Perform the fuzzy search
@@ -78,7 +88,12 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
                     return a.score - b.score;
                 }
 
-                // Priority 2: Alphabetical Tie-breaker
+                // Priority 2: Frequency (Workout Count)
+                const countA = workoutCounts.get(a.item.exerciseID) || 0;
+                const countB = workoutCounts.get(b.item.exerciseID) || 0;
+                if (countB !== countA) return countB - countA;
+
+                // Priority 3: Alphabetical Tie-breaker
                 // If they are equally relevant, sort A-Z
                 return a.item.name.localeCompare(b.item.name);
             })
@@ -140,7 +155,14 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
             activeOpacity={0.7}
         >
             <View style={styles.exerciseContent}>
-                <Text style={styles.exerciseName} numberOfLines={2}>{item.name}</Text>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={styles.exerciseName} numberOfLines={2}>{item.name}</Text>
+                    {workoutCounts.has(item.exerciseID) && (
+                        <Text style={styles.usageCount}>
+                            {workoutCounts.get(item.exerciseID)} {workoutCounts.get(item.exerciseID) === 1 ? 'workout' : 'workouts'}
+                        </Text>
+                    )}
+                </View>
                 <View style={styles.plusIconContainer}>
                     <Feather name="plus" size={20} color={theme.primary} />
                 </View>
@@ -376,8 +398,12 @@ const getStyles = (theme) => {
             color: safeText,
             fontSize: 16,
             fontFamily: FONTS.semiBold,
-            flex: 1,
-            marginRight: 12,
+        },
+        usageCount: {
+            color: safeTextSecondary,
+            fontSize: 13,
+            fontFamily: FONTS.medium,
+            marginTop: 2,
         },
         plusIconContainer: {
             justifyContent: 'center',

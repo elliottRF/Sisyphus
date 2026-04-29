@@ -21,6 +21,12 @@ const MUSCLE_OPTIONS = [
     'Calves', 'Adductors', 'Neck', 'Obliques'
 ];
 
+const MUSCLE_DISPLAY_NAMES = {
+    'Gluteal': 'Glutes',
+    'Upper-Back': 'Back',
+    'Lower-Back': 'Lower Back',
+};
+
 // ─── Animated muscle chip ────────────────────────────────────────────────────
 const AnimatedMuscleChip = React.memo(({ muscle, isSelected, isDisabled, onPress, styles, theme, inactiveBg }) => {
     const activeProgress = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
@@ -54,7 +60,7 @@ const AnimatedMuscleChip = React.memo(({ muscle, isSelected, isDisabled, onPress
             >
                 <Animated.View style={[styles.chip, { backgroundColor: activeBg, borderColor: activeBorder }]}>
                     <Animated.Text style={[styles.chipText, { color: textColor }]}>
-                        {muscle}
+                        {MUSCLE_DISPLAY_NAMES[muscle] || muscle}
                     </Animated.Text>
                 </Animated.View>
             </TouchableOpacity>

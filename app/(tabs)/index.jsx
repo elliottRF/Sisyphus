@@ -9,7 +9,7 @@ import { FlatList } from 'react-native-gesture-handler';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Body from "react-native-body-highlighter";
-import { fetchRecentMuscleUsage, getPinnedExercises, pinExercise, fetchExercises } from '../../components/db';
+import { fetchRecentMuscleUsage, getPinnedExercises, pinExercise, fetchExercises, fetchExerciseWorkoutCounts } from '../../components/db';
 import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -34,7 +34,7 @@ const muscleMapping = {
 };
 
 const shortMuscleNames = {
-    "Upper Back": "U. Back",
+    "Upper Back": "Back",
     "Lower Back": "L. Back",
     "Shoulders": "Delts",
     "Forearms": "Forearms",
@@ -89,6 +89,7 @@ const Home = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [cardBodyWidth, setCardBodyWidth] = useState(0);
     const [allMusclesSorted, setAllMusclesSorted] = useState([]);
+    const [workoutCounts, setWorkoutCounts] = useState(new Map());
 
     const actionSheetRef = useRef(null);
     const router = useRouter();
@@ -104,6 +105,7 @@ const Home = () => {
         loadMuscleData();
         loadPinnedExercises();
         loadModulePrefs();
+        fetchExerciseWorkoutCounts().then(setWorkoutCounts);
     }, [accessoryWeight]);
 
     // Correct useFocusEffect
@@ -111,6 +113,7 @@ const Home = () => {
         React.useCallback(() => {
             loadModulePrefs();
             loadMuscleData();
+            fetchExerciseWorkoutCounts().then(setWorkoutCounts);
         }, [accessoryWeight]) // 👈 was []
     );
 
@@ -288,6 +291,7 @@ const Home = () => {
                 console.error("Error fetching exercises:", error);
             }
         }
+        fetchExerciseWorkoutCounts().then(setWorkoutCounts);
         actionSheetRef.current?.show();
     };
 
@@ -333,10 +337,13 @@ const Home = () => {
 
     const filteredExercises = useMemo(() => {
         if (!searchQuery.trim()) {
-            // Default state: strictly alphabetical
-            return [...allExercises].sort((a, b) =>
-                a.name.localeCompare(b.name)
-            );
+            // Default state: Frequency then alphabetical
+            return [...allExercises].sort((a, b) => {
+                const countA = workoutCounts.get(a.exerciseID) || 0;
+                const countB = workoutCounts.get(b.exerciseID) || 0;
+                if (countB !== countA) return countB - countA;
+                return a.name.localeCompare(b.name);
+            });
         }
 
         const searchResults = fuse.search(searchQuery);
@@ -349,7 +356,12 @@ const Home = () => {
                     return a.score - b.score;
                 }
 
-                // 2. Tie-breaker: Alphabetical
+                // 2. Frequency (Workout Count)
+                const countA = workoutCounts.get(a.item.exerciseID) || 0;
+                const countB = workoutCounts.get(b.item.exerciseID) || 0;
+                if (countB !== countA) return countB - countA;
+
+                // 3. Tie-breaker: Alphabetical
                 // If the matches are roughly equal in quality, then go A-Z.
                 return a.item.name.localeCompare(b.item.name);
             })
@@ -585,7 +597,14 @@ const Home = () => {
                                 activeOpacity={0.7}
                             >
                                 <View style={styles.exerciseContent}>
-                                    <Text style={styles.exerciseName}>{item.name}</Text>
+                                    <View style={{ flex: 1, marginRight: 12 }}>
+                                        <Text style={styles.exerciseName}>{item.name}</Text>
+                                        {workoutCounts.has(item.exerciseID) && (
+                                            <Text style={styles.usageCount}>
+                                                {workoutCounts.get(item.exerciseID)} {workoutCounts.get(item.exerciseID) === 1 ? 'workout' : 'workouts'}
+                                            </Text>
+                                        )}
+                                    </View>
                                     <Feather name="plus" size={20} color={theme.primary} />
                                 </View>
                             </TouchableOpacity>
@@ -866,6 +885,12 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.text,
         fontSize: 16,
         fontFamily: FONTS.semiBold,
+    },
+    usageCount: {
+        fontSize: 13,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+        marginTop: 2,
     },
     actionSheetHeader: {
         padding: 20,
