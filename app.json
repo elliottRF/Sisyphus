@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1b1c1c"
+      "backgroundColor": "#0c0c0c"
     },
     "ios": {
       "supportsTablet": true,
@@ -25,7 +25,7 @@
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive.png",
-        "backgroundColor": "#1b1c1c"
+        "backgroundColor": "#0c0c0c"
       },
       "package": "com.elliottr.sisyphus",
       "compileSdkVersion": 34,
