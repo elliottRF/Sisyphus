@@ -55,7 +55,7 @@ const _layout = () => {
     return (
         <SafeAreaProvider>
             <ThemeProvider>
-                <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+                <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
                     <ThemeConsumer />
                 </GestureHandlerRootView>
             </ThemeProvider>
@@ -130,10 +130,10 @@ const ThemeConsumer = () => {
         };
 
         loadOnboardingState();
-    }, [pathname]);
+    }, []);
 
     if (shouldShowOnboarding === null) {
-        return null;
+        return <View style={{ flex: 1, backgroundColor: theme.background }} />;
     }
 
     if (shouldShowOnboarding && pathname !== '/onboarding') {
