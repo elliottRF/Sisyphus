@@ -873,6 +873,7 @@ export const fetchRecentMuscleUsage = async (days) => {
 
   return await database.getAllAsync(
     `SELECT 
+      e.name,
       e.targetMuscle,
       e.accessoryMuscles,
       COUNT(*) as sets,
@@ -880,7 +881,7 @@ export const fetchRecentMuscleUsage = async (days) => {
      FROM workoutHistory wh
      JOIN exercises e ON wh.exerciseID = e.exerciseID
      WHERE wh.time >= ? AND (wh.setType IS NULL OR wh.setType != 'W')
-     GROUP BY wh.workoutSession, wh.exerciseID, e.targetMuscle, e.accessoryMuscles;`,
+     GROUP BY wh.workoutSession, wh.exerciseID, e.name, e.targetMuscle, e.accessoryMuscles;`,
     [cutoffDate.toISOString()]
   );
 };

@@ -164,6 +164,7 @@ const ThemeConsumer = () => {
                 <Stack.Screen name="onboarding" options={{ headerShown: false }} />
                 <Stack.Screen name="exercise/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="exercise/new" options={{ headerShown: false }} />
+                <Stack.Screen name="muscle/[id]" options={{ headerShown: false, animation: 'fade' }} />
             </Stack>
 
             <Modal transparent visible={isWorkoutFinishing} animationType="fade">

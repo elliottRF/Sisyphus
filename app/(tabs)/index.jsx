@@ -16,32 +16,18 @@ import { Feather } from '@expo/vector-icons';
 import PRGraphCard from '../../components/PRGraphCard';
 import BodyweightGraphCard from '../../components/bodyweightGraphCard';
 import MuscleRadarChart from '../../components/MuscleRadarChart';
+import ReadinessCard from '../../components/ReadinessCard';
 import { useTheme } from '../../context/ThemeContext';
 import { AppEvents, emit, on, off } from '../../utils/events';
+import { muscleMapping, majorMuscles } from '../../constants/muscles';
 import Fuse from 'fuse.js';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const muscleMapping = {
-    "Chest": "chest", "Upper Chest": "chest", "Quadriceps": "quadriceps", "Triceps": "triceps",
-    "Biceps": "biceps", "Hamstring": "hamstring", "Hamstrings": "hamstring",
-    "Upper-Back": "upper-back", "Lower-Back": "lower-back", "Shoulders": "deltoids",
-    "Deltoids": "deltoids", "Gluteal": "gluteal", "Glutes": "gluteal",
-    "Forearms": "forearm", "Forearm": "forearm", "Traps": "trapezius",
-    "Trapezius": "trapezius", "Calves": "calves", "Abs": "abs",
-    "Adductors": "adductors", "Neck": "neck", "Obliques": "obliques",
-};
 
-const shortMuscleNames = {
-    "Upper Back": "Back",
-    "Lower Back": "L. Back",
-    "Shoulders": "Delts",
-    "Forearms": "Forearms",
-    "Hamstrings": "Hams",
-    "Quadriceps": "Quads",
-    "Glutes": "Glutes",
-};
+
+
 
 const GradientOrView = ({ colors, style, theme, children }) => {
     if (theme?.type === 'dynamic') {
@@ -65,11 +51,7 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 };
 
 
-const chunkArray = (arr, size) => {
-    const result = [];
-    for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
-    return result;
-};
+
 
 
 
@@ -97,7 +79,7 @@ const Home = () => {
 
     const [muscleStatsData, setMuscleStatsData] = useState({});
     const [majorMuscleList, setMajorMuscleList] = useState([]);
-
+    const [usageData, setUsageData] = useState([]);
     useScrollToTop(scrollRef);
 
     // Load data on mount
@@ -146,7 +128,7 @@ const Home = () => {
         try {
             // Fetching recent data
             const usageData = await fetchRecentMuscleUsage(5);
-
+            setUsageData(usageData);
             const muscleStats = {};
             const SETS_CAP = 6;
             const RECOVERY_WINDOW_DAYS = 4; // Muscles fully recover after 4 days
@@ -203,21 +185,7 @@ const Home = () => {
                 }
             });
 
-            // 6. Define Major Muscle Groups for UI List
-            const majorMuscles = [
-                { label: 'Chest', slugs: ['chest'] },
-                { label: 'Upper Back', slugs: ['upper-back', 'trapezius'] },
-                { label: 'Lower Back', slugs: ['lower-back'] },
-                { label: 'Shoulders', slugs: ['deltoids'] },
-                { label: 'Biceps', slugs: ['biceps'] },
-                { label: 'Triceps', slugs: ['triceps'] },
-                { label: 'Forearms', slugs: ['forearm'] },
-                { label: 'Quads', slugs: ['quadriceps'] },
-                { label: 'Hamstrings', slugs: ['hamstring'] },
-                { label: 'Glutes', slugs: ['gluteal'] },
-                { label: 'Calves', slugs: ['calves'] },
-                { label: 'Abs', slugs: ['abs', 'obliques'] },
-            ];
+
 
             // 7. Calculate Percentages for Readiness Bars
             const allMusclesWithPercent = majorMuscles.map(muscle => {
@@ -375,38 +343,7 @@ const Home = () => {
         ? [theme.bodyFill, '#2DC4B655', '#2DC4B6CC']
         : [theme.bodyFill, `${theme.primary}55`, `${theme.primary}CC`];
 
-    const MuscleReadinessBox = ({ muscle, percent }) => {
-        const displayName = shortMuscleNames[muscle] || muscle;
 
-        // Use proper recovery logic instead of arbitrary cutoffs
-        let color, bg;
-
-        if (percent <= 60) {
-            color = theme.primary;
-
-            const intensity = (30 - percent) / 30;   // 0 → 1
-            const alpha = 0.08 + intensity * 0.12;   // 0.08–0.20
-
-            bg = '';
-        } else if (percent < 80) {              // Still recovering
-            color = theme.secondary;              // blue
-            bg = `${theme.secondary}30`;
-        } else {                                // Mostly ready
-            color = theme.success;              // green
-            bg = 'rgba(52,199,89,0.15)';
-        }
-
-        return (
-            <View style={[styles.muscleBox, { backgroundColor: bg }]}>
-                <Text style={[styles.muscleName, { color }]} numberOfLines={1}>
-                    {displayName}
-                </Text>
-                <View style={styles.progressBarContainer}>
-                    <View style={[styles.progressBarFill, { width: `${percent}%`, backgroundColor: color }]} />
-                </View>
-            </View>
-        );
-    };
 
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
     const cardWidth = (SCREEN_WIDTH - 32 - 12) / 2;
@@ -462,24 +399,7 @@ const Home = () => {
                     </View>
 
                     {/* Readiness - Single sorted list */}
-                    <View style={[styles.readinessStickyCard, { width: cardWidth, minHeight: 400 }]}>
-                        <View style={styles.readinessHeader}>
-                            <Feather name="activity" size={14} color={theme.primary} />
-                            <Text style={styles.readinessTitle}>Readiness</Text>
-                        </View>
-
-                        <ScrollView style={styles.readinessScroll} showsVerticalScrollIndicator={false}>
-                            <View style={styles.muscleGrid}>
-                                {chunkArray(allMusclesSorted, 2).map((row, rowIndex) => (
-                                    <View key={rowIndex} style={styles.muscleRow}>
-                                        {row.map((item) => (
-                                            <MuscleReadinessBox key={item.label} muscle={item.label} percent={item.percent} />
-                                        ))}
-                                    </View>
-                                ))}
-                            </View>
-                        </ScrollView>
-                    </View>
+                    <ReadinessCard allMusclesSorted={allMusclesSorted} cardWidth={cardWidth} styles={styles} usageData={usageData} />
                 </Animated.View>
 
                 <Animated.View entering={FadeIn.duration(400).delay(200)} style={styles.divider} />
@@ -503,8 +423,8 @@ const Home = () => {
                 )}
 
                 {pinnedExercises.map((exercise, index) => (
-                    <Animated.View 
-                        key={exercise.exerciseID} 
+                    <Animated.View
+                        key={exercise.exerciseID}
                         entering={FadeInDown.duration(400).delay(340 + index * 60).springify()}
                         exiting={FadeOutDown.duration(300)}
                         layout={LinearTransition}

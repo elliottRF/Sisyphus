@@ -966,7 +966,7 @@ const getStyles = (theme) => {
         },
         emptyStateHeader: {
             alignItems: 'center',
-            marginTop: 20,
+            marginTop: 10,
             marginBottom: 32,
         },
         emptyStateTitle: {

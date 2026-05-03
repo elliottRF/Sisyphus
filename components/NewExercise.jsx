@@ -25,6 +25,8 @@ const MUSCLE_DISPLAY_NAMES = {
     'Gluteal': 'Glutes',
     'Upper-Back': 'Back',
     'Lower-Back': 'Lower Back',
+    'Forearm': 'Forearms',
+    'Hamstring': 'Hamstrings'
 };
 
 // ─── Animated muscle chip ────────────────────────────────────────────────────
