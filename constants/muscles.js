@@ -10,13 +10,13 @@ export const muscleMapping = {
 
 export const majorMuscles = [
     { label: 'Chest', slugs: ['chest'] },
-    { label: 'Upper Back', slugs: ['upper-back', 'trapezius'] },
+    { label: 'Back', slugs: ['upper-back', 'trapezius'] },
     { label: 'Lower Back', slugs: ['lower-back'] },
     { label: 'Shoulders', slugs: ['deltoids'] },
     { label: 'Biceps', slugs: ['biceps'] },
     { label: 'Triceps', slugs: ['triceps'] },
     { label: 'Forearms', slugs: ['forearm'] },
-    { label: 'Quads', slugs: ['quadriceps'] },
+    { label: 'Quadriceps', slugs: ['quadriceps'] },
     { label: 'Hamstrings', slugs: ['hamstring'] },
     { label: 'Glutes', slugs: ['gluteal'] },
     { label: 'Calves', slugs: ['calves'] },

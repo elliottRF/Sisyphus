@@ -24,7 +24,7 @@ const chunkArray = (arr, size) => {
 };
 
 const shortMuscleNames = {
-    "Upper Back": "Back",
+    "Back": "Back",
     "Lower Back": "L. Back",
     "Shoulders": "Delts",
     "Forearms": "Forearms",
@@ -36,7 +36,9 @@ const shortMuscleNames = {
 // ─── Overlay ──────────────────────────────────────────────────────────────────
 
 const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
-    const { x, y, w, h, bg, color, percent, displayName, exercises } = card;
+    const { x, y, w, h, bg, color, percent, displayName, fullName, exercises } = card;
+
+    const overlayTitle = fullName || displayName;
 
     const left = useSharedValue(x);
     const top = useSharedValue(y);
@@ -47,7 +49,7 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
     const scrimOpacity = useSharedValue(0);
 
     const dismiss = React.useCallback(() => {
-        contentOpacity.value = withTiming(0, { duration: 80 });
+        contentOpacity.value = withTiming(0, { duration: 250 });
         scrimOpacity.value = withTiming(0, { duration: 320 });
         left.value = withSpring(x, SPRING);
         top.value = withSpring(y, SPRING);
@@ -147,7 +149,7 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                             letterSpacing: -1.5,
                             marginBottom: 4,
                         }}>
-                            {displayName}
+                            {overlayTitle}
                         </Text>
 
                         {/* Status pill */}
@@ -259,7 +261,7 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                                                 color,
                                                 opacity: 0.6,
                                             }}>
-                                                {ex.isPrimary ? 'Primary' : 'Accessory'} · {ex.sets} {ex.sets === 1 ? 'set' : 'sets'} · {ex.daysAgo === 0 ? 'Today' : ex.daysAgo === 1 ? 'Yesterday' : `${ex.daysAgo}d ago`}
+                                                {ex.isPrimary ? 'Primary' : 'Secondary'} · {ex.sets} {ex.sets === 1 ? 'set' : 'sets'} · {ex.daysAgo === 0 ? 'Today' : ex.daysAgo === 1 ? 'Yesterday' : `${ex.daysAgo}d ago`}
                                             </Text>
                                         </View>
                                     </View>
@@ -288,11 +290,20 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                             opacity: 0.85,
                             fontFamily: FONTS.medium,
                         }}>
-                            {readiness <= 60
-                                ? `${displayName} is still under significant fatigue. Prioritise rest or keep volume very low if you must train today.`
-                                : readiness < 80
-                                    ? `${displayName} is on its way back. One more rest day will have it fully recovered for a quality session.`
-                                    : `${displayName} is fully recovered and ready to train hard today.`}
+                            {(() => {
+                                const isPlural = overlayTitle.toLowerCase().endsWith('s');
+                                const verb = isPlural ? 'are' : 'is';
+                                const pronoun = isPlural ? 'their' : 'its';
+                                const objectPronoun = isPlural ? 'them' : 'it';
+
+                                if (readiness <= 60) {
+                                    return `${overlayTitle} ${verb} still under significant fatigue. Prioritise rest or keep volume very low if you must train today.`;
+                                } else if (readiness < 80) {
+                                    return `${overlayTitle} ${verb} on ${pronoun} way back. One more rest day will have ${objectPronoun} fully recovered for a quality session.`;
+                                } else {
+                                    return `${overlayTitle} ${verb} fully recovered and ready to train hard today.`;
+                                }
+                            })()}
                         </Text>
                     </ScrollView>
                 </Animated.View>
@@ -341,17 +352,18 @@ const MuscleReadinessBox = ({ muscle, percent, styles, onPress, usageData }) => 
                     const slug = muscleMapping[m] || m.toLowerCase();
                     return muscleDef.slugs.includes(slug);
                 });
-                const daysAgo = Math.floor((now - new Date(ex.date)) / (1000 * 60 * 60 * 24));
-                return { name: ex.name, sets: parseInt(ex.sets, 10) || 0, daysAgo, isPrimary };
+                const exDate = new Date(ex.date);
+                const daysAgo = Math.floor((now - exDate) / (1000 * 60 * 60 * 24));
+                return { name: ex.name, sets: parseInt(ex.sets, 10) || 0, daysAgo, isPrimary, timestamp: exDate.getTime() };
             })
-            .sort((a, b) => (b.isPrimary - a.isPrimary) || a.daysAgo - b.daysAgo);
+            .sort((a, b) => b.timestamp - a.timestamp);
     };
 
     const handlePress = () => {
         ref.current?.measure((_, __, w, h, pageX, pageY) => {
             onPress({
                 x: pageX, y: pageY, w, h,
-                bg, color, percent, displayName,
+                bg, color, percent, displayName, fullName: muscle,
                 exercises: getContributingExercises(),
             });
         });
