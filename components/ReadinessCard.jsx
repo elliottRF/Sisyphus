@@ -173,6 +173,26 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
             <Animated.View style={scrimStyle} />
             <Animated.View style={cardStyle}>
                 <Animated.View style={contentStyle}>
+                    {/* Close button — absolute so it doesn't push content down */}
+                    <Pressable
+                        onPress={dismiss}
+                        hitSlop={16}
+                        style={{
+                            position: 'absolute',
+                            top: insets.top + 12,
+                            right: 20,
+                            zIndex: 10,
+                            width: 34,
+                            height: 34,
+                            borderRadius: 17,
+                            backgroundColor: pillBg,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <Feather name="x" size={16} color={color} />
+                    </Pressable>
+
                     <ScrollView
                         contentContainerStyle={{
                             paddingTop: insets.top + 16,
@@ -181,23 +201,6 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                         }}
                         showsVerticalScrollIndicator={false}
                     >
-                        {/* Close button */}
-                        <Pressable
-                            onPress={dismiss}
-                            hitSlop={16}
-                            style={{
-                                alignSelf: 'flex-end',
-                                width: 34,
-                                height: 34,
-                                borderRadius: 17,
-                                backgroundColor: pillBg,
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                marginBottom: 28,
-                            }}
-                        >
-                            <Feather name="x" size={16} color={color} />
-                        </Pressable>
 
                         {/* Label + name */}
                         <Text style={{
