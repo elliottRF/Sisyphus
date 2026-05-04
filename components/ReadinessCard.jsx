@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import { View, Text, ScrollView, Pressable, Modal, Dimensions, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -36,7 +36,7 @@ const shortMuscleNames = {
 // ─── Overlay ──────────────────────────────────────────────────────────────────
 
 const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
-    const { x, y, w, h, bg, color, percent, displayName, fullName, exercises } = card;
+    const { x, y, w, h, bg, color, percent, displayName, fullName, exercises, accessoryWeight } = card;
 
     const overlayTitle = fullName || displayName;
 
@@ -47,10 +47,12 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
     const radius = useSharedValue(12);
     const contentOpacity = useSharedValue(0);
     const scrimOpacity = useSharedValue(0);
+    const cardOpacity = useSharedValue(1);
 
     const dismiss = React.useCallback(() => {
         contentOpacity.value = withTiming(0, { duration: 250 });
         scrimOpacity.value = withTiming(0, { duration: 320 });
+        cardOpacity.value = withDelay(150, withTiming(0, { duration: 250 }));
         left.value = withSpring(x, SPRING);
         top.value = withSpring(y, SPRING);
         width.value = withSpring(w, SPRING);
@@ -84,6 +86,7 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
         borderRadius: radius.value,
         backgroundColor: bg,
         overflow: 'hidden',
+        opacity: cardOpacity.value,
     }));
 
     const contentStyle = useAnimatedStyle(() => ({
@@ -98,6 +101,72 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                 'Ready';
 
     const pillBg = `${color}20`;
+
+    // Binary-search for time until readiness hits 80% (the green threshold).
+    // score = min(SETS_CAP, Σ sets_i * weight_i * max(0, 1 - hoursTotal_i / RECOVERY_WINDOW))
+    // 80% readiness  ⟺  score ≤ TARGET_SCORE = (1 - 0.8) * 6 = 1.2
+    const RECOVERY_WINDOW_HOURS = 96; // 4 days
+    const SETS_CAP = 6;
+    const TARGET_SCORE = (1 - 80 / 100) * SETS_CAP; // 1.2
+    const aw = accessoryWeight ?? 0.5;
+
+    const scoreAt = (tFuture) => {
+        const slugs = exercises[0]?.slugsInGroup;
+
+        if (!slugs || slugs.length <= 1) {
+            // Single-slug muscle (e.g. Chest, Biceps): simple weighted sum + cap.
+            // Matches index.jsx exactly.
+            const raw = exercises.reduce((sum, ex) => {
+                const hoursAgoNow = (Date.now() - ex.timestamp) / (1000 * 60 * 60);
+                const decay = Math.max(0, 1 - (hoursAgoNow + tFuture) / RECOVERY_WINDOW_HOURS);
+                return sum + ex.sets * (ex.isPrimary ? 1 : aw) * decay;
+            }, 0);
+            return Math.min(SETS_CAP, raw);
+        }
+
+        // Multi-slug muscle (e.g. Back = upper-back + trapezius, Abs = abs + obliques):
+        // index.jsx accumulates each slug independently then takes the max.
+        // We replicate that here so the timer is accurate.
+        const slugScores = slugs.map(slug => {
+            const raw = exercises.reduce((sum, ex) => {
+                const hoursAgoNow = (Date.now() - ex.timestamp) / (1000 * 60 * 60);
+                const decay = Math.max(0, 1 - (hoursAgoNow + tFuture) / RECOVERY_WINDOW_HOURS);
+                const isPrimary = ex.targetSlugsInGroup?.includes(slug);
+                const isAccessory = ex.accessorySlugsInGroup?.includes(slug);
+                if (isPrimary) return sum + ex.sets * decay;
+                if (isAccessory) return sum + ex.sets * decay * aw;
+                return sum;
+            }, 0);
+            return Math.min(SETS_CAP, raw);
+        });
+
+        return Math.max(...slugScores);
+    };
+
+    let hoursToTarget = 0;
+    if (readiness < 80) {
+        let lo = 0, hi = RECOVERY_WINDOW_HOURS;
+        for (let i = 0; i < 60; i++) {
+            const mid = (lo + hi) / 2;
+            if (scoreAt(mid) > TARGET_SCORE) lo = mid;
+            else hi = mid;
+        }
+        hoursToTarget = hi;
+    }
+
+    const formatRecovery = (hrs) => {
+        if (hrs <= 0) return 'Ready now';
+        if (hrs < 1) return '< 1 hour';
+        if (hrs < 24) {
+            const h = Math.floor(hrs);
+            const m = Math.round((hrs - h) * 60);
+            return m > 0 ? `${h}h ${m}m` : `${h}h`;
+        }
+        const d = Math.floor(hrs / 24);
+        const h = Math.round(hrs % 24);
+        return h > 0 ? `${d}d ${h}h` : `${d}d`;
+    };
+    const recoveryLabel = formatRecovery(hoursToTarget);
 
     return (
         <Modal transparent animationType="none" statusBarTranslucent onRequestClose={dismiss}>
@@ -198,7 +267,7 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                             borderRadius: 3,
                             backgroundColor: pillBg,
                             overflow: 'hidden',
-                            marginBottom: 44,
+                            marginBottom: 20,
                         }}>
                             <View style={{
                                 width: `${readiness}%`,
@@ -207,6 +276,72 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                                 backgroundColor: color,
                             }} />
                         </View>
+
+                        {/* Time to recovery */}
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: pillBg,
+                            borderRadius: 14,
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                            marginBottom: 36,
+                            gap: 10,
+                        }}>
+                            <Feather name="clock" size={14} color={color} />
+                            <Text style={{
+                                fontSize: 13,
+                                fontFamily: FONTS.medium,
+                                color,
+                                opacity: 0.7,
+                                flex: 1,
+                            }}>
+                                {hoursToTarget <= 0 ? 'Ready to train' : 'Ready to train in'}
+                            </Text>
+                            <Text style={{
+                                fontSize: 14,
+                                fontFamily: FONTS.bold,
+                                color,
+                            }}>
+                                {recoveryLabel}
+                            </Text>
+                        </View>
+
+                        {/* Advice */}
+                        <Text style={{
+                            fontSize: 12,
+                            fontFamily: FONTS.bold,
+                            color,
+                            opacity: 0.6,
+                            letterSpacing: 1.8,
+                            textTransform: 'uppercase',
+                            marginBottom: 12,
+                        }}>
+                            Advice
+                        </Text>
+                        <Text style={{
+                            fontSize: 16,
+                            lineHeight: 25,
+                            color,
+                            opacity: 0.85,
+                            fontFamily: FONTS.medium,
+                            marginBottom: 44,
+                        }}>
+                            {(() => {
+                                const isPlural = overlayTitle.toLowerCase().endsWith('s');
+                                const verb = isPlural ? 'are' : 'is';
+                                const pronoun = isPlural ? 'their' : 'its';
+                                const objectPronoun = isPlural ? 'them' : 'it';
+
+                                if (readiness <= 60) {
+                                    return `${overlayTitle} ${verb} significantly fatigued. Prioritise rest or keep volume very low if you must train today.`;
+                                } else if (readiness < 80) {
+                                    return `${overlayTitle} ${verb} on ${pronoun} way back. One more rest day will have ${objectPronoun} recovered for a quality session.`;
+                                } else {
+                                    return `${overlayTitle} ${verb} fully recovered and ready to train hard today.`;
+                                }
+                            })()}
+                        </Text>
 
                         {/* Contributing exercises */}
                         {exercises.length > 0 && (
@@ -267,44 +402,9 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                                     </View>
                                 ))}
 
-                                <View style={{ borderTopWidth: 1, borderTopColor: pillBg, marginBottom: 36 }} />
+                                <View style={{ borderTopWidth: 1, borderTopColor: pillBg }} />
                             </>
                         )}
-
-                        {/* Advice */}
-                        <Text style={{
-                            fontSize: 12,
-                            fontFamily: FONTS.bold,
-                            color,
-                            opacity: 0.6,
-                            letterSpacing: 1.8,
-                            textTransform: 'uppercase',
-                            marginBottom: 12,
-                        }}>
-                            Advice
-                        </Text>
-                        <Text style={{
-                            fontSize: 16,
-                            lineHeight: 25,
-                            color,
-                            opacity: 0.85,
-                            fontFamily: FONTS.medium,
-                        }}>
-                            {(() => {
-                                const isPlural = overlayTitle.toLowerCase().endsWith('s');
-                                const verb = isPlural ? 'are' : 'is';
-                                const pronoun = isPlural ? 'their' : 'its';
-                                const objectPronoun = isPlural ? 'them' : 'it';
-
-                                if (readiness <= 60) {
-                                    return `${overlayTitle} ${verb} still under significant fatigue. Prioritise rest or keep volume very low if you must train today.`;
-                                } else if (readiness < 80) {
-                                    return `${overlayTitle} ${verb} on ${pronoun} way back. One more rest day will have ${objectPronoun} fully recovered for a quality session.`;
-                                } else {
-                                    return `${overlayTitle} ${verb} fully recovered and ready to train hard today.`;
-                                }
-                            })()}
-                        </Text>
                     </ScrollView>
                 </Animated.View>
             </Animated.View>
@@ -315,7 +415,7 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
 // ─── Individual card ──────────────────────────────────────────────────────────
 
 const MuscleReadinessBox = ({ muscle, percent, styles, onPress, usageData }) => {
-    const { theme } = useTheme();
+    const { theme, accessoryWeight } = useTheme();
     const ref = useRef(null);
     const displayName = shortMuscleNames[muscle] || muscle;
 
@@ -348,13 +448,30 @@ const MuscleReadinessBox = ({ muscle, percent, styles, onPress, usageData }) => 
             })
             .map(ex => {
                 const targets = (ex.targetMuscle || '').split(',').map(m => m.trim()).filter(Boolean);
-                const isPrimary = targets.some(m => {
-                    const slug = muscleMapping[m] || m.toLowerCase();
-                    return muscleDef.slugs.includes(slug);
-                });
+                const accessories = (ex.accessoryMuscles || '').split(',').map(m => m.trim()).filter(Boolean);
+
+                // Track which of this group's slugs this exercise specifically targets/accessories
+                // so `scoreAt` can replicate index.jsx's per-slug max logic
+                const targetSlugsInGroup = targets
+                    .map(m => muscleMapping[m] || m.toLowerCase())
+                    .filter(s => muscleDef.slugs.includes(s));
+                const accessorySlugsInGroup = accessories
+                    .map(m => muscleMapping[m] || m.toLowerCase())
+                    .filter(s => muscleDef.slugs.includes(s));
+
+                const isPrimary = targetSlugsInGroup.length > 0;
                 const exDate = new Date(ex.date);
                 const daysAgo = Math.floor((now - exDate) / (1000 * 60 * 60 * 24));
-                return { name: ex.name, sets: parseInt(ex.sets, 10) || 0, daysAgo, isPrimary, timestamp: exDate.getTime() };
+                return {
+                    name: ex.name,
+                    sets: parseInt(ex.sets, 10) || 0,
+                    daysAgo,
+                    isPrimary,
+                    timestamp: exDate.getTime(),
+                    slugsInGroup: muscleDef.slugs,
+                    targetSlugsInGroup,
+                    accessorySlugsInGroup,
+                };
             })
             .sort((a, b) => b.timestamp - a.timestamp);
     };
@@ -365,6 +482,7 @@ const MuscleReadinessBox = ({ muscle, percent, styles, onPress, usageData }) => 
                 x: pageX, y: pageY, w, h,
                 bg, color, percent, displayName, fullName: muscle,
                 exercises: getContributingExercises(),
+                accessoryWeight,
             });
         });
     };
@@ -385,10 +503,73 @@ const MuscleReadinessBox = ({ muscle, percent, styles, onPress, usageData }) => 
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-const ReadinessCard = ({ allMusclesSorted, cardWidth, styles, usageData }) => {
-    const { theme } = useTheme();
+const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, styles, usageData }, ref) => {
+    const { theme, accessoryWeight } = useTheme();
     const insets = useSafeAreaInsets();
     const [activeCard, setActiveCard] = useState(null);
+
+    // Allows index.jsx to open the overlay for a given muscle label programmatically
+    // (triggered by onBodyPartPress on the body highlighter).
+    useImperativeHandle(ref, () => ({
+        openMuscleByLabel: (label) => {
+            const muscleItem = allMusclesSorted.find(m => m.label === label);
+            if (!muscleItem) return;
+
+            const { percent } = muscleItem;
+            let color, bg;
+            if (percent <= 60) {
+                color = theme.primary;
+                bg = theme.overlayInputFocused;
+            } else if (percent < 80) {
+                color = theme.secondary;
+                bg = `${theme.secondary}30`;
+            } else {
+                color = theme.success;
+                bg = 'rgba(52,199,89,0.15)';
+            }
+
+            const muscleDef = majorMuscles.find(m => m.label === label);
+            const now = new Date();
+            const exercises = muscleDef && usageData?.length
+                ? usageData
+                    .filter(ex => {
+                        const targets = (ex.targetMuscle || '').split(',').map(m => m.trim()).filter(Boolean);
+                        const accessories = (ex.accessoryMuscles || '').split(',').map(m => m.trim()).filter(Boolean);
+                        const matchesSlugs = (muscles) => muscles.some(m => {
+                            const slug = muscleMapping[m] || m.toLowerCase();
+                            return muscleDef.slugs.includes(slug);
+                        });
+                        return matchesSlugs(targets) || matchesSlugs(accessories);
+                    })
+                    .map(ex => {
+                        const targets = (ex.targetMuscle || '').split(',').map(m => m.trim()).filter(Boolean);
+                        const accessories = (ex.accessoryMuscles || '').split(',').map(m => m.trim()).filter(Boolean);
+                        const targetSlugsInGroup = targets.map(m => muscleMapping[m] || m.toLowerCase()).filter(s => muscleDef.slugs.includes(s));
+                        const accessorySlugsInGroup = accessories.map(m => muscleMapping[m] || m.toLowerCase()).filter(s => muscleDef.slugs.includes(s));
+                        const isPrimary = targetSlugsInGroup.length > 0;
+                        const exDate = new Date(ex.date);
+                        const daysAgo = Math.floor((now - exDate) / (1000 * 60 * 60 * 24));
+                        return { name: ex.name, sets: parseInt(ex.sets, 10) || 0, daysAgo, isPrimary, timestamp: exDate.getTime(), slugsInGroup: muscleDef.slugs, targetSlugsInGroup, accessorySlugsInGroup };
+                    })
+                    .sort((a, b) => b.timestamp - a.timestamp)
+                : [];
+
+            // Expand from centre of screen since there's no tapped DOM node
+            const { width: W, height: H } = Dimensions.get('window');
+            const SIZE = 48;
+            setActiveCard({
+                x: (W - SIZE) / 2,
+                y: (H - SIZE) / 2,
+                w: SIZE,
+                h: SIZE,
+                bg, color, percent,
+                displayName: label,
+                fullName: label,
+                exercises,
+                accessoryWeight,
+            });
+        },
+    }), [allMusclesSorted, usageData, theme, accessoryWeight]);
 
     return (
         <>
@@ -426,8 +607,8 @@ const ReadinessCard = ({ allMusclesSorted, cardWidth, styles, usageData }) => {
                     insets={insets}
                 />
             )}
-        </>
+        </> 
     );
-};
+});
 
 export default ReadinessCard;

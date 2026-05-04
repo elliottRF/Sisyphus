@@ -76,6 +76,7 @@ const Home = () => {
     const actionSheetRef = useRef(null);
     const router = useRouter();
     const scrollRef = useRef(null);
+    const readinessCardRef = useRef(null);
 
     const [muscleStatsData, setMuscleStatsData] = useState({});
     const [majorMuscleList, setMajorMuscleList] = useState([]);
@@ -294,6 +295,14 @@ const Home = () => {
         }
     };
 
+    // Map a body-highlighter SVG slug to a majorMuscle label, then open its modal.
+    const handleBodyPartPress = (bodyPart) => {
+        const slug = bodyPart?.slug;
+        if (!slug) return;
+        const matched = majorMuscles.find(m => m.slugs.includes(slug));
+        if (matched) readinessCardRef.current?.openMuscleByLabel(matched.label);
+    };
+
     const fuse = useMemo(() => {
         return new Fuse(allExercises, {
             keys: ['name'],
@@ -390,16 +399,16 @@ const Home = () => {
                             scrollEventThrottle={8}
                             style={styles.bodyScrollView}>
                             <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
-                                <Body data={bodyData} gender={gender} side="front" scale={bodyScale} border={safeBorder} colors={bodyColors} bg="transparent" width={(cardBodyWidth || cardWidth) - 8} />
+                                <Body data={bodyData} gender={gender} side="front" scale={bodyScale} border={safeBorder} colors={bodyColors} bg="transparent" width={(cardBodyWidth || cardWidth) - 8} onBodyPartPress={handleBodyPartPress} />
                             </View>
                             <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
-                                <Body data={bodyData} gender={gender} side="back" scale={bodyScale} border={safeBorder} colors={bodyColors} bg="transparent" width={(cardBodyWidth || cardWidth) - 8} />
+                                <Body data={bodyData} gender={gender} side="back" scale={bodyScale} border={safeBorder} colors={bodyColors} bg="transparent" width={(cardBodyWidth || cardWidth) - 8} onBodyPartPress={handleBodyPartPress} />
                             </View>
                         </ScrollView>
                     </View>
 
                     {/* Readiness - Single sorted list */}
-                    <ReadinessCard allMusclesSorted={allMusclesSorted} cardWidth={cardWidth} styles={styles} usageData={usageData} />
+                    <ReadinessCard ref={readinessCardRef} allMusclesSorted={allMusclesSorted} cardWidth={cardWidth} styles={styles} usageData={usageData} />
                 </Animated.View>
 
                 <Animated.View entering={FadeIn.duration(400).delay(200)} style={styles.divider} />

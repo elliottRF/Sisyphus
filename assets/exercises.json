@@ -341,7 +341,7 @@
     "exerciseID": 28,
     "name": "Shoulder Press (Plate Loaded)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps,Trapezius",
+    "accessoryMuscles": "Triceps",
     "strengthRatios": [
       0.5,
       0.75,
@@ -892,7 +892,7 @@
     "exerciseID": 74,
     "name": "Shoulder Press (Machine)",
     "targetMuscle": "Deltoids",
-    "accessoryMuscles": "Triceps,Trapezius",
+    "accessoryMuscles": "Triceps",
     "strengthRatios": [
       0.25,
       0.5,
