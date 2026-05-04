@@ -399,7 +399,10 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                                                 color,
                                                 opacity: 0.6,
                                             }}>
-                                                {ex.isPrimary ? 'Primary' : 'Secondary'} · {ex.sets} {ex.sets === 1 ? 'set' : 'sets'} · {ex.daysAgo === 0 ? 'Today' : ex.daysAgo === 1 ? 'Yesterday' : `${ex.daysAgo}d ago`}
+                                                {ex.isPrimary ? 'Primary' : 'Secondary'} · {ex.sets} {ex.sets === 1 ? 'set' : 'sets'} · {ex.daysAgo === 0 ? 'Today' :
+                                                    ex.daysAgo === 1 ? 'Yesterday' :
+                                                        ex.daysAgo === 2 ? '2 days ago' :
+                                                            `${ex.daysAgo}d ago`}
                                             </Text>
                                         </View>
                                     </View>
@@ -464,8 +467,9 @@ const MuscleReadinessBox = ({ muscle, percent, styles, onPress, usageData }) => 
 
                 const isPrimary = targetSlugsInGroup.length > 0;
                 const exDate = new Date(ex.date);
-                const daysAgo = Math.floor((now - exDate) / (1000 * 60 * 60 * 24));
-                return {
+                const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const exMidnight = new Date(exDate.getFullYear(), exDate.getMonth(), exDate.getDate());
+                const daysAgo = Math.round((todayMidnight - exMidnight) / (1000 * 60 * 60 * 24)); return {
                     name: ex.name,
                     sets: parseInt(ex.sets, 10) || 0,
                     daysAgo,
@@ -551,7 +555,9 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, styles, usageDa
                         const accessorySlugsInGroup = accessories.map(m => muscleMapping[m] || m.toLowerCase()).filter(s => muscleDef.slugs.includes(s));
                         const isPrimary = targetSlugsInGroup.length > 0;
                         const exDate = new Date(ex.date);
-                        const daysAgo = Math.floor((now - exDate) / (1000 * 60 * 60 * 24));
+                        const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                        const exMidnight = new Date(exDate.getFullYear(), exDate.getMonth(), exDate.getDate());
+                        const daysAgo = Math.round((todayMidnight - exMidnight) / (1000 * 60 * 60 * 24));
                         return { name: ex.name, sets: parseInt(ex.sets, 10) || 0, daysAgo, isPrimary, timestamp: exDate.getTime(), slugsInGroup: muscleDef.slugs, targetSlugsInGroup, accessorySlugsInGroup };
                     })
                     .sort((a, b) => b.timestamp - a.timestamp)
@@ -610,7 +616,7 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, styles, usageDa
                     insets={insets}
                 />
             )}
-        </> 
+        </>
     );
 });
 
