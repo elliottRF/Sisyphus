@@ -101,8 +101,8 @@ const Onboarding = () => {
         // Set the flag ONLY after the animation finishes
         await AsyncStorage.setItem(SETTINGS_KEYS.onboardingSeen, 'true');
 
-        // Navigate to tabs
-        router.replace('/(tabs)');
+        // Signal layout to show loading state
+        emit(AppEvents.ONBOARDING_COMPLETED);
       } catch (error) {
         console.error('Failed to complete onboarding:', error);
       }

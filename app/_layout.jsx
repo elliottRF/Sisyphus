@@ -1,10 +1,10 @@
-import { View, Platform, ActivityIndicator, Text } from 'react-native'
+import { View, Platform, ActivityIndicator, Text, Animated, StyleSheet, Modal } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Redirect, Stack, usePathname } from 'expo-router'
+import { Redirect, Stack, usePathname, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupDatabase } from '../components/db';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
@@ -14,7 +14,6 @@ import { SETTINGS_KEYS } from '../constants/preferences';
 import { AppEvents, on, off } from '../utils/events';
 import { primeExerciseSnapshots } from '../utils/exerciseSnapshots';
 import LottieView from 'lottie-react-native';
-import { StyleSheet, Modal } from 'react-native';
 import CustomAlert from '../components/CustomAlert';
 
 SplashScreen.preventAutoHideAsync();
@@ -42,11 +41,10 @@ const _layout = () => {
         initDb();
     }, []);
 
+
+    // Splash screen is now handled inside ThemeConsumer to wait for theme loading
     const onLayoutRootView = useCallback(async () => {
-        if (fontsLoaded && dbReady) {
-            await SplashScreen.hideAsync();
-        }
-    }, [fontsLoaded, dbReady]);
+    }, []);
 
 
     if (!fontsLoaded || !dbReady) {
@@ -58,8 +56,8 @@ const _layout = () => {
     return (
         <SafeAreaProvider>
             <ThemeProvider>
-                <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
-                    <ThemeConsumer />
+                <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+                    <ThemeConsumer fontsLoaded={fontsLoaded} dbReady={dbReady} />
                 </GestureHandlerRootView>
             </ThemeProvider>
         </SafeAreaProvider>
@@ -67,10 +65,28 @@ const _layout = () => {
 }
 
 // Separate component to consume theme and render content with dynamic styles
-const ThemeConsumer = () => {
-    const { theme } = useTheme(); // Now we can use the hook
+const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
+    const { theme, settingsLoaded } = useTheme(); // Now we can use the hook
     const pathname = usePathname();
+    const router = useRouter();
     const [shouldShowOnboarding, setShouldShowOnboarding] = useState(null);
+    const [isWorkoutFinishing, setIsWorkoutFinishing] = useState(false);
+    const [isSettingUp, setIsSettingUp] = useState(false);
+    const overlayOpacity = useRef(new Animated.Value(1)).current;
+    const [isOverlayVisible, setIsOverlayVisible] = useState(true);
+
+    useEffect(() => {
+        if (settingsLoaded && fontsLoaded && dbReady && shouldShowOnboarding !== null && !isSettingUp) {
+            // Initial boot fade out
+            Animated.timing(overlayOpacity, {
+                toValue: 0,
+                duration: 400,
+                useNativeDriver: true
+            }).start(() => setIsOverlayVisible(false));
+
+            SplashScreen.hideAsync();
+        }
+    }, [settingsLoaded, fontsLoaded, dbReady, shouldShowOnboarding, isSettingUp]);
 
     useEffect(() => {
         if (Platform.OS === 'android') {
@@ -81,8 +97,6 @@ const ThemeConsumer = () => {
             }
         }
     }, [theme]);
-
-    const [isWorkoutFinishing, setIsWorkoutFinishing] = useState(false);
 
     useEffect(() => {
         const handleWorkoutCompleted = (data) => {
@@ -122,30 +136,51 @@ const ThemeConsumer = () => {
     }, []);
 
     useEffect(() => {
-        const loadOnboardingState = async () => {
-            try {
-                const onboardingSeen = await AsyncStorage.getItem(SETTINGS_KEYS.onboardingSeen);
-                setShouldShowOnboarding(onboardingSeen !== 'true');
-            } catch (error) {
-                console.error('Failed to determine onboarding state:', error);
-                setShouldShowOnboarding(false);
-            }
-        };
+        if (shouldShowOnboarding === null) return;
 
+        if (shouldShowOnboarding && pathname !== '/onboarding') {
+            router.replace('/onboarding');
+        } else if (!shouldShowOnboarding && pathname === '/onboarding') {
+            router.replace('/(tabs)');
+        }
+    }, [shouldShowOnboarding, pathname]);
+
+    const loadOnboardingState = async () => {
+        try {
+            const onboardingSeen = await AsyncStorage.getItem(SETTINGS_KEYS.onboardingSeen);
+            setShouldShowOnboarding(onboardingSeen !== 'true');
+        } catch (error) {
+            console.error('Failed to determine onboarding state:', error);
+            setShouldShowOnboarding(false);
+        }
+    };
+
+    useEffect(() => {
         loadOnboardingState();
     }, []);
 
-    if (shouldShowOnboarding === null) {
-        return <View style={{ flex: 1, backgroundColor: theme.background }} />;
-    }
+    useEffect(() => {
+        const handleOnboardingCompleted = () => {
+            setIsOverlayVisible(true);
+            overlayOpacity.setValue(1);
+            setIsSettingUp(true);
+            loadOnboardingState(); // Re-check onboarding status
+            setTimeout(() => {
+                Animated.timing(overlayOpacity, {
+                    toValue: 0,
+                    duration: 600,
+                    useNativeDriver: true
+                }).start(() => {
+                    setIsSettingUp(false);
+                    setIsOverlayVisible(false);
+                });
+            }, 2000);
+        };
 
-    if (shouldShowOnboarding && pathname !== '/onboarding') {
-        return <Redirect href="/onboarding" />;
-    }
+        on(AppEvents.ONBOARDING_COMPLETED, handleOnboardingCompleted);
+        return () => off(AppEvents.ONBOARDING_COMPLETED, handleOnboardingCompleted);
+    }, []);
 
-    if (!shouldShowOnboarding && pathname === '/onboarding') {
-        return <Redirect href="/(tabs)" />;
-    }
 
     return (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -154,21 +189,45 @@ const ThemeConsumer = () => {
                 backgroundColor="transparent"
                 translucent={true}
             />
-            <Stack screenOptions={{
-                headerShown: false,
-                animation: 'flip',
-                contentStyle: { backgroundColor: theme.background }
-            }}>
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="workout/[session]" options={{ headerShown: false }} />
-                <Stack.Screen name="workout/EditWorkout" options={{ headerShown: false }} />
-                <Stack.Screen name="template/[id]" options={{ headerShown: false }} />
-                <Stack.Screen name="settings" options={{ headerShown: false }} />
-                <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-                <Stack.Screen name="exercise/[id]" options={{ headerShown: false }} />
-                <Stack.Screen name="exercise/new" options={{ headerShown: false }} />
-                <Stack.Screen name="muscle/[id]" options={{ headerShown: false, animation: 'fade' }} />
-            </Stack>
+
+            {/* Main Content - only render Stack when we know the onboarding state */}
+            {shouldShowOnboarding !== null && (
+                <Stack screenOptions={{
+                    headerShown: false,
+                    animation: 'flip',
+                    contentStyle: { backgroundColor: theme.background }
+                }}>
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen name="workout/[session]" options={{ headerShown: false }} />
+                    <Stack.Screen name="workout/EditWorkout" options={{ headerShown: false }} />
+                    <Stack.Screen name="template/[id]" options={{ headerShown: false }} />
+                    <Stack.Screen name="settings" options={{ headerShown: false }} />
+                    <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+                    <Stack.Screen name="exercise/[id]" options={{ headerShown: false }} />
+                    <Stack.Screen name="exercise/new" options={{ headerShown: false }} />
+                    <Stack.Screen name="muscle/[id]" options={{ headerShown: false, animation: 'fade' }} />
+                </Stack>
+            )}
+
+            {/* Setup Overlay - Masks transitions and initial theme loading */}
+            {isOverlayVisible && (
+                <Animated.View style={[StyleSheet.absoluteFill, {
+                    backgroundColor: theme.background,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 999,
+                    opacity: overlayOpacity
+                }]}>
+                    {isSettingUp && (
+                        <>
+                            <ActivityIndicator size="large" color={theme.primary} />
+                            <Text style={{ marginTop: 12, color: theme.text, fontFamily: 'Inter_600SemiBold' }}>
+                                Setting up your dashboard...
+                            </Text>
+                        </>
+                    )}
+                </Animated.View>
+            )}
 
             <Modal transparent visible={isWorkoutFinishing} animationType="fade">
                 <View style={[StyleSheet.absoluteFillObject, { backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }]}>

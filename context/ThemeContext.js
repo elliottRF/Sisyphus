@@ -22,6 +22,7 @@ export const ThemeProvider = ({ children }) => {
     const [workoutStartTime, setWorkoutStartTime] = useState(null);
     const [useImperial, setUseImperial] = useState(false);
     const [alternateView, setAlternateView] = useState(false);
+    const [settingsLoaded, setSettingsLoaded] = useState(false);
 
     useEffect(() => {
         loadSettings();
@@ -81,6 +82,8 @@ export const ThemeProvider = ({ children }) => {
             }
         } catch (error) {
             console.error("Failed to load settings:", error);
+        } finally {
+            setSettingsLoaded(true);
         }
     };
 
@@ -191,7 +194,8 @@ export const ThemeProvider = ({ children }) => {
             useImperial,
             updateUnitPref,
             alternateView,
-            updateAlternateView
+            updateAlternateView,
+            settingsLoaded
         }}>
             {children}
         </ThemeContext.Provider>

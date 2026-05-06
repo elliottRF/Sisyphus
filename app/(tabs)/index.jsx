@@ -371,18 +371,18 @@ const Home = () => {
                             <View style={styles.altBodyContentRow}>
                                 <View style={[styles.altBodyPanel, { width: altBodyPanelWidth }]}>
                                     <View style={styles.altBodyCrop}>
-                                    <Body
-                                        data={bodyData}
-                                        gender={gender}
-                                        side="front"
-                                        scale={altBodyScale}
-                                        border={safeBorder}
-                                        colors={bodyColors}
-                                        width={altBodyWidth}
-                                        onBodyPartPress={handleBodyPartPress}
-                                    />
+                                        <Body
+                                            data={bodyData}
+                                            gender={gender}
+                                            side="front"
+                                            scale={altBodyScale}
+                                            border={safeBorder}
+                                            colors={bodyColors}
+                                            width={altBodyWidth}
+                                            onBodyPartPress={handleBodyPartPress}
+                                        />
+                                    </View>
                                 </View>
-                            </View>
                                 <View style={styles.altBodyDivider} />
                                 <View style={[styles.altBodyPanel, { width: altBodyPanelWidth }]}>
                                     <View style={styles.altBodyCrop}>
