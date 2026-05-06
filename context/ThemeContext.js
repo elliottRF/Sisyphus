@@ -21,6 +21,7 @@ export const ThemeProvider = ({ children }) => {
     const [workoutInProgress, setWorkoutInProgress] = useState(false);
     const [workoutStartTime, setWorkoutStartTime] = useState(null);
     const [useImperial, setUseImperial] = useState(false);
+    const [alternateView, setAlternateView] = useState(false);
 
     useEffect(() => {
         loadSettings();
@@ -36,7 +37,8 @@ export const ThemeProvider = ({ children }) => {
                 storedRepRangePreset,
                 storedRepRangeMin,
                 storedRepRangeMax,
-                storedWorkoutStartTime
+                storedWorkoutStartTime,
+                storedAlternateView
             ] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
@@ -45,7 +47,8 @@ export const ThemeProvider = ({ children }) => {
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangePreset),
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangeMin),
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangeMax),
-                AsyncStorage.getItem('@workoutStartTime')
+                AsyncStorage.getItem('@workoutStartTime'),
+                AsyncStorage.getItem(SETTINGS_KEYS.alternateView)
             ]);
 
             if (storedThemeID && THEMES[storedThemeID]) {
@@ -72,6 +75,9 @@ export const ThemeProvider = ({ children }) => {
             }
             if (storedWorkoutStartTime) {
                 setWorkoutStartTime(storedWorkoutStartTime);
+            }
+            if (storedAlternateView !== null) {
+                setAlternateView(storedAlternateView === 'true');
             }
         } catch (error) {
             console.error("Failed to load settings:", error);
@@ -142,6 +148,15 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updateAlternateView = async (enabled) => {
+        setAlternateView(enabled);
+        try {
+            await AsyncStorage.setItem(SETTINGS_KEYS.alternateView, enabled.toString());
+        } catch (error) {
+            console.error("Failed to save alternate view preference:", error);
+        }
+    };
+
     const updateWorkoutStartTime = async (time) => {
         setWorkoutStartTime(time);
         try {
@@ -174,7 +189,9 @@ export const ThemeProvider = ({ children }) => {
             workoutStartTime,
             updateWorkoutStartTime,
             useImperial,
-            updateUnitPref
+            updateUnitPref,
+            alternateView,
+            updateAlternateView
         }}>
             {children}
         </ThemeContext.Provider>

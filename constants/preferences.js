@@ -32,4 +32,5 @@ export const SETTINGS_KEYS = {
   repRangeMin: 'user_rep_range_min',
   repRangeMax: 'user_rep_range_max',
   onboardingSeen: 'user_onboarding_seen_v1',
+  alternateView: 'user_alternate_view',
 };

@@ -34,7 +34,11 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     const loadSettings = async () => {
         try {
             const saved = await AsyncStorage.getItem('settings_default_timer');
-            if (saved) setDefaultDuration(parseInt(saved, 10));
+            if (saved && saved.trim() !== '') {
+                setDefaultDuration(parseInt(saved, 10));
+            } else {
+                setDefaultDuration(180);
+            }
             const savedMuted = await AsyncStorage.getItem('settings_timer_muted');
             if (savedMuted !== null) setIsMuted(savedMuted === 'true');
         } catch (e) {

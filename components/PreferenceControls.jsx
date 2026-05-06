@@ -134,7 +134,7 @@ export const RepRangeSelector = ({
 
       <View style={styles.customRangeCard}>
         <View style={styles.customRangeHeader}>
-          <View>
+          <View style={styles.customRangeTextContent}>
             <Text style={styles.customRangeTitle}>Custom range</Text>
             <Text style={styles.customRangeSubtitle}>
               Drag both handles to choose your target band.
@@ -412,9 +412,11 @@ const getStyles = (theme) =>
     },
     customRangeHeader: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
       gap: 12,
+    },
+    customRangeTextContent: {
+      flex: 1,
     },
     customRangeTitle: { fontSize: 15, fontFamily: FONTS.semiBold, color: theme.text },
     customRangeSubtitle: {
@@ -422,7 +424,6 @@ const getStyles = (theme) =>
       lineHeight: 18,
       fontFamily: FONTS.regular,
       color: theme.textSecondary,
-      maxWidth: '88%',
     },
     customBadge: {
       minWidth: 58,
@@ -533,23 +534,39 @@ const getStyles = (theme) =>
     themeSelectorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
     themeSelectorGridCompact: { gap: 10 },
     themeOption: {
-      width: 100,
-      padding: 12,
-      borderRadius: 12,
+      flexBasis: '30%',
+      flexGrow: 1,
+      paddingVertical: 14,
+      paddingHorizontal: 8,
+      borderRadius: 16,
       borderWidth: 2,
       alignItems: 'center',
-      gap: 8,
+      gap: 10,
     },
     themeOptionActive: {},
     themePreview: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.1)',
+      backgroundColor: 'rgba(0,0,0,0.2)',
     },
-    themePreviewCircle: { width: 16, height: 16, borderRadius: 8 },
-    themeName: { fontSize: 12, fontFamily: FONTS.medium, textAlign: 'center' },
+    themePreviewCircle: { 
+      width: 20, 
+      height: 20, 
+      borderRadius: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    themeName: { 
+      fontSize: 11, 
+      fontFamily: FONTS.semiBold, 
+      textAlign: 'center' 
+    },
   });

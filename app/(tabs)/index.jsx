@@ -26,9 +26,6 @@ import Fuse from 'fuse.js';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 
-
-
-
 const GradientOrView = ({ colors, style, theme, children }) => {
     if (theme?.type === 'dynamic') {
         return (
@@ -38,10 +35,9 @@ const GradientOrView = ({ colors, style, theme, children }) => {
         );
     }
 
-    // Ensure colors is an array of strings and never contains null/undefined
     const safeColors = Array.isArray(colors) && colors.every(c => !!c)
         ? colors
-        : ['#transparent', '#transparent']; // Or a theme default
+        : ['#transparent', '#transparent'];
 
     return (
         <LinearGradient colors={safeColors} style={style}>
@@ -51,14 +47,9 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 };
 
 
-
-
-
-
-
 const Home = () => {
     const insets = useSafeAreaInsets();
-    const { theme, gender, accessoryWeight } = useTheme();
+    const { theme, gender, accessoryWeight, alternateView } = useTheme();
     const styles = getStyles(theme);
 
     const [bodyData, setBodyData] = useState([]);
@@ -83,7 +74,6 @@ const Home = () => {
     const [usageData, setUsageData] = useState([]);
     useScrollToTop(scrollRef);
 
-    // Load data on mount
     useEffect(() => {
         loadMuscleData();
         loadPinnedExercises();
@@ -91,16 +81,14 @@ const Home = () => {
         fetchExerciseWorkoutCounts().then(setWorkoutCounts);
     }, [accessoryWeight]);
 
-    // Correct useFocusEffect
     useFocusEffect(
         React.useCallback(() => {
             loadModulePrefs();
             loadMuscleData();
             fetchExerciseWorkoutCounts().then(setWorkoutCounts);
-        }, [accessoryWeight]) // 👈 was []
+        }, [accessoryWeight])
     );
 
-    // Event listeners
     useEffect(() => {
         const handler = () => {
             loadMuscleData();
@@ -127,40 +115,33 @@ const Home = () => {
 
     const loadMuscleData = async () => {
         try {
-            // Fetching recent data
             const usageData = await fetchRecentMuscleUsage(5);
             setUsageData(usageData);
             const muscleStats = {};
             const SETS_CAP = 6;
-            const RECOVERY_WINDOW_DAYS = 4; // Muscles fully recover after 4 days
+            const RECOVERY_WINDOW_DAYS = 4;
             const now = new Date();
 
             usageData.forEach(exercise => {
                 if (!exercise.date) return;
 
-                // 1. Calculate precise time difference
                 const exerciseDate = new Date(exercise.date);
                 const diffInMs = now - exerciseDate;
                 const hoursAgo = diffInMs / (1000 * 60 * 60);
                 const daysAgoDecimal = hoursAgo / 24;
 
-                // 2. Skip if the workout is outside our recovery window or in the future
                 if (daysAgoDecimal >= RECOVERY_WINDOW_DAYS || daysAgoDecimal < 0) return;
 
-                // 3. Calculate Linear Decay (e.g., at 2 days, impact is 0.5)
                 const decayFactor = 1 - (daysAgoDecimal / RECOVERY_WINDOW_DAYS);
 
                 const sets = parseInt(exercise.sets, 10) || 0;
                 if (sets === 0) return;
 
-                // 4. Process Target Muscles
                 if (exercise.targetMuscle) {
                     exercise.targetMuscle.split(',').map(m => m.trim()).forEach(tm => {
                         if (tm) {
                             const target = muscleMapping[tm] || tm.toLowerCase();
                             if (!muscleStats[target]) muscleStats[target] = 0;
-
-                            // Add to current score, capped at SETS_CAP
                             muscleStats[target] = Math.min(
                                 SETS_CAP,
                                 muscleStats[target] + (sets * decayFactor)
@@ -169,14 +150,11 @@ const Home = () => {
                     });
                 }
 
-                // 5. Process Accessory Muscles
                 if (exercise.accessoryMuscles) {
                     exercise.accessoryMuscles.split(',').map(m => m.trim()).forEach(acc => {
                         if (acc) {
                             const accTarget = muscleMapping[acc] || acc.toLowerCase();
                             if (!muscleStats[accTarget]) muscleStats[accTarget] = 0;
-
-                            // Add with accessory weight penalty, capped at SETS_CAP
                             muscleStats[accTarget] = Math.min(
                                 SETS_CAP,
                                 muscleStats[accTarget] + (sets * decayFactor * accessoryWeight)
@@ -186,26 +164,20 @@ const Home = () => {
                 }
             });
 
-
-
-            // 7. Calculate Percentages for Readiness Bars
             const allMusclesWithPercent = majorMuscles.map(muscle => {
                 const maxScore = muscle.slugs.reduce((max, slug) => {
                     const score = muscleStats[slug] ?? 0;
                     return score > max ? score : max;
                 }, 0);
 
-                // Percentage is Inverse of Fatigue (0 score = 100% ready)
                 const percent = Math.max(0, Math.min(100, Math.round(100 - (maxScore / SETS_CAP) * 100)));
                 return { label: muscle.label, percent };
             });
 
-            // Sort by most fatigued (lowest percentage) first
             allMusclesWithPercent.sort((a, b) => a.percent - b.percent);
             setAllMusclesSorted(allMusclesWithPercent);
             setMajorMuscleList(majorMuscles);
 
-            // 8. Map to Visual Body Model Slugs
             const ALL_MUSCLE_SLUGS = [
                 'chest', 'quadriceps', 'triceps', 'biceps', 'hamstring',
                 'upper-back', 'lower-back', 'deltoids', 'gluteal', 'forearm',
@@ -217,10 +189,9 @@ const Home = () => {
                 const score = muscleStats[slug] ?? 0;
                 const percent = Math.max(0, Math.min(100, Math.round(100 - (score / SETS_CAP) * 100)));
 
-                // Intensity mapping for the SVG/Model colors
-                if (percent <= 60) return { slug, intensity: 3 }; // High Fatigue
-                if (percent < 80) return { slug, intensity: 2 };  // Moderate Fatigue
-                return { slug, intensity: 1 };                   // Recovered
+                if (percent <= 60) return { slug, intensity: 3 };
+                if (percent < 80) return { slug, intensity: 2 };
+                return { slug, intensity: 1 };
             });
 
             setBodyData(newBodyData);
@@ -295,7 +266,6 @@ const Home = () => {
         }
     };
 
-    // Map a body-highlighter SVG slug to a majorMuscle label, then open its modal.
     const handleBodyPartPress = (bodyPart) => {
         const slug = bodyPart?.slug;
         if (!slug) return;
@@ -306,15 +276,14 @@ const Home = () => {
     const fuse = useMemo(() => {
         return new Fuse(allExercises, {
             keys: ['name'],
-            threshold: 0.35,      // Slightly tighter for better accuracy
-            includeScore: true,   // MUST have this to sort by relevance
-            ignoreLocation: true, // Matches "Press" even if it's at the end of "Bench Press"
+            threshold: 0.35,
+            includeScore: true,
+            ignoreLocation: true,
         });
     }, [allExercises]);
 
     const filteredExercises = useMemo(() => {
         if (!searchQuery.trim()) {
-            // Default state: Frequency then alphabetical
             return [...allExercises].sort((a, b) => {
                 const countA = workoutCounts.get(a.exerciseID) || 0;
                 const countB = workoutCounts.get(b.exerciseID) || 0;
@@ -327,24 +296,16 @@ const Home = () => {
 
         return searchResults
             .sort((a, b) => {
-                // 1. Sort by Fuse score (Relevance)
-                // If the score difference is significant (e.g., > 0.1), use it.
                 if (Math.abs(a.score - b.score) > 0.1) {
                     return a.score - b.score;
                 }
-
-                // 2. Frequency (Workout Count)
                 const countA = workoutCounts.get(a.item.exerciseID) || 0;
                 const countB = workoutCounts.get(b.item.exerciseID) || 0;
                 if (countB !== countA) return countB - countA;
-
-                // 3. Tie-breaker: Alphabetical
-                // If the matches are roughly equal in quality, then go A-Z.
                 return a.item.name.localeCompare(b.item.name);
             })
-            .map(r => r.item); // Always map at the end
+            .map(r => r.item);
     }, [searchQuery, allExercises, fuse]);
-
 
 
     const isDynamic = theme.type === 'dynamic';
@@ -352,13 +313,17 @@ const Home = () => {
         ? [theme.bodyFill, '#2DC4B655', '#2DC4B6CC']
         : [theme.bodyFill, `${theme.primary}55`, `${theme.primary}CC`];
 
-
-
     const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
     const cardWidth = (SCREEN_WIDTH - 32 - 12) / 2;
 
     const BODY_NATURAL_WIDTH = 170;
     const bodyScale = Math.min(0.95, ((cardBodyWidth || cardWidth) - 16) / BODY_NATURAL_WIDTH);
+
+    // ── Alternate view: force both SVGs to identical width so front/back are symmetric
+    const altBodyPanelWidth = Math.floor((SCREEN_WIDTH - 32 - 1) / 2); // 1px for divider
+    const altBodyWidth = altBodyPanelWidth - 30; // increased padding each side
+    const BODY_NATURAL_WIDTH_ALT = 170;
+    const altBodyScale = altBodyWidth / BODY_NATURAL_WIDTH_ALT;
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
@@ -383,33 +348,99 @@ const Home = () => {
                     </View>
                 </Animated.View>
 
-                <Animated.View entering={FadeInDown.duration(450).delay(80).springify()} style={styles.recoverySideBySide}>
-                    {/* Body Highlighter */}
-                    <View style={[styles.highlighterCard, { width: cardWidth }]} onLayout={(e) => setCardBodyWidth(e.nativeEvent.layout.width)}>
-                        <View style={styles.highlighterHeader}>
-                            <Text style={styles.highlighterTitle}>{bodySide === 'front' ? 'Front' : 'Back'}</Text>
-                            <View style={styles.sideIndicators}>
-                                <View style={[styles.indicatorDot, bodySide === 'front' && styles.indicatorDotActive]} />
-                                <View style={[styles.indicatorDot, bodySide === 'back' && styles.indicatorDotActive]} />
+                {alternateView ? (
+                    /* ── Alternate layout ───────────────────────────────────────── */
+                    <Animated.View entering={FadeInDown.duration(450).delay(80).springify()} style={{ marginTop: 10 }}>
+                        {/* Dual body highlighters — explicit equal width on both SVGs for symmetry */}
+                        <View style={styles.altBodyCard}>
+                            {/* Fatigue Header with Title and Legend */}
+                            <View style={styles.altLegendContainer}>
+                                <Text style={styles.altCardTitle}>Fatigue Status</Text>
+                                <View style={{ flexDirection: 'row', gap: 16 }}>
+                                    <View style={styles.altLegendItem}>
+                                        <View style={[styles.altLegendDot, { backgroundColor: bodyColors[2], borderColor: safeBorder }]} />
+                                        <Text style={styles.altLegendText}>High</Text>
+                                    </View>
+                                    <View style={styles.altLegendItem}>
+                                        <View style={[styles.altLegendDot, { backgroundColor: bodyColors[1], borderColor: safeBorder }]} />
+                                        <Text style={styles.altLegendText}>Low</Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            <View style={styles.altBodyContentRow}>
+                                <View style={[styles.altBodyPanel, { width: altBodyPanelWidth }]}>
+                                    <View style={styles.altBodyCrop}>
+                                    <Body
+                                        data={bodyData}
+                                        gender={gender}
+                                        side="front"
+                                        scale={altBodyScale}
+                                        border={safeBorder}
+                                        colors={bodyColors}
+                                        width={altBodyWidth}
+                                        onBodyPartPress={handleBodyPartPress}
+                                    />
+                                </View>
+                            </View>
+                                <View style={styles.altBodyDivider} />
+                                <View style={[styles.altBodyPanel, { width: altBodyPanelWidth }]}>
+                                    <View style={styles.altBodyCrop}>
+                                        <Body
+                                            data={bodyData}
+                                            gender={gender}
+                                            side="back"
+                                            scale={altBodyScale}
+                                            border={safeBorder}
+                                            colors={bodyColors}
+                                            width={altBodyWidth}
+                                            onBodyPartPress={handleBodyPartPress}
+                                        />
+                                    </View>
+                                </View>
                             </View>
                         </View>
 
-                        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-                            onMomentumScrollEnd={(e) => setBodySide(e.nativeEvent.contentOffset.x > (cardBodyWidth * 0.5) ? 'back' : 'front')}
-                            scrollEventThrottle={8}
-                            style={styles.bodyScrollView}>
-                            <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
-                                <Body data={bodyData} gender={gender} side="front" scale={bodyScale} border={safeBorder} colors={bodyColors} bg="transparent" width={(cardBodyWidth || cardWidth) - 8} onBodyPartPress={handleBodyPartPress} />
+                        {/* Horizontal readiness strip */}
+                        <ReadinessCard
+                            ref={readinessCardRef}
+                            allMusclesSorted={allMusclesSorted}
+                            cardWidth={cardWidth}
+                            usageData={usageData}
+                            horizontal
+                            showPercentage={false} // Set to false to hide percentage text
+                        />
+                    </Animated.View>
+                ) : (
+                    /* ── Default layout ─────────────────────────────────────────── */
+                    <Animated.View entering={FadeInDown.duration(450).delay(80).springify()} style={styles.recoverySideBySide}>
+                        {/* Swipeable body highlighter */}
+                        <View style={[styles.highlighterCard, { width: cardWidth }]} onLayout={(e) => setCardBodyWidth(e.nativeEvent.layout.width)}>
+                            <View style={styles.highlighterHeader}>
+                                <Text style={styles.highlighterTitle}>{bodySide === 'front' ? 'Front' : 'Back'}</Text>
+                                <View style={styles.sideIndicators}>
+                                    <View style={[styles.indicatorDot, bodySide === 'front' && styles.indicatorDotActive]} />
+                                    <View style={[styles.indicatorDot, bodySide === 'back' && styles.indicatorDotActive]} />
+                                </View>
                             </View>
-                            <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
-                                <Body data={bodyData} gender={gender} side="back" scale={bodyScale} border={safeBorder} colors={bodyColors} bg="transparent" width={(cardBodyWidth || cardWidth) - 8} onBodyPartPress={handleBodyPartPress} />
-                            </View>
-                        </ScrollView>
-                    </View>
 
-                    {/* Readiness - Single sorted list */}
-                    <ReadinessCard ref={readinessCardRef} allMusclesSorted={allMusclesSorted} cardWidth={cardWidth} styles={styles} usageData={usageData} />
-                </Animated.View>
+                            <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+                                onMomentumScrollEnd={(e) => setBodySide(e.nativeEvent.contentOffset.x > (cardBodyWidth * 0.5) ? 'back' : 'front')}
+                                scrollEventThrottle={8}
+                                style={styles.bodyScrollView}>
+                                <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
+                                    <Body data={bodyData} gender={gender} side="front" scale={bodyScale} border={safeBorder} colors={bodyColors} bg="transparent" width={(cardBodyWidth || cardWidth) - 8} onBodyPartPress={handleBodyPartPress} />
+                                </View>
+                                <View style={[styles.bodyViewWrapper, { width: cardBodyWidth || cardWidth }]}>
+                                    <Body data={bodyData} gender={gender} side="back" scale={bodyScale} border={safeBorder} colors={bodyColors} bg="transparent" width={(cardBodyWidth || cardWidth) - 8} onBodyPartPress={handleBodyPartPress} />
+                                </View>
+                            </ScrollView>
+                        </View>
+
+                        {/* Readiness vertical list */}
+                        <ReadinessCard ref={readinessCardRef} allMusclesSorted={allMusclesSorted} cardWidth={cardWidth} usageData={usageData} />
+                    </Animated.View>
+                )}
 
                 <Animated.View entering={FadeIn.duration(400).delay(200)} style={styles.divider} />
 
@@ -457,7 +488,6 @@ const Home = () => {
                 </Animated.View>
             </ScrollView>
 
-            {/* ActionSheet - keep your original content here */}
             <ActionSheet ref={actionSheetRef} gestureEnabled={true} containerStyle={styles.actionSheetContainer} indicatorStyle={styles.indicator} onClose={() => setSearchQuery('')}>
                 <View style={styles.contentContainer}>
                     <View style={styles.actionSheetHeader}>
@@ -610,6 +640,8 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.textSecondary,
         marginTop: 4
     },
+
+    // ── Default layout ────────────────────────────────────────────────────────
     recoverySideBySide: {
         flexDirection: 'row',
         paddingHorizontal: 16,
@@ -618,7 +650,7 @@ const getStyles = (theme) => StyleSheet.create({
         alignItems: 'stretch'
     },
     highlighterCard: {
-        width: 0, // Placeholder for inline override
+        width: 0,
         minHeight: 405,
         backgroundColor: theme.surface,
         borderRadius: 24,
@@ -664,62 +696,77 @@ const getStyles = (theme) => StyleSheet.create({
         overflow: 'hidden',
         marginLeft: -1,
     },
-    readinessStickyCard: {
-        width: 0, // Placeholder for inline override
-        minHeight: 410,
+
+    // ── Alternate layout ──────────────────────────────────────────────────────
+    altBodyCard: {
+        marginHorizontal: 16,
+        marginBottom: 12,
         backgroundColor: theme.surface,
         borderRadius: 24,
         borderWidth: 1,
         borderColor: theme.border,
         ...SHADOWS.medium,
-        padding: 8,
-        overflow: 'hidden'
+        overflow: 'hidden',
     },
-    readinessHeader: {
+    altBodyContentRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    altBodyPanel: {
+        alignItems: 'center',
+        paddingTop: 0,
+        paddingBottom: 0,
+        overflow: 'hidden',
+    },
+    altBodyCrop: {
+        marginVertical: -10,
+    },
+    altBodyDivider: {
+        width: 1,
+        height: 260,
+        backgroundColor: theme.border,
+        opacity: 0.3,
+    },
+    altLegendContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingTop: 16,
+        paddingHorizontal: 20,
+        marginBottom: -8,
+    },
+    altCardTitle: {
+        fontSize: 11,
+        fontFamily: FONTS.bold,
+        color: theme.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 1.2,
+        opacity: 0.7,
+    },
+    altLegendItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginBottom: 8
-    },
-    readinessTitle: {
-        fontSize: 16,
-        fontFamily: FONTS.bold,
-        color: theme.text
-    },
-    readinessScroll: {
-        flex: 1
-    },
-    muscleGrid: {
-        flexDirection: 'column',
         gap: 6,
     },
-    muscleRow: {
-        flexDirection: 'row',
-        gap: 6,
-    },
-    muscleBox: {
-        flex: 1,                              // was width: '48%'
-        backgroundColor: theme.overlayInputFocused,
-        borderRadius: 12,
-        padding: 10,
+    altLegendDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
         borderWidth: 1,
-        borderColor: theme.border,
     },
-    muscleName: {
-        fontSize: 13.5,
-        fontFamily: FONTS.semiBold,
-        marginBottom: 8
+    altLegendText: {
+        fontSize: 10,
+        fontFamily: FONTS.bold,
+        color: theme.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        opacity: 0.8,
     },
-    progressBarContainer: {
-        height: 4,
-        backgroundColor: theme.overlayBorder,
-        borderRadius: 2,
-        overflow: 'hidden'
-    },
-    progressBarFill: {
-        height: '100%',
-        borderRadius: 2
-    },
+
+
+
+    // ── Rest ──────────────────────────────────────────────────────────────────
     divider: {
         height: 1,
         backgroundColor: theme.border,

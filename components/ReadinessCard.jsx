@@ -11,11 +11,12 @@ import Animated, {
     withDelay,
 } from 'react-native-reanimated';
 import { muscleMapping, majorMuscles } from '../constants/muscles';
-import { FONTS } from '../constants/theme';
+import { FONTS, SHADOWS } from '../constants/theme';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const SPRING = { damping: 28, stiffness: 280, mass: 0.85 };
 const CORNER = 26;
+const HORIZONTAL_ITEM_WIDTH = 88;
 
 const chunkArray = (arr, size) => {
     const result = [];
@@ -102,20 +103,15 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
 
     const pillBg = `${color}20`;
 
-    // Binary-search for time until readiness hits 80% (the green threshold).
-    // score = min(SETS_CAP, Σ sets_i * weight_i * max(0, 1 - hoursTotal_i / RECOVERY_WINDOW))
-    // 80% readiness  ⟺  score ≤ TARGET_SCORE = (1 - 0.8) * 6 = 1.2
-    const RECOVERY_WINDOW_HOURS = 96; // 4 days
+    const RECOVERY_WINDOW_HOURS = 96;
     const SETS_CAP = 6;
-    const TARGET_SCORE = (1 - 80 / 100) * SETS_CAP; // 1.2
+    const TARGET_SCORE = (1 - 80 / 100) * SETS_CAP;
     const aw = accessoryWeight ?? 0.5;
 
     const scoreAt = (tFuture) => {
         const slugs = exercises[0]?.slugsInGroup;
 
         if (!slugs || slugs.length <= 1) {
-            // Single-slug muscle (e.g. Chest, Biceps): simple weighted sum + cap.
-            // Matches index.jsx exactly.
             const raw = exercises.reduce((sum, ex) => {
                 const hoursAgoNow = (Date.now() - ex.timestamp) / (1000 * 60 * 60);
                 const decay = Math.max(0, 1 - (hoursAgoNow + tFuture) / RECOVERY_WINDOW_HOURS);
@@ -124,9 +120,6 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
             return Math.min(SETS_CAP, raw);
         }
 
-        // Multi-slug muscle (e.g. Back = upper-back + trapezius, Abs = abs + obliques):
-        // index.jsx accumulates each slug independently then takes the max.
-        // We replicate that here so the timer is accurate.
         const slugScores = slugs.map(slug => {
             const raw = exercises.reduce((sum, ex) => {
                 const hoursAgoNow = (Date.now() - ex.timestamp) / (1000 * 60 * 60);
@@ -173,7 +166,6 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
             <Animated.View style={scrimStyle} />
             <Animated.View style={cardStyle}>
                 <Animated.View style={contentStyle}>
-                    {/* Close button — absolute so it doesn't push content down */}
                     <Pressable
                         onPress={dismiss}
                         hitSlop={16}
@@ -201,8 +193,6 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                         }}
                         showsVerticalScrollIndicator={false}
                     >
-
-                        {/* Label + name */}
                         <Text style={{
                             fontSize: 12,
                             fontFamily: FONTS.bold,
@@ -224,7 +214,6 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                             {overlayTitle}
                         </Text>
 
-                        {/* Status pill */}
                         <View style={{ flexDirection: 'row', marginBottom: 36 }}>
                             <View style={{
                                 paddingHorizontal: 12,
@@ -242,7 +231,6 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                             </View>
                         </View>
 
-                        {/* Big percent */}
                         <Text style={{
                             fontSize: 100,
                             fontFamily: FONTS.bold,
@@ -264,7 +252,6 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                             recovered
                         </Text>
 
-                        {/* Progress bar */}
                         <View style={{
                             height: 5,
                             borderRadius: 3,
@@ -280,7 +267,6 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                             }} />
                         </View>
 
-                        {/* Time to recovery */}
                         <View style={{
                             flexDirection: 'row',
                             alignItems: 'center',
@@ -310,7 +296,6 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                             </Text>
                         </View>
 
-                        {/* Advice */}
                         <Text style={{
                             fontSize: 12,
                             fontFamily: FONTS.bold,
@@ -341,12 +326,11 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                                 } else if (readiness < 80) {
                                     return `${overlayTitle} ${verb} on ${pronoun} way back. One more rest day will have ${objectPronoun} recovered for a quality session.`;
                                 } else {
-                                    return `${overlayTitle} ${verb} fully recovered and ready to train hard today.`;
+                                    return `${overlayTitle} ${verb} recovered and ready to train hard today.`;
                                 }
                             })()}
                         </Text>
 
-                        {/* Contributing exercises */}
                         {exercises.length > 0 && (
                             <>
                                 <Text style={{
@@ -420,7 +404,7 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
 
 // ─── Individual card ──────────────────────────────────────────────────────────
 
-const MuscleReadinessBox = ({ muscle, percent, styles, onPress, usageData }) => {
+const MuscleReadinessBox = ({ muscle, percent, localStyles, onPress, usageData, horizontal, showPercentage = true }) => {
     const { theme, accessoryWeight } = useTheme();
     const ref = useRef(null);
     const displayName = shortMuscleNames[muscle] || muscle;
@@ -456,8 +440,6 @@ const MuscleReadinessBox = ({ muscle, percent, styles, onPress, usageData }) => 
                 const targets = (ex.targetMuscle || '').split(',').map(m => m.trim()).filter(Boolean);
                 const accessories = (ex.accessoryMuscles || '').split(',').map(m => m.trim()).filter(Boolean);
 
-                // Track which of this group's slugs this exercise specifically targets/accessories
-                // so `scoreAt` can replicate index.jsx's per-slug max logic
                 const targetSlugsInGroup = targets
                     .map(m => muscleMapping[m] || m.toLowerCase())
                     .filter(s => muscleDef.slugs.includes(s));
@@ -469,7 +451,8 @@ const MuscleReadinessBox = ({ muscle, percent, styles, onPress, usageData }) => 
                 const exDate = new Date(ex.date);
                 const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const exMidnight = new Date(exDate.getFullYear(), exDate.getMonth(), exDate.getDate());
-                const daysAgo = Math.round((todayMidnight - exMidnight) / (1000 * 60 * 60 * 24)); return {
+                const daysAgo = Math.round((todayMidnight - exMidnight) / (1000 * 60 * 60 * 24));
+                return {
                     name: ex.name,
                     sets: parseInt(ex.sets, 10) || 0,
                     daysAgo,
@@ -494,29 +477,64 @@ const MuscleReadinessBox = ({ muscle, percent, styles, onPress, usageData }) => 
         });
     };
 
+    const scale = useSharedValue(1);
+    const animatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }]
+    }));
+
+    if (horizontal) {
+        return (
+            <Pressable
+                ref={ref}
+                onPress={handlePress}
+                onPressIn={() => { scale.value = withSpring(0.94, SPRING); }}
+                onPressOut={() => { scale.value = withSpring(1, SPRING); }}
+            >
+                <Animated.View style={[localStyles.muscleBoxHorizontal, { backgroundColor: bg }, animatedStyle]}>
+                    <Text style={[localStyles.muscleNameHorizontal, { color }]} numberOfLines={1}>
+                        {displayName}
+                    </Text>
+                    {showPercentage && (
+                        <Text style={[localStyles.musclePercentHorizontal, { color }]}>
+                            {percent}%
+                        </Text>
+                    )}
+                    <View style={localStyles.progressBarContainerHorizontal}>
+                        <View style={[localStyles.progressBarFill, { width: `${percent}%`, backgroundColor: color }]} />
+                    </View>
+                </Animated.View>
+            </Pressable>
+        );
+    }
+
     return (
-        <Pressable ref={ref} onPress={handlePress} style={{ flex: 1 }}>
-            <View style={[styles.muscleBox, { backgroundColor: bg }]}>
-                <Text style={[styles.muscleName, { color }]} numberOfLines={1}>
+        <Pressable
+            ref={ref}
+            onPress={handlePress}
+            style={{ flex: 1 }}
+            onPressIn={() => { scale.value = withSpring(0.96, SPRING); }}
+            onPressOut={() => { scale.value = withSpring(1, SPRING); }}
+        >
+            <Animated.View style={[localStyles.muscleBox, { backgroundColor: bg }, animatedStyle]}>
+                <Text style={[localStyles.muscleName, { color }]} numberOfLines={1}>
                     {displayName}
                 </Text>
-                <View style={styles.progressBarContainer}>
-                    <View style={[styles.progressBarFill, { width: `${percent}%`, backgroundColor: color }]} />
+                <View style={localStyles.progressBarContainer}>
+                    <View style={[localStyles.progressBarFill, { width: `${percent}%`, backgroundColor: color }]} />
                 </View>
-            </View>
+            </Animated.View>
         </Pressable>
     );
 };
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, styles, usageData }, ref) => {
+const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, usageData, horizontal, showPercentage = true }, ref) => {
     const { theme, accessoryWeight } = useTheme();
+    const localStyles = getStyles(theme);
     const insets = useSafeAreaInsets();
     const [activeCard, setActiveCard] = useState(null);
 
-    // Allows index.jsx to open the overlay for a given muscle label programmatically
-    // (triggered by onBodyPartPress on the body highlighter).
     useImperativeHandle(ref, () => ({
         openMuscleByLabel: (label) => {
             const muscleItem = allMusclesSorted.find(m => m.label === label);
@@ -563,7 +581,6 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, styles, usageDa
                     .sort((a, b) => b.timestamp - a.timestamp)
                 : [];
 
-            // Expand from centre of screen since there's no tapped DOM node
             const { width: W, height: H } = Dimensions.get('window');
             const SIZE = 48;
             setActiveCard({
@@ -580,23 +597,67 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, styles, usageDa
         },
     }), [allMusclesSorted, usageData, theme, accessoryWeight]);
 
+    // ─── Horizontal layout ────────────────────────────────────────────────────
+    if (horizontal) {
+        return (
+            <>
+                <View style={localStyles.readinessHorizontalCard}>
+                    <View style={localStyles.readinessHeader}>
+                        <Feather name="activity" size={14} color={theme.primary} />
+                        <Text style={localStyles.readinessTitle}>Readiness</Text>
+                    </View>
+                    {/* Pairs of muscle boxes as vertical columns, scrolled horizontally */}
+                    <View style={localStyles.horizontalScrollContent}>
+                        {chunkArray(allMusclesSorted, 3).map((pair, colIndex) => (
+                            <View key={colIndex} style={localStyles.horizontalColumn}>
+                                {pair.map((item) => (
+                                    <MuscleReadinessBox
+                                        key={item.label}
+                                        muscle={item.label}
+                                        percent={item.percent}
+                                        localStyles={localStyles}
+                                        onPress={setActiveCard}
+                                        usageData={usageData}
+                                        horizontal
+                                        showPercentage={showPercentage}
+                                    />
+                                ))}
+                            </View>
+                        ))}
+                    </View>
+                </View>
+
+                {activeCard && (
+                    <MuscleDetailOverlay
+                        key={activeCard.displayName}
+                        card={activeCard}
+                        onClose={() => setActiveCard(null)}
+                        theme={theme}
+                        insets={insets}
+                    />
+                )}
+            </>
+        );
+    }
+
+    // ─── Default vertical layout ──────────────────────────────────────────────
     return (
         <>
-            <View style={[styles.readinessStickyCard, { width: cardWidth, minHeight: 400 }]}>
-                <View style={styles.readinessHeader}>
+            <View style={[localStyles.readinessStickyCard, { width: cardWidth }]}>
+                <View style={localStyles.readinessHeader}>
                     <Feather name="activity" size={14} color={theme.primary} />
-                    <Text style={styles.readinessTitle}>Readiness</Text>
+                    <Text style={localStyles.readinessTitle}>Readiness</Text>
                 </View>
-                <ScrollView style={styles.readinessScroll} showsVerticalScrollIndicator={false}>
-                    <View style={styles.muscleGrid}>
+                <ScrollView style={localStyles.readinessScroll} showsVerticalScrollIndicator={false}>
+                    <View style={localStyles.muscleGrid}>
                         {chunkArray(allMusclesSorted, 2).map((row, rowIndex) => (
-                            <View key={rowIndex} style={styles.muscleRow}>
+                            <View key={rowIndex} style={localStyles.muscleRow}>
                                 {row.map((item) => (
                                     <MuscleReadinessBox
                                         key={item.label}
                                         muscle={item.label}
                                         percent={item.percent}
-                                        styles={styles}
+                                        localStyles={localStyles}
                                         onPress={setActiveCard}
                                         usageData={usageData}
                                     />
@@ -618,6 +679,112 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, styles, usageDa
             )}
         </>
     );
+});
+
+const getStyles = (theme) => StyleSheet.create({
+    readinessStickyCard: {
+        flex: 1,
+        minHeight: 400,
+        backgroundColor: theme.surface,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: theme.border,
+        ...SHADOWS.medium,
+        padding: 8,
+        overflow: 'hidden'
+    },
+    readinessHorizontalCard: {
+        marginHorizontal: 16,
+        marginBottom: 24,
+        backgroundColor: theme.surface,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: theme.border,
+        ...SHADOWS.medium,
+        paddingTop: 8,
+        paddingBottom: 10,
+        overflow: 'hidden',
+    },
+    readinessHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 10,
+        paddingHorizontal: 14,
+    },
+    readinessTitle: {
+        fontSize: 16,
+        fontFamily: FONTS.bold,
+        color: theme.text
+    },
+    readinessScroll: {
+        flex: 1
+    },
+    muscleGrid: {
+        flexDirection: 'column',
+        gap: 6,
+    },
+    muscleRow: {
+        flexDirection: 'row',
+        gap: 6,
+    },
+    muscleBox: {
+        flex: 1,
+        backgroundColor: theme.overlayInputFocused,
+        borderRadius: 12,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: theme.border,
+    },
+    muscleName: {
+        fontSize: 13.5,
+        fontFamily: FONTS.semiBold,
+        marginBottom: 8
+    },
+    progressBarContainer: {
+        height: 4,
+        backgroundColor: theme.overlayBorder,
+        borderRadius: 2,
+        overflow: 'hidden'
+    },
+    progressBarFill: {
+        height: '100%',
+        borderRadius: 2
+    },
+    horizontalScrollContent: {
+        paddingHorizontal: 12,
+        gap: 6,
+        flexDirection: 'row',
+        width: '100%',
+    },
+    horizontalColumn: {
+        flex: 1,
+        flexDirection: 'column',
+        gap: 4,
+    },
+    muscleBoxHorizontal: {
+        borderRadius: 12,
+        padding: 8,
+        borderWidth: 1,
+        borderColor: theme.border,
+        gap: 2,
+    },
+    muscleNameHorizontal: {
+        fontSize: 13,
+        fontFamily: FONTS.semiBold,
+    },
+    musclePercentHorizontal: {
+        fontSize: 16,
+        fontFamily: FONTS.bold,
+        letterSpacing: -0.5,
+    },
+    progressBarContainerHorizontal: {
+        height: 4,
+        backgroundColor: theme.overlayBorder,
+        borderRadius: 2,
+        overflow: 'hidden',
+        marginTop: 2,
+    },
 });
 
 export default ReadinessCard;

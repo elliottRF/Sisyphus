@@ -359,7 +359,7 @@ const Onboarding = () => {
             <View style={styles.importButtonGroup}>
               <TouchableOpacity
                 style={styles.importButton}
-                onPress={() => handleImportData('Strong')}
+                onPress={() => handleImportData('Sisyphus/Strong')}
                 activeOpacity={0.85}
                 disabled={importing}
               >
@@ -368,23 +368,7 @@ const Onboarding = () => {
                 ) : (
                   <>
                     <Feather name="upload" size={18} color={theme.surface} />
-                    <Text style={styles.importButtonText}>Import Strong CSV</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.importButton, styles.secondaryImportButton]}
-                onPress={() => handleImportData('Sisyphus')}
-                activeOpacity={0.85}
-                disabled={importing}
-              >
-                {importing ? (
-                  <ActivityIndicator color={theme.primary} />
-                ) : (
-                  <>
-                    <Feather name="refresh-cw" size={18} color={theme.primary} />
-                    <Text style={[styles.importButtonText, { color: theme.primary }]}>Import Sisyphus CSV</Text>
+                    <Text style={styles.importButtonText}>Import Workouts Sisyphus/Strong</Text>
                   </>
                 )}
               </TouchableOpacity>
