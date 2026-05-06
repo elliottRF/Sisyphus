@@ -162,18 +162,38 @@ const Settings = () => {
 
     const handleImportData = async () => {
         try {
-            const result = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'application/csv'] });
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['text/csv', 'text/comma-separated-values', 'application/csv'],
+                copyToCacheDirectory: true,
+            });
+
             if (result.canceled) return;
+
             setImportingWorkouts(true);
+            setImportProgress('Reading file...');
             const fileUri = result.assets[0].uri;
             const fileContent = await FileSystem.readAsStringAsync(fileUri);
-            const count = await importStrongData(fileContent, (p) => setImportProgress(p.stage));
-            customAlert("Success", `Imported ${count} sets.`);
+
+            const count = await importStrongData(fileContent, (progress) => {
+                if (progress.stage === 'parsing') {
+                    setImportProgress(`Parsing ${progress.total} rows...`);
+                } else if (progress.stage === 'preparing') {
+                    setImportProgress('Preparing workouts...');
+                } else if (progress.stage === 'importing') {
+                    setImportProgress(`Importing workout ${progress.current} of ${progress.total}...`);
+                } else if (progress.stage === 'complete') {
+                    setImportProgress('Finalizing...');
+                }
+            });
+
+            customAlert("Import Successful", `Successfully imported ${count} workout sets.`, [{ text: "OK" }]);
             emit(AppEvents.WORKOUT_DATA_IMPORTED);
-        } catch (e) {
-            customAlert("Error", "Import failed.");
+        } catch (error) {
+            console.error("Import error:", error);
+            customAlert("Import Failed", "An error occurred while importing your data.");
         } finally {
             setImportingWorkouts(false);
+            setImportProgress('');
         }
     };
 
@@ -191,17 +211,24 @@ const Settings = () => {
 
     const handleImportBodyWeight = async () => {
         try {
-            const result = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'application/csv'] });
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['text/csv', 'text/comma-separated-values', 'application/csv'],
+                copyToCacheDirectory: true,
+            });
             if (result.canceled) return;
             setImportingBodyWeight(true);
-            const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri);
+            setImportProgress('Reading file...');
+            const fileUri = result.assets[0].uri;
+            const fileContent = await FileSystem.readAsStringAsync(fileUri);
             const count = await importBodyWeightData(fileContent);
-            customAlert("Success", `Imported ${count} entries.`);
+            customAlert("Import Successful", `Successfully imported ${count} body weight entries.`, [{ text: "OK" }]);
             emit(AppEvents.BODYWEIGHT_DATA_IMPORTED);
-        } catch (e) {
-            customAlert("Error", "Import failed.");
+        } catch (error) {
+            console.error("Import error:", error);
+            customAlert("Import Failed", "An error occurred while importing body weight data.");
         } finally {
             setImportingBodyWeight(false);
+            setImportProgress('');
         }
     };
 
@@ -283,8 +310,11 @@ const Settings = () => {
                         <TouchableOpacity style={styles.actionButtonOutline} onPress={handleImportData} disabled={importingWorkouts}><Feather name="download" size={18} color={theme.primary} /><Text style={[styles.actionButtonOutlineText, { color: theme.primary }]}>Import Workouts Sisyphus/Strong</Text></TouchableOpacity>
                         <View style={styles.buttonRowWithHelp}>
                             <TouchableOpacity style={[styles.actionButtonOutline, { flex: 1 }]} onPress={handleImportBodyWeight} disabled={importingBodyWeight}><Feather name="download" size={18} color={theme.primary} /><Text style={[styles.actionButtonOutlineText, { color: theme.primary }]}>Import Body Weight</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => customAlert("Help", "Extract Strong measurements ZIP file for weight.csv")} style={styles.infoButton}><Feather name="help-circle" size={22} color={theme.textSecondary} /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => customAlert("Weight Import", "Extract Strong measurements ZIP file for weight.csv")} style={styles.infoButton}><Feather name="help-circle" size={22} color={theme.textSecondary} /></TouchableOpacity>
                         </View>
+                        {(importingWorkouts || importingBodyWeight) && importProgress && (
+                            <Text style={[styles.progressText, { color: theme.textSecondary }]}>{importProgress}</Text>
+                        )}
                     </View>
                 </View>
             </ScrollView>
@@ -318,6 +348,7 @@ const getStyles = (theme) => StyleSheet.create({
     divider: { height: 1, backgroundColor: theme.border, marginVertical: 4 },
     buttonRowWithHelp: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     infoButton: { padding: 8, backgroundColor: theme.background, borderRadius: 10, borderWidth: 1, borderColor: theme.border },
+    progressText: { fontSize: 14, fontFamily: FONTS.medium, marginTop: 8, textAlign: 'center' },
     timerInputWrapper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background, borderRadius: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border, height: 40, minWidth: 80 },
     timerInput: { fontFamily: FONTS.semiBold, fontSize: 16, textAlign: 'center', paddingVertical: 0, textAlignVertical: 'center', paddingRight: 2 },
     unitText: { fontFamily: FONTS.regular, fontSize: 14, marginLeft: 4 },

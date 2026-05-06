@@ -348,12 +348,10 @@ const Home = () => {
                     </View>
                 </Animated.View>
 
-                {alternateView ? (
-                    /* ── Alternate layout ───────────────────────────────────────── */
+                {!alternateView ? (
+                    /* ── Dual Body (Normal View) ────────────────────────────────── */
                     <Animated.View entering={FadeInDown.duration(450).delay(80).springify()} style={{ marginTop: 10 }}>
-                        {/* Dual body highlighters — explicit equal width on both SVGs for symmetry */}
                         <View style={styles.altBodyCard}>
-                            {/* Fatigue Header with Title and Legend */}
                             <View style={styles.altLegendContainer}>
                                 <Text style={styles.altCardTitle}>Fatigue Status</Text>
                                 <View style={{ flexDirection: 'row', gap: 16 }}>
@@ -401,20 +399,18 @@ const Home = () => {
                             </View>
                         </View>
 
-                        {/* Horizontal readiness strip */}
                         <ReadinessCard
                             ref={readinessCardRef}
                             allMusclesSorted={allMusclesSorted}
                             cardWidth={cardWidth}
                             usageData={usageData}
                             horizontal
-                            showPercentage={false} // Set to false to hide percentage text
+                            showPercentage={false}
                         />
                     </Animated.View>
                 ) : (
-                    /* ── Default layout ─────────────────────────────────────────── */
+                    /* ── Swipeable (Alternate View) ─────────────────────────────── */
                     <Animated.View entering={FadeInDown.duration(450).delay(80).springify()} style={styles.recoverySideBySide}>
-                        {/* Swipeable body highlighter */}
                         <View style={[styles.highlighterCard, { width: cardWidth }]} onLayout={(e) => setCardBodyWidth(e.nativeEvent.layout.width)}>
                             <View style={styles.highlighterHeader}>
                                 <Text style={styles.highlighterTitle}>{bodySide === 'front' ? 'Front' : 'Back'}</Text>
@@ -437,7 +433,6 @@ const Home = () => {
                             </ScrollView>
                         </View>
 
-                        {/* Readiness vertical list */}
                         <ReadinessCard ref={readinessCardRef} allMusclesSorted={allMusclesSorted} cardWidth={cardWidth} usageData={usageData} />
                     </Animated.View>
                 )}
