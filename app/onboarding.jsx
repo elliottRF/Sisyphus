@@ -152,7 +152,6 @@ const Onboarding = () => {
   if (!isReady) {
     return (
       <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }

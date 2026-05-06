@@ -249,7 +249,7 @@ const Settings = () => {
                         <RepRangeSelector theme={theme} value={localRepPreset} min={localRepMin} max={localRepMax} onRangeChange={(r) => { setLocalRepMin(r.min); setLocalRepMax(r.max); setLocalRepPreset(r.preset); pendingRangeRef.current = r; }} onRangeChangeComplete={() => updateRepRange(pendingRangeRef.current)} compact />
                     </SettingsBlock>
                     <SettingsBlock theme={theme} styles={styles} title="Secondary Volume" description="Weight for supporting muscles (0.0-1.0)." iconNode={<MaterialCommunityIcons name="chart-bell-curve-cumulative" size={20} color={theme.primary} />}>
-                        <SecondaryVolumeSlider theme={theme} value={localAccessoryWeight} onChange={setLocalAccessoryWeight} onSlidingComplete={() => { updateAccessoryWeight(localAccessoryWeight); emit(AppEvents.WORKOUT_DATA_IMPORTED); }} />
+                        <SecondaryVolumeSlider theme={theme} value={localAccessoryWeight} onChange={setLocalAccessoryWeight} onSlidingComplete={(val) => { updateAccessoryWeight(val); emit(AppEvents.WORKOUT_DATA_IMPORTED); }} />
                     </SettingsBlock>
                     <SettingsBlock theme={theme} styles={styles} title="Muscle Model" description="Gender for highlighter model." iconNode={<MaterialCommunityIcons name="human-male-female" size={20} color={theme.primary} />} isLast>
                         <GenderSegment theme={theme} value={gender} onChange={updateGender} />

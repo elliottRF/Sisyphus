@@ -226,7 +226,9 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange, onSlidingComplet
     const width = Math.max(sliderWidthRef.current, 1);
     const raw = clamp(locationX / width, 0, 1);
     const stepped = Math.round(raw / 0.05) * 0.05;
-    onChange(parseFloat(stepped.toFixed(2)));
+    const val = parseFloat(stepped.toFixed(2));
+    onChange(val);
+    return val;
   };
 
   const onSlidingCompleteRef = useRef(onSlidingComplete);
@@ -241,8 +243,8 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange, onSlidingComplet
       onPanResponderGrant: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
       onPanResponderMove: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
       onPanResponderRelease: (evt) => {
-        handleMoveRef.current(evt.nativeEvent.locationX);
-        onSlidingCompleteRef.current?.();
+        const val = handleMoveRef.current(evt.nativeEvent.locationX);
+        onSlidingCompleteRef.current?.(val);
       },
     }),
   ).current;
@@ -288,7 +290,7 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange, onSlidingComplet
               ]}
               onPress={() => {
                 onChange(preset);
-                onSlidingComplete?.();
+                onSlidingComplete?.(preset);
               }}
             >
               <Text style={[styles.weightOptionText, active && { color: theme.surface }]}>

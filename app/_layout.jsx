@@ -1,4 +1,4 @@
-import { View, Platform } from 'react-native'
+import { View, Platform, ActivityIndicator, Text } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -48,8 +48,11 @@ const _layout = () => {
         }
     }, [fontsLoaded, dbReady]);
 
+
     if (!fontsLoaded || !dbReady) {
-        return null;
+        return (
+            <View style={{ flex: 1, backgroundColor: '#151517' }} />
+        );
     }
 
     return (
