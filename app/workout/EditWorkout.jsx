@@ -69,7 +69,7 @@ const EditWorkout = () => {
         } else {
             oneRepMax = weight * (1 + reps / 30);
         }
-        return Math.round(oneRepMax * 100) / 100;
+        return parseFloat(oneRepMax.toFixed(2));
     };
 
     const inputExercise = (item) => {

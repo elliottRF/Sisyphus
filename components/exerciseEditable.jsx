@@ -26,6 +26,7 @@ import {
     getPRType,
     useWorkoutSuggestions,
 } from './suggestions';
+import CustomAlert from './CustomAlert';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
@@ -363,6 +364,9 @@ const ExerciseEditable = ({
     const styles = getStyles(theme);
     const [isNoteVisible, setIsNoteVisible] = useState(false);
     const [previousSets, setPreviousSets] = useState([]);
+    const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+
+
 
     const drag = useReorderableDrag();
     const isActive = useIsActive();
@@ -551,7 +555,7 @@ const ExerciseEditable = ({
                             color={exercise.notes && exercise.notes.length > 0 ? theme.primary : theme.textSecondary}
                         />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={deleteExercise} style={styles.iconButton}>
+                    <TouchableOpacity onPress={() => setShowDeleteAlert(true)} style={styles.iconButton}>
                         <Feather name="x" size={18} color={theme.textSecondary} />
                     </TouchableOpacity>
                 </View>
@@ -706,6 +710,24 @@ const ExerciseEditable = ({
             <TouchableOpacity style={styles.addSetButton} onPress={addNewSet} activeOpacity={0.6}>
                 <Text style={styles.addSetText}>+ ADD SET</Text>
             </TouchableOpacity>
+            <CustomAlert
+                visible={showDeleteAlert}
+                title="Remove Exercise"
+                description={`Remove ${exerciseName} from this workout?`}
+                iconType="destructive"
+                onClose={() => setShowDeleteAlert(false)}
+                buttons={[
+                    {
+                        text: 'Cancel',
+                        style: 'cancel',
+                    },
+                    {
+                        text: 'Remove',
+                        style: 'destructive',
+                        onPress: deleteExercise,
+                    },
+                ]}
+            />
         </View>
     );
 };

@@ -10,6 +10,7 @@ import { FONTS } from '../constants/theme';
 import { useFocusEffect } from 'expo-router';
 import Timer from '../app/timer/androidTimerModule';
 import { useTheme } from '../context/ThemeContext';
+import * as Haptics from 'expo-haptics';
 
 const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     const { theme } = useTheme();
@@ -206,6 +207,7 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     }));
 
     const startTimer = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         console.log("startTimer called (Tap)");
 
         if (timerRunning.current) {

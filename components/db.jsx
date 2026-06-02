@@ -1202,6 +1202,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             } else {
               oneRM = weight * (1 + reps / 30);
             }
+            oneRM = parseFloat(oneRM.toFixed(2));
 
             const setData = {
               exerciseName,

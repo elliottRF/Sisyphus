@@ -237,7 +237,7 @@ const Current = () => {
         } else {
             oneRepMax = weight * (1 + reps / 30);
         }
-        return Math.round(oneRepMax * 100) / 100; // Truncates to 2 decimal places
+        return parseFloat(oneRepMax.toFixed(2));
     };
 
 
