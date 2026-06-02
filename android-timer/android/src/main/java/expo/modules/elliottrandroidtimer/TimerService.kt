@@ -20,6 +20,7 @@ class TimerService : Service() {
     private var remaining = 0
     private var totalSeconds = 0
     private var isMuted = false
+    private var endTimeMs = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -34,6 +35,7 @@ class TimerService : Service() {
                 remaining = intent.getIntExtra("seconds", 0)
                 totalSeconds = remaining
                 isMuted = intent.getBooleanExtra("muted", false)
+                endTimeMs = System.currentTimeMillis() + remaining * 1000L
                 persistRemaining()
                 startForegroundCompat()
                 startTicking()
@@ -41,8 +43,8 @@ class TimerService : Service() {
             "adjust" -> {
                 val delta = intent.getIntExtra("delta", 0)
                 remaining = maxOf(5, remaining + delta)
-                // If time was added beyond the original total, grow the bar too
                 if (remaining > totalSeconds) totalSeconds = remaining
+                endTimeMs = System.currentTimeMillis() + remaining * 1000L
                 persistRemaining()
                 notifyUpdate()
             }
@@ -124,7 +126,6 @@ class TimerService : Service() {
         val stopPi  = pendingServiceIntent(REQUEST_STOP,  "stop")
 
         val safe = maxOf(seconds, 0)
-        val progress = if (totalSeconds > 0) safe else 0
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Rest Timer")
@@ -132,10 +133,20 @@ class TimerService : Service() {
             .setSubText("Tap to open Sisyphus")
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setOngoing(true)
-            .setOnlyAlertOnce(true)       // no sound/vibration on every tick
-            .setShowWhen(false)
-            .setProgress(totalSeconds, progress, false)
-            .addAction(0, "−30s", minusPi)
+            .setOnlyAlertOnce(true)
+            // Live Update (Android 16+): promoted chip in status bar
+            .addExtras(android.os.Bundle().apply {
+                putBoolean("android.requestPromotedOngoing", true)
+            })
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText("${formatTime(safe)} remaining"))
+            // Chronometer countdown — system renders live time in the chip
+            .setWhen(endTimeMs)
+            .setShowWhen(true)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(0, "\u221230s", minusPi)
             .addAction(0, "Stop",  stopPi)
             .addAction(0, "+30s", plusPi)
             .setContentIntent(launchPi)
@@ -160,8 +171,11 @@ class TimerService : Service() {
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(CHANNEL_ID, "Timer", NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel(CHANNEL_ID, "Timer", NotificationManager.IMPORTANCE_DEFAULT)
             channel.description = "Rest timer countdown"
+            channel.enableVibration(false)
+            channel.setSound(null, null)
+            channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
@@ -210,7 +224,7 @@ class TimerService : Service() {
 
     companion object {
         private const val NOTIF_ID    = 1
-        private const val CHANNEL_ID  = "timer"
+        private const val CHANNEL_ID  = "timer_v4"
         private const val REQUEST_MINUS = 1
         private const val REQUEST_PLUS  = 2
         private const val REQUEST_STOP  = 3

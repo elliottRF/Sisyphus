@@ -34,6 +34,7 @@ export const customAlert = (title, description, buttons = [], options = {}) => {
     title,
     description,
     buttons: finalButtons,
-    iconType
+    iconType,
+    onDismiss: options.onDismiss
   });
 };

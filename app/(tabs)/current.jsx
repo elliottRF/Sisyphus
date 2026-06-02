@@ -1,6 +1,6 @@
 
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, Dimensions, Modal } from 'react-native'
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated, { LinearTransition, FadeIn, FadeOut } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -65,6 +65,7 @@ const Current = () => {
 
 
     const [PRMODE, setPRMODE] = useState(false);
+    const [showInfoIcon, setShowInfoIcon] = useState(false);
 
     // Real template data
     const [templates, setTemplates] = useState([]);
@@ -88,7 +89,22 @@ const Current = () => {
         if (asked) return;
 
         await AsyncStorage.setItem('notifications_permission_asked', 'true');
+        setShowInfoIcon(false);
         await Notifications.requestPermissionsAsync();
+    };
+
+    const showTimerInfoAlert = () => {
+        customAlert(
+            "Timer Controls",
+            "• Tap it to start or cancel a timer.\n• Swipe it up or down to increment time.\n• Configure timer options in settings.",
+            [{ text: "Got it" }],
+            {
+                onDismiss: async () => {
+                    await AsyncStorage.setItem('notifications_permission_asked', 'true');
+                    setShowInfoIcon(false);
+                }
+            }
+        );
     };
 
 
@@ -534,6 +550,10 @@ const Current = () => {
                 if (val !== null) autoTimerEnabledRef.current = val === 'true';
             });
 
+            AsyncStorage.getItem('notifications_permission_asked').then(val => {
+                setShowInfoIcon(val !== 'true');
+            });
+
             const checkActiveWorkout = async () => {
                 try {
                     const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
@@ -838,12 +858,27 @@ const Current = () => {
                                             keyboardType="text"
                                         />
                                         {workoutStartTime && (
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                                <TouchableOpacity onPress={() => setPRMODE(!PRMODE)}>
-                                                    <MaterialCommunityIcons name="trending-up" size={24} color={PRMODE ? theme.primary : theme.textSecondary} />
-                                                </TouchableOpacity>
-                                                <RestTimer ref={restTimerRef} onFirstStart={requestNotificationPermissionOnce} />
-                                            </View>
+                                            <Animated.View layout={LinearTransition.springify()} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                <Animated.View layout={LinearTransition.springify()}>
+                                                    <TouchableOpacity onPress={() => setPRMODE(!PRMODE)}>
+                                                        <MaterialCommunityIcons name="trending-up" size={24} color={PRMODE ? theme.primary : theme.textSecondary} />
+                                                    </TouchableOpacity>
+                                                </Animated.View>
+                                                <Animated.View layout={LinearTransition.springify()}>
+                                                    <RestTimer ref={restTimerRef} onFirstStart={requestNotificationPermissionOnce} />
+                                                </Animated.View>
+                                                {showInfoIcon && (
+                                                    <Animated.View
+                                                        entering={FadeIn}
+                                                        exiting={FadeOut}
+                                                        layout={LinearTransition.springify()}
+                                                    >
+                                                        <TouchableOpacity onPress={showTimerInfoAlert} style={styles.timerInfoButton}>
+                                                            <Feather name="info" size={20} color={theme.textSecondary} />
+                                                        </TouchableOpacity>
+                                                    </Animated.View>
+                                                )}
+                                            </Animated.View>
                                         )}
                                     </View>
                                     <View style={styles.headerDivider} />
@@ -1190,6 +1225,11 @@ const getStyles = (theme) => {
             backgroundColor: theme.overlayInput,
             alignItems: 'center',
             justifyContent: 'center',
+        },
+        timerInfoButton: {
+            padding: 4,
+            justifyContent: 'center',
+            alignItems: 'center',
         }
     });
 };

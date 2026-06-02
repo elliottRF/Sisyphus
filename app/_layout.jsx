@@ -275,6 +275,9 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
                 iconType={alertConfig.iconType}
                 id={alertConfig.id}
                 onClose={(id) => {
+                    if (alertConfig.onDismiss) {
+                        alertConfig.onDismiss();
+                    }
                     setAlertConfig(prev => {
                         if (id && prev.id !== id) return prev;
                         return { ...prev, visible: false };
