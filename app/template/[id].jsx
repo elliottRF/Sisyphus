@@ -1,8 +1,8 @@
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, ActivityIndicator } from 'react-native'
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureHandlerRootView, Gesture } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, Stack, router } from 'expo-router';
@@ -145,7 +145,11 @@ const EditTemplate = () => {
 
     const renderItem = useCallback(({ item, index }) => {
         return (
-            <View collapsable={false} style={styles.exerciseWrapper}>
+            <Animated.View
+                collapsable={false}
+                style={styles.exerciseWrapper}
+                layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+            >
                 {item.exercises.map((exercise, exerciseIndex) => {
                     const exerciseDetails = exercises.find(
                         (e) => e.exerciseID === exercise.exerciseID
@@ -167,14 +171,9 @@ const EditTemplate = () => {
                         />
                     );
                 })}
-            </View>
+            </Animated.View>
         );
     }, [setCurrentWorkout, exercises]);
-
-    const panGesture = useMemo(
-        () => Gesture.Pan().activeOffsetX([-20, 20]).activeOffsetY([0, 0]),
-        []
-    );
 
     const saveTemplateAction = useCallback(async () => {
         if (!templateName.trim()) {
@@ -357,14 +356,17 @@ const EditTemplate = () => {
                     onReorder={handleReorder}
                     keyExtractor={(item) => String(item.id)}
                     renderItem={renderItem}
+                    itemLayoutAnimation={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
                     style={styles.list}
                     contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
-                    panGesture={panGesture}
                     showsVerticalScrollIndicator={false}
                     ListFooterComponent={
-                        <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
+                        <Animated.View
+                            layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+                            style={styles.footer}
+                        >
                             <TouchableOpacity
                                 style={styles.addExerciseButton}
                                 onPress={plusButtonShowExerciseList}
