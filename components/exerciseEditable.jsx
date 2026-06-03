@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, UIManager, Dimensions, LayoutAnimation, Pressable, Keyboard, TextInput } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Platform, UIManager, Dimensions, Pressable, Keyboard, TextInput } from 'react-native'
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -11,6 +11,7 @@ import Animated, {
     FadeIn,
     FadeOut,
     ZoomIn,
+    Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useReorderableDrag, useIsActive } from 'react-native-reorderable-list';
@@ -177,7 +178,6 @@ const SetRowBody = React.memo(({
     onWeightChange, onRepsChange,
     onDistanceChange, onMinutesChange,
 }) => {
-    // Flash overlay: opacity 0 → 1 → 0 when row is filled
     const fillFlash = useSharedValue(0);
 
     const flashOverlayStyle = useAnimatedStyle(() => ({
@@ -186,7 +186,6 @@ const SetRowBody = React.memo(({
 
     const handleFillPress = () => {
         if (!fillData || set.completed) return;
-        // Quick pop then fade out
         fillFlash.value = withSequence(
             withTiming(1, { duration: 80 }),
             withTiming(0, { duration: 420 }),
@@ -194,11 +193,9 @@ const SetRowBody = React.memo(({
         onFillFromPrevious(index, fillData);
     };
 
-
     const color = brightColor;
     const bgColor = withAlpha(brightColor, isLightTheme(theme) ? 0.14 : 0.25);
     const borderColor = withAlpha(brightColor, isLightTheme(theme) ? 0.24 : 0.4);
-
 
     return (
         <View style={styles.setRow}>
@@ -210,7 +207,7 @@ const SetRowBody = React.memo(({
                 />
             )}
 
-            {/* Fill-tap flash overlay — sits above completedBackground, below content */}
+            {/* Fill-tap flash overlay */}
             <Animated.View
                 style={[StyleSheet.absoluteFillObject, styles.fillFlashOverlay, flashOverlayStyle]}
                 pointerEvents="none"
@@ -245,10 +242,10 @@ const SetRowBody = React.memo(({
                 >
                     <View style={styles.prevContentWrapper}>
                         <Animated.View
-                            key={columnText} // Key moves to the wrapper so the whole badge fades in/out
+                            key={columnText}
                             entering={FadeIn.duration(200)}
                             style={[
-                                styles.prevTextContainer, // General container styles
+                                styles.prevTextContainer,
                                 isLifetimePRSuggestion && {
                                     flexDirection: 'row',
                                     alignItems: 'center',
@@ -333,7 +330,7 @@ const SetRowBody = React.memo(({
                     >
                         <Animated.View
                             key={`check-${set.id}-${set.completed}`}
-                            entering={set.completed ? ZoomIn.springify().damping(25) : undefined}
+                            entering={set.completed ? ZoomIn.duration(200).easing(Easing.out(Easing.back(1.5))) : undefined}
                         >
                             <Feather name="check" size={14} color={set.completed ? '#fff' : theme.textSecondary} />
                         </Animated.View>
@@ -365,8 +362,6 @@ const ExerciseEditable = ({
     const [isNoteVisible, setIsNoteVisible] = useState(false);
     const [previousSets, setPreviousSets] = useState([]);
     const [showDeleteAlert, setShowDeleteAlert] = useState(false);
-
-
 
     const drag = useReorderableDrag();
     const isActive = useIsActive();
@@ -426,6 +421,7 @@ const ExerciseEditable = ({
         const sanitized = sanitizeInteger(text);
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: sanitized } : s) } : e) } : w));
     };
+
     const playTapSound = async () => {
         try {
             const { sound } = await Audio.Sound.createAsync(
@@ -446,15 +442,14 @@ const ExerciseEditable = ({
     const toggleSetComplete = (setIndex) => {
         if (isTemplate) return;
         const set = exercise.sets[setIndex];
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         if (!set.completed) {
             Keyboard.dismiss();
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            //playTapSound();
             if (onSetComplete) onSetComplete();
         }
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
     };
+
     const toggleSetType = (setIndex) => {
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => { if (i === setIndex) { const t = s.setType || 'N'; const n = t === 'N' ? 'W' : t === 'W' ? 'D' : 'N'; return { ...s, setType: n }; } return s; }) } : e) } : w));
     };
@@ -502,7 +497,6 @@ const ExerciseEditable = ({
         prevWorking: previousSets.filter(s => s.setType !== 'W'),
     }), [previousSets]);
 
-    // New progressive-overload logic (replaces old computeSuggestion + adjustedSuggestions)
     const showSuggestion = PRMODE && !isTemplate && !hidePrevious && !isCardio && !isAssisted;
 
     const workingSuggestions = useWorkoutSuggestions({
@@ -514,7 +508,6 @@ const ExerciseEditable = ({
         muscleOccurrenceIndex,
     });
 
-    // Whether the header should show the suggestion icon or "PREVIOUS" label.
     const headerKey = showSuggestion ? 'suggest' : 'prev';
 
     let prevWarmupIndex = 0;
@@ -522,7 +515,10 @@ const ExerciseEditable = ({
     let suggestWorkingIndex = 0;
 
     return (
-        <View style={[styles.container, isActive && styles.containerActive]}>
+        <Animated.View
+            style={[styles.container, isActive && styles.containerActive]}
+            layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+        >
             {/* Header */}
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
@@ -599,7 +595,10 @@ const ExerciseEditable = ({
             </View>
 
             {/* Sets */}
-            <View style={styles.setsContainer}>
+            <Animated.View
+                style={styles.setsContainer}
+                layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+            >
                 {exercise.sets.reduce((acc, set, index) => {
                     let displayNumber = index + 1;
                     if (set.setType === 'W') displayNumber = 'W';
@@ -609,7 +608,6 @@ const ExerciseEditable = ({
                         displayNumber = normalSetCount + 1;
                     }
 
-                    // --- PREVIOUS column (always computed for warmups + non-suggestion mode) ---
                     let prevSetText = '-';
                     let prevSet = null;
                     prevSet = set.setType === 'W'
@@ -625,7 +623,6 @@ const ExerciseEditable = ({
                         }
                     }
 
-                    // --- SUGGESTION column (new progressive overload logic) ---
                     let suggestionText = '-';
                     let computedSuggestion = null;
                     let fillData = null;
@@ -633,13 +630,11 @@ const ExerciseEditable = ({
                     if (showSuggestion) {
                         const isWarmup = set.setType === 'W';
                         if (isWarmup) {
-                            // Warmups are not progressively overloaded – just copy last warmup
                             if (prevSet) {
                                 suggestionText = `${formatWeight(prevSet.weight, useImperial)} × ${prevSet.reps}`;
                                 fillData = { weight: prevSet.weight || 0, reps: prevSet.reps || 0 };
                             }
                         } else {
-                            // Working sets use the new computeNextSet logic from the hook
                             const suggestIndex = suggestWorkingIndex++;
                             const computed = workingSuggestions[suggestIndex];
                             if (computed) {
@@ -649,7 +644,6 @@ const ExerciseEditable = ({
                             }
                         }
                     } else if (prevSet) {
-                        // Non-PRMODE → classic previous fill
                         if (isCardio) {
                             fillData = {
                                 distance: prevSet.distance || 0,
@@ -669,47 +663,56 @@ const ExerciseEditable = ({
                         prType !== null;
 
                     acc.push(
-                        <SwipeableSetRow
+                        <Animated.View
                             key={set.id || index}
-                            onDelete={() => deleteSet(index)}
-                            index={index}
-                            simultaneousHandlers={simultaneousHandlers}
-                            isExerciseDragging={isActive}
-                            completed={set.completed}
+                            entering={FadeIn.duration(180)}
+                            exiting={FadeOut.duration(150)}
+                            layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
                         >
-                            <SetRowBody
-                                set={set}
+                            <SwipeableSetRow
+                                onDelete={() => deleteSet(index)}
                                 index={index}
-                                displayNumber={displayNumber}
-                                isTemplate={isTemplate}
-                                hidePrevious={hidePrevious}
-                                columnText={columnText}
-                                fillData={fillData}
-                                showSuggestion={showSuggestion}
-                                computedSuggestion={computedSuggestion}
-                                isLifetimePRSuggestion={isLifetimePRSuggestion}
-                                brightColor={brightColor}
-                                isCardio={isCardio}
-                                theme={theme}
-                                styles={styles}
-                                onFillFromPrevious={fillFromPrevious}
-                                onToggleSetType={toggleSetType}
-                                onToggleSetComplete={toggleSetComplete}
-                                onWeightChange={handleWeightChange}
-                                onRepsChange={handleRepsChange}
-                                onDistanceChange={handleDistanceChange}
-                                onMinutesChange={handleMinutesChange}
-                            />
-                        </SwipeableSetRow>
+                                simultaneousHandlers={simultaneousHandlers}
+                                isExerciseDragging={isActive}
+                                completed={set.completed}
+                            >
+                                <SetRowBody
+                                    set={set}
+                                    index={index}
+                                    displayNumber={displayNumber}
+                                    isTemplate={isTemplate}
+                                    hidePrevious={hidePrevious}
+                                    columnText={columnText}
+                                    fillData={fillData}
+                                    showSuggestion={showSuggestion}
+                                    computedSuggestion={computedSuggestion}
+                                    isLifetimePRSuggestion={isLifetimePRSuggestion}
+                                    brightColor={brightColor}
+                                    isCardio={isCardio}
+                                    theme={theme}
+                                    styles={styles}
+                                    onFillFromPrevious={fillFromPrevious}
+                                    onToggleSetType={toggleSetType}
+                                    onToggleSetComplete={toggleSetComplete}
+                                    onWeightChange={handleWeightChange}
+                                    onRepsChange={handleRepsChange}
+                                    onDistanceChange={handleDistanceChange}
+                                    onMinutesChange={handleMinutesChange}
+                                />
+                            </SwipeableSetRow>
+                        </Animated.View>
                     );
                     return acc;
                 }, [])}
-            </View>
+            </Animated.View>
 
             {/* Footer */}
-            <TouchableOpacity style={styles.addSetButton} onPress={addNewSet} activeOpacity={0.6}>
-                <Text style={styles.addSetText}>+ ADD SET</Text>
-            </TouchableOpacity>
+            <Animated.View layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}>
+                <TouchableOpacity style={styles.addSetButton} onPress={addNewSet} activeOpacity={0.6}>
+                    <Text style={styles.addSetText}>+ ADD SET</Text>
+                </TouchableOpacity>
+            </Animated.View>
+
             <CustomAlert
                 visible={showDeleteAlert}
                 title="Remove Exercise"
@@ -728,7 +731,7 @@ const ExerciseEditable = ({
                     },
                 ]}
             />
-        </View>
+        </Animated.View>
     );
 };
 
@@ -848,7 +851,6 @@ const getStyles = (theme) => {
             justifyContent: 'center',
             backgroundColor: safeError,
             height: '100%',
-
         },
         deleteIconContainer: {
             alignItems: 'center',

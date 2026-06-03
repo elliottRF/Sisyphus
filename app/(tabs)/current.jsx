@@ -1,6 +1,5 @@
-
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, Dimensions, Modal } from 'react-native'
-import Animated, { LinearTransition, FadeIn, FadeOut } from 'react-native-reanimated';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, Dimensions, Modal } from 'react-native'
+import Animated, { LinearTransition, FadeIn, FadeOut, Easing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -71,9 +70,6 @@ const Current = () => {
     const [templates, setTemplates] = useState([]);
     const [loadingTemplateId, setLoadingTemplateId] = useState(null);
 
-    // Real template data
-
-
     const loadTemplates = async () => {
         try {
             const data = await getTemplates();
@@ -127,14 +123,12 @@ const Current = () => {
 
         const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
-        // Fetch history for all exercises in the template to overwrite structure
         const workoutWithDynamicData = await Promise.all(template.data.map(async (item) => {
             const updatedExercises = await Promise.all(item.exercises.map(async (ex) => {
                 const history = await fetchLastWorkoutSets(ex.exerciseID);
 
                 let setsToUse = ex.sets;
                 if (history && history.length > 0) {
-                    // Overwrite template sets with history (weights, reps, counts)
                     setsToUse = history.map(hSet => ({
                         id: generateId(),
                         weight: formatWeight(hSet.weight, useImperial),
@@ -145,7 +139,6 @@ const Current = () => {
                         completed: false
                     }));
                 } else {
-                    // Use template sets but refresh IDs
                     setsToUse = ex.sets.map(set => ({
                         ...set,
                         id: generateId(),
@@ -177,8 +170,6 @@ const Current = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
         try {
-            // We fetch the full template data in parallel with a 300ms visual delay
-            // This ensures the next screen has what it needs before it even mounts
             const [fullTemplate, exercisesData] = await Promise.all([
                 getTemplate(template.id),
                 fetchExercises(),
@@ -202,7 +193,6 @@ const Current = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
         try {
-            // Clear preloader and fetch exercises in background during the delay
             const [exercisesData] = await Promise.all([
                 fetchExercises(),
                 new Promise(resolve => setTimeout(resolve, 300))
@@ -222,7 +212,7 @@ const Current = () => {
     const clearWorkout = async () => {
         setCurrentWorkout([]);
         updateWorkoutStartTime(null);
-        setWorkoutTitle("New Workout"); // Reset title
+        setWorkoutTitle("New Workout");
         restTimerRef.current?.stopTimer();
         setPRMODE(false);
         await AsyncStorage.removeItem('@currentWorkout');
@@ -273,7 +263,6 @@ const Current = () => {
                 return;
             }
 
-            // Filter out sets with null weight or reps
             const filteredWorkout = currentWorkout.map(exerciseGroup => ({
                 ...exerciseGroup,
                 exercises: exerciseGroup.exercises.map(exercise => ({
@@ -289,8 +278,6 @@ const Current = () => {
 
             const workoutEntries = [];
             let globalExerciseNum = 1;
-            // --- STEP 1: Determine the maximums for each exercise in this workout ---
-            // Maps to store: { exerciseID: maxVal_in_this_workout }
             const maxOneRmsInWorkout = new Map();
             const maxVolumesInWorkout = new Map();
             const maxWeightsInWorkout = new Map();
@@ -307,20 +294,16 @@ const Current = () => {
                     const isAssisted = !!exerciseDetails?.isAssisted;
 
                     for (const set of exercise.sets) {
-                        // Convert user-input weight to kg for storage
                         const weightKg = toStorageKg(set.weight, useImperial);
-                        // Calculate One Rep Max
                         const calculatedOneRM = calculateOneRepMax(
                             weightKg,
                             parseInt(set.reps) || 0
                         );
                         if (calculatedOneRM > maxOneRM) maxOneRM = calculatedOneRM;
 
-                        // Calculate Volume
                         const volume = weightKg * (parseInt(set.reps) || 0);
                         if (volume > maxVolume) maxVolume = volume;
 
-                        // Calculate Weight (ignore 0 reps)
                         const weight = weightKg;
                         const reps = parseInt(set.reps) || 0;
                         if (reps > 0) {
@@ -347,9 +330,6 @@ const Current = () => {
                 }
             }
 
-            // --------------------------------------------------------------------------
-
-            // --- STEP 2: Iterate again, calculate PR status, and prepare entries ---
             for (const exerciseGroup of filteredWorkout) {
                 for (const exercise of exerciseGroup.exercises) {
                     let setNum = 1;
@@ -357,31 +337,26 @@ const Current = () => {
                     const exerciseDetails = exercises.find(e => e.exerciseID === exercise.exerciseID);
                     const isAssisted = !!exerciseDetails?.isAssisted;
 
-                    // Retrieve the maximums achieved for this exercise in the current workout
                     const maxOneRMForExercise = maxOneRmsInWorkout.get(exercise.exerciseID);
                     const maxVolumeForExercise = maxVolumesInWorkout.get(exercise.exerciseID);
                     const maxWeightInfo = maxWeightsInWorkout.get(exercise.exerciseID);
 
-                    // Fetch historical bests
                     const historicalPRs = await getExercisePRs(exercise.exerciseID);
 
                     const isOverall1rmPR = isAssisted ? false : (maxOneRMForExercise > historicalPRs.maxOneRM);
                     const isOverallVolumePR = isAssisted ? false : (maxVolumeForExercise > historicalPRs.maxVolume);
 
-                    // Weight PR: either new max weight OR matching weight with more reps
                     const isOverallWeightPR = isAssisted
                         ? (maxWeightInfo.weight < historicalPRs.maxWeight ||
                             (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight))
                         : (maxWeightInfo.weight > historicalPRs.maxWeight ||
                             (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight));
 
-                    // Track assigned PRs to avoid duplicate badges in the same workout (first set gets priority)
                     let pr1rmAssigned = false;
                     let prVolumeAssigned = false;
                     let prWeightAssigned = false;
 
                     for (const set of exercise.sets) {
-                        // Calculate metrics for the set
                         const weightKg = toStorageKg(set.weight, useImperial);
                         const calculatedOneRM = calculateOneRepMax(
                             weightKg,
@@ -391,8 +366,6 @@ const Current = () => {
                         const weight = weightKg;
                         const reps = parseInt(set.reps) || 0;
 
-                        // Determine if this specific set is the PR-setting set
-                        // Logic: Must match the workout max AND represent an overall PR AND not have been assigned yet
                         let is1rmPR = 0;
                         if (!pr1rmAssigned && !isAssisted && calculatedOneRM === maxOneRMForExercise && isOverall1rmPR) {
                             is1rmPR = 1;
@@ -411,18 +384,16 @@ const Current = () => {
                             prWeightAssigned = true;
                         }
 
-                        // Legacy PR flag (1RM)
                         const isPR = is1rmPR;
 
-                        // Prepare entry for database
                         workoutEntries.push({
                             workoutSession: nextSessionNumber,
                             exerciseNum: globalExerciseNum,
                             setNum: setNum,
                             exerciseID: exercise.exerciseID,
-                            weight: toStorageKg(set.weight, useImperial), // always store in kg
+                            weight: toStorageKg(set.weight, useImperial),
                             reps: set.reps,
-                            oneRM: calculatedOneRM,   // already in kg
+                            oneRM: calculatedOneRM,
                             time: new Date().toISOString(),
                             name: workoutTitle,
                             pr: isPR,
@@ -442,14 +413,12 @@ const Current = () => {
                 }
             }
 
-            // Calculate duration in minutes
             const endTime = Date.now();
             const startTimeMs = workoutStartTime ? new Date(workoutStartTime).getTime() : endTime;
             const durationMs = endTime - startTimeMs;
             const durationMinutes = Math.floor(durationMs / 60000);
             await insertWorkoutHistory(workoutEntries, workoutTitle, durationMinutes);
 
-            // Emit event so Global Overlay triggers
             emit(AppEvents.WORKOUT_COMPLETED);
 
             try {
@@ -460,7 +429,6 @@ const Current = () => {
 
                 await sound.playAsync();
 
-                // Cleanup when done – allow the full sound to play even during navigation
                 sound.setOnPlaybackStatusUpdate(async (status) => {
                     if (status.didJustFinish) {
                         await sound.unloadAsync();
@@ -470,10 +438,8 @@ const Current = () => {
                 console.log("Error playing success sound", e);
             }
 
-            // Give the Global Modal a moment to fade in and cover the screen before we clear the state
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Clear AsyncStorage and state
             await AsyncStorage.removeItem('@currentWorkout');
             setCurrentWorkout([]);
             updateWorkoutStartTime(null);
@@ -482,15 +448,14 @@ const Current = () => {
             setPRMODE(false);
             console.log("Workout saved successfully");
 
-            // Build our history stack effectively
             router.navigate('/history');
 
             router.push({
                 pathname: `/workout/${nextSessionNumber}`,
                 params: {
                     session: nextSessionNumber,
-                    initialData: JSON.stringify(workoutEntries), // This is the "bridge" that prevents the kick-out
-                    viewMode: 'summary' // optional
+                    initialData: JSON.stringify(workoutEntries),
+                    viewMode: 'summary'
                 }
             });
         }
@@ -543,7 +508,7 @@ const Current = () => {
             fetchExercises()
                 .then(data => setExercises(data))
                 .catch(err => console.error(err));
-            loadTemplates(); // Refresh templates when focusing
+            loadTemplates();
             setLoadingTemplateId(null);
 
             AsyncStorage.getItem('settings_auto_timer').then(val => {
@@ -568,14 +533,12 @@ const Current = () => {
                         });
                     } else {
                         setCurrentWorkout([]);
-                        // Only reset to "New Workout" if we aren't currently loading a template via params
                         if (!params.template) {
                             setWorkoutTitle("New Workout");
                         }
                     }
                     const storedStartTime = await AsyncStorage.getItem('@workoutStartTime');
                     if (storedStartTime) {
-                        // Global state update is enough, but ensure local context sync
                         updateWorkoutStartTime(storedStartTime);
                     } else {
                         updateWorkoutStartTime(null);
@@ -615,17 +578,16 @@ const Current = () => {
                                 reps: null,
                                 distance: null,
                                 minutes: null,
-                                setType: 'N' // Normal
+                                setType: 'N'
                             }
                         ],
-                        notes: '' // Initialize notes
+                        notes: ''
                     }
                 ]
             }
         ]);
     };
 
-    // Handler for when reordering completes
     const handleReorder = useCallback(({ from, to }) => {
         setCurrentWorkout((prevWorkout) => reorderItems(prevWorkout, from, to));
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -657,7 +619,7 @@ const Current = () => {
                     if (count > maxOcc) maxOcc = count;
                 });
 
-                const currentOccIdx = maxOcc + 1; // 1 for first time, 2 for second time, etc.
+                const currentOccIdx = maxOcc + 1;
 
                 occurrenceMap[ex.id] = currentOccIdx;
 
@@ -677,7 +639,11 @@ const Current = () => {
 
     const renderItem = useCallback(({ item, index }) => {
         return (
-            <View collapsable={false} style={styles.exerciseWrapper}>
+            <Animated.View
+                collapsable={false}
+                style={styles.exerciseWrapper}
+                layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+            >
                 {item.exercises.map((exercise, exerciseIndex) => {
                     const exerciseDetails = exercises.find(
                         (e) => e.exerciseID === exercise.exerciseID
@@ -685,7 +651,7 @@ const Current = () => {
 
                     return (
                         <ExerciseEditable
-                            key={exercise.id} // Use the unique instance ID
+                            key={exercise.id}
                             exerciseID={exercise.exerciseID}
                             workoutID={item.id}
                             exercise={exercise}
@@ -696,24 +662,21 @@ const Current = () => {
                             onSetComplete={handleSetComplete}
                             isCardio={!!exerciseDetails?.isCardio}
                             isAssisted={!!exerciseDetails?.isAssisted}
-                            // Use the map we pre-calculated!
                             muscleOccurrenceIndex={occurrenceMap[exercise.id]}
                             PRMODE={PRMODE}
                         />
                     );
                 })}
-            </View>
+            </Animated.View>
         );
     }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap, PRMODE]);
 
-    // Pan gesture configuration to work with swipeable rows
     const panGesture = useMemo(
         () => Gesture.Pan().activeOffsetX([-20, 20]).activeOffsetY([0, 0]),
         []
     );
 
 
-    // Safe Colors for Reanimated / Linear Gradient fallbacks
     const isDynamic = theme.type === 'dynamic';
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
     const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
@@ -721,7 +684,6 @@ const Current = () => {
     const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
     const safeDanger = isDynamic ? '#FF4444' : theme.danger;
 
-    // Helper for Button Gradient
     const ButtonBackground = ({ children, style }) => {
         if (isDynamic) {
             return (
@@ -858,20 +820,20 @@ const Current = () => {
                                             keyboardType="text"
                                         />
                                         {workoutStartTime && (
-                                            <Animated.View layout={LinearTransition.springify()} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                                <Animated.View layout={LinearTransition.springify()}>
+                                            <Animated.View layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                                <Animated.View layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}>
                                                     <TouchableOpacity onPress={() => setPRMODE(!PRMODE)}>
                                                         <MaterialCommunityIcons name="trending-up" size={24} color={PRMODE ? theme.primary : theme.textSecondary} />
                                                     </TouchableOpacity>
                                                 </Animated.View>
-                                                <Animated.View layout={LinearTransition.springify()}>
+                                                <Animated.View layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}>
                                                     <RestTimer ref={restTimerRef} onFirstStart={requestNotificationPermissionOnce} />
                                                 </Animated.View>
                                                 {showInfoIcon && (
                                                     <Animated.View
                                                         entering={FadeIn}
                                                         exiting={FadeOut}
-                                                        layout={LinearTransition.springify()}
+                                                        layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
                                                     >
                                                         <TouchableOpacity onPress={showTimerInfoAlert} style={styles.timerInfoButton}>
                                                             <Feather name="info" size={20} color={theme.textSecondary} />
@@ -882,7 +844,6 @@ const Current = () => {
                                         )}
                                     </View>
                                     <View style={styles.headerDivider} />
-
                                 </View>
 
                                 <ReorderableList
@@ -891,13 +852,17 @@ const Current = () => {
                                     onReorder={handleReorder}
                                     keyExtractor={(item) => String(item.id)}
                                     renderItem={renderItem}
+                                    itemLayoutAnimation={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
                                     style={styles.list}
                                     contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                                     keyboardShouldPersistTaps="handled"
                                     showsVerticalScrollIndicator={false}
                                     keyboardDismissMode="on-drag"
                                     ListFooterComponent={
-                                        <Animated.View layout={LinearTransition.springify()} style={styles.footer}>
+                                        <Animated.View
+                                            layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+                                            style={styles.footer}
+                                        >
                                             <TouchableOpacity
                                                 style={styles.addExerciseButton}
                                                 onPress={plusButtonShowExerciseList}
@@ -920,7 +885,6 @@ const Current = () => {
                                                 activeOpacity={0.8}
                                                 style={styles.finishButtonContainer}
                                             >
-
                                                 <ButtonBackground style={styles.finishButton}>
                                                     <Text style={styles.finishButtonText}>Finish Workout</Text>
                                                 </ButtonBackground>
@@ -940,7 +904,6 @@ const Current = () => {
                                                 activeOpacity={0.7}
                                                 style={styles.clearButton}
                                             >
-
                                                 <Text style={styles.clearButtonText}>Clear Workout</Text>
                                             </TouchableOpacity>
                                         </Animated.View>
@@ -970,12 +933,6 @@ const getStyles = (theme) => {
     const safeBorder = isDynamic ? theme.overlayInput : theme.border;
     const safeDanger = isDynamic ? '#FF4444' : theme.danger;
 
-    const insets = useSafeAreaInsets(); // Access insets inside getStyles if needed, but it's passed from component
-    // Actually, getStyles is called inside the component, but it doesn't take insets.
-    // I should pass insets to getStyles or just use them directly if I'm within the Hook.
-    // Wait, getStyles is a separate function. I'll pass insets to it.
-
-    // Grid sizing - CHANGED TO 2 COLUMNS
     const numColumns = 2;
     const gap = 12;
     const padding = 16;
@@ -1026,7 +983,7 @@ const getStyles = (theme) => {
         },
         templateCard: {
             width: itemWidth,
-            height: 200, // Fixed height for consistency with overview
+            height: 200,
             backgroundColor: theme.surface,
             borderRadius: 16,
             padding: 14,
@@ -1113,9 +1070,7 @@ const getStyles = (theme) => {
         },
         bottomButtonContainer: {
             position: 'absolute',
-            // Use props passed to getStyles or fallback. 
-            // I'll update the component to pass insets to getStyles.
-            bottom: 75, // Base offset, will be adjusted in the component style if needed
+            bottom: 75,
             left: 0,
             right: 0,
             paddingHorizontal: 16,
@@ -1128,7 +1083,7 @@ const getStyles = (theme) => {
         },
         startButton: {
             paddingVertical: 16,
-            borderRadius: 16, // Rounder for premium feel
+            borderRadius: 16,
             alignItems: 'center',
             justifyContent: 'center',
         },
