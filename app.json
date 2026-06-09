@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sisyphus",
     "slug": "sisyphus",
-    "version": "1.0.0",
+    "version": "1.3.2",
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -28,6 +28,7 @@
         "backgroundColor": "#0c0c0c"
       },
       "package": "com.elliottr.sisyphus",
+      "versionCode": 38,
       "compileSdkVersion": 34,
       "targetSdkVersion": 34,
       "minSdkVersion": 21,
@@ -56,7 +57,21 @@
             "./assets/notifications/dingnoti.wav"
           ]
         }
-      ]
+      ],
+      [
+        "react-native-fbsdk-next",
+        {
+          "appID": "2320014995193119",
+          "clientToken": "6938700f4a11e3a36d6bcb9865ed6774",
+          "displayName": "Sisyphus",
+          "scheme": "fb2320014995193119",
+          "advertiserIDCollectionEnabled": true,
+          "autoLogAppEventsEnabled": true,
+          "isAutoInitEnabled": true,
+          "iosUserTrackingPermission": "This identifier will be used to track app installs and measure the effectiveness of our Meta ad campaigns."
+        }
+      ],
+      "expo-tracking-transparency"
     ],
     "experiments": {
       "typedRoutes": true

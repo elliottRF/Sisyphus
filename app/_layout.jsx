@@ -15,6 +15,8 @@ import { AppEvents, on, off } from '../utils/events';
 import { primeExerciseSnapshots } from '../utils/exerciseSnapshots';
 import LottieView from 'lottie-react-native';
 import CustomAlert from '../components/CustomAlert';
+import { Settings } from 'react-native-fbsdk-next';
+import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -41,6 +43,27 @@ const _layout = () => {
         initDb();
     }, []);
 
+    useEffect(() => {
+        const initFacebookSdk = async () => {
+            try {
+                Settings.initializeSDK();
+                if (Platform.OS === 'ios') {
+                    const { status } = await requestTrackingPermissionsAsync();
+                    if (status === 'granted') {
+                        await Settings.setAdvertiserTrackingEnabled(true);
+                    } else {
+                        await Settings.setAdvertiserTrackingEnabled(false);
+                    }
+                } else {
+                    await Settings.setAdvertiserTrackingEnabled(true);
+                }
+                console.log('Facebook SDK initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize Facebook SDK:', error);
+            }
+        };
+        initFacebookSdk();
+    }, []);
 
     // Splash screen is now handled inside ThemeConsumer to wait for theme loading
     const onLayoutRootView = useCallback(async () => {
