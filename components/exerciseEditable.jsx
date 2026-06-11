@@ -206,13 +206,24 @@ const SetRowBody = React.memo(({
     useEffect(() => {
         if (columnText === displayedTextRef.current) return;
         displayedTextRef.current = columnText;
-        cellTextOpacity.value = withSequence(
-            withTiming(0, { duration: 110 }, (finished) => {
-                if (finished) runOnJS(setDisplayedText)(columnText);
-            }),
-            withTiming(1, { duration: 160 })
-        );
-    }, [columnText, cellTextOpacity]);
+        if (columnText === displayedText) {
+            // Changed back before a pending swap committed — just restore.
+            cellTextOpacity.value = withTiming(1, { duration: 160 });
+            return;
+        }
+        cellTextOpacity.value = withTiming(0, { duration: 110 }, (finished) => {
+            if (finished) runOnJS(setDisplayedText)(columnText);
+        });
+    }, [columnText, displayedText, cellTextOpacity]);
+
+    // Fade back in only after the swapped text has been committed by React —
+    // sequencing the fade-in off the animation clock instead would briefly
+    // show the old value again while the runOnJS swap is still in flight.
+    useEffect(() => {
+        if (displayedText === displayedTextRef.current) {
+            cellTextOpacity.value = withTiming(1, { duration: 160 });
+        }
+    }, [displayedText, cellTextOpacity]);
 
     const cellTextStyle = useAnimatedStyle(() => ({
         opacity: cellTextOpacity.value,

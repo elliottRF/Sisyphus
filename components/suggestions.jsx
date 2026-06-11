@@ -123,6 +123,15 @@ export const useWorkoutSuggestions = ({
 
         const cacheKey = `${exerciseID}|${muscleOccurrenceIndex}|${repRangeMin}|${repRangeMax}|${isAssisted ? 1 : 0}`;
 
+        // Serve the cached result synchronously so toggling suggestions on
+        // goes straight from the previous value to the suggestion instead of
+        // flashing "-" while recomputing; the recompute below then dissolves
+        // in fresher values only if they actually differ.
+        const cached = suggestionsCache.get(exerciseID);
+        if (cached && cached.key === cacheKey) {
+            setSuggestions(cached.suggestions);
+        }
+
         const publish = (computed) => {
             suggestionsCache.set(exerciseID, { key: cacheKey, suggestions: computed });
             if (!cancelled) setSuggestions(computed);
