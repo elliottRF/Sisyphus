@@ -19,7 +19,6 @@ export async function primeExerciseSnapshots() {
                 MEMORY_CACHE.set(exerciseID, JSON.parse(value));
             }
         });
-        console.log(`[Snapshots] Primed ${MEMORY_CACHE.size} exercises.`);
     } catch (e) {
         console.error('[Snapshots] Error priming snapshots:', e);
     }

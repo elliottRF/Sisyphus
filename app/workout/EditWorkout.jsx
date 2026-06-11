@@ -2,7 +2,7 @@
 
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation } from 'react-native'
 import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
@@ -30,6 +30,8 @@ import ExerciseEditable from '../../components/exerciseEditable'
 import ActionSheet from "react-native-actions-sheet";
 import ExerciseHistory from "../../components/exerciseHistory"
 import FilteredExerciseList from '../../components/FilteredExerciseList';
+import { useOverlayReorder } from '../../utils/useOverlayReorder';
+import ReorderOverlay from '../../components/ReorderOverlay';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
@@ -121,6 +123,23 @@ const EditWorkout = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }, []);
 
+    const { session: reorderSession, overlayRef, listWrapperRef, fingerY, startReorder, endReorder, handleScrollToIndexFailed, isReordering } =
+        useOverlayReorder(listRef, currentWorkout, setCurrentWorkout);
+
+    const reorderRows = useMemo(() => {
+        if (!reorderSession) return [];
+        return currentWorkout.map(group => {
+            const firstExercise = group.exercises[0];
+            const details = exercises.find(e => e.exerciseID === firstExercise?.exerciseID);
+            const setCount = group.exercises.reduce((n, ex) => n + ex.sets.length, 0);
+            return {
+                id: group.id,
+                label: details ? details.name : 'Unknown Exercise',
+                meta: `${setCount} ${setCount === 1 ? 'set' : 'sets'}`,
+            };
+        });
+    }, [reorderSession, currentWorkout, exercises]);
+
     const renderItem = useCallback(({ item, index }) => {
         return (
             <Animated.View
@@ -146,16 +165,18 @@ const EditWorkout = () => {
                             isCardio={exerciseDetails ? exerciseDetails.isCardio : false}
                             isAssisted={exerciseDetails ? (exerciseDetails.isAssisted === 1) : false}
                             hidePrevious={true}
+                            onReorderStart={startReorder}
+                            onReorderEnd={endReorder}
+                            reorderFingerY={fingerY}
                         />
                     );
                 })}
             </Animated.View>
         );
-    }, [setCurrentWorkout, exercises]);
+    }, [setCurrentWorkout, exercises, startReorder, endReorder, fingerY]);
 
     // FIXED: Save workout function
     const saveWorkout = useCallback(async () => {
-        console.log("saveWorkout called (Edit). State length:", currentWorkout.length);
         try {
             if (!currentWorkout || !currentWorkout.length) {
                 customAlert("Error", "Workout is empty. Cannot save.");
@@ -354,7 +375,6 @@ const EditWorkout = () => {
             setWorkoutTitle('');
 
 
-            console.log("Loading workout for session:", WORKOUT_SESSION_NUMBER);
 
             if (!WORKOUT_SESSION_NUMBER) {
                 // Return silently. If eagerly mounted by Tabs lazy: false, session is missing.
@@ -371,15 +391,6 @@ const EditWorkout = () => {
 
                 // Load workout history
                 const sessionData = await fetchWorkoutHistoryBySession(WORKOUT_SESSION_NUMBER);
-                console.log("Loaded session data:", sessionData?.length, "rows");
-
-                console.log("First few rows:", sessionData.slice(0, 8).map(r => ({
-                    exerciseNum: r.exerciseNum,
-                    exerciseID: r.exerciseID,
-                    setNum: r.setNum,
-                    exerciseName: r.exerciseName
-                })));
-
 
                 if (sessionData && sessionData.length > 0) {
                     // Extract metadata from first row
@@ -421,7 +432,6 @@ const EditWorkout = () => {
                     });
 
                     const groupedWorkout = Array.from(exerciseGroups.values());
-                    console.log("Reconstructed workout:", groupedWorkout.length, "exercises");
                     setCurrentWorkout(groupedWorkout);
 
                 } else {
@@ -501,10 +511,12 @@ const EditWorkout = () => {
                     <View style={styles.headerDivider} />
                 </View>
 
+                <View ref={listWrapperRef} style={{ flex: 1 }} collapsable={false}>
                 <ReorderableList
                     ref={listRef}
                     data={currentWorkout}
                     onReorder={handleReorder}
+                    onScrollToIndexFailed={handleScrollToIndexFailed}
                     keyExtractor={(item) => String(item.id)}
                     renderItem={renderItem}
                     itemLayoutAnimation={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
@@ -512,6 +524,7 @@ const EditWorkout = () => {
                     contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
+                    scrollEnabled={!isReordering}
                     ListFooterComponent={
                         <Animated.View
                             layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
@@ -562,6 +575,16 @@ const EditWorkout = () => {
                         </Animated.View>
                     }
                 />
+                {reorderSession && (
+                    <ReorderOverlay
+                        ref={overlayRef}
+                        rows={reorderRows}
+                        activeId={reorderSession.activeId}
+                        fingerY={fingerY}
+                        frame={reorderSession.frame}
+                    />
+                )}
+                </View>
 
                 <FilteredExerciseList
                     exercises={exercises}

@@ -3,7 +3,7 @@ import Animated, { LinearTransition, FadeIn, FadeOut, Easing } from 'react-nativ
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureHandlerRootView, Gesture } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
 import * as Haptics from 'expo-haptics';
 
@@ -27,12 +27,12 @@ import { FONTS, SHADOWS } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import Timer from '../../components/Timer';
 import RestTimer from '../../components/RestTimer';
+import { useOverlayReorder } from '../../utils/useOverlayReorder';
+import ReorderOverlay from '../../components/ReorderOverlay';
 import { useFocusEffect, router } from 'expo-router';
 import { Audio } from 'expo-av';
 import LottieView from 'lottie-react-native';
 
-import TestSoundButton from '../../components/TestSoundButton';
-import TestNotificationButton from '../../components/TestNotificationButton';
 import { useTheme } from '../../context/ThemeContext';
 import { ActivityIndicator } from 'react-native';
 import { AppEvents, emit } from '../../utils/events';
@@ -234,7 +234,6 @@ const Current = () => {
     const [currentWorkout, setCurrentWorkout] = useState([]);
     const [workoutTitle, setWorkoutTitle] = useState("New Workout");
 
-    console.log("Render Current. Workout length:", currentWorkout.length);
 
 
     const params = useLocalSearchParams();
@@ -253,13 +252,11 @@ const Current = () => {
 
 
     const endWorkout = useCallback(async () => {
-        console.log("endWorkout called. State length:", currentWorkout.length);
         try {
             const latestSessionQuery = await getLatestWorkoutSession();
             const nextSessionNumber = latestSessionQuery + 1;
 
             if (!currentWorkout || !currentWorkout.length) {
-                console.log("No workout data to save");
                 return;
             }
 
@@ -435,7 +432,7 @@ const Current = () => {
                     }
                 });
             } catch (e) {
-                console.log("Error playing success sound", e);
+                console.warn("Error playing success sound", e);
             }
 
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -446,7 +443,6 @@ const Current = () => {
             setWorkoutTitle("New Workout");
             restTimerRef.current?.stopTimer();
             setPRMODE(false);
-            console.log("Workout saved successfully");
 
             router.navigate('/history');
 
@@ -593,8 +589,27 @@ const Current = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }, []);
 
+    // Hold-to-reorder: holding a card's header opens an overlay of compact
+    // exercise-name rows; the held row tracks the finger directly and the
+    // new order is committed on release.
+    const { session: reorderSession, overlayRef, listWrapperRef, fingerY, startReorder, endReorder, handleScrollToIndexFailed, isReordering } =
+        useOverlayReorder(listRef, currentWorkout, setCurrentWorkout);
+
+    const reorderRows = useMemo(() => {
+        if (!reorderSession) return [];
+        return currentWorkout.map(group => {
+            const firstExercise = group.exercises[0];
+            const details = exercises.find(e => e.exerciseID === firstExercise?.exerciseID);
+            const setCount = group.exercises.reduce((n, ex) => n + ex.sets.length, 0);
+            return {
+                id: group.id,
+                label: details ? details.name : 'Unknown Exercise',
+                meta: `${setCount} ${setCount === 1 ? 'set' : 'sets'}`,
+            };
+        });
+    }, [reorderSession, currentWorkout, exercises]);
+
     const handleSetComplete = useCallback(() => {
-        console.log("Set completed, restarting timer...");
         if (autoTimerEnabledRef.current) {
             restTimerRef.current?.restartTimer();
         }
@@ -664,18 +679,15 @@ const Current = () => {
                             isAssisted={!!exerciseDetails?.isAssisted}
                             muscleOccurrenceIndex={occurrenceMap[exercise.id]}
                             PRMODE={PRMODE}
+                            onReorderStart={startReorder}
+                            onReorderEnd={endReorder}
+                            reorderFingerY={fingerY}
                         />
                     );
                 })}
             </Animated.View>
         );
-    }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap, PRMODE]);
-
-    const panGesture = useMemo(
-        () => Gesture.Pan().activeOffsetX([-20, 20]).activeOffsetY([0, 0]),
-        []
-    );
-
+    }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap, PRMODE, startReorder, endReorder, fingerY]);
 
     const isDynamic = theme.type === 'dynamic';
     const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
@@ -846,10 +858,12 @@ const Current = () => {
                                     <View style={styles.headerDivider} />
                                 </View>
 
+                                <View ref={listWrapperRef} style={{ flex: 1 }} collapsable={false}>
                                 <ReorderableList
                                     ref={listRef}
                                     data={currentWorkout}
                                     onReorder={handleReorder}
+                                    onScrollToIndexFailed={handleScrollToIndexFailed}
                                     keyExtractor={(item) => String(item.id)}
                                     renderItem={renderItem}
                                     itemLayoutAnimation={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
@@ -858,6 +872,7 @@ const Current = () => {
                                     keyboardShouldPersistTaps="handled"
                                     showsVerticalScrollIndicator={false}
                                     keyboardDismissMode="on-drag"
+                                    scrollEnabled={!isReordering}
                                     ListFooterComponent={
                                         <Animated.View
                                             layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
@@ -909,6 +924,16 @@ const Current = () => {
                                         </Animated.View>
                                     }
                                 />
+                                {reorderSession && (
+                                    <ReorderOverlay
+                                        ref={overlayRef}
+                                        rows={reorderRows}
+                                        activeId={reorderSession.activeId}
+                                        fingerY={fingerY}
+                                        frame={reorderSession.frame}
+                                    />
+                                )}
+                                </View>
                             </View>
                         )}
                         <FilteredExerciseList

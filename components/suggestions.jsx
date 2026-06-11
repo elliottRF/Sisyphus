@@ -94,6 +94,12 @@ const resolveAgainstRecentHistory = (
     return computeNextSet(bestAchieved, repRangeMin, repRangeMax, isAssisted);
 };
 
+// Session cache keyed by exerciseID. The reorderable list force-remounts
+// cells after a drag, resetting hook state; this lets a remounted card render
+// its last computed suggestions immediately (then refresh/dissolve to new
+// values if the inputs actually changed) instead of flashing "-".
+const suggestionsCache = new Map();
+
 export const useWorkoutSuggestions = ({
     showSuggestion,
     exerciseID,
@@ -102,7 +108,9 @@ export const useWorkoutSuggestions = ({
     isAssisted,
     muscleOccurrenceIndex,
 }) => {
-    const [suggestions, setSuggestions] = useState([]);
+    const [suggestions, setSuggestions] = useState(
+        () => suggestionsCache.get(exerciseID)?.suggestions ?? []
+    );
 
     useEffect(() => {
         if (!showSuggestion || !exerciseID) {
@@ -110,9 +118,15 @@ export const useWorkoutSuggestions = ({
             return;
         }
 
-        console.log(`useWorkoutSuggestions called for exerciseID=${exerciseID}, muscleOccurrenceIndex=${muscleOccurrenceIndex}`);
 
         let cancelled = false;
+
+        const cacheKey = `${exerciseID}|${muscleOccurrenceIndex}|${repRangeMin}|${repRangeMax}|${isAssisted ? 1 : 0}`;
+
+        const publish = (computed) => {
+            suggestionsCache.set(exerciseID, { key: cacheKey, suggestions: computed });
+            if (!cancelled) setSuggestions(computed);
+        };
 
         const loadAndCompute = async () => {
             // 1. All working sets in the last 60 days — ONLY needed for first-muscle case
@@ -137,7 +151,7 @@ export const useWorkoutSuggestions = ({
             }
 
             if (!baseSets || baseSets.length === 0) {
-                if (!cancelled) setSuggestions([]);
+                publish([]);
                 return;
             }
 
@@ -147,7 +161,7 @@ export const useWorkoutSuggestions = ({
             );
 
             if (baseSets.length === 0) {
-                if (!cancelled) setSuggestions([]);
+                publish([]);
                 return;
             }
 
@@ -185,9 +199,7 @@ export const useWorkoutSuggestions = ({
                 );
             });
 
-            if (!cancelled) {
-                setSuggestions(computedSuggestions);
-            }
+            publish(computedSuggestions);
         };
 
         loadAndCompute();

@@ -49,11 +49,9 @@ const migrateExerciseIDs = async (database) => {
   }
 
   if (remap.size === 0) {
-    console.log('Exercise ID migration: already correct, nothing to do.');
     return;
   }
 
-  console.log(`Exercise ID migration: remapping ${remap.size} exercise(s)...`);
 
   const remapArray = (arr) => {
     if (!Array.isArray(arr)) return arr;
@@ -126,7 +124,6 @@ const migrateExerciseIDs = async (database) => {
       [newSeq]
     );
 
-    console.log(`Exercise ID migration complete. ${remap.size} exercise(s) remapped.`);
   } catch (error) {
     console.error('Exercise ID migration failed:', error);
     throw error;
@@ -181,11 +178,10 @@ export const setupDatabase = async () => {
         const tableInfo = await database.getAllAsync(`PRAGMA table_info(${tableName});`);
         const columnExists = tableInfo.some(col => col.name === columnName);
         if (!columnExists) {
-          console.log(`Adding missing column ${columnName} to ${tableName}...`);
           await database.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${formattedDefinition};`);
         }
       } catch (e) {
-        console.log(`Error checking/adding column ${columnName} to ${tableName}:`, e);
+        console.warn(`Error checking/adding column ${columnName} to ${tableName}:`, e);
       }
     };
 
@@ -319,7 +315,6 @@ export const setupDatabase = async () => {
        SELECT 'exercises', MAX(MAX(exerciseID), 999) FROM exercises;`
     );
 
-    console.log('Database setup completed successfully');
   } catch (error) {
     console.error('Database setup error:', error);
     throw error;
@@ -466,7 +461,6 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
         [sessionNumber]
       );
 
-      console.log(`Deleted ${deleteResult.changes} existing sets for session ${sessionNumber}.`);
 
       for (const entry of workoutEntries) {
         await database.runAsync(
@@ -498,7 +492,6 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
       }
     });
 
-    console.log(`Workout session ${sessionNumber} overwritten successfully with ${setsOverwritten} sets.`);
 
     const newExerciseIDs = workoutEntries.map(e => e.exerciseID);
     const affectedExerciseIDs = [...new Set([...originalExerciseIDs, ...newExerciseIDs])];
@@ -1125,8 +1118,6 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             progressCallback({ stage: 'parsing', current: totalRows, total: totalRows });
           }
 
-          console.log("First row keys:", Object.keys(rows[0]));
-          console.log("First row sample:", rows[0]);
 
           const workoutMap = new Map();
           const notesMap = new Map();
@@ -1613,4 +1604,54 @@ export const exportBodyWeightData = async () => {
     console.error('Body weight export error:', error);
     throw error;
   }
+};
+
+// ---------------------------------------------------------------------------
+// Full database backup & restore
+// ---------------------------------------------------------------------------
+
+const DB_NAME = 'sisyphus.db';
+
+/**
+ * Flushes WAL and returns the on-disk path of the SQLite database file,
+ * ready to be copied/shared as a complete backup.
+ */
+export const prepareDatabaseBackup = async () => {
+  const database = await getDb();
+  // Merge the write-ahead log into the main db file so the copy is complete.
+  await database.execAsync('PRAGMA wal_checkpoint(FULL);');
+  return DB_NAME;
+};
+
+/**
+ * Closes the cached database handle so the underlying file can be replaced.
+ */
+export const closeDatabase = async () => {
+  if (db) {
+    try {
+      await db.closeAsync();
+    } catch (e) {
+      console.warn('Error closing database:', e);
+    }
+    db = null;
+  }
+};
+
+/**
+ * Validates that a file's contents look like a SQLite database.
+ * `headerBase64` should be the first 16 bytes of the file, base64-encoded.
+ */
+export const isValidSQLiteHeader = (headerBase64) => {
+  // "SQLite format 3\0" base64-encoded prefix
+  return typeof headerBase64 === 'string' && headerBase64.startsWith('U1FMaXRlIGZvcm1hdCAz');
+};
+
+/**
+ * Reopens the database after a restore and re-runs setup/migrations.
+ */
+export const reopenDatabaseAfterRestore = async () => {
+  db = null;
+  await setupDatabase();
+  emit(AppEvents.WORKOUT_DATA_IMPORTED);
+  emit(AppEvents.BODYWEIGHT_DATA_IMPORTED);
 };

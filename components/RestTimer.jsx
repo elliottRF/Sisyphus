@@ -163,7 +163,6 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     };
 
     const restartTimer = useCallback(() => {
-        console.log("Restarting timer (overwrite)...");
 
         // 1. Clear any existing UI loops
         if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
@@ -208,7 +207,6 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
 
     const startTimer = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        console.log("startTimer called (Tap)");
 
         if (timerRunning.current) {
             // STOP (Manual Tap -> NO SOUND)
@@ -230,7 +228,6 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     };
 
     const addTime = () => {
-        console.log("addTime called (Swipe Up)");
 
         // If not running, assume starting from 0? Or just return? 
         // Assuming we want to start it if stopped, or add to it if running.

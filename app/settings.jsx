@@ -6,8 +6,9 @@ import { FONTS, SHADOWS } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { importStrongData, exportWorkoutData, importBodyWeightData, exportBodyWeightData } from '../components/db';
+import { importStrongData, exportWorkoutData, importBodyWeightData, exportBodyWeightData, prepareDatabaseBackup, closeDatabase, isValidSQLiteHeader, reopenDatabaseAfterRestore } from '../components/db';
 import * as Sharing from 'expo-sharing';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, emit } from '../utils/events';
@@ -45,7 +46,13 @@ const AnimatedSwitch = ({ value, onValueChange, activeColor, inactiveColor, thum
     });
 
     return (
-        <TouchableOpacity activeOpacity={0.8} onPress={() => onValueChange(!value)}>
+        <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+                Haptics.selectionAsync();
+                onValueChange(!value);
+            }}
+        >
             <View style={{
                 width: 50, height: 28, borderRadius: 14,
                 backgroundColor: value ? activeColor : inactiveColor,
@@ -150,10 +157,11 @@ const Settings = () => {
     };
 
     const saveTimerSetting = async (text) => {
-        setDefaultTimer(text);
+        const sanitized = text.replace(/[^0-9]/g, '');
+        setDefaultTimer(sanitized);
         try {
             // Save '180' as fallback if user clears the input
-            const toSave = text.trim() === '' ? '180' : text;
+            const toSave = sanitized === '' ? '180' : sanitized;
             await AsyncStorage.setItem('settings_default_timer', toSave);
         } catch (e) {
             console.error(e);
@@ -232,6 +240,64 @@ const Settings = () => {
         }
     };
 
+    const handleBackupDatabase = async () => {
+        try {
+            const dbName = await prepareDatabaseBackup();
+            const srcUri = `${FileSystem.documentDirectory}SQLite/${dbName}`;
+            const info = await FileSystem.getInfoAsync(srcUri);
+            if (!info.exists) return customAlert("Error", "Database file not found.");
+            const date = new Date().toISOString().slice(0, 10);
+            const destUri = `${FileSystem.cacheDirectory}sisyphus_backup_${date}.db`;
+            await FileSystem.copyAsync({ from: srcUri, to: destUri });
+            await Sharing.shareAsync(destUri, { dialogTitle: 'Save Sisyphus backup' });
+        } catch (e) {
+            console.error("Backup error:", e);
+            customAlert("Error", "Backup failed.");
+        }
+    };
+
+    const performRestore = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+            if (result.canceled) return;
+            const uri = result.assets[0].uri;
+
+            // Validate the file is actually a SQLite database before nuking anything
+            const header = await FileSystem.readAsStringAsync(uri, {
+                encoding: FileSystem.EncodingType.Base64,
+                length: 16,
+                position: 0,
+            });
+            if (!isValidSQLiteHeader(header)) {
+                return customAlert("Invalid File", "That file doesn't look like a Sisyphus backup (.db file).");
+            }
+
+            const dbUri = `${FileSystem.documentDirectory}SQLite/sisyphus.db`;
+            await closeDatabase();
+            // Clear stale WAL/SHM files so the restored db is read cleanly
+            await FileSystem.deleteAsync(`${dbUri}-wal`, { idempotent: true });
+            await FileSystem.deleteAsync(`${dbUri}-shm`, { idempotent: true });
+            await FileSystem.copyAsync({ from: uri, to: dbUri });
+            await reopenDatabaseAfterRestore();
+            customAlert("Restore Complete", "Your data has been restored from the backup.");
+        } catch (e) {
+            console.error("Restore error:", e);
+            customAlert("Error", "Restore failed. Your existing data was not changed.");
+            try { await reopenDatabaseAfterRestore(); } catch { }
+        }
+    };
+
+    const handleRestoreDatabase = () => {
+        customAlert(
+            "Restore Backup",
+            "This will replace ALL current data (workouts, templates, PRs) with the backup. This cannot be undone. Consider creating a backup first.",
+            [
+                { text: "Cancel", style: "cancel" },
+                { text: "Restore", style: "destructive", onPress: performRestore },
+            ]
+        );
+    };
+
     const handleExportBodyWeight = async () => {
         try {
             const csv = await exportBodyWeightData();
@@ -304,6 +370,9 @@ const Settings = () => {
                 <Text style={styles.sectionTitle}>Data & Backup</Text>
                 <View style={styles.cardGroup}>
                     <View style={styles.dataBlock}>
+                        <TouchableOpacity style={styles.actionButton} onPress={handleBackupDatabase}><MaterialCommunityIcons name="database-export" size={18} color={theme.surface} /><Text style={styles.actionButtonText}>Backup Everything</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.actionButtonOutline} onPress={handleRestoreDatabase}><MaterialCommunityIcons name="database-import" size={18} color={theme.primary} /><Text style={[styles.actionButtonOutlineText, { color: theme.primary }]}>Restore From Backup</Text></TouchableOpacity>
+                        <View style={styles.divider} />
                         <TouchableOpacity style={styles.actionButton} onPress={handleExportData}><Feather name="upload" size={18} color={theme.surface} /><Text style={styles.actionButtonText}>Export Workouts</Text></TouchableOpacity>
                         <TouchableOpacity style={styles.actionButton} onPress={handleExportBodyWeight}><Feather name="upload" size={18} color={theme.surface} /><Text style={styles.actionButtonText}>Export Body Weight</Text></TouchableOpacity>
                         <View style={styles.divider} />

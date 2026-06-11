@@ -22,6 +22,8 @@ import {
 import ExerciseEditable from '../../components/exerciseEditable'
 import ActionSheet from "react-native-actions-sheet";
 import FilteredExerciseList from '../../components/FilteredExerciseList';
+import { useOverlayReorder } from '../../utils/useOverlayReorder';
+import ReorderOverlay from '../../components/ReorderOverlay';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
@@ -143,6 +145,23 @@ const EditTemplate = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }, []);
 
+    const { session: reorderSession, overlayRef, listWrapperRef, fingerY, startReorder, endReorder, handleScrollToIndexFailed, isReordering } =
+        useOverlayReorder(listRef, currentWorkout, setCurrentWorkout);
+
+    const reorderRows = useMemo(() => {
+        if (!reorderSession) return [];
+        return currentWorkout.map(group => {
+            const firstExercise = group.exercises[0];
+            const details = exercises.find(e => e.exerciseID === firstExercise?.exerciseID);
+            const setCount = group.exercises.reduce((n, ex) => n + ex.sets.length, 0);
+            return {
+                id: group.id,
+                label: details ? details.name : 'Unknown Exercise',
+                meta: `${setCount} ${setCount === 1 ? 'set' : 'sets'}`,
+            };
+        });
+    }, [reorderSession, currentWorkout, exercises]);
+
     const renderItem = useCallback(({ item, index }) => {
         return (
             <Animated.View
@@ -168,12 +187,15 @@ const EditTemplate = () => {
                             isCardio={exerciseDetails ? exerciseDetails.isCardio : false}
                             isAssisted={exerciseDetails ? (exerciseDetails.isAssisted === 1) : false}
                             isTemplate={true}
+                            onReorderStart={startReorder}
+                            onReorderEnd={endReorder}
+                            reorderFingerY={fingerY}
                         />
                     );
                 })}
             </Animated.View>
         );
-    }, [setCurrentWorkout, exercises]);
+    }, [setCurrentWorkout, exercises, startReorder, endReorder, fingerY]);
 
     const saveTemplateAction = useCallback(async () => {
         if (!templateName.trim()) {
@@ -350,10 +372,12 @@ const EditTemplate = () => {
                     <View style={styles.headerDivider} />
                 </View>
 
+                <View ref={listWrapperRef} style={{ flex: 1 }} collapsable={false}>
                 <ReorderableList
                     ref={listRef}
                     data={currentWorkout}
                     onReorder={handleReorder}
+                    onScrollToIndexFailed={handleScrollToIndexFailed}
                     keyExtractor={(item) => String(item.id)}
                     renderItem={renderItem}
                     itemLayoutAnimation={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
@@ -362,6 +386,7 @@ const EditTemplate = () => {
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
                     showsVerticalScrollIndicator={false}
+                    scrollEnabled={!isReordering}
                     ListFooterComponent={
                         <Animated.View
                             layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
@@ -405,6 +430,16 @@ const EditTemplate = () => {
                         </Animated.View>
                     }
                 />
+                {reorderSession && (
+                    <ReorderOverlay
+                        ref={overlayRef}
+                        rows={reorderRows}
+                        activeId={reorderSession.activeId}
+                        fingerY={fingerY}
+                        frame={reorderSession.frame}
+                    />
+                )}
+                </View>
 
                 <FilteredExerciseList
                     exercises={exercises}

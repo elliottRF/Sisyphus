@@ -15,6 +15,7 @@ import { AppEvents, on, off } from '../utils/events';
 import { primeExerciseSnapshots } from '../utils/exerciseSnapshots';
 import LottieView from 'lottie-react-native';
 import CustomAlert from '../components/CustomAlert';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { Settings } from 'react-native-fbsdk-next';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 
@@ -57,7 +58,6 @@ const _layout = () => {
                 } else {
                     await Settings.setAdvertiserTrackingEnabled(true);
                 }
-                console.log('Facebook SDK initialized successfully');
             } catch (error) {
                 console.error('Failed to initialize Facebook SDK:', error);
             }
@@ -77,13 +77,15 @@ const _layout = () => {
     }
 
     return (
-        <SafeAreaProvider>
-            <ThemeProvider>
-                <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
-                    <ThemeConsumer fontsLoaded={fontsLoaded} dbReady={dbReady} />
-                </GestureHandlerRootView>
-            </ThemeProvider>
-        </SafeAreaProvider>
+        <ErrorBoundary>
+            <SafeAreaProvider>
+                <ThemeProvider>
+                    <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+                        <ThemeConsumer fontsLoaded={fontsLoaded} dbReady={dbReady} />
+                    </GestureHandlerRootView>
+                </ThemeProvider>
+            </SafeAreaProvider>
+        </ErrorBoundary>
     )
 }
 

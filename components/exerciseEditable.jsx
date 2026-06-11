@@ -14,7 +14,6 @@ import Animated, {
     Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useReorderableDrag, useIsActive } from 'react-native-reorderable-list';
 
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme'
 import { Feather, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -31,6 +30,13 @@ import CustomAlert from './CustomAlert';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
+
+// Session caches: the reorderable list force-remounts cells after a drag,
+// which resets component state. These warm-start remounted cards so the
+// previous/PR columns render their values immediately instead of flashing
+// "-" while the data refetches.
+const prevSetsCache = new Map();
+const lifetimePRsCache = new Map();
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -184,6 +190,34 @@ const SetRowBody = React.memo(({
         opacity: fillFlash.value,
     }));
 
+    // Mount guard: the reorderable list remounts cells after a drag, which would
+    // replay all `entering` animations. Suppress them on (re)mount; only animate
+    // genuine state changes that happen after mount.
+    const hasMountedRef = useRef(false);
+    useEffect(() => { hasMountedRef.current = true; }, []);
+
+    // Previous/suggestion text: dissolve to the new value when it actually
+    // changes. No animation on mount/remount, and none when the value is equal
+    // (e.g. reordering in "previous" mode, where history doesn't depend on order).
+    const cellTextOpacity = useSharedValue(1);
+    const [displayedText, setDisplayedText] = useState(columnText);
+    const displayedTextRef = useRef(columnText);
+
+    useEffect(() => {
+        if (columnText === displayedTextRef.current) return;
+        displayedTextRef.current = columnText;
+        cellTextOpacity.value = withSequence(
+            withTiming(0, { duration: 110 }, (finished) => {
+                if (finished) runOnJS(setDisplayedText)(columnText);
+            }),
+            withTiming(1, { duration: 160 })
+        );
+    }, [columnText, cellTextOpacity]);
+
+    const cellTextStyle = useAnimatedStyle(() => ({
+        opacity: cellTextOpacity.value,
+    }));
+
     const handleFillPress = () => {
         if (!fillData || set.completed) return;
         fillFlash.value = withSequence(
@@ -202,7 +236,7 @@ const SetRowBody = React.memo(({
             {set.completed && (
                 <Animated.View
                     style={styles.completedBackground}
-                    entering={FadeIn.duration(180)}
+                    entering={hasMountedRef.current ? FadeIn.duration(180) : undefined}
                     exiting={FadeOut.duration(150)}
                 />
             )}
@@ -242,9 +276,8 @@ const SetRowBody = React.memo(({
                 >
                     <View style={styles.prevContentWrapper}>
                         <Animated.View
-                            key={columnText}
-                            entering={FadeIn.duration(200)}
                             style={[
+                                cellTextStyle,
                                 styles.prevTextContainer,
                                 isLifetimePRSuggestion && {
                                     flexDirection: 'row',
@@ -270,7 +303,7 @@ const SetRowBody = React.memo(({
                                 ]}
                                 numberOfLines={1}
                             >
-                                {columnText}
+                                {displayedText}
                             </Text>
 
                             {isLifetimePRSuggestion && (
@@ -330,7 +363,7 @@ const SetRowBody = React.memo(({
                     >
                         <Animated.View
                             key={`check-${set.id}-${set.completed}`}
-                            entering={set.completed ? ZoomIn.duration(200).easing(Easing.out(Easing.back(1.5))) : undefined}
+                            entering={set.completed && hasMountedRef.current ? ZoomIn.duration(200).easing(Easing.out(Easing.back(1.5))) : undefined}
                         >
                             <Feather name="check" size={14} color={set.completed ? '#fff' : theme.textSecondary} />
                         </Animated.View>
@@ -355,16 +388,47 @@ const ExerciseEditable = ({
     isTemplate = false,
     hidePrevious = false,
     muscleOccurrenceIndex = 1,
-    PRMODE = false
+    PRMODE = false,
+    onReorderStart,
+    onReorderEnd,
+    reorderFingerY
 }) => {
     const { theme, useImperial, repRangeMin, repRangeMax } = useTheme();
     const styles = getStyles(theme);
     const [isNoteVisible, setIsNoteVisible] = useState(false);
-    const [previousSets, setPreviousSets] = useState([]);
+    const [previousSets, setPreviousSets] = useState(() => prevSetsCache.get(exerciseID) ?? []);
     const [showDeleteAlert, setShowDeleteAlert] = useState(false);
 
-    const drag = useReorderableDrag();
-    const isActive = useIsActive();
+    // The reorderable list remounts cells after a drag; suppress entering
+    // animations on (re)mount so reordering doesn't make content flash.
+    const hasMountedRef = useRef(false);
+    useEffect(() => { hasMountedRef.current = true; }, []);
+
+    // Hold-to-reorder: a pan that activates after a stationary hold on the
+    // header. It hands the screen the absolute finger position (start +
+    // every move) so the reorder overlay can place the held row directly
+    // under the finger. Scroll wins if the finger moves before the hold
+    // completes; quick taps fall through to onPress.
+    const reorderPan = useMemo(() => {
+        if (!onReorderStart || !onReorderEnd) return null;
+        return Gesture.Pan()
+            .activateAfterLongPress(250)
+            .maxPointers(1)
+            .shouldCancelWhenOutside(false)
+            .onStart((e) => {
+                'worklet';
+                if (reorderFingerY) reorderFingerY.value = e.absoluteY;
+                runOnJS(onReorderStart)(workoutID, e.absoluteY);
+            })
+            .onUpdate((e) => {
+                'worklet';
+                if (reorderFingerY) reorderFingerY.value = e.absoluteY;
+            })
+            .onFinalize(() => {
+                'worklet';
+                runOnJS(onReorderEnd)();
+            });
+    }, [onReorderStart, onReorderEnd, reorderFingerY, workoutID]);
 
     const brightColor = useMemo(() => lightenColor(theme.primary, 20), [theme.primary]);
 
@@ -373,6 +437,7 @@ const ExerciseEditable = ({
         const loadPreviousData = async () => {
             try {
                 const prevSets = await fetchLastWorkoutSets(exerciseID);
+                prevSetsCache.set(exerciseID, prevSets);
                 setPreviousSets(prevSets);
             } catch (error) {
                 console.error("Error loading previous sets:", error);
@@ -381,7 +446,7 @@ const ExerciseEditable = ({
         loadPreviousData();
     }, [exerciseID, isTemplate, hidePrevious]);
 
-    const [lifetimePRs, setLifetimePRs] = useState(null);
+    const [lifetimePRs, setLifetimePRs] = useState(() => lifetimePRsCache.get(exerciseID) ?? null);
 
     useEffect(() => {
         if (!PRMODE || isAssisted) return;
@@ -389,6 +454,7 @@ const ExerciseEditable = ({
         const loadPRs = async () => {
             try {
                 const prs = await fetchLifetimePRs(exerciseID);
+                lifetimePRsCache.set(exerciseID, prs);
                 setLifetimePRs(prs);
             } catch (e) { console.error(e); }
         };
@@ -514,31 +580,38 @@ const ExerciseEditable = ({
     let prevWorkingIndex = 0;
     let suggestWorkingIndex = 0;
 
+    const headerLeftContent = (
+        <>
+            <View style={styles.dragHandle}>
+                <MaterialIcons name="drag-indicator" size={20} color={theme.textSecondary} />
+            </View>
+            <TouchableOpacity
+                onPress={onOpenDetails}
+                style={{ flex: 1 }}
+            >
+                <Text style={styles.exerciseName} numberOfLines={1}>{exerciseName}</Text>
+            </TouchableOpacity>
+        </>
+    );
+
     return (
         <Animated.View
-            style={[styles.container, isActive && styles.containerActive]}
+            style={styles.container}
             layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
         >
             {/* Header */}
             <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity
-                        style={styles.dragHandle}
-                        onLongPress={drag}
-                        delayLongPress={100}
-                        activeOpacity={0.7}
-                    >
-                        <MaterialIcons name="drag-indicator" size={20} color={theme.textSecondary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={onOpenDetails}
-                        onLongPress={drag}
-                        delayLongPress={100}
-                        style={{ flex: 1 }}
-                    >
-                        <Text style={styles.exerciseName} numberOfLines={1}>{exerciseName}</Text>
-                    </TouchableOpacity>
-                </View>
+                {reorderPan ? (
+                    <GestureDetector gesture={reorderPan}>
+                        <View style={styles.headerLeft} collapsable={false}>
+                            {headerLeftContent}
+                        </View>
+                    </GestureDetector>
+                ) : (
+                    <View style={styles.headerLeft}>
+                        {headerLeftContent}
+                    </View>
+                )}
 
                 <View style={styles.headerActions}>
                     <TouchableOpacity
@@ -577,7 +650,7 @@ const ExerciseEditable = ({
                 {(!isTemplate && !hidePrevious) ? (
                     <Animated.View
                         key={headerKey}
-                        entering={FadeIn.duration(220)}
+                        entering={hasMountedRef.current ? FadeIn.duration(220) : undefined}
                         style={[styles.colPrev, { alignItems: 'center', justifyContent: 'center' }]}
                     >
                         {showSuggestion ? (
@@ -665,7 +738,7 @@ const ExerciseEditable = ({
                     acc.push(
                         <Animated.View
                             key={set.id || index}
-                            entering={FadeIn.duration(180)}
+                            entering={hasMountedRef.current ? FadeIn.duration(180) : undefined}
                             exiting={FadeOut.duration(150)}
                             layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
                         >
@@ -673,7 +746,7 @@ const ExerciseEditable = ({
                                 onDelete={() => deleteSet(index)}
                                 index={index}
                                 simultaneousHandlers={simultaneousHandlers}
-                                isExerciseDragging={isActive}
+                                isExerciseDragging={false}
                                 completed={set.completed}
                             >
                                 <SetRowBody
@@ -753,15 +826,6 @@ const getStyles = (theme) => {
             borderWidth: 1,
             borderColor: lightTheme ? theme.border : 'transparent',
             ...getThemedShadow(theme, 'small'),
-        },
-        containerActive: {
-            borderColor: safePrimary,
-            backgroundColor: theme.surface,
-            elevation: 10,
-            shadowColor: lightTheme ? '#7C8FAA' : "#000",
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: lightTheme ? 0.18 : 0.25,
-            shadowRadius: 16,
         },
         header: {
             flexDirection: 'row',
@@ -891,9 +955,10 @@ const getStyles = (theme) => {
             color: theme.textSecondary,
         },
         badgeWarmup: { backgroundColor: withAlpha(theme.warning, lightTheme ? 0.18 : 0.2) },
-        textWarmup: { color: '#fdcb6e' },
+        // Pastels are illegible on light surfaces — use the stronger theme tones there
+        textWarmup: { color: lightTheme ? theme.warning : '#fdcb6e' },
         badgeDrop: { backgroundColor: withAlpha(theme.info, lightTheme ? 0.16 : 0.2) },
-        textDrop: { color: '#74b9ff' },
+        textDrop: { color: lightTheme ? theme.info : '#74b9ff' },
 
         prevContentWrapper: {
             flexDirection: 'row',

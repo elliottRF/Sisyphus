@@ -24,13 +24,15 @@ import Svg, { Path } from 'react-native-svg';
 const { width } = Dimensions.get('window');
 
 const ICON_MAP = {
-    destructive: { path: 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z', color: '#ef4444' },
-    confirm: { path: 'M20 6L9 17l-5-5', color: '#2563eb' },
-    default: { path: 'M12 8v4m0 4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z', color: '#2563eb' },
+    destructive: { path: 'M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z', themeKey: 'danger', fallback: '#ef4444' },
+    confirm: { path: 'M20 6L9 17l-5-5', themeKey: 'primary', fallback: '#2563eb' },
+    default: { path: 'M12 8v4m0 4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z', themeKey: 'primary', fallback: '#2563eb' },
 };
 
-const AlertIcon = ({ type }) => {
-    const icon = ICON_MAP[type] ?? ICON_MAP.default;
+const AlertIcon = ({ type, theme }) => {
+    const base = ICON_MAP[type] ?? ICON_MAP.default;
+    const themed = theme?.[base.themeKey];
+    const icon = { ...base, color: typeof themed === 'string' ? themed : base.fallback };
     return (
         <View style={[styles.iconCircle, {
             backgroundColor: icon.color + '1a',
@@ -127,7 +129,7 @@ const CustomAlert = ({
                     { backgroundColor: theme.surface, borderColor: theme.border },
                     animatedContentStyle,
                 ]}>
-                    {resolvedIconType && <AlertIcon type={resolvedIconType} />}
+                    {resolvedIconType && <AlertIcon type={resolvedIconType} theme={theme} />}
 
                     {title && <Text style={[styles.title, { color: theme.text }]}>{title}</Text>}
                     {description && (
