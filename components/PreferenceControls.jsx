@@ -2,6 +2,9 @@ import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, PanResponder } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { FONTS, THEMES } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
+import { customAlert } from '../utils/customAlert';
+import CustomThemeCreator from './CustomThemeCreator';
 import {
   DEFAULT_REP_RANGE,
   REP_RANGE_MAX,
@@ -341,39 +344,82 @@ export const GenderSegment = ({ theme, value, onChange }) => {
 
 export const AppThemeSelector = ({ theme, themeID, onChange, compact = false }) => {
   const styles = getStyles(theme);
+  const { customThemes = [], addCustomTheme, deleteCustomTheme } = useTheme();
+  const [creating, setCreating] = useState(false);
   const visibleThemes = Object.keys(THEMES);
+
+  const prettyName = (key) =>
+    key.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+  const confirmDelete = (item) => {
+    customAlert(
+      'Delete Theme',
+      `Remove "${item.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteCustomTheme?.(item.id) },
+      ]
+    );
+  };
+
+  const renderTile = (key, itemTheme, label, { onLongPress } = {}) => {
+    const isActive = themeID === key;
+    return (
+      <TouchableOpacity
+        key={key}
+        style={[
+          styles.themeOption,
+          { backgroundColor: itemTheme.surface, borderColor: isActive ? theme.primary : itemTheme.border },
+        ]}
+        onPress={() => onChange(key)}
+        onLongPress={onLongPress}
+        delayLongPress={300}
+        activeOpacity={0.85}
+      >
+        <View style={[styles.themePreview, { backgroundColor: itemTheme.background }]}>
+          <View style={[styles.themePreviewCircle, { backgroundColor: itemTheme.primary }]} />
+        </View>
+        <Text style={[styles.themeName, { color: isActive ? theme.primary : theme.textSecondary }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
-    <View style={[styles.themeSelectorGrid, compact && styles.themeSelectorGridCompact]}>
-      {visibleThemes.map((key) => {
-        const itemTheme = THEMES[key];
-        const isActive = themeID === key;
-        return (
-          <TouchableOpacity
-            key={key}
-            style={[
-              styles.themeOption,
-              isActive && styles.themeOptionActive,
-              {
-                backgroundColor: itemTheme.surface,
-                borderColor: isActive ? theme.primary : itemTheme.border,
-              },
-            ]}
-            onPress={() => onChange(key)}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.themePreview, { backgroundColor: itemTheme.background }]}>
-              <View style={[styles.themePreviewCircle, { backgroundColor: itemTheme.primary }]} />
-            </View>
-            <Text style={[styles.themeName, { color: isActive ? theme.primary : theme.textSecondary }]}>
-              {key
-                .split('_')
-                .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                .join(' ')}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
+    <>
+      <View style={[styles.themeSelectorGrid, compact && styles.themeSelectorGridCompact]}>
+        {visibleThemes.map((key) => renderTile(key, THEMES[key], prettyName(key)))}
+
+        {customThemes.map((item) =>
+          renderTile(item.id, item, item.name, { onLongPress: () => confirmDelete(item) })
+        )}
+
+        {/* Create-theme tile */}
+        <TouchableOpacity
+          style={[styles.themeOption, styles.themeOptionCreate]}
+          onPress={() => setCreating(true)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.themePreview, styles.themePreviewCreate]}>
+            <Feather name="plus" size={22} color={theme.primary} />
+          </View>
+          <Text style={[styles.themeName, { color: theme.primary }]}>Create</Text>
+        </TouchableOpacity>
+      </View>
+
+      {customThemes.length > 0 && (
+        <Text style={styles.themeHint}>Long-press a custom theme to delete it.</Text>
+      )}
+
+      {creating && (
+        <CustomThemeCreator
+          theme={theme}
+          onCreate={(themeObj, name) => addCustomTheme?.(themeObj, name)}
+          onClose={() => setCreating(false)}
+        />
+      )}
+    </>
   );
 };
 
@@ -546,6 +592,21 @@ const getStyles = (theme) =>
       gap: 10,
     },
     themeOptionActive: {},
+    themeOptionCreate: {
+      backgroundColor: theme.overlaySubtle,
+      borderColor: theme.border,
+      borderStyle: 'dashed',
+    },
+    themePreviewCreate: {
+      backgroundColor: 'transparent',
+      borderColor: theme.border,
+    },
+    themeHint: {
+      fontSize: 12,
+      fontFamily: FONTS.regular,
+      color: theme.textSecondary,
+      marginTop: 10,
+    },
     themePreview: {
       width: 48,
       height: 48,

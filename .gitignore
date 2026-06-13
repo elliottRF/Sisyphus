@@ -10,6 +10,8 @@ npm-debug.*
 *.mobileprovision
 *.orig.*
 *.log
+*.env
+*.md
 release.keystore
 keystore.properties
 web-build/

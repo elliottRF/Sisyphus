@@ -74,6 +74,14 @@ export function calculateSnapshotFromHistory(exerciseID, history, exerciseDetail
     let maxDist = 0;
     let bestP = Infinity;
 
+    // Header data: workout count, est. 1RM trend, last PR — cached so the
+    // exercise page header renders complete on first paint.
+    const distinctSessions = new Set();
+    const sixMonthCutoff = Date.now() - 182 * 86400000;
+    let est1RM = 0;
+    let est1RMBefore = 0;
+    let lastPRTime = null;
+
     history.forEach(entry => {
         totalSetsCount++;
         if (entry.reps > 0 && entry.weight > maxWeight) maxWeight = entry.weight;
@@ -85,9 +93,34 @@ export function calculateSnapshotFromHistory(exerciseID, history, exerciseDetail
             const pace = (entry.seconds / 60) / entry.distance;
             if (pace < bestP) bestP = pace;
         }
+
+        distinctSessions.add(entry.workoutSession);
+        const reps = parseInt(entry.reps, 10) || 0;
+        const weight = parseFloat(entry.weight) || 0;
+        const t = new Date(entry.time).getTime();
+        if (reps > 0 && weight > 0) {
+            const oneRM = reps === 1 ? weight : weight * (1 + reps / 30);
+            est1RM = Math.max(est1RM, oneRM);
+            if (t < sixMonthCutoff) est1RMBefore = Math.max(est1RMBefore, oneRM);
+        }
+        if ((entry.is1rmPR || entry.isWeightPR || entry.isVolumePR) && (!lastPRTime || t > lastPRTime)) {
+            lastPRTime = t;
+        }
     });
 
     const isAssisted = !!exerciseDetails?.isAssisted;
+
+    // Best weight held for at least N reps (1–10), for the Rep Records card.
+    const repRecords = [];
+    for (let r = 1; r <= 10; r++) {
+        let best = 0;
+        history.forEach(entry => {
+            const reps = parseInt(entry.reps, 10) || 0;
+            const weight = parseFloat(entry.weight) || 0;
+            if (reps >= r && weight > best) best = weight;
+        });
+        if (best > 0) repRecords.push({ reps: r, weight: best });
+    }
 
     return {
         name: exerciseDetails?.name,
@@ -98,9 +131,25 @@ export function calculateSnapshotFromHistory(exerciseID, history, exerciseDetail
             maxDistance: maxDist,
             bestPace: bestP,
         },
+        header: {
+            workoutCount: distinctSessions.size,
+            primaryMuscle: exerciseDetails?.targetMuscle?.split(',')[0]?.trim() || null,
+            trend: {
+                est1RM,
+                pct: est1RMBefore > 0 ? ((est1RM - est1RMBefore) / est1RMBefore) * 100 : null,
+                lastPRTime,
+            },
+            repRecords,
+        },
         muscles: {
-            target: exerciseDetails?.targetMuscle ? exerciseDetails.targetMuscle.split(',') : [],
-            accessory: exerciseDetails?.accessoryMuscles ? exerciseDetails.accessoryMuscles.split(',') : []
+            // Store normalized slugs (trimmed + lowercased) so the body
+            // diagram can highlight them straight from the cached snapshot —
+            // raw values like "Chest" don't match the highlighter's slugs.
+            target: normMuscleSlugs(exerciseDetails?.targetMuscle),
+            accessory: normMuscleSlugs(exerciseDetails?.accessoryMuscles),
         }
     };
 }
+
+const normMuscleSlugs = (str) =>
+    (str ? str.split(',').map((m) => m.trim().toLowerCase()).filter(Boolean) : []);

@@ -12,9 +12,11 @@ import { AntDesign, Feather, Ionicons, MaterialIcons, MaterialCommunityIcons } f
 
 import * as NavigationBar from 'expo-navigation-bar';
 
-import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, fetchLastWorkoutSets, getTemplate } from '../../components/db';
+import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, fetchLastWorkoutSets, getTemplate, fetchRecentMuscleUsage } from '../../components/db';
 import { setPreloadedData } from '../../constants/preloader';
-import { toStorageKg, formatWeight } from '../../utils/units';
+import { toStorageKg, formatWeight, unitLabel } from '../../utils/units';
+import { computeMuscleScores, slugRecoveryPercent } from '../../utils/recovery';
+import { muscleMapping } from '../../constants/muscles';
 
 
 import ExerciseEditable from '../../components/exerciseEditable'
@@ -23,7 +25,7 @@ import ActionSheet from "react-native-actions-sheet";
 
 
 import FilteredExerciseList from '../../components/FilteredExerciseList';
-import { FONTS, SHADOWS } from '../../constants/theme';
+import { FONTS, RADIUS, SHADOWS, isLightTheme, getThemedShadow } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import Timer from '../../components/Timer';
 import RestTimer from '../../components/RestTimer';
@@ -35,7 +37,7 @@ import LottieView from 'lottie-react-native';
 
 import { useTheme } from '../../context/ThemeContext';
 import { ActivityIndicator } from 'react-native';
-import { AppEvents, emit } from '../../utils/events';
+import { AppEvents, on, off } from '../../utils/events';
 import { useLocalSearchParams } from 'expo-router';
 
 import * as Notifications from 'expo-notifications';
@@ -47,7 +49,7 @@ const { width } = Dimensions.get('window');
 
 const Current = () => {
     const insets = useSafeAreaInsets();
-    const { theme, setWorkoutInProgress, useImperial, workoutStartTime, updateWorkoutStartTime } = useTheme();
+    const { theme, setWorkoutInProgress, useImperial, workoutStartTime, updateWorkoutStartTime, accessoryWeight } = useTheme();
     const styles = getStyles(theme);
 
     const [exercises, setExercises] = useState([]);
@@ -68,7 +70,9 @@ const Current = () => {
 
     // Real template data
     const [templates, setTemplates] = useState([]);
+    const [templatesLoaded, setTemplatesLoaded] = useState(false);
     const [loadingTemplateId, setLoadingTemplateId] = useState(null);
+    const [muscleScores, setMuscleScores] = useState(null);
 
     const loadTemplates = async () => {
         try {
@@ -76,8 +80,39 @@ const Current = () => {
             setTemplates(data);
         } catch (error) {
             console.error("Error loading templates:", error);
+        } finally {
+            setTemplatesLoaded(true);
         }
     };
+
+    // Single source for recomputing template readiness (live DB + current
+    // time — never a cached value).
+    const loadMuscleScores = useCallback(() => {
+        fetchRecentMuscleUsage(5)
+            .then(usage => setMuscleScores(computeMuscleScores(usage, accessoryWeight)))
+            .catch(err => console.error(err));
+    }, [accessoryWeight]);
+
+    // Compute at launch (and when the accessory-weight setting settles) so the
+    // pills are accurate the first time the tab opens, not only after a focus.
+    useEffect(() => {
+        loadMuscleScores();
+    }, [loadMuscleScores]);
+
+    // Refresh in the background the moment a workout finishes, so returning to
+    // this tab shows correct percentages with no stale-then-flash.
+    useEffect(() => {
+        const handler = () => {
+            loadTemplates();
+            loadMuscleScores();
+        };
+        on(AppEvents.WORKOUT_COMPLETED, handler);
+        on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        return () => {
+            off(AppEvents.WORKOUT_COMPLETED, handler);
+            off(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        };
+    }, [loadMuscleScores]);
 
 
     const requestNotificationPermissionOnce = async () => {
@@ -414,18 +449,17 @@ const Current = () => {
             const startTimeMs = workoutStartTime ? new Date(workoutStartTime).getTime() : endTime;
             const durationMs = endTime - startTimeMs;
             const durationMinutes = Math.floor(durationMs / 60000);
+            // insertWorkoutHistory emits WORKOUT_COMPLETED (with
+            // showCelebration:false) — the trophy now plays inline on the
+            // summary page instead of a full-screen overlay.
             await insertWorkoutHistory(workoutEntries, workoutTitle, durationMinutes);
-
-            emit(AppEvents.WORKOUT_COMPLETED);
 
             try {
                 const { sound } = await Audio.Sound.createAsync(
                     require('../../assets/notifications/greatSuccess.mp3'),
                     { volume: 0.6 }
                 );
-
                 await sound.playAsync();
-
                 sound.setOnPlaybackStatusUpdate(async (status) => {
                     if (status.didJustFinish) {
                         await sound.unloadAsync();
@@ -435,7 +469,21 @@ const Current = () => {
                 console.warn("Error playing success sound", e);
             }
 
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Push the celebratory summary straight over the current tab (one
+            // clean flip transition — no instant flash to History first). Done
+            // on the summary navigates to History.
+            router.push({
+                pathname: `/workout/${nextSessionNumber}`,
+                params: {
+                    session: nextSessionNumber,
+                    // Include duration (a separate DB column, not on the entries)
+                    // so the summary has everything it needs and can skip the
+                    // post-mount re-fetch — that re-render was stuttering the
+                    // count-up mid-animation.
+                    initialData: JSON.stringify(workoutEntries.map(e => ({ ...e, duration: durationMinutes }))),
+                    viewMode: 'summary'
+                }
+            });
 
             await AsyncStorage.removeItem('@currentWorkout');
             setCurrentWorkout([]);
@@ -443,17 +491,6 @@ const Current = () => {
             setWorkoutTitle("New Workout");
             restTimerRef.current?.stopTimer();
             setPRMODE(false);
-
-            router.navigate('/history');
-
-            router.push({
-                pathname: `/workout/${nextSessionNumber}`,
-                params: {
-                    session: nextSessionNumber,
-                    initialData: JSON.stringify(workoutEntries),
-                    viewMode: 'summary'
-                }
-            });
         }
         catch (error) {
             console.error("Error saving workout:", error);
@@ -507,6 +544,9 @@ const Current = () => {
             loadTemplates();
             setLoadingTemplateId(null);
 
+            // Recovery scores for the template readiness badges.
+            loadMuscleScores();
+
             AsyncStorage.getItem('settings_auto_timer').then(val => {
                 if (val !== null) autoTimerEnabledRef.current = val === 'true';
             });
@@ -544,8 +584,37 @@ const Current = () => {
                 }
             };
             checkActiveWorkout();
-        }, [])
+        }, [accessoryWeight])
     );
+
+    // ── Template readiness: average recovery of each template's target
+    // muscles, so the grid can answer "what should I train today?" ──────────
+    const templatesWithReadiness = useMemo(() => {
+        const readinessFor = (template) => {
+            if (!muscleScores || exercises.length === 0) return null;
+            const slugs = new Set();
+            (template.data || []).forEach(group => group.exercises.forEach(ex => {
+                const details = exercises.find(e => e.exerciseID === ex.exerciseID);
+                (details?.targetMuscle || '').split(',').map(m => m.trim()).filter(Boolean)
+                    .forEach(m => slugs.add(muscleMapping[m] || m.toLowerCase()));
+            }));
+            if (slugs.size === 0) return null;
+            const percents = [...slugs].map(slug => slugRecoveryPercent(muscleScores, slug));
+            return Math.round(percents.reduce((a, b) => a + b, 0) / percents.length);
+        };
+
+        return [...templates]
+            .reverse()
+            .map(template => ({ template, readiness: readinessFor(template) }))
+            .sort((a, b) => (b.readiness ?? -1) - (a.readiness ?? -1));
+    }, [templates, exercises, muscleScores]);
+
+    const readinessBadge = (readiness) => {
+        if (readiness == null) return null;
+        if (readiness >= 80) return { color: theme.success, label: readiness >= 95 ? 'Ready' : `${readiness}%` };
+        if (readiness >= 60) return { color: theme.warning, label: `${readiness}%` };
+        return { color: theme.danger, label: `${readiness}%` };
+    };
 
     useEffect(() => {
         if (currentWorkout.length > 0) {
@@ -614,6 +683,78 @@ const Current = () => {
             restTimerRef.current?.restartTimer();
         }
     }, []);
+
+    // ── Live session stats (volume in display units, set progress) ──────────
+    const liveStats = useMemo(() => {
+        let volume = 0;
+        let done = 0;
+        let total = 0;
+        currentWorkout.forEach(group => group.exercises.forEach(ex => ex.sets.forEach(set => {
+            total++;
+            if (set.completed) {
+                done++;
+                volume += (parseFloat(set.weight) || 0) * (parseInt(set.reps, 10) || 0);
+            }
+        })));
+        return { volume, done, total };
+    }, [currentWorkout]);
+
+    // ── Live PR count: completed sets vs historical PRs (cached per exercise,
+    // same comparisons endWorkout uses) ──────────────────────────────────────
+    const prCacheRef = useRef(new Map());
+    const [prCacheVersion, setPrCacheVersion] = useState(0);
+
+    useEffect(() => {
+        const ids = new Set();
+        currentWorkout.forEach(group => group.exercises.forEach(ex => ids.add(ex.exerciseID)));
+        ids.forEach(id => {
+            if (prCacheRef.current.has(id)) return;
+            prCacheRef.current.set(id, null); // pending
+            getExercisePRs(id)
+                .then(prs => {
+                    prCacheRef.current.set(id, prs);
+                    setPrCacheVersion(v => v + 1);
+                })
+                .catch(() => prCacheRef.current.delete(id));
+        });
+    }, [currentWorkout]);
+
+    // Reset the cache when a workout ends so the next session re-fetches
+    // fresh records.
+    useEffect(() => {
+        if (!workoutStartTime) {
+            prCacheRef.current = new Map();
+        }
+    }, [workoutStartTime]);
+
+    const livePRCount = useMemo(() => {
+        let count = 0;
+        currentWorkout.forEach(group => group.exercises.forEach(ex => {
+            const hist = prCacheRef.current.get(ex.exerciseID);
+            if (!hist) return;
+            const details = exercises.find(e => e.exerciseID === ex.exerciseID);
+            if (details?.isAssisted || details?.isCardio) return;
+
+            let bestOneRM = 0;
+            let bestWeight = 0;
+            let bestVolume = 0;
+            ex.sets.forEach(set => {
+                if (!set.completed) return;
+                const weightKg = toStorageKg(set.weight, useImperial) || 0;
+                const reps = parseInt(set.reps, 10) || 0;
+                if (weightKg <= 0 || reps <= 0) return;
+                bestOneRM = Math.max(bestOneRM, calculateOneRepMax(weightKg, reps));
+                bestWeight = Math.max(bestWeight, weightKg);
+                bestVolume = Math.max(bestVolume, weightKg * reps);
+            });
+
+            if (bestOneRM > (hist.maxOneRM || 0)) count++;
+            if (bestVolume > (hist.maxVolume || 0)) count++;
+            if (bestWeight > (hist.maxWeight || 0)) count++;
+        }));
+        return count;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentWorkout, exercises, useImperial, prCacheVersion]);
 
 
     const getFirstOccurrenceMap = (currentWorkout, exercisesData) => {
@@ -725,15 +866,23 @@ const Current = () => {
                     <>
                         {!workoutStartTime && currentWorkout.length === 0 && (
                             <View style={{ flex: 1 }}>
+                                {/* Header lives OUTSIDE the scroll so it sits in the
+                                    exact same spot as the other tabs' headers. */}
+                                <View style={styles.emptyStateHeader}>
+                                    <Text style={styles.eyebrow}>
+                                        {templates.length > 0
+                                            ? `${templates.length} ${templates.length === 1 ? 'TEMPLATE' : 'TEMPLATES'} · READY FIRST`
+                                            : 'READY WHEN YOU ARE'}
+                                    </Text>
+                                    <Text style={styles.emptyStateTitle}>Train</Text>
+                                </View>
                                 <ScrollView ref={emptyStateScrollRef} contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false}>
-                                    <View style={styles.emptyStateHeader}>
-                                        <Feather name="activity" size={48} color={theme.primary} style={{ marginBottom: 16, opacity: 0.8 }} />
-                                        <Text style={styles.emptyStateTitle}>Ready to train?</Text>
-                                        <Text style={styles.emptyStateSubtitle}>Start an empty workout or choose a template to begin your session.</Text>
-                                    </View>
-
-                                    <View style={styles.templatesGrid}>
-                                        {[...templates].reverse().map((template) => {
+                                    {/* Render only once templates + exercises are
+                                        loaded, then fade in — avoids the cards and
+                                        their exercise names popping in on first boot. */}
+                                    {(templatesLoaded && exercises.length > 0) && (
+                                    <Animated.View entering={FadeIn.duration(300)} style={styles.templatesGrid}>
+                                        {templatesWithReadiness.map(({ template, readiness }) => {
                                             const exerciseNames = template.data.flatMap(group =>
                                                 group.exercises.map(ex => {
                                                     const detail = exercises.find(e => e.exerciseID === ex.exerciseID);
@@ -742,6 +891,7 @@ const Current = () => {
                                             );
                                             const displayNames = exerciseNames.slice(0, 4);
                                             const moreCount = exerciseNames.length - displayNames.length;
+                                            const badge = readinessBadge(readiness);
 
                                             return (
                                                 <TouchableOpacity
@@ -787,7 +937,16 @@ const Current = () => {
                                                         <Text style={styles.templateDetails}>
                                                             {exerciseNames.length} {exerciseNames.length === 1 ? 'exercise' : 'exercises'}
                                                         </Text>
-                                                        <Ionicons name="chevron-forward" size={16} color={theme.primary} opacity={0.5} />
+                                                        {badge ? (
+                                                            <View style={styles.readinessPill}>
+                                                                <View style={[styles.readinessPillDot, { backgroundColor: badge.color }]} />
+                                                                <Text style={[styles.readinessPillText, { color: badge.color }]}>
+                                                                    {badge.label}
+                                                                </Text>
+                                                            </View>
+                                                        ) : (
+                                                            <Ionicons name="chevron-forward" size={16} color={theme.primary} opacity={0.5} />
+                                                        )}
                                                     </View>
                                                 </TouchableOpacity>
                                             );
@@ -805,7 +964,8 @@ const Current = () => {
                                                 <Text style={styles.addTemplateText}>New Template</Text>
                                             </View>
                                         </TouchableOpacity>
-                                    </View>
+                                    </Animated.View>
+                                    )}
                                 </ScrollView>
 
                                 <View style={[styles.bottomButtonContainer, { bottom: Math.max(insets.bottom + 80, 115) }]}>
@@ -855,6 +1015,26 @@ const Current = () => {
                                             </Animated.View>
                                         )}
                                     </View>
+
+                                    {/* Live session stats */}
+                                    <View style={styles.liveStatsRow}>
+                                        <Text style={styles.liveStatsText}>
+                                            {Math.round(liveStats.volume).toLocaleString()} {unitLabel(useImperial)}
+                                        </Text>
+                                        <View style={styles.liveStatsDivider} />
+                                        <Text style={styles.liveStatsText}>
+                                            {liveStats.done}/{liveStats.total} sets
+                                        </Text>
+                                        {livePRCount > 0 && (
+                                            <Animated.View entering={FadeIn.duration(250)} style={styles.livePRPill}>
+                                                <MaterialCommunityIcons name="trophy" size={12} color={theme.primary} />
+                                                <Text style={styles.livePRPillText}>
+                                                    {livePRCount} PR{livePRCount > 1 ? 's' : ''}
+                                                </Text>
+                                            </Animated.View>
+                                        )}
+                                    </View>
+
                                     <View style={styles.headerDivider} />
                                 </View>
 
@@ -888,9 +1068,16 @@ const Current = () => {
 
                                             <TouchableOpacity
                                                 onPress={() => {
+                                                    const mins = workoutStartTime
+                                                        ? Math.max(0, Math.floor((Date.now() - new Date(workoutStartTime).getTime()) / 60000))
+                                                        : 0;
+                                                    const summary = `${mins}m · ${Math.round(liveStats.volume).toLocaleString()} ${unitLabel(useImperial)} · ${liveStats.done} of ${liveStats.total} sets completed`;
+                                                    const warning = liveStats.done < liveStats.total
+                                                        ? "\n\nIncomplete sets won't be saved."
+                                                        : "";
                                                     customAlert(
                                                         "Finish Workout?",
-                                                        "Are you sure you want to finish and save this workout?",
+                                                        `${summary}${warning}`,
                                                         [
                                                             { text: "Cancel", style: "cancel" },
                                                             { text: "Finish", onPress: endWorkout, style: "bold" }
@@ -978,28 +1165,42 @@ const getStyles = (theme) => {
             alignItems: 'center',
         },
         emptyStateScrollContent: {
-            padding: padding,
+            paddingHorizontal: padding,
+            paddingTop: 4,
             paddingBottom: 240,
         },
         emptyStateHeader: {
-            alignItems: 'center',
-            marginTop: 10,
-            marginBottom: 32,
+            // Matches the header position on Home/History/Exercises exactly.
+            paddingHorizontal: 20,
+            paddingTop: 16,
+            paddingBottom: 12,
+        },
+        eyebrow: {
+            fontSize: 12,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
+            letterSpacing: 1.1,
+            marginBottom: 2,
         },
         emptyStateTitle: {
-            fontSize: 24,
+            fontSize: 32,
             fontFamily: FONTS.bold,
+            letterSpacing: -0.6,
             color: safeText,
-            marginBottom: 8,
-            textAlign: 'center',
         },
-        emptyStateSubtitle: {
-            fontSize: 16,
-            fontFamily: FONTS.regular,
-            color: theme.textSecondary,
-            textAlign: 'center',
-            lineHeight: 24,
-            width: '80%',
+        readinessPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+        },
+        readinessPillDot: {
+            width: 7,
+            height: 7,
+            borderRadius: 3.5,
+        },
+        readinessPillText: {
+            fontSize: 12,
+            fontFamily: FONTS.bold,
         },
         templatesGrid: {
             flexDirection: 'row',
@@ -1010,13 +1211,11 @@ const getStyles = (theme) => {
             width: itemWidth,
             height: 200,
             backgroundColor: theme.surface,
-            borderRadius: 16,
+            borderRadius: RADIUS.l,
             padding: 14,
             justifyContent: 'space-between',
-            borderWidth: 1,
-            borderColor: safeBorder,
             position: 'relative',
-            ...SHADOWS.small,
+            ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
         },
         templateCardHeader: {
             flexDirection: 'row',
@@ -1068,10 +1267,14 @@ const getStyles = (theme) => {
         addTemplateCard: {
             alignItems: 'center',
             justifyContent: 'center',
-            borderStyle: 'dashed',
-            backgroundColor: 'transparent',
-            borderColor: theme.overlayBorder,
-            opacity: 0.8,
+            // A recessed placeholder, not an elevated card — cancel the shadow
+            // inherited from templateCard (its grey elevation halo around a
+            // near-transparent fill looks janky in light mode).
+            backgroundColor: theme.overlayInput,
+            shadowColor: 'transparent',
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            elevation: 0,
         },
         templateEditButton: {
             width: 28,
@@ -1143,6 +1346,39 @@ const getStyles = (theme) => {
             backgroundColor: safeBorder,
             opacity: 0.5,
         },
+        liveStatsRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 9,
+            minHeight: 20,
+        },
+        liveStatsText: {
+            fontSize: 12.5,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            fontVariant: ['tabular-nums'],
+        },
+        liveStatsDivider: {
+            width: 1,
+            height: 12,
+            backgroundColor: safeBorder,
+        },
+        livePRPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            backgroundColor: theme.overlayInput,
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: RADIUS.pill,
+            marginLeft: 2,
+        },
+        livePRPillText: {
+            fontSize: 11.5,
+            fontFamily: FONTS.bold,
+            color: theme.primary,
+        },
         scrollContent: {
             padding: 16,
             paddingBottom: 40,
@@ -1151,15 +1387,12 @@ const getStyles = (theme) => {
             marginBottom: 0,
         },
         addExerciseButton: {
-            backgroundColor: theme.overlayBorder,
-            paddingVertical: 16,
-            borderRadius: 12,
+            backgroundColor: theme.overlayInput,
+            paddingVertical: 15,
+            borderRadius: RADIUS.m,
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: 24,
-            borderWidth: 1,
-            borderColor: safeBorder,
-            borderStyle: 'dashed',
         },
         addExerciseText: {
             color: safePrimary,

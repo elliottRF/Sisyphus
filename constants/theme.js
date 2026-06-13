@@ -1,7 +1,8 @@
-import { Dimensions, Platform, PlatformColor } from "react-native";
+import { Dimensions } from "react-native";
 const { height, width } = Dimensions.get("window");
 
-// Base Fonts (Shared across themes usually, but can be customized)
+// ─── Typography ──────────────────────────────────────────────────────────────
+// Inter tracks San Francisco closely; weights map to iOS text styles.
 export const FONTS = {
     regular: "Inter_400Regular",
     medium: "Inter_500Medium",
@@ -9,26 +10,52 @@ export const FONTS = {
     bold: "Inter_700Bold",
 };
 
+// iOS-derived type scale (sizes in pt). Use these instead of ad-hoc numbers.
+export const TYPE = {
+    largeTitle: 32,
+    title: 24,
+    title2: 20,
+    headline: 17,
+    body: 15,
+    subhead: 14,
+    footnote: 13,
+    caption: 12,
+    caption2: 11,
+};
+
+// ─── Layout tokens ───────────────────────────────────────────────────────────
+export const SPACING = {
+    xs: 4,
+    s: 8,
+    m: 12,
+    l: 16,
+    xl: 24,
+    xxl: 32,
+};
+
+export const RADIUS = {
+    s: 8,
+    m: 12,
+    l: 16,
+    xl: 22,
+    pill: 100,
+};
+
+// Soft, diffuse, low-opacity — shadows should be felt, not seen.
 export const SHADOWS = {
     small: {
         shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.10,
+        shadowRadius: 8,
+        elevation: 1,
     },
     medium: {
         shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 5.84,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.14,
+        shadowRadius: 16,
+        elevation: 3,
     },
 };
 
@@ -81,7 +108,7 @@ const isLight = (color) => {
             b = parseInt(match[3]);
         }
     } else {
-        return false; // PlatformColor or unknown
+        return false; // Unknown color format
     }
 
     // YIQ brightness formula
@@ -90,353 +117,73 @@ const isLight = (color) => {
 };
 
 
-// --- THEME DEFINITIONS ---
+// ─── THEME DEFINITIONS ───────────────────────────────────────────────────────
+// Two themes, both built strictly from the iOS system palette.
+// `secondary` intentionally equals `primary`: existing [primary, secondary]
+// gradients collapse to flat fills, which is the native look we want.
+
+// iOS dark, elevated grouped style: charcoal canvas (not OLED black) so the
+// UI keeps contrast under harsh gym lighting, with each layer stepped up.
 const DEFAULT = {
-    primary: "#0A84FF",      // Apple San Francisco Blue
-    primaryDark: "#007AFF",  // Slightly boosted for visibility
+    primary: "#0A84FF",            // systemBlue (dark)
+    primaryDark: "#0974DE",
     secondary: "#0A84FF",
-    background: "#151517",   // Lifted from near-black to deep charcoal to reduce glare
-    surface: "#242426",      // Noticeably lighter than background for card definition
-    text: "#FFFFFF",
-    textSecondary: "#A1A1A6",// Boosted from #8E8E93 for better legibility in bright light
-    textAlternate: "#FFFFFF",
-    border: "#3A3A3C",       // Made more distinct so UI sections are visible
-    success: "#30D158",      // Slightly more vibrant iOS Green
-    danger: "#FF453A",
-    warning: "#FF9F0A",
-    info: "#64D2FF",
-    bodyFill: "#3A3A3C",     // Matches borders for a cohesive look
+    background: "#1C1C1E",         // systemGroupedBackground (dark, elevated)
+    surface: "#2C2C2E",            // secondarySystemGroupedBackground (elevated)
+    surfaceElevated: "#3A3A3C",    // tertiarySystemGroupedBackground (elevated)
+    text: "#FFFFFF",               // label
+    textSecondary: "#AEAEB4",      // secondaryLabel, boosted for bright rooms
+    textTertiary: "#7C7C82",       // tertiaryLabel, boosted for bright rooms
+    textAlternate: "#FFFFFF",      // text on primary-filled controls
+    border: "#3A3A3C",             // separator flattened to hex
+    success: "#30D158",            // systemGreen (dark)
+    danger: "#FF453A",             // systemRed (dark)
+    error: "#FF453A",
+    warning: "#FF9F0A",            // systemOrange (dark)
+    info: "#64D2FF",               // systemCyan (dark)
+    bodyFill: "#3A3A3C",           // unworked muscle fill
+    chartFill: "rgba(10, 132, 255, 0.18)",
     statusBar: "light",
-    // Increased opacity for overlays to ensure they don't disappear under glare
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
+    overlaySubtle: "rgba(255,255,255,0.04)",
+    overlayMedium: "rgba(255,255,255,0.06)",
+    overlayBorder: "rgba(255,255,255,0.09)",
+    overlayInput: "rgba(118,118,128,0.26)",   // systemFill-style input wells
+    overlayInputFocused: "rgba(118,118,128,0.40)",
 };
 
-
-const NOIR = {
-    primary: "#ffffff",
-    primaryDark: "#b2bec3",
-    secondary: "#ffffff",
-    background: "#0d0d0d",
-    surface: "#1a1a1a",
-    text: "#ffffff",
-    textSecondary: "#999999",
-    textAlternate: "#1a1a1a",
-    border: "#2a2a2a",
-    success: "#27ae60",
-    danger: "#e74c3c",
-    warning: "#f1c40f",
-    info: "#3498db",
-    bodyFill: "#333333",
-    statusBar: isLight("#0d0d0d") ? "dark" : "light",
-    // Adaptive overlays (white for dark themes)
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-};
-
-const ARCTIC = {
-    primary: "#74f9ff",      // Ice blue
-    primaryDark: "#3dd5e1",
-    secondary: "#74f9ff",
-    background: "#0a141a",
-    surface: "#102027",
-    text: "#f8feff",
-    textSecondary: "#a7cbd9",
-    textAlternate: "#000000ff",
-    border: "#1f3a44",
-    success: "#2ecc71",
-    danger: "#ff7675",
-    warning: "#ffeaa7",
-    info: "#54a0ff",
-    bodyFill: "#333333",
-    statusBar: isLight("#0a141a") ? "dark" : "light",
-    // Adaptive overlays (white for dark themes)
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-};
-
-const NOTHING = {
-    primary: "#ff2a2a",      // Nothing red
-    primaryDark: "#b71c1c",
-    secondary: "#ff2a2a",    // Stark white
-    background: "#000000",   // Pure black
-    surface: "#0b0b0b",      // Near-black
-    text: "#ffffff",
-    textSecondary: "#8e8e8e",
-    textAlternate: "#ffffffff",
-    border: "#1a1a1a",
-    success: "#9eff00",      // Techy lime
-    danger: "#ff2a2a",
-    warning: "#ffcc00",
-    info: "#ffffff",
-    bodyFill: "#333333",
-    statusBar: isLight("#000000") ? "dark" : "light",
-    // Adaptive overlays (white for dark themes)
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-};
-
-const TERMINAL = {
-    primary: "#00ff9c",      // Phosphor green
-    primaryDark: "#00c97a",
-    secondary: "#00ff9c",
-    background: "#050807",
-    surface: "#0b1210",
-    text: "#eafff6",
-    textSecondary: "#6fbfa2",
-    textAlternate: "#000000ff",
-    border: "#13261e",
-    success: "#00ff9c",
-    danger: "#ff4d4d",
-    warning: "#ffd166",
-    info: "#4ddcff",
-    bodyFill: "#333333",
-    statusBar: isLight("#050807") ? "dark" : "light",
-    // Adaptive overlays (white for dark themes)
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-};
-
-const SCHEMATIC = {
-    primary: "#ffd600",      // PCB yellow
-    primaryDark: "#c7a600",
-    secondary: "#ffd600",    // PCB yellow
-    background: "#0a0f14",
-    surface: "#121820",
-    text: "#e6edf3",
-    textSecondary: "#8fa3b8",
-    textAlternate: "#1a1a1a",
-    border: "#1f2a36",
-    success: "#00ff87",
-    danger: "#ff5c5c",
-    warning: "#ffb300",
-    info: "#00e5ff",
-    bodyFill: "#333333",
-    statusBar: isLight("#0a0f14") ? "dark" : "light",
-    // Adaptive overlays (white for dark themes)
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-};
-
-const CALIPER = {
-    primary: "#2563eb",      // Precision blue
-    primaryDark: "#1e40af",
-    secondary: "#2563eb",    // Precision blue
-    background: "#0f172a",
-    surface: "#111827",
-    text: "#f9fafb",
-    textSecondary: "#9ca3af",
-    textAlternate: "#1a1a1a",
-    border: "#1f2933",
-    success: "#22c55e",
-    danger: "#ef4444",
-    warning: "#eab308",
-    info: "#38bdf8",
-    bodyFill: "#333333",
-    statusBar: isLight("#0f172a") ? "dark" : "light",
-    // Adaptive overlays (white for dark themes)
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-};
-
-const BLOSSOM = {
-    // Brand Colors
-    primary: "#FF85A1",           // Soft Pink (Main Accent)
-    primaryDark: "#E06A86",       // Deeper Pink (Active States/Buttons)
-    secondary: "#ff85a1",         // Soft Periwinkle (Complementary for Data/Charts)
-
-    // Neutrals & Surfaces
-    background: "#FFF1F4",        // Slightly richer pink wash for stronger structure
-    surface: "#FFFFFF",           // Pure White (Cards & Modals)
-    border: "#EBCFD7",            // Stronger blush border
-
-    // Typography
-    text: "#2D1A1E",              // Deep Berry (High Contrast for Readability)
-    textSecondary: "#7C5E66",     // Darker muted rose-grey for utility text
-    textAlternate: "#ffffffff",
-    // Feedback & Semantic
-    success: "#7CD9A3",           // Sage Green (Softened for the theme)
-    danger: "#F28D8D",            // Coral Red
-    warning: "#F7C97E",           // Muted Amber
-    info: "#89CFF0",              // Baby Blue
-
-    // Heatmap & Charting
-    bodyFill: "#ddced1ff",          // Base color for unworked muscles
-    chartFill: "rgba(255, 133, 161, 0.25)", // Transparent Primary for Radar fill
-
-    statusBar: isLight("#FFF5F7") ? "dark" : "light",
-    // Adaptive Overlays
-    overlaySubtle: "rgba(45, 26, 30, 0.028)",
-    overlayMedium: "rgba(45, 26, 30, 0.05)",
-    overlayBorder: "rgba(45, 26, 30, 0.08)",
-    overlayInput: "rgba(45, 26, 30, 0.045)",
-    overlayInputFocused: "rgba(255, 133, 161, 0.12)",
-};
-
-const BLACK_PINK = {
-    primary: "#ff007f",      // Neon Magenta
-    primaryDark: "#c70063",
-    secondary: "#ff007f",    // Neon Magenta
-    background: "#13010dff",   // Near-black with pink tint
-    surface: "#1a0212",      // Deep wine/black
-    text: "#ffe0f0",
-    textSecondary: "#b37795",
-    border: "#3d142b",
-    success: "#00f5d4",
-    danger: "#ff4d6d",
-    warning: "#fee440",
-    info: "#00bbf9",
-    bodyFill: "#333333",
-    statusBar: isLight("#13010dff") ? "dark" : "light",
-    // Adaptive overlays (white for dark themes)
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-};
-
-const DEFAULT_DARK = {
-    primary: "#0A84FF",      // Apple San Francisco Blue
-    primaryDark: "#0066CC",
-    secondary: "#0A84FF",    // iOS System Gray
-    background: "#080808ff",
-    surface: "#121214",      // iOS Secondary System Background
-    text: "#FFFFFF",         // Primary Label
-    textSecondary: "#8E8E93",// Secondary Label
-    textAlternate: "#FFFFFF",
-    border: "#2C2C2E",       // Thin, subtle separator
-    success: "#32D74B",      // iOS System Green
-    danger: "#FF453A",       // iOS System Red
-    warning: "#FF9F0A",      // iOS System Orange
-    info: "#64D2FF",         // iOS System Cyan
-    bodyFill: "#333333",
-    statusBar: isLight("#080808ff") ? "dark" : "light",
-    // Adaptive overlays (white for dark themes)
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-};
-
-
-const THRIVE = {
-    primary: "#1bffcd",      // Apple San Francisco Blue
-    primaryDark: "#2E7F78",
-    secondary: "#8143a3",    // iOS System Gray
-    background: "#000000",   // Pure Black (OLED optimized) - FIXED from #080808ff
-    surface: "#121214",      // iOS Secondary System Background
-    text: "#FFFFFF",         // Primary Label
-    textSecondary: "#8E8E93",// Secondary Label
-    textAlternate: "#ffffffff",
-    border: "#2C2C2E",       // Thin, subtle separator
-    success: "#32D74B",      // iOS System Green
-    danger: "#FF453A",       // iOS System Red
-    warning: "#FF9F0A",      // iOS System Orange
-    info: "#64D2FF",         // iOS System Cyan
-    bodyFill: "#333333",
-    statusBar: isLight("#000000") ? "dark" : "light",
-    // Adaptive overlays (white for dark themes)
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-};
+// iOS light, grouped style: grey canvas, white cards.
 const LIGHT = {
-    // Brand Colors
-    primary: "#3B82F6",           // Vibrant Blue (Trustworthy & Standard)
-    primaryDark: "#2563EB",       // Richer Blue (Hover/Active States)
-    secondary: "#6366F1",         // Indigo (Complementary for Charts)
-
-    // Neutrals & Surfaces
-    background: "#F3F7FC",        // Cleaner cool background for elevated white cards
-    surface: "#FFFFFF",           // Pure White
-    border: "#D7E1EC",            // Stronger border so bright cards still separate
-
-    // Typography
-    text: "#162033",              // Deep Navy with slightly softer contrast
-    textSecondary: "#5D6B80",     // Darker secondary text for better readability
+    primary: "#007AFF",            // systemBlue (light)
+    primaryDark: "#0064D2",
+    secondary: "#007AFF",
+    background: "#F2F2F7",         // systemGroupedBackground (light)
+    surface: "#FFFFFF",            // secondarySystemGroupedBackground (light)
+    surfaceElevated: "#F2F2F7",    // tertiarySystemGroupedBackground (light)
+    text: "#000000",               // label
+    textSecondary: "#8A8A8E",      // secondaryLabel flattened to hex
+    textTertiary: "#C5C5C7",       // tertiaryLabel flattened to hex
     textAlternate: "#FFFFFF",
-    // Feedback & Semantic
-    success: "#10B981",           // Emerald Green
-    danger: "#EF4444",            // Standard Red
-    warning: "#F59E0B",           // Amber
-    info: "#0EA5E9",              // Sky Blue
-
-    // Heatmap & Charting
-    bodyFill: "#b4b9c0ff",          // Neutral Slate for unworked areas
-    chartFill: "rgba(59, 130, 246, 0.15)", // Transparent Blue for Radar
-
-    statusBar: isLight("#F8FAFC") ? "dark" : "light",
-    // Adaptive Overlays
-    overlaySubtle: "rgba(15, 23, 42, 0.028)",
-    overlayMedium: "rgba(15, 23, 42, 0.05)",
-    overlayBorder: "rgba(15, 23, 42, 0.08)",
-    overlayInput: "rgba(15, 23, 42, 0.045)",
-    overlayInputFocused: "rgba(59, 130, 246, 0.12)",
+    border: "#E3E3E8",             // separator flattened to hex
+    success: "#34C759",            // systemGreen (light)
+    danger: "#FF3B30",             // systemRed (light)
+    error: "#FF3B30",
+    warning: "#FF9500",            // systemOrange (light)
+    info: "#32ADE6",               // systemCyan (light)
+    bodyFill: "#D1D1D6",
+    chartFill: "rgba(0, 122, 255, 0.14)",
+    statusBar: "dark",
+    overlaySubtle: "rgba(60,60,67,0.03)",
+    overlayMedium: "rgba(60,60,67,0.05)",
+    overlayBorder: "rgba(60,60,67,0.08)",
+    overlayInput: "rgba(118,118,128,0.12)",
+    overlayInputFocused: "rgba(0,122,255,0.10)",
 };
 
-const SYSTEM = Platform.OS === 'android' ? {
-    type: 'dynamic', // Flag to indicate special handling needed (no gradients etc)
-    primary: PlatformColor('@android:color/system_accent1_200'), // Lighter accent for dark mode
-    secondary: PlatformColor('@android:color/system_accent1_200'),
-    background: PlatformColor('@android:color/system_neutral1_900'), // Dark background
-    surface: PlatformColor('@android:color/system_neutral1_800'), // Slightly lighter surface
-    text: PlatformColor('@android:color/system_neutral1_50'),    // Light text
-    textSecondary: PlatformColor('@android:color/system_neutral1_300'),
-    border: PlatformColor('@android:color/system_neutral1_700'),
-    success: PlatformColor('@android:color/system_accent2_400'), // Fallback roughly
-    danger: '#ef4444', // Keep standard dangers/warnings for safety visibility
-    warning: '#f59e0b',
-    info: '#3b82f6',
-    bodyFill: '#494949ff',
-    statusBar: 'light', // Native dark background
-    // Adaptive overlays (white for dark themes)
-    overlaySubtle: "rgba(255,255,255,0.02)",
-    overlayMedium: "rgba(255,255,255,0.03)",
-    overlayBorder: "rgba(255,255,255,0.05)",
-    overlayInput: "rgba(0,0,0,0.2)",
-    overlayInputFocused: "rgba(0,0,0,0.4)",
-} : DEFAULT; // Fallback for non-android
-
-
-// Export the dictionary
+// Export the dictionary. Previously saved theme ids that no longer exist
+// fall back to DEFAULT in ThemeContext (it checks `THEMES[storedThemeID]`).
 export const THEMES = {
     DEFAULT,
-    DEFAULT_DARK,
     LIGHT,
-    NOIR,
-    ARCTIC,
-    NOTHING,
-    TERMINAL,
-    BLACK_PINK,
-    BLOSSOM,
-    SCHEMATIC,
-    CALIPER,
-    THRIVE
 };
 
 export const isLightTheme = (theme) => {
@@ -445,33 +192,114 @@ export const isLightTheme = (theme) => {
 };
 
 export const getThemedShadow = (theme, size = 'medium') => {
-    if (theme?.type === 'dynamic') {
-        return SHADOWS[size] || SHADOWS.medium;
-    }
-
     if (isLightTheme(theme)) {
         if (size === 'small') {
             return {
-                shadowColor: '#7C8FAA',
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.12,
-                shadowRadius: 18,
-                elevation: 4,
+                shadowColor: '#3C3C43',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.06,
+                shadowRadius: 12,
+                elevation: 2,
             };
         }
 
         return {
-            shadowColor: '#7C8FAA',
-            shadowOffset: { width: 0, height: 12 },
-            shadowOpacity: 0.16,
-            shadowRadius: 24,
-            elevation: 8,
+            shadowColor: '#3C3C43',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.08,
+            shadowRadius: 20,
+            elevation: 4,
         };
     }
 
     return SHADOWS[size] || SHADOWS.medium;
 };
 
+// ─── Custom theme builder ─────────────────────────────────────────────────────
+// A custom theme is generated from just four colours; everything else is
+// derived so the result is always internally consistent. Crucially,
+// `textAlternate` (the text drawn on solid-primary buttons/inputs) is forced
+// to black or white based on the primary's brightness, so it stays legible.
+
+const clampByte = (v) => Math.max(0, Math.min(255, Math.round(v)));
+
+const parseHex = (hex) => {
+    if (typeof hex !== 'string') return null;
+    let h = hex.trim().replace('#', '');
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    if (h.length !== 6 || /[^0-9a-fA-F]/.test(h)) return null;
+    const n = parseInt(h, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+};
+
+const toHex = ({ r, g, b }) =>
+    '#' + [r, g, b].map((v) => clampByte(v).toString(16).padStart(2, '0')).join('');
+
+// Linear blend between two hex colours (t: 0 = c1, 1 = c2).
+const mix = (c1, c2, t) => {
+    const a = parseHex(c1);
+    const b = parseHex(c2);
+    if (!a || !b) return c1;
+    return toHex({ r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t });
+};
+
+const hslToHex = (h, s, l) => {
+    s /= 100; l /= 100;
+    const k = (n) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return toHex({ r: f(0) * 255, g: f(8) * 255, b: f(4) * 255 });
+};
+
+export const isValidHex = (hex) => parseHex(hex) !== null;
+
+export const DEFAULT_CUSTOM_INPUT = {
+    primary: '#0A84FF',
+    background: '#1C1C1E',
+    surface: '#2C2C2E',
+    text: '#FFFFFF',
+};
+
+export const buildCustomTheme = ({ primary, background, surface, text }) => {
+    const lightBg = isLight(background);
+    return {
+        type: 'custom',
+        primary,
+        primaryDark: mix(primary, '#000000', 0.18),
+        secondary: primary,
+        background,
+        surface,
+        surfaceElevated: mix(surface, text, 0.06),
+        text,
+        textSecondary: mix(text, background, 0.42),
+        textTertiary: mix(text, background, 0.62),
+        // Legible text on solid-primary fills (buttons, inputs).
+        textAlternate: isLight(primary) ? '#000000' : '#FFFFFF',
+        border: mix(surface, text, 0.14),
+        success: '#30D158',
+        danger: '#FF453A',
+        error: '#FF453A',
+        warning: '#FF9F0A',
+        info: '#64D2FF',
+        bodyFill: mix(surface, text, 0.16),
+        chartFill: withAlpha(primary, 0.16),
+        statusBar: lightBg ? 'dark' : 'light',
+        overlaySubtle: lightBg ? 'rgba(60,60,67,0.03)' : 'rgba(255,255,255,0.04)',
+        overlayMedium: lightBg ? 'rgba(60,60,67,0.05)' : 'rgba(255,255,255,0.06)',
+        overlayBorder: lightBg ? 'rgba(60,60,67,0.08)' : 'rgba(255,255,255,0.09)',
+        overlayInput: lightBg ? 'rgba(118,118,128,0.12)' : 'rgba(118,118,128,0.26)',
+        overlayInputFocused: lightBg ? 'rgba(118,118,128,0.20)' : 'rgba(118,118,128,0.40)',
+    };
+};
+
+// A coherent random palette (background/surface tinted by the accent hue).
+export const randomThemeInput = () => {
+    const hue = Math.floor(Math.random() * 360);
+    const dark = Math.random() > 0.4;
+    return dark
+        ? { primary: hslToHex(hue, 75, 62), background: hslToHex(hue, 14, 8), surface: hslToHex(hue, 12, 14), text: '#FFFFFF' }
+        : { primary: hslToHex(hue, 70, 48), background: hslToHex(hue, 30, 97), surface: '#FFFFFF', text: hslToHex(hue, 25, 12) };
+};
+
 // Deprecated: Backwards compatibility for now, will be removed
 export const COLORS = DEFAULT;
-

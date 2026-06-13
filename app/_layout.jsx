@@ -6,7 +6,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Redirect, Stack, usePathname, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setupDatabase } from '../components/db';
+import { setupDatabase, fetchWorkoutHistory, fetchExercises } from '../components/db';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
@@ -35,6 +35,13 @@ const _layout = () => {
             try {
                 await setupDatabase();
                 await primeExerciseSnapshots();
+                // Warm the in-memory caches so screens (esp. History, which can
+                // be cold-mounted when navigated to from the summary) paint
+                // from cache on first frame instead of showing a spinner.
+                await Promise.all([
+                    fetchWorkoutHistory().catch(() => {}),
+                    fetchExercises().catch(() => {}),
+                ]);
             } catch (e) {
                 console.error("DB Setup Failed:", e);
             } finally {
@@ -220,7 +227,12 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
                 <Stack screenOptions={{
                     headerShown: false,
                     animation: 'flip',
-                    contentStyle: { backgroundColor: theme.background }
+                    contentStyle: { backgroundColor: theme.background },
+                    // Long browsing chains (history → session → exercise →
+                    // session…) stack many heavy screens (charts, body SVGs);
+                    // freezing blurred ones stops them re-rendering and keeps
+                    // the back gesture responsive late in an app session.
+                    freezeOnBlur: true,
                 }}>
                     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                     <Stack.Screen name="workout/[session]" options={{ headerShown: false }} />

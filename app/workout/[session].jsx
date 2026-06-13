@@ -2,7 +2,7 @@ import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import React, { useState, useRef, useCallback } from 'react';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchWorkoutHistoryBySession, fetchExercises } from '../../components/db';
+import { fetchWorkoutHistoryBySession, fetchExercises, getCachedExercises } from '../../components/db';
 import WorkoutSessionView from '../../components/WorkoutSessionView';
 import WorkoutSummaryOverview from '../../components/WorkoutSummaryOverview';
 import { useTheme } from '../../context/ThemeContext';
@@ -31,7 +31,10 @@ const WorkoutDetail = () => {
     }, [initialData]);
 
     const [workoutDetails, setWorkoutDetails] = useState(syncedInitialData || []);
-    const [exercisesList, setExercises] = useState([]);
+    // Seed from the cached exercise list so names/muscle data are present on
+    // first paint (the live fetch below still refreshes it) — avoids the
+    // exercise names and muscle split flashing in on the summary.
+    const [exercisesList, setExercises] = useState(() => getCachedExercises() || []);
 
     const currentSessionId = parseInt(session);
     const dataSessionId = workoutDetails[0]?.workoutSession;
@@ -51,8 +54,23 @@ const WorkoutDetail = () => {
         React.useCallback(() => {
             let isActive = true;
 
+            const haveInitial = syncedInitialData && syncedInitialData.length > 0 && syncedInitialData[0]?.workoutSession === currentSessionId;
+
             const loadData = async () => {
                 try {
+                    // Summary mode: the passed-in data is the authoritative,
+                    // complete just-finished workout (incl. duration + PR flags),
+                    // so don't overwrite workoutDetails — re-setting it mid-count
+                    // forces a heavy re-render that stutters the count-up. Only
+                    // pull exercises if they weren't already seeded from cache.
+                    if (isSummary && haveInitial) {
+                        if (!exercisesList.length) {
+                            const exercisesData = await fetchExercises();
+                            if (isActive && exercisesData) setExercises(exercisesData);
+                        }
+                        return;
+                    }
+
                     const [historyData, exercisesData] = await Promise.all([
                         fetchWorkoutHistoryBySession(session),
                         fetchExercises()
@@ -72,7 +90,7 @@ const WorkoutDetail = () => {
                 }
             };
 
-            if (syncedInitialData && syncedInitialData.length > 0 && syncedInitialData[0]?.workoutSession === currentSessionId) {
+            if (haveInitial) {
                 setLoading(false);
             } else {
                 setLoading(true);
@@ -101,7 +119,16 @@ const WorkoutDetail = () => {
     useFocusEffect(
         React.useCallback(() => {
             if (hasAttemptedFetch && effectiveWorkoutDetails.length === 0) {
-                router.replace('/history');
+                // This session has no data (e.g. it was just deleted). Pop the
+                // stack to return to where we came from — replacing with the
+                // '/history' tab route from here remounts a whole new (tabs)
+                // navigator each time (lazy:false → all tabs), which piles up
+                // and progressively slows the app until a force-close.
+                if (router.canGoBack()) {
+                    router.back();
+                } else {
+                    router.replace('/history');
+                }
             }
         }, [hasAttemptedFetch, effectiveWorkoutDetails.length, router])
     );
@@ -223,6 +250,10 @@ const WorkoutDetail = () => {
                     <WorkoutSummaryOverview
                         workoutDetails={effectiveWorkoutDetails}
                         exercisesList={exercisesList}
+                        celebrate
+                        // Pops the summary and lands on History (navigate reuses
+                        // the existing tab — no duplicate-tabs remount).
+                        onDone={() => router.navigate('/history')}
                         contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
                     />
                 ) : (

@@ -14,6 +14,7 @@ import Animated, {
     Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme'
 import { Feather, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -286,44 +287,49 @@ const SetRowBody = React.memo(({
                     disabled={!fillData || set.completed}
                 >
                     <View style={styles.prevContentWrapper}>
-                        <Animated.View
-                            style={[
-                                cellTextStyle,
-                                styles.prevTextContainer,
-                                isLifetimePRSuggestion && {
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: withAlpha(brightColor, 0.05),
-                                    borderColor: withAlpha(brightColor, 0.1),
-                                    borderWidth: 1,
-                                    borderRadius: 10,
-                                    paddingHorizontal: 8,
-                                    paddingVertical: 3,
-                                    gap: 3,
-                                }
-                            ]}
-                        >
-                            <Text
-                                style={[
-                                    styles.prevText,
-                                    showSuggestion && computedSuggestion && styles.suggestionText,
-                                    isLifetimePRSuggestion && {
-                                        color: brightColor,
-                                        fontFamily: FONTS.bold,
-                                    },
-                                ]}
-                                numberOfLines={1}
-                            >
-                                {displayedText}
-                            </Text>
-
-                            {isLifetimePRSuggestion && (
-                                <MaterialCommunityIcons
-                                    name="trophy"
-                                    size={11}
-                                    color={brightColor}
-                                    style={{ marginLeft: 2 }}
-                                />
+                        <Animated.View style={[cellTextStyle, styles.prevTextContainer]}>
+                            {isLifetimePRSuggestion ? (
+                                // PR target: soft gradient sheen, sparkle, and
+                                // a solid micro "PR" tag — a goal, not a chip.
+                                <LinearGradient
+                                    colors={[
+                                        withAlpha(brightColor, isLightTheme(theme) ? 0.16 : 0.22),
+                                        withAlpha(brightColor, isLightTheme(theme) ? 0.04 : 0.05),
+                                    ]}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={styles.prTargetPill}
+                                >
+                                    <MaterialCommunityIcons
+                                        name="star-four-points"
+                                        size={10}
+                                        color={brightColor}
+                                    />
+                                    <Text
+                                        style={[styles.prTargetText, { color: brightColor }]}
+                                        numberOfLines={1}
+                                    >
+                                        {displayedText}
+                                    </Text>
+                                    <View style={[styles.prTargetBadge, { backgroundColor: brightColor }]}>
+                                        <Text style={styles.prTargetBadgeText}>PR</Text>
+                                    </View>
+                                </LinearGradient>
+                            ) : showSuggestion && fillData && displayedText !== '-' ? (
+                                // Any fillable suggestion (computed or warmup):
+                                // same capsule family as the PR target, but
+                                // quiet — neutral well + "aim higher" arrow.
+                                <View style={styles.suggestionPill}>
+                                    <Feather name="arrow-up-right" size={10} color={theme.textSecondary} />
+                                    <Text style={styles.suggestionPillText} numberOfLines={1}>
+                                        {displayedText}
+                                    </Text>
+                                </View>
+                            ) : (
+                                // Nothing to suggest/fill — plain quiet text.
+                                <Text style={styles.prevText} numberOfLines={1}>
+                                    {displayedText}
+                                </Text>
                             )}
                         </Animated.View>
                     </View>
@@ -543,6 +549,24 @@ const ExerciseEditable = ({
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.filter(ex => ex.id !== exercise.id) } : w).filter(w => w.exercises.length > 0));
     };
 
+    // Delete animation: fade + shrink the card, then remove it from state.
+    // The list's itemLayoutAnimation then slides the remaining cards up to
+    // close the gap, so it doesn't just pop away.
+    const deleteAnim = useSharedValue(0);
+    const animatedDeleteStyle = useAnimatedStyle(() => {
+        if (deleteAnim.value === 0) return {};
+        const f = 1 - deleteAnim.value;
+        return {
+            opacity: f,
+            transform: [{ scale: 0.94 + 0.06 * f }],
+        };
+    });
+    const handleConfirmDelete = () => {
+        deleteAnim.value = withTiming(1, { duration: 200 }, (finished) => {
+            if (finished) runOnJS(deleteExercise)();
+        });
+    };
+
     const fillFromPrevious = (setIndex, fillData) => {
         if (!fillData) return;
         const currentSet = exercise.sets[setIndex];
@@ -587,6 +611,11 @@ const ExerciseEditable = ({
 
     const headerKey = showSuggestion ? 'suggest' : 'prev';
 
+    // Set progress for the header: "2/4" while working, a check when done.
+    const setsDone = exercise.sets.filter(s => s.completed).length;
+    const showSetProgress = !isTemplate && !hidePrevious && exercise.sets.length > 0;
+    const allSetsDone = showSetProgress && setsDone === exercise.sets.length;
+
     let prevWarmupIndex = 0;
     let prevWorkingIndex = 0;
     let suggestWorkingIndex = 0;
@@ -607,7 +636,7 @@ const ExerciseEditable = ({
 
     return (
         <Animated.View
-            style={styles.container}
+            style={[styles.container, animatedDeleteStyle]}
             layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
         >
             {/* Header */}
@@ -625,6 +654,17 @@ const ExerciseEditable = ({
                 )}
 
                 <View style={styles.headerActions}>
+                    {showSetProgress && (
+                        allSetsDone ? (
+                            <Animated.View entering={hasMountedRef.current ? ZoomIn.duration(220).easing(Easing.out(Easing.back(1.5))) : undefined}>
+                                <MaterialCommunityIcons name="check-circle" size={17} color={theme.success} />
+                            </Animated.View>
+                        ) : (
+                            <Text style={styles.setProgressText}>
+                                {setsDone}/{exercise.sets.length}
+                            </Text>
+                        )
+                    )}
                     <TouchableOpacity
                         onPress={() => setIsNoteVisible(!isNoteVisible)}
                         style={styles.iconButton}
@@ -811,7 +851,7 @@ const ExerciseEditable = ({
                     {
                         text: 'Remove',
                         style: 'destructive',
-                        onPress: deleteExercise,
+                        onPress: handleConfirmDelete,
                     },
                 ]}
             />
@@ -834,9 +874,7 @@ const getStyles = (theme) => {
             backgroundColor: theme.surface,
             borderRadius: 16,
             marginBottom: 12,
-            borderWidth: 1,
-            borderColor: lightTheme ? theme.border : 'transparent',
-            ...getThemedShadow(theme, 'small'),
+            ...(lightTheme ? getThemedShadow(theme, 'small') : null),
         },
         header: {
             flexDirection: 'row',
@@ -866,7 +904,14 @@ const getStyles = (theme) => {
         },
         headerActions: {
             flexDirection: 'row',
+            alignItems: 'center',
             gap: 12,
+        },
+        setProgressText: {
+            fontSize: 12,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
+            fontVariant: ['tabular-nums'],
         },
         iconButton: {
             padding: 2,
@@ -988,6 +1033,53 @@ const getStyles = (theme) => {
         suggestionText: {
             color: safePrimary,
             opacity: 1,
+        },
+        suggestionPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            alignSelf: 'center',
+            backgroundColor: theme.overlayInput,
+            borderRadius: 100,
+            paddingHorizontal: 8,
+            paddingVertical: 3.5,
+            gap: 4,
+        },
+        suggestionPillText: {
+            fontSize: 12.5,
+            fontFamily: FONTS.semiBold,
+            letterSpacing: -0.2,
+            color: theme.text,
+            fontVariant: ['tabular-nums'],
+            flexShrink: 1,
+        },
+        prTargetPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            alignSelf: 'center',
+            borderRadius: 100,
+            paddingHorizontal: 8,
+            paddingVertical: 3.5,
+            gap: 5,
+        },
+        prTargetText: {
+            fontSize: 12.5,
+            fontFamily: FONTS.bold,
+            letterSpacing: -0.2,
+            fontVariant: ['tabular-nums'],
+            flexShrink: 1,
+        },
+        prTargetBadge: {
+            borderRadius: 4,
+            paddingHorizontal: 4,
+            paddingVertical: 1,
+        },
+        prTargetBadgeText: {
+            fontSize: 8,
+            fontFamily: FONTS.bold,
+            color: '#FFFFFF',
+            letterSpacing: 0.6,
         },
 
         inputContainer: {

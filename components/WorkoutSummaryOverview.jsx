@@ -1,12 +1,61 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import React, { useState, useCallback, useMemo, useLayoutEffect, forwardRef } from 'react';
-import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, InteractionManager } from 'react-native';
+import React, { useState, useCallback, useMemo, useLayoutEffect, useEffect, forwardRef } from 'react';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import LottieView from 'lottie-react-native';
+import * as Haptics from 'expo-haptics';
+import { FONTS, RADIUS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { formatWeight, unitLabel } from '../utils/units';
+import { muscleMapping, broadMuscleGroups } from '../constants/muscles';
+
+// Count a number up from 0 → value on mount; used for the celebratory stats.
+// Driven by requestAnimationFrame with the clock started on the FIRST painted
+// frame (not when .start() is called). A timing-based clock keeps ticking even
+// when the opening frames are dropped during the screen settle, so it would
+// paint mid-curve — with ease-out that's a visible "jolt" to a few hundred
+// before it counts. Anchoring the clock to the first frame means no time is
+// ever lost: it always begins at 0 and ramps smoothly from there.
+const CountUp = ({ value, run, format, style, duration = 1000 }) => {
+    const [display, setDisplay] = useState(run ? 0 : value);
+    useEffect(() => {
+        if (!run) { setDisplay(value); return; }
+        setDisplay(0);
+        let raf;
+        let startTs = null;
+        let cancelled = false;
+        const tick = (ts) => {
+            if (cancelled) return;
+            if (startTs === null) startTs = ts; // clock starts on the first frame
+            const t = Math.min((ts - startTs) / duration, 1);
+            const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+            setDisplay(eased * value);
+            if (t < 1) raf = requestAnimationFrame(tick);
+        };
+        // Wait for the entrance transition to settle before kicking off.
+        const task = InteractionManager.runAfterInteractions(() => {
+            raf = requestAnimationFrame(tick);
+        });
+        return () => {
+            cancelled = true;
+            task?.cancel?.();
+            if (raf) cancelAnimationFrame(raf);
+        };
+    }, [value, run, duration]);
+    return <Text style={style}>{format ? format(display) : Math.round(display)}</Text>;
+};
+
+// Theme-tinted colour map for the win.json trophy animation.
+const trophyColorFilters = (theme) => [
+    ...['Cup', 'Stand', 'Trophy', 'Group 1', 'Pre-comp 3'].map((keypath) => ({ keypath, color: theme.primary })),
+    ...['Cup 2', 'Cup 3', 'Shape Layer 1', 'Shape Layer 2', 'Shape Layer 3', 'Shape Layer 4', 'Shape Layer 5', 'Shape Layer 6', 'Shape Layer 7'].map((keypath) => ({ keypath, color: theme.primaryDark || theme.primary })),
+    ...['Star', 'Star 2', 'Star 3', 'Star 4', 'Star 4 :M'].map((keypath) => ({ keypath, color: '#FFFFFF' })),
+    ...['Black Stand', 'Black Stand 2', 'White Stand', 'White Stand 2', 'White Stand 3', 'White Stand 4', 'White Stand 4 :M'].map((keypath) => ({ keypath, color: theme.surface })),
+    ...['Shape Layer 9', 'Shape Layer 10', 'Shape Layer 11', 'Shape Layer 12', 'Shape Layer 13', 'Shape Layer 14'].map((keypath) => ({ keypath, color: theme.secondary })),
+];
 
 // --- UTILS ---
 const lightenColor = (color, percent) => {
@@ -69,8 +118,8 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 });
 
 // --- MAIN COMPONENT ---
-const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDone, contentContainerStyle, onExerciseInfo }, ref) => {
-    const { theme, useImperial } = useTheme();
+const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDone, celebrate = false, contentContainerStyle, onExerciseInfo }, ref) => {
+    const { theme, useImperial, accessoryWeight } = useTheme();
     const router = useRouter();
     const styles = getStyles(theme);
     const handlers = useScrollHandlers();
@@ -138,6 +187,42 @@ const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDo
         };
     }, [workoutDetails, exercisesList]);
 
+    // Muscle split (working sets per broad group, accessories weighted by the
+    // settings slider) — same model as the session view.
+    const muscleSplit = useMemo(() => {
+        if (!groupedExercises || !exercisesList?.length) return [];
+        const scores = new Map();
+        let total = 0;
+        const add = (muscleName, score) => {
+            const slug = muscleMapping[muscleName] || muscleName.toLowerCase();
+            const group = broadMuscleGroups.find((g) => g.slugs.includes(slug));
+            if (!group) return;
+            scores.set(group.label, (scores.get(group.label) || 0) + score);
+            total += score;
+        };
+        groupedExercises.forEach((group) => {
+            const details = exercisesList.find((ex) => ex.exerciseID === group[0].exerciseID);
+            if (!details) return;
+            const workingSets = group.filter((s) => (s.setType || 'N') !== 'W').length;
+            if (workingSets === 0) return;
+            (details.targetMuscle || '').split(',').map((m) => m.trim()).filter(Boolean).forEach((m) => add(m, workingSets));
+            (details.accessoryMuscles || '').split(',').map((m) => m.trim()).filter(Boolean).forEach((m) => add(m, workingSets * (accessoryWeight ?? 0.5)));
+        });
+        if (total <= 0) return [];
+        return [...scores.entries()]
+            .map(([label, score]) => ({ label, percent: Math.round((score / total) * 100) }))
+            .sort((a, b) => b.percent - a.percent)
+            .slice(0, 4);
+    }, [groupedExercises, exercisesList, accessoryWeight]);
+
+    // A celebratory haptic timed to the Achievements reveal.
+    useEffect(() => {
+        if (celebrate && prHighlights && prHighlights.length > 0) {
+            const t = setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success), 480);
+            return () => clearTimeout(t);
+        }
+    }, [celebrate, prHighlights]);
+
     if (!workoutDetails || workoutDetails.length === 0) return <View />;
 
     const formatDuration = (minutes) => {
@@ -159,46 +244,66 @@ const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDo
             <ScrollView {...handlers} ref={ref} contentContainerStyle={[styles.scrollContent, contentContainerStyle]} showsVerticalScrollIndicator={false}>
 
                 {/* HERO SECTION */}
-                <View style={styles.heroContainer}>
-                    <View style={styles.heroHeader}>
-                        <View style={styles.iconCircle}>
-                            <MaterialCommunityIcons name="check-decagram" size={32} color={theme.primary} />
-                        </View>
-                        <View>
-                            <Text style={styles.completionText}>Workout Complete!</Text>
-                            <Text style={styles.workoutNameHuge}>{workoutName}</Text>
-                            <Text style={styles.workoutDateDisplay}>{formatDate(workoutDate)}</Text>
-                        </View>
-                    </View>
+                <Reanimated.View entering={FadeInDown.duration(420)} style={styles.heroContainer}>
+                    {celebrate && (
+                        <LottieView
+                            source={require('../assets/notifications/win.json')}
+                            autoPlay
+                            loop={false}
+                            style={styles.heroTrophy}
+                            colorFilters={trophyColorFilters(theme)}
+                        />
+                    )}
+                    <Text style={styles.completionText}>Workout Complete</Text>
+                    <Text style={styles.workoutNameHuge} numberOfLines={2}>{workoutName}</Text>
+                    <Text style={styles.workoutDateDisplay}>{formatDate(workoutDate)}</Text>
+                    {/* Always rendered (fixed height) so the split — which fills
+                        in once exercisesList loads — doesn't shove the stats
+                        down. Empty space when there's nothing to show. */}
+                    <Text style={styles.splitText} numberOfLines={1}>
+                        {muscleSplit.length > 0
+                            ? muscleSplit.map((g) => `${g.label} ${g.percent}%`).join('  ·  ')
+                            : ' '}
+                    </Text>
+                </Reanimated.View>
 
-                    {/* STATS DASHBOARD */}
-                    <View style={styles.statsRow}>
-                        <View style={styles.statBox}>
-                            <Feather name="clock" size={18} color={theme.textSecondary} />
-                            <Text style={styles.statValue}>{formatDuration(workoutDuration)}</Text>
-                            <Text style={styles.statLabel}>Time</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statBox}>
-                            <MaterialCommunityIcons name="weight-lifter" size={20} color={theme.textSecondary} />
-                            <Text style={styles.statValue}>{formatWeight(stats.totalVolume, useImperial)} <Text style={{ fontSize: 12 }}>{unitLabel(useImperial)}</Text></Text>
-                            <Text style={styles.statLabel}>Volume</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statBox}>
-                            <MaterialCommunityIcons name="format-list-numbered" size={20} color={theme.textSecondary} />
-                            <Text style={styles.statValue}>{stats.totalSets}</Text>
-                            <Text style={styles.statLabel}>Sets</Text>
-                        </View>
+                {/* STATS DASHBOARD */}
+                <Reanimated.View entering={FadeInDown.delay(120).duration(420)} style={styles.statsRow}>
+                    <View style={styles.statBox}>
+                        <Feather name="clock" size={18} color={theme.textSecondary} />
+                        <CountUp value={workoutDuration || 0} run={celebrate} format={(v) => formatDuration(Math.round(v))} style={styles.statValue} />
+                        <Text style={styles.statLabel}>Time</Text>
                     </View>
-                </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statBox}>
+                        <MaterialCommunityIcons name="weight-lifter" size={20} color={theme.textSecondary} />
+                        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                            <CountUp
+                                value={parseFloat(formatWeight(stats.totalVolume, useImperial, 0)) || 0}
+                                run={celebrate}
+                                format={(v) => Math.round(v).toLocaleString()}
+                                style={styles.statValue}
+                            />
+                            <Text style={[styles.statValue, { fontSize: 12 }]}> {unitLabel(useImperial)}</Text>
+                        </View>
+                        <Text style={styles.statLabel}>Volume</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statBox}>
+                        <MaterialCommunityIcons name="format-list-numbered" size={20} color={theme.textSecondary} />
+                        <CountUp value={stats.totalSets} run={celebrate} format={(v) => String(Math.round(v))} style={styles.statValue} />
+                        <Text style={styles.statLabel}>Sets</Text>
+                    </View>
+                </Reanimated.View>
 
                 {/* PR SPOTLIGHT */}
                 {prHighlights.length > 0 && (
-                    <View style={styles.prSpotlightContainer}>
+                    <Reanimated.View entering={FadeInDown.delay(260).duration(450)} style={styles.prSpotlightContainer}>
                         <View style={styles.prHeader}>
                             <MaterialCommunityIcons name="trophy" size={22} color={lightenColor(theme.primary, 10)} />
-                            <Text style={styles.prSpotlightTitle}>Achievements</Text>
+                            <Text style={styles.prSpotlightTitle}>
+                                {prHighlights.length} New {prHighlights.length === 1 ? 'Achievement' : 'Achievements'}
+                            </Text>
                         </View>
                         {prHighlights.map((pr, idx) => (
                             <View key={idx} style={styles.prItem}>
@@ -208,11 +313,11 @@ const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDo
                                 </View>
                             </View>
                         ))}
-                    </View>
+                    </Reanimated.View>
                 )}
 
                 {/* EXERCISE BREAKDOWN */}
-                <Text style={styles.sectionTitle}>Workout Breakdown</Text>
+                <Reanimated.Text entering={FadeInDown.delay(360).duration(420)} style={styles.sectionTitle}>Workout Breakdown</Reanimated.Text>
                 <View style={styles.exercisesList}>
                     {!isEmpty && groupedExercises.map((exerciseGroup, index) => {
                         const exerciseId = exerciseGroup[0].exerciseID;
@@ -380,38 +485,30 @@ const getStyles = (theme) => {
         },
         heroContainer: {
             paddingHorizontal: 20,
-            paddingVertical: 16,
-            marginBottom: 10,
-        },
-        heroHeader: {
-            flexDirection: 'row',
+            paddingTop: 8,
+            paddingBottom: 8,
             alignItems: 'center',
-            gap: 16,
-            marginBottom: 24,
         },
-        iconCircle: {
-            width: 64,
-            height: 64,
-            borderRadius: 32,
-            backgroundColor: primaryGlow,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderWidth: 1,
-            borderColor: withAlpha(theme.primary, 0.3),
+        heroTrophy: {
+            width: 130,
+            height: 130,
+            marginBottom: -6,
         },
         completionText: {
-            fontSize: 13,
-            fontFamily: FONTS.bold,
+            fontSize: 12,
+            fontFamily: FONTS.semiBold,
             color: theme.primary,
             textTransform: 'uppercase',
-            letterSpacing: 1,
-            marginBottom: 4,
+            letterSpacing: 1.4,
+            marginBottom: 6,
         },
         workoutNameHuge: {
-            fontSize: 26,
+            fontSize: 28,
             fontFamily: FONTS.bold,
+            letterSpacing: -0.5,
             color: theme.text,
-            lineHeight: 32,
+            textAlign: 'center',
+            lineHeight: 34,
         },
         workoutDateDisplay: {
             fontSize: 14,
@@ -419,14 +516,23 @@ const getStyles = (theme) => {
             color: theme.textSecondary,
             marginTop: 4,
         },
+        splitText: {
+            fontSize: 12.5,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            marginTop: 10,
+            minHeight: 16,
+            textAlign: 'center',
+        },
         statsRow: {
             flexDirection: 'row',
             backgroundColor: theme.surface,
-            borderRadius: 16,
+            borderRadius: RADIUS.l,
             padding: 16,
-            borderWidth: 1,
-            borderColor: theme.border,
-            ...getThemedShadow(theme, 'medium'),
+            marginHorizontal: 20,
+            marginTop: 16,
+            marginBottom: 8,
+            ...(lightTheme ? getThemedShadow(theme, 'small') : null),
             justifyContent: 'space-between',
         },
         statBox: {
@@ -452,12 +558,11 @@ const getStyles = (theme) => {
         },
         prSpotlightContainer: {
             marginHorizontal: 20,
+            marginTop: 12,
             marginBottom: 20,
-            backgroundColor: withAlpha(theme.primary, lightTheme ? 0.08 : 0.12),
-            borderRadius: 16,
+            backgroundColor: withAlpha(theme.primary, lightTheme ? 0.09 : 0.14),
+            borderRadius: RADIUS.l,
             padding: 16,
-            borderWidth: 1,
-            borderColor: withAlpha(theme.primary, 0.3),
         },
         prHeader: {
             flexDirection: 'row',
@@ -495,11 +600,9 @@ const getStyles = (theme) => {
         },
         exerciseCard: {
             backgroundColor: theme.surface,
-            borderRadius: 12,
+            borderRadius: 14,
             overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: theme.border,
-            ...getThemedShadow(theme, 'small'),
+            ...(lightTheme ? getThemedShadow(theme, 'small') : null),
         },
         exerciseHeader: {
             paddingHorizontal: 12,
@@ -562,15 +665,15 @@ const getStyles = (theme) => {
         },
         doneButton: {
             marginHorizontal: 20,
-            marginTop: 30,
+            marginTop: 28,
             backgroundColor: theme.primary,
             paddingVertical: 16,
-            borderRadius: 12,
+            borderRadius: RADIUS.m,
             alignItems: 'center',
-            ...getThemedShadow(theme, 'medium'),
+            ...(lightTheme ? getThemedShadow(theme, 'small') : null),
         },
         doneButtonText: {
-            color: '#fff',
+            color: theme.textAlternate,
             fontSize: 16,
             fontFamily: FONTS.bold,
         },
@@ -645,11 +748,9 @@ const getStyles = (theme) => {
         },
         exerciseCard: {
             backgroundColor: theme.surface,
-            borderRadius: 12,
+            borderRadius: 14,
             overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: theme.border,
-            ...getThemedShadow(theme, 'small'),
+            ...(lightTheme ? getThemedShadow(theme, 'small') : null),
         },
         exerciseHeader: {
             paddingHorizontal: 12,

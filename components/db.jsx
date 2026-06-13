@@ -322,9 +322,17 @@ export const setupDatabase = async () => {
 };
 
 // Fetch all exercises from the database
+// In-memory cache of the exercise list (definitions change rarely). Lets
+// screens render names/muscles synchronously on first paint instead of
+// waiting for the async fetch (avoids flash-in on the summary page).
+let _exercisesCache = null;
+export const getCachedExercises = () => _exercisesCache;
+
 export const fetchExercises = async () => {
   const database = await getDb();
-  return await database.getAllAsync('SELECT * FROM exercises;');
+  const rows = await database.getAllAsync('SELECT * FROM exercises;');
+  _exercisesCache = rows;
+  return rows;
 };
 
 // Insert exercise entries
@@ -377,9 +385,19 @@ export const updateExercise = async (exerciseID, exerciseName, targetMuscles, ac
 };
 
 // Fetch all workouts from the database
+// In-memory cache of the full workout-history rows. The History tab can be
+// cold-mounted when navigated to from a stacked screen (e.g. the post-workout
+// summary), so seeding its first paint from this cache shows the existing list
+// immediately — no loading spinner, no flash — while the fresh fetch reconciles
+// the just-added session (which then animates in).
+let _workoutHistoryCache = null;
+export const getCachedWorkoutHistory = () => _workoutHistoryCache;
+
 export const fetchWorkoutHistory = async () => {
   const database = await getDb();
-  return await database.getAllAsync('SELECT * FROM workoutHistory;');
+  const rows = await database.getAllAsync('SELECT * FROM workoutHistory;');
+  _workoutHistoryCache = rows;
+  return rows;
 };
 
 export const getWorkoutHistoryCount = async () => {
@@ -427,7 +445,18 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
       );
     }
   });
-  emit(AppEvents.WORKOUT_COMPLETED);
+  // Refresh the cache so a cold-mounted History (navigated to from the summary)
+  // paints the new session immediately — no spinner, no flash.
+  try { await fetchWorkoutHistory(); } catch (e) { /* cache refresh is best-effort */ }
+  // Defer the refresh broadcast until after the post-finish celebration.
+  // Every mounted tab reloads on this event (Home's muscle radar + PR graphs,
+  // Exercises, History) — firing it immediately runs all that fetch + re-render
+  // work on the JS thread right as the summary's (JS-driven) count-up animates,
+  // which is what makes the count stutter. The summary reads its own data from
+  // route params, and History seeds from the cache refreshed just above, so the
+  // delay leaves nothing stale on screen. showCelebration:false — the trophy
+  // now plays inline on the summary, not as a full-screen overlay.
+  setTimeout(() => emit(AppEvents.WORKOUT_COMPLETED, { showCelebration: false }), 1600);
 };
 
 // Fetch workout history for a specific session
@@ -549,6 +578,26 @@ export const fetchExerciseHistory = async (exerciseID) => {
       WHERE exerciseID= ?;`,
     [exerciseID]
   );
+};
+
+// Per-exercise stats for the library list, in one query: last trained time +
+// best (working-set) weight, plus the min weight for assisted exercises where
+// lower is better.
+export const fetchExerciseStats = async () => {
+  const database = await getDb();
+  const rows = await database.getAllAsync(
+    `SELECT exerciseID,
+            MAX(time) as lastTime,
+            MAX(CASE WHEN reps > 0 AND (setType IS NULL OR setType != 'W') THEN weight END) as maxWeight,
+            MIN(CASE WHEN reps > 0 AND (setType IS NULL OR setType != 'W') AND weight > 0 THEN weight END) as minWeight
+     FROM workoutHistory
+     GROUP BY exerciseID;`
+  );
+  const statsMap = new Map();
+  for (const row of rows) {
+    statsMap.set(row.exerciseID, row);
+  }
+  return statsMap;
 };
 
 // Get workout session count per exercise (number of distinct sessions)

@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, TextInput, Keyboard, Pressable, Platform } from 'react-native';
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
 import { LineGraph } from 'react-native-graph';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
@@ -21,6 +21,12 @@ const CARD_MARGIN = 32;
 const CARD_PADDING = 40;
 const Y_AXIS_WIDTH = 40;
 const GRAPH_RIGHT_PADDING = 0;
+
+// One fixed-height region holds the graph OR the empty/loading message, so
+// the card is pixel-identical in every state (no resize when switching
+// 1M/3M/1Y/ALL or when a period has no data). Sized to fit the graph plus
+// its x-axis labels with a little headroom.
+const CHART_AREA_HEIGHT = GRAPH_HEIGHT + 30;
 
 const CustomSelectionDot = ({ isActive, color, borderColor }) => (
     <View style={{
@@ -282,7 +288,22 @@ const BodyweightGraphCard = ({ theme }) => {
         } else if (loading) {
             graphOpacity.value = 0;
         }
-    }, [loading, points]);
+        // Keyed on `loading` only — range switches recompute points without
+        // toggling loading, so they fade via the effect below instead.
+    }, [loading]);
+
+    // Crossfade the line when the time range changes: the point count differs
+    // between ranges, so the graph library can't morph between them (it snaps).
+    // Hide before paint, then fade in to mask the snap.
+    const isFirstRangeRef = useRef(true);
+    useLayoutEffect(() => {
+        if (isFirstRangeRef.current) {
+            isFirstRangeRef.current = false;
+            return;
+        }
+        graphOpacity.value = 0;
+        graphOpacity.value = withTiming(1, { duration: 260 });
+    }, [timeRange]);
 
     const rGraphStyle = useAnimatedStyle(() => ({
         opacity: graphOpacity.value
@@ -311,26 +332,37 @@ const BodyweightGraphCard = ({ theme }) => {
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     };
 
+    // Latest logged weight (display units) — drives the header hero number
+    // and works even with a single log, where the graph stays empty.
+    const currentDisplayWeight = useMemo(() => {
+        if (!allData || allData.length === 0) return null;
+        const latest = [...allData]
+            .filter(r => Number(r.weight) > 3)
+            .sort((a, b) => new Date(b.datetime) - new Date(a.datetime))[0];
+        if (!latest) return null;
+        const kg = Number(latest.weight);
+        return useImperial ? kg * 2.20462 : kg;
+    }, [allData, useImperial]);
+
     const trendData = useMemo(() => {
         if (points.length < 2) {
-            return { direction: 'flat', label: '0%', period: 'all time' };
+            return { direction: 'flat', label: `0.0 ${unitLabel(useImperial)}`, period: 'all time' };
         }
 
-        const first = points[0];
-        const last = points[points.length - 1];
-
-        const diff = last.value - first.value;
-        const percentChange = first.value > 0 ? (diff / first.value) * 100 : 0;
-
-        const EPSILON = 0.01;
-        const isFlat = Math.abs(percentChange) < EPSILON;
+        const diff = points[points.length - 1].value - points[0].value;
+        const EPSILON = 0.05;
+        const isFlat = Math.abs(diff) < EPSILON;
 
         return {
+            // Absolute change reads better than % for bodyweight.
             direction: isFlat ? 'flat' : diff > 0 ? 'up' : 'down',
-            label: isFlat ? '0%' : `${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%`,
+            label: `${Math.abs(diff).toFixed(1)} ${unitLabel(useImperial)}`,
             period: timeRange.toLowerCase()
         };
-    }, [points, timeRange]);
+    }, [points, timeRange, useImperial]);
+
+    // Hero number: the scrubbed point while dragging, else the latest weight.
+    const heroValue = selectedPoint?.value ?? currentDisplayWeight;
 
     const onPointSelected = useCallback(p => { if (isTouching.current) setSelectedPoint(p); }, []);
     const onGestureStart = useCallback(() => { isTouching.current = true; }, []);
@@ -359,8 +391,9 @@ const BodyweightGraphCard = ({ theme }) => {
                     const focus = () => {
                         if (inputRef.current) {
                             inputRef.current.focus();
-                            // Only select text if we're editing an existing entry
-                            if (editingEntry && newWeight) {
+                            // Select the pre-filled value so typing replaces it
+                            // (edit OR the latest-weight prefill on a new log).
+                            if (newWeight) {
                                 inputRef.current.setNativeProps({
                                     selection: { start: 0, end: newWeight.length }
                                 });
@@ -470,50 +503,50 @@ const BodyweightGraphCard = ({ theme }) => {
             <GradientOrView colors={[theme.surface, theme.surface]} style={styles.content} theme={theme}>
                     <View style={styles.header}>
                         <View style={{ flex: 1, marginRight: 8 }}>
-                            <Text style={styles.title}>Body Weight</Text>
-                            <Text style={styles.subtitle}>
-                                {allData.length > 0 && points.length >= 1
-                                    ? `Current: ${points.at(-1)?.value.toFixed(1)} ${unitLabel(useImperial)}`
-                                    : 'No logs for this period'}
-                            </Text>
+                            <Text style={styles.eyebrow}>BODY WEIGHT</Text>
+                            <View style={styles.heroRow}>
+                                <Text style={styles.heroValue}>
+                                    {heroValue != null ? heroValue.toFixed(1) : '—'}
+                                </Text>
+                                {heroValue != null && (
+                                    <Text style={styles.heroUnit}>{unitLabel(useImperial)}</Text>
+                                )}
+                            </View>
 
-                            {allData.length >= 2 && points.length >= 2 && (
-                                <View style={[
-                                    styles.trendBadge,
-                                    { backgroundColor: `${theme.secondary}30` }
-                                ]}>
-                                    <Text style={[
-                                        styles.trendArrow,
-                                        { color: theme.secondary }
-                                    ]}>
-                                        {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
+                            {/* Fixed-height sub-line: scrub date → trend → prompt */}
+                            <View style={styles.subLine}>
+                                {selectedPoint ? (
+                                    <Text style={styles.subLineDate} numberOfLines={1}>
+                                        {selectedPoint.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                                     </Text>
-
-                                    <Text style={[
-                                        styles.trendText,
-                                        {
-                                            color: theme.secondary,
-                                            fontFamily: FONTS.bold
-                                        }
-                                    ]}>
-                                        {trendData.label}
+                                ) : (allData.length >= 2 && points.length >= 2) ? (
+                                    <View style={styles.trendBadge}>
+                                        <Text style={[styles.trendArrow, { color: theme.primary }]}>
+                                            {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
+                                        </Text>
+                                        <Text style={[styles.trendText, { color: theme.primary }]}>
+                                            {trendData.label}
+                                        </Text>
+                                        <Text style={styles.trendPeriod}>· {trendData.period}</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.subLineDate} numberOfLines={1}>
+                                        {allData.length === 0 ? 'No logs yet' : 'Add another log'}
                                     </Text>
-
-                                    <Text style={styles.trendPeriod}>
-                                        · {trendData.period}
-                                    </Text>
-                                </View>
-                            )}
+                                )}
+                            </View>
                         </View>
 
                         <View style={{ gap: 8, alignItems: 'flex-end' }}>
                             <View style={{ flexDirection: 'row', gap: 8 }}>
-                                <TouchableOpacity style={[styles.logButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]} onPress={() => historySheetRef.current?.show()}>
-                                    <Feather name="list" size={16} color={theme.text} />
+                                <TouchableOpacity style={styles.historyButton} onPress={() => historySheetRef.current?.show()}>
+                                    <Feather name="list" size={16} color={theme.textSecondary} />
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.logButton} onPress={() => {
                                     setEditingEntry(null);
-                                    setNewWeight('');
+                                    // Pre-fill with the latest weight so a small daily
+                                    // adjustment is a tiny edit, not a fresh entry.
+                                    setNewWeight(currentDisplayWeight != null ? currentDisplayWeight.toFixed(1) : '');
                                     setLogDate(new Date().toISOString().split('T')[0]);
                                     setModalVisible(true);
                                 }}>
@@ -531,26 +564,24 @@ const BodyweightGraphCard = ({ theme }) => {
                         </View>
                     </View>
 
+                    {/* Single fixed-height region — identical card height in
+                        every state (data / empty / loading / any range). */}
+                    <View style={styles.chartArea}>
                     {points.length < 2 ? (
-                        !loading && (
-                            <View style={[styles.emptyState, { height: GRAPH_HEIGHT + 60, justifyContent: 'center', alignItems: 'center' }]}>
-                                <Feather name="activity" size={40} color={theme.textSecondary} style={{ opacity: 0.2, marginBottom: 10 }} />
-                                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                                    {allData.length === 0 ? 'Log weight to see your progress graph' : 'No logs found for this period'}
-                                </Text>
-                            </View>
-                        )
+                        <View style={styles.chartEmpty}>
+                            {loading ? (
+                                <ActivityIndicator size="small" color={theme.primary} />
+                            ) : (
+                                <>
+                                    <Feather name="activity" size={40} color={theme.textSecondary} style={{ opacity: 0.2, marginBottom: 10 }} />
+                                    <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                                        {allData.length === 0 ? 'Log weight to see your progress graph' : 'No logs found for this period'}
+                                    </Text>
+                                </>
+                            )}
+                        </View>
                     ) : (
                         <>
-                            <View style={styles.tooltipContainer}>
-                                <View style={styles.activeTooltip}>
-                                    <Text style={styles.tooltipValue}>{(selectedPoint?.value ?? points.at(-1)?.value).toFixed(1)} {unitLabel(useImperial)}</Text>
-                                    <Text style={styles.tooltipDate}>
-                                        {selectedPoint ? selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Current'}
-                                    </Text>
-                                </View>
-                            </View>
-
                             <View style={styles.graphRow}>
                                 <View style={styles.yAxis}>
                                     {(() => {
@@ -607,6 +638,7 @@ const BodyweightGraphCard = ({ theme }) => {
                             </View>
                         </>
                     )}
+                    </View>
                 </GradientOrView>
             {renderModalsAndSheets()}
         </View>
@@ -615,14 +647,12 @@ const BodyweightGraphCard = ({ theme }) => {
 
 const getStyles = (theme) => StyleSheet.create({
     container: {
-        marginBottom: 20,
+        marginBottom: 16,
         marginHorizontal: 16,
-        borderRadius: 24,
+        borderRadius: 16,
         backgroundColor: theme.surface,
-        borderWidth: 1,
-        borderColor: theme.border,
         overflow: 'hidden',
-        ...getThemedShadow(theme, 'medium'),
+        ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
     },
     content: {
         padding: 20,
@@ -633,35 +663,41 @@ const getStyles = (theme) => StyleSheet.create({
         alignItems: 'flex-start',
         marginBottom: 12,
     },
-    title: {
-        fontSize: 18,
-        fontFamily: FONTS.bold,
-        color: theme.text,
-        marginBottom: 2,
-    },
-    subtitle: {
+    eyebrow: {
         fontSize: 12,
-        fontFamily: FONTS.medium,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        marginBottom: 4,
+    },
+    heroRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 4,
+    },
+    heroValue: {
+        fontSize: 30,
+        fontFamily: FONTS.bold,
+        letterSpacing: -0.8,
+        color: theme.text,
+        fontVariant: ['tabular-nums'],
+    },
+    heroUnit: {
+        fontSize: 15,
+        fontFamily: FONTS.semiBold,
         color: theme.textSecondary,
     },
-    tooltipContainer: {
-        height: 44,
+    subLine: {
+        height: 24,
         justifyContent: 'center',
-        marginBottom: 6,
+        alignItems: 'flex-start',
+        marginTop: 3,
     },
-    activeTooltip: {
-        paddingLeft: Y_AXIS_WIDTH,
-    },
-    tooltipValue: {
-        fontSize: 26,
-        fontFamily: FONTS.bold,
-        color: theme.text,
-    },
-    tooltipDate: {
-        fontSize: 12,
+    subLineDate: {
+        fontSize: 12.5,
         fontFamily: FONTS.medium,
         color: theme.textSecondary,
-        marginTop: 2,
     },
     rangeSelector: {
         flexDirection: 'row',
@@ -687,9 +723,17 @@ const getStyles = (theme) => StyleSheet.create({
     rangeTextActive: {
         color: theme.primary,
     },
+    chartArea: {
+        height: CHART_AREA_HEIGHT,
+        marginTop: 10,
+    },
+    chartEmpty: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     graphRow: {
         flexDirection: 'row',
-        marginTop: 10,
     },
     yAxis: {
         width: Y_AXIS_WIDTH,
@@ -715,11 +759,6 @@ const getStyles = (theme) => StyleSheet.create({
         fontFamily: FONTS.medium,
         width: 60,
     },
-    emptyState: {
-        height: 260,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
     emptyText: {
         fontSize: 14,
         color: theme.textSecondary,
@@ -729,11 +768,11 @@ const getStyles = (theme) => StyleSheet.create({
     trendBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
+        backgroundColor: theme.overlayInput,
+        paddingHorizontal: 9,
+        paddingVertical: 3,
+        borderRadius: 100,
         gap: 4,
-        marginTop: 4,
         alignSelf: 'flex-start'
     },
     trendArrow: {
@@ -743,21 +782,29 @@ const getStyles = (theme) => StyleSheet.create({
     },
     trendText: {
         fontSize: 12,
+        fontFamily: FONTS.bold,
     },
     trendPeriod: {
         fontSize: 10,
         color: theme.textSecondary,
         opacity: 0.8,
     },
+    historyButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: theme.overlayInput,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     logButton: {
         backgroundColor: theme.primary,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 6,
+        height: 32,
         paddingHorizontal: 12,
-        borderRadius: 12,
+        borderRadius: 16,
         gap: 4,
-        marginBottom: 8,
     },
     logButtonText: {
         color: theme.textAlternate,

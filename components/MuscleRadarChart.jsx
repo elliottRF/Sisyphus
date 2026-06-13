@@ -11,7 +11,7 @@ import Svg, {
     LinearGradient,
     Stop,
 } from 'react-native-svg';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, isLightTheme, getThemedShadow, withAlpha } from '../constants/theme';
 import { fetchRecentMuscleUsage } from './db';
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, on, off } from '../utils/events';
@@ -92,8 +92,14 @@ const MuscleRadarChart = () => {
 
     const getScoreColor = (score) => {
         if (score >= 70) return theme.success; // Balanced
-        if (score >= 50) return '#FF9800'; // Moderate
+        if (score >= 50) return theme.warning; // Moderate
         return theme.danger; // Unbalanced
+    };
+
+    const getScoreLabel = (score) => {
+        if (score >= 70) return 'Balanced';
+        if (score >= 50) return 'Moderate';
+        return 'Unbalanced';
     };
 
     const loadData = useCallback(async (range = timeRange) => {
@@ -148,6 +154,20 @@ const MuscleRadarChart = () => {
     const maxGraphValue = Math.max(...values, 5);
     const averageVolume = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
     const laggingThreshold = averageVolume * 0.7;
+    const hasData = values.some(v => v > 0);
+
+    // The weak points — the card's actual payoff, surfaced as chips instead
+    // of only being implied by small red dots. Matches the dot logic exactly
+    // (trained but below the lagging threshold), with no cap.
+    const laggingMuscles = useMemo(() => {
+        if (averageVolume <= 0) return [];
+        return axes
+            .filter(a => {
+                const v = radarData[a] || 0;
+                return v > 0 && v < laggingThreshold;
+            })
+            .sort((a, b) => (radarData[a] || 0) - (radarData[b] || 0));
+    }, [radarData, laggingThreshold, averageVolume]);
 
     const getCoordinates = (index, value, extraRadius = 0) => {
         const angle = index * angleStep - Math.PI / 2;
@@ -163,17 +183,36 @@ const MuscleRadarChart = () => {
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <View>
-                    <Text style={styles.title}>Muscle Balance</Text>
-                    {Object.keys(radarData).length > 0 && (
-                        <View style={[styles.balanceBadge, { backgroundColor: getScoreColor(balanceScore) + '20', opacity: loading ? 0.6 : 1 }]}>
-                            <Text style={[styles.balanceText, { color: getScoreColor(balanceScore) }]}>
-                                {balanceScore}% Balanced
-                            </Text>
-                        </View>
-                    )}
+                <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.eyebrow}>MUSCLE BALANCE</Text>
+                    <View style={styles.heroRow}>
+                        <Text style={[styles.heroValue, { color: hasData ? getScoreColor(balanceScore) : theme.textSecondary }]}>
+                            {hasData ? balanceScore : '—'}
+                        </Text>
+                        {hasData && <Text style={[styles.heroPct, { color: getScoreColor(balanceScore) }]}>%</Text>}
+                        {hasData && <Text style={styles.heroLabel}>{getScoreLabel(balanceScore)}</Text>}
+                    </View>
                 </View>
                 <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} styles={styles} />
+            </View>
+
+            {/* Insight gets the full card width so the lagging chips fit on
+                one line rather than wrapping in the cramped header column. */}
+            <View style={styles.insightRow}>
+                {!hasData ? (
+                    <Text style={styles.subLineText}>Log workouts to see your balance</Text>
+                ) : laggingMuscles.length === 0 ? (
+                    <Text style={[styles.subLineText, { color: theme.success }]}>Well balanced across all groups</Text>
+                ) : (
+                    <View style={styles.chipRow}>
+                        <Text style={styles.lagSuffix}>Lagging:</Text>
+                        {laggingMuscles.map(m => (
+                            <View key={m} style={[styles.lagChip, { backgroundColor: withAlpha(theme.danger, isLightTheme(theme) ? 0.1 : 0.16) }]}>
+                                <Text style={[styles.lagChipText, { color: theme.danger }]}>{m}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
             </View>
 
             {/* Chart is always rendered — we fade opacity instead of mounting/unmounting */}
@@ -250,13 +289,11 @@ const getStyles = (theme) => StyleSheet.create({
     container: {
         backgroundColor: theme.surface,
         marginHorizontal: 16,
-        marginBottom: 20,
-        borderRadius: 24,
+        marginBottom: 16,
+        borderRadius: 16,
         paddingTop: 16,
         paddingBottom: 4,
-        borderWidth: 1,
-        borderColor: theme.border,
-        ...SHADOWS.medium,
+        ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
     },
     header: {
         flexDirection: 'row',
@@ -265,19 +302,66 @@ const getStyles = (theme) => StyleSheet.create({
         paddingHorizontal: 20,
         marginBottom: 5,
     },
-    title: { fontSize: 18, fontFamily: FONTS.bold, color: theme.text },
-    balanceBadge: {
-        marginTop: 4,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6,
-        alignSelf: 'flex-start'
-    },
-    balanceText: {
-        fontSize: 10,
-        fontFamily: FONTS.bold,
+    eyebrow: {
+        fontSize: 12,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
         textTransform: 'uppercase',
-        letterSpacing: 0.5
+        letterSpacing: 0.6,
+        marginBottom: 4,
+    },
+    heroRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 2,
+    },
+    heroValue: {
+        fontSize: 30,
+        fontFamily: FONTS.bold,
+        letterSpacing: -0.8,
+        fontVariant: ['tabular-nums'],
+    },
+    heroPct: {
+        fontSize: 16,
+        fontFamily: FONTS.bold,
+        marginRight: 6,
+    },
+    heroLabel: {
+        fontSize: 14,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
+    },
+    insightRow: {
+        paddingHorizontal: 20,
+        marginTop: 6,
+        marginBottom: 2,
+        minHeight: 22,
+        justifyContent: 'center',
+    },
+    subLineText: {
+        fontSize: 12.5,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+    },
+    chipRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 5,
+    },
+    lagChip: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 100,
+    },
+    lagChipText: {
+        fontSize: 11.5,
+        fontFamily: FONTS.semiBold,
+    },
+    lagSuffix: {
+        fontSize: 12.5,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
     },
     chartWrapper: { width: '100%', alignItems: 'center', marginTop: -5 },
     rangeSelector: { flexDirection: 'row', backgroundColor: theme.overlayBorder, borderRadius: 8, padding: 2 },

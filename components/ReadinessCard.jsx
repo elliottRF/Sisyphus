@@ -11,7 +11,16 @@ import Animated, {
     withDelay,
 } from 'react-native-reanimated';
 import { muscleMapping, majorMuscles } from '../constants/muscles';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, RADIUS, isLightTheme, getThemedShadow } from '../constants/theme';
+
+// Status colour is reserved for the percent + progress bar; tiles themselves
+// stay neutral so the grid reads calm. Red = fatigued, orange = recovering,
+// green = ready.
+const statusColor = (theme, percent) => {
+    if (percent <= 60) return theme.danger;
+    if (percent < 80) return theme.warning;
+    return theme.success;
+};
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const SPRING = { damping: 28, stiffness: 280, mass: 0.85 };
@@ -409,17 +418,8 @@ const MuscleReadinessBox = ({ muscle, percent, localStyles, onPress, usageData, 
     const ref = useRef(null);
     const displayName = shortMuscleNames[muscle] || muscle;
 
-    let color, bg;
-    if (percent <= 60) {
-        color = theme.primary;
-        bg = theme.overlayInputFocused;
-    } else if (percent < 80) {
-        color = theme.secondary;
-        bg = `${theme.secondary}30`;
-    } else {
-        color = theme.success;
-        bg = 'rgba(52,199,89,0.15)';
-    }
+    const color = statusColor(theme, percent);
+    const bg = theme.overlayInput;
 
     const getContributingExercises = () => {
         const muscleDef = majorMuscles.find(m => m.label === muscle);
@@ -491,7 +491,7 @@ const MuscleReadinessBox = ({ muscle, percent, localStyles, onPress, usageData, 
                 onPressOut={() => { scale.value = withSpring(1, SPRING); }}
             >
                 <Animated.View style={[localStyles.muscleBoxHorizontal, { backgroundColor: bg }, animatedStyle]}>
-                    <Text style={[localStyles.muscleNameHorizontal, { color }]} numberOfLines={1}>
+                    <Text style={[localStyles.muscleNameHorizontal, { color: theme.text }]} numberOfLines={1}>
                         {displayName}
                     </Text>
                     {showPercentage && (
@@ -516,7 +516,7 @@ const MuscleReadinessBox = ({ muscle, percent, localStyles, onPress, usageData, 
             onPressOut={() => { scale.value = withSpring(1, SPRING); }}
         >
             <Animated.View style={[localStyles.muscleBox, { backgroundColor: bg }, animatedStyle]}>
-                <Text style={[localStyles.muscleName, { color }]} numberOfLines={1}>
+                <Text style={[localStyles.muscleName, { color: theme.text }]} numberOfLines={1}>
                     {displayName}
                 </Text>
                 <View style={localStyles.progressBarContainer}>
@@ -541,17 +541,8 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, usageData, hori
             if (!muscleItem) return;
 
             const { percent } = muscleItem;
-            let color, bg;
-            if (percent <= 60) {
-                color = theme.primary;
-                bg = theme.overlayInputFocused;
-            } else if (percent < 80) {
-                color = theme.secondary;
-                bg = `${theme.secondary}30`;
-            } else {
-                color = theme.success;
-                bg = 'rgba(52,199,89,0.15)';
-            }
+            const color = statusColor(theme, percent);
+            const bg = theme.overlayInput;
 
             const muscleDef = majorMuscles.find(m => m.label === label);
             const now = new Date();
@@ -603,7 +594,6 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, usageData, hori
             <>
                 <View style={localStyles.readinessHorizontalCard}>
                     <View style={localStyles.readinessHeader}>
-                        <Feather name="activity" size={14} color={theme.primary} />
                         <Text style={localStyles.readinessTitle}>Readiness</Text>
                     </View>
                     {/* Pairs of muscle boxes as vertical columns, scrolled horizontally */}
@@ -645,7 +635,6 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, usageData, hori
         <>
             <View style={[localStyles.readinessStickyCard, { width: cardWidth }]}>
                 <View style={localStyles.readinessHeader}>
-                    <Feather name="activity" size={14} color={theme.primary} />
                     <Text style={localStyles.readinessTitle}>Readiness</Text>
                 </View>
                 <ScrollView style={localStyles.readinessScroll} showsVerticalScrollIndicator={false}>
@@ -681,41 +670,39 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, usageData, hori
     );
 });
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => {
+    const cardShadow = isLightTheme(theme) ? getThemedShadow(theme, 'small') : null;
+
+    return StyleSheet.create({
     readinessStickyCard: {
         flex: 1,
         minHeight: 400,
         backgroundColor: theme.surface,
-        borderRadius: 24,
-        borderWidth: 1,
-        borderColor: theme.border,
-        ...SHADOWS.medium,
+        borderRadius: RADIUS.l,
+        ...cardShadow,
         padding: 8,
         overflow: 'hidden'
     },
     readinessHorizontalCard: {
         marginHorizontal: 16,
-        marginBottom: 24,
+        marginBottom: 20,
         backgroundColor: theme.surface,
-        borderRadius: 24,
-        borderWidth: 1,
-        borderColor: theme.border,
-        ...SHADOWS.medium,
-        paddingTop: 8,
+        borderRadius: RADIUS.l,
+        ...cardShadow,
+        paddingTop: 10,
         paddingBottom: 10,
         overflow: 'hidden',
     },
     readinessHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 10,
-        paddingHorizontal: 14,
+        marginBottom: 8,
+        paddingHorizontal: 16,
     },
     readinessTitle: {
-        fontSize: 16,
-        fontFamily: FONTS.bold,
-        color: theme.text
+        fontSize: 12,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
     },
     readinessScroll: {
         flex: 1
@@ -730,11 +717,8 @@ const getStyles = (theme) => StyleSheet.create({
     },
     muscleBox: {
         flex: 1,
-        backgroundColor: theme.overlayInputFocused,
-        borderRadius: 12,
+        borderRadius: RADIUS.m,
         padding: 10,
-        borderWidth: 1,
-        borderColor: theme.border,
     },
     muscleName: {
         fontSize: 13.5,
@@ -760,31 +744,31 @@ const getStyles = (theme) => StyleSheet.create({
     horizontalColumn: {
         flex: 1,
         flexDirection: 'column',
-        gap: 4,
+        gap: 6,
     },
     muscleBoxHorizontal: {
-        borderRadius: 12,
-        padding: 8,
-        borderWidth: 1,
-        borderColor: theme.border,
-        gap: 2,
+        borderRadius: RADIUS.m,
+        paddingHorizontal: 9,
+        paddingVertical: 7,
+        gap: 1,
     },
     muscleNameHorizontal: {
-        fontSize: 13,
-        fontFamily: FONTS.semiBold,
+        fontSize: 12,
+        fontFamily: FONTS.medium,
     },
     musclePercentHorizontal: {
-        fontSize: 16,
+        fontSize: 15,
         fontFamily: FONTS.bold,
-        letterSpacing: -0.5,
+        letterSpacing: -0.3,
     },
     progressBarContainerHorizontal: {
-        height: 4,
+        height: 3,
         backgroundColor: theme.overlayBorder,
-        borderRadius: 2,
+        borderRadius: 1.5,
         overflow: 'hidden',
-        marginTop: 2,
+        marginTop: 3,
     },
-});
+    });
+};
 
 export default ReadinessCard;

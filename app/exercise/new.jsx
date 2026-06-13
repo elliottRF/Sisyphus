@@ -17,6 +17,7 @@ export default function NewExerciseScreen() {
             <Stack.Screen options={{ headerShown: false }} />
 
             <NewExercise
+                isScreen
                 exerciseID={id ? Number(id) : undefined}
                 close={() => router.back()}
             />

@@ -12,6 +12,7 @@ const ThemeContext = createContext();
 export const ThemeProvider = ({ children }) => {
     const [themeID, setThemeID] = useState('DEFAULT');
     const [theme, setTheme] = useState(THEMES.DEFAULT);
+    const [customThemes, setCustomThemes] = useState([]);
 
     const [gender, setGender] = useState('male');
     const [accessoryWeight, setAccessoryWeight] = useState(0.5);
@@ -21,7 +22,6 @@ export const ThemeProvider = ({ children }) => {
     const [workoutInProgress, setWorkoutInProgress] = useState(false);
     const [workoutStartTime, setWorkoutStartTime] = useState(null);
     const [useImperial, setUseImperial] = useState(false);
-    const [alternateView, setAlternateView] = useState(false);
     const [settingsLoaded, setSettingsLoaded] = useState(false);
 
     useEffect(() => {
@@ -39,7 +39,7 @@ export const ThemeProvider = ({ children }) => {
                 storedRepRangeMin,
                 storedRepRangeMax,
                 storedWorkoutStartTime,
-                storedAlternateView
+                storedCustomThemes,
             ] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
@@ -49,12 +49,28 @@ export const ThemeProvider = ({ children }) => {
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangeMin),
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangeMax),
                 AsyncStorage.getItem('@workoutStartTime'),
-                AsyncStorage.getItem(SETTINGS_KEYS.alternateView)
+                AsyncStorage.getItem('user_custom_themes'),
             ]);
 
-            if (storedThemeID && THEMES[storedThemeID]) {
-                setThemeID(storedThemeID);
-                setTheme(THEMES[storedThemeID]);
+            // Custom themes are stored as full theme objects (each with an id).
+            let parsedCustom = [];
+            if (storedCustomThemes) {
+                try { parsedCustom = JSON.parse(storedCustomThemes) || []; } catch (e) { parsedCustom = []; }
+                setCustomThemes(parsedCustom);
+            }
+
+            // Resolve the saved theme from built-ins OR custom themes.
+            if (storedThemeID) {
+                if (THEMES[storedThemeID]) {
+                    setThemeID(storedThemeID);
+                    setTheme(THEMES[storedThemeID]);
+                } else {
+                    const custom = parsedCustom.find((t) => t.id === storedThemeID);
+                    if (custom) {
+                        setThemeID(storedThemeID);
+                        setTheme(custom);
+                    }
+                }
             }
             if (storedGender) {
                 setGender(storedGender);
@@ -77,9 +93,6 @@ export const ThemeProvider = ({ children }) => {
             if (storedWorkoutStartTime) {
                 setWorkoutStartTime(storedWorkoutStartTime);
             }
-            if (storedAlternateView !== null) {
-                setAlternateView(storedAlternateView === 'true');
-            }
         } catch (error) {
             console.error("Failed to load settings:", error);
         } finally {
@@ -88,14 +101,51 @@ export const ThemeProvider = ({ children }) => {
     };
 
     const updateTheme = async (newThemeID) => {
-        if (THEMES[newThemeID]) {
-            setThemeID(newThemeID);
-            setTheme(THEMES[newThemeID]);
-            try {
-                await AsyncStorage.setItem('user_theme', newThemeID);
-            } catch (error) {
-                console.error("Failed to save theme:", error);
-            }
+        const resolved = THEMES[newThemeID] || customThemes.find((t) => t.id === newThemeID);
+        if (!resolved) return;
+        setThemeID(newThemeID);
+        setTheme(resolved);
+        try {
+            await AsyncStorage.setItem('user_theme', newThemeID);
+        } catch (error) {
+            console.error("Failed to save theme:", error);
+        }
+    };
+
+    // Add a custom theme (a full theme object from buildCustomTheme) and make
+    // it active. Returns the new theme id.
+    const addCustomTheme = async (themeObj, name) => {
+        const id = `custom_${Date.now()}`;
+        const full = { ...themeObj, id, name: name?.trim() || `Custom ${customThemes.length + 1}` };
+        const next = [...customThemes, full];
+        setCustomThemes(next);
+        setThemeID(id);
+        setTheme(full);
+        try {
+            await AsyncStorage.multiSet([
+                ['user_custom_themes', JSON.stringify(next)],
+                ['user_theme', id],
+            ]);
+        } catch (error) {
+            console.error("Failed to save custom theme:", error);
+        }
+        return id;
+    };
+
+    const deleteCustomTheme = async (id) => {
+        const next = customThemes.filter((t) => t.id !== id);
+        setCustomThemes(next);
+        const removingActive = themeID === id;
+        if (removingActive) {
+            setThemeID('DEFAULT');
+            setTheme(THEMES.DEFAULT);
+        }
+        try {
+            const ops = [['user_custom_themes', JSON.stringify(next)]];
+            if (removingActive) ops.push(['user_theme', 'DEFAULT']);
+            await AsyncStorage.multiSet(ops);
+        } catch (error) {
+            console.error("Failed to delete custom theme:", error);
         }
     };
 
@@ -151,15 +201,6 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
-    const updateAlternateView = async (enabled) => {
-        setAlternateView(enabled);
-        try {
-            await AsyncStorage.setItem(SETTINGS_KEYS.alternateView, enabled.toString());
-        } catch (error) {
-            console.error("Failed to save alternate view preference:", error);
-        }
-    };
-
     const updateWorkoutStartTime = async (time) => {
         setWorkoutStartTime(time);
         try {
@@ -178,6 +219,9 @@ export const ThemeProvider = ({ children }) => {
             theme,
             themeID,
             updateTheme,
+            customThemes,
+            addCustomTheme,
+            deleteCustomTheme,
             gender,
             updateGender,
             accessoryWeight,
@@ -193,8 +237,6 @@ export const ThemeProvider = ({ children }) => {
             updateWorkoutStartTime,
             useImperial,
             updateUnitPref,
-            alternateView,
-            updateAlternateView,
             settingsLoaded
         }}>
             {children}

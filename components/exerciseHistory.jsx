@@ -7,14 +7,29 @@ import Body from "react-native-body-highlighter";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import * as Haptics from 'expo-haptics';
 import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession } from './db';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, RADIUS, isLightTheme, getThemedShadow } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import PRGraphCard from "./PRGraphCard";
+import ContextMenu from './ContextMenu';
 import { Stack } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 import { getExerciseSnapshotSync, updateExerciseSnapshot, calculateSnapshotFromHistory } from '../utils/exerciseSnapshots';
+import { buildWorkoutDataFromSession } from '../utils/workoutBuilders';
+import { customAlert } from '../utils/customAlert';
 import { AppEvents, on, off } from '../utils/events';
+
+const relativeTime = (timestamp) => {
+    if (!timestamp) return null;
+    const days = Math.floor((Date.now() - timestamp) / 86400000);
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 7) return `${days}d ago`;
+    if (days < 30) return `${Math.floor(days / 7)}w ago`;
+    if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+    return `${Math.floor(days / 365)}y ago`;
+};
 
 
 
@@ -99,7 +114,7 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 });
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
-const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect, exercisesList, animationKey }) => {
+const HistorySessionCard = React.memo(({ session, exercises, theme, styles, formatDate, onSessionSelect, onSessionMenu, exercisesList, animationKey }) => {
     const [isLoading, setIsLoading] = useState(false);
     const { useImperial } = useTheme();
 
@@ -178,13 +193,23 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
     const isAssisted = exerciseDetails?.isAssisted === 1;
 
     return (
-        <Animated.View style={{
-            opacity: entranceOpacity,
-            transform: [{ translateY: entranceTranslateY }],
-        }}>
+        <Animated.View
+            // Composite the card (incl. its shadow) to one layer while fading,
+            // else Android draws the elevation shadow as a hard grey box edge
+            // during the opacity animation (the "ugly inner border" flash).
+            renderToHardwareTextureAndroid
+            style={{
+                opacity: entranceOpacity,
+                transform: [{ translateY: entranceTranslateY }],
+            }}>
             <AnimatedTouchableOpacity
                 activeOpacity={0.8}
                 onPress={handlePress}
+                onLongPress={(e) => {
+                    onSessionMenu?.(e, session);
+                    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 4 }).start();
+                }}
+                delayLongPress={350}
                 onPressIn={handlePressIn}
                 onPressOut={handlePressOut}
                 style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
@@ -301,6 +326,23 @@ const ALL_MUSCLE_SLUGS = [
 // highlighted muscles change once exercise data loads — no full colour pop.
 const DEFAULT_MUSCLE_TARGETS = ALL_MUSCLE_SLUGS.map(slug => ({ slug, intensity: 1 }));
 
+// Build the highlighter `data` (and a content key for change-detection) from
+// target/accessory slug lists. Normalizes slugs so seeded snapshot values and
+// live exercise data produce identical output — no pop when they reconcile.
+const buildMuscleTargets = (targetSlugs = [], accessorySlugs = []) => {
+    const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+    const t = targetSlugs.map(norm).filter(Boolean);
+    const a = accessorySlugs.map(norm).filter(Boolean);
+    const worked = new Set([...t, ...a]);
+    const data = [
+        ...t.map(slug => ({ slug, intensity: 3 })),
+        ...a.map(slug => ({ slug, intensity: 2 })),
+        ...ALL_MUSCLE_SLUGS.filter(slug => !worked.has(slug)).map(slug => ({ slug, intensity: 1 })),
+    ];
+    const key = JSON.stringify({ t: [...t].sort(), a: [...a].sort() });
+    return { data, key };
+};
+
 
 
 const ExerciseHistory = (props) => {
@@ -315,19 +357,19 @@ const ExerciseHistory = (props) => {
     const [loading, setLoading] = useState(true);
     const [exercisesList, setExercises] = useState([]);
 
-    // Seed initial muscle targets from snapshot if available
-    const [formattedTargets, setFormattedTargets] = useState(() =>
+    // Seed initial muscle targets from the snapshot so the body diagram is
+    // highlighted on first paint. muscleKeyRef tracks the current content so
+    // the live recompute can skip redundant re-renders (which made the
+    // highlights occasionally re-draw / pop).
+    const initialMuscle = useMemo(() =>
         initialSnapshot?.muscles
-            ? [
-                ...initialSnapshot.muscles.target.map(slug => ({ slug, intensity: 3 })),
-                ...initialSnapshot.muscles.accessory.map(slug => ({ slug, intensity: 2 })),
-                ...ALL_MUSCLE_SLUGS.filter(slug =>
-                    !initialSnapshot.muscles.target.includes(slug) &&
-                    !initialSnapshot.muscles.accessory.includes(slug)
-                ).map(slug => ({ slug, intensity: 1 }))
-            ]
-            : DEFAULT_MUSCLE_TARGETS
+            ? buildMuscleTargets(initialSnapshot.muscles.target, initialSnapshot.muscles.accessory)
+            : { data: DEFAULT_MUSCLE_TARGETS, key: null },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        []
     );
+    const [formattedTargets, setFormattedTargets] = useState(initialMuscle.data);
+    const muscleKeyRef = useRef(initialMuscle.key);
 
     // Seed initial stats from snapshot if available
     const [stats, setStats] = useState(() => initialSnapshot?.stats || {
@@ -340,8 +382,56 @@ const ExerciseHistory = (props) => {
     const [displayStats, setDisplayStats] = useState(stats);
     const [showOnlyPRs, setShowOnlyPRs] = useState(false);
     const [filterAnimKey, setFilterAnimKey] = useState(0);
+    const [contextMenu, setContextMenu] = useState(null); // {x, y, session}
 
     const [exerciseName, setExerciseName] = useState(props.exerciseName);
+    const { workoutInProgress } = useTheme();
+
+    // ── Trend + rep records, derived once from the full history ─────────────
+    // Seeded from the snapshot cache until history loads, so the header
+    // never pops in after first paint.
+    const trend = useMemo(() => {
+        const allSets = workoutHistory.flatMap(([_, sets]) => sets);
+        if (allSets.length === 0) return initialSnapshot?.header?.trend ?? null;
+        const cutoff = Date.now() - 182 * 86400000; // ~6 months
+        let est1RM = 0;
+        let est1RMBefore = 0;
+        let lastPRTime = null;
+
+        allSets.forEach(set => {
+            const reps = parseInt(set.reps, 10) || 0;
+            const weight = parseFloat(set.weight) || 0;
+            const t = new Date(set.time).getTime();
+            if (reps > 0 && weight > 0) {
+                const oneRM = reps === 1 ? weight : weight * (1 + reps / 30);
+                est1RM = Math.max(est1RM, oneRM);
+                if (t < cutoff) est1RMBefore = Math.max(est1RMBefore, oneRM);
+            }
+            if ((set.is1rmPR || set.isWeightPR || set.isVolumePR) && (!lastPRTime || t > lastPRTime)) {
+                lastPRTime = t;
+            }
+        });
+
+        const pct = est1RMBefore > 0 ? ((est1RM - est1RMBefore) / est1RMBefore) * 100 : null;
+        return { est1RM, pct, lastPRTime };
+    }, [workoutHistory, initialSnapshot]);
+
+    // Best weight handled for at least N reps (1–10).
+    const repRecords = useMemo(() => {
+        const allSets = workoutHistory.flatMap(([_, sets]) => sets);
+        if (allSets.length === 0) return initialSnapshot?.header?.repRecords ?? [];
+        const records = [];
+        for (let r = 1; r <= 10; r++) {
+            let best = 0;
+            allSets.forEach(set => {
+                const reps = parseInt(set.reps, 10) || 0;
+                const weight = parseFloat(set.weight) || 0;
+                if (reps >= r && weight > best) best = weight;
+            });
+            if (best > 0) records.push({ reps: r, weight: best });
+        }
+        return records;
+    }, [workoutHistory, initialSnapshot]);
 
     const filteredWorkoutHistory = useMemo(() => {
         if (!showOnlyPRs) return workoutHistory;
@@ -370,6 +460,61 @@ const ExerciseHistory = (props) => {
         });
     };
 
+    const handleSessionMenu = (e, session) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setContextMenu({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, session });
+    };
+
+    const menuItems = useMemo(() => {
+        if (!contextMenu) return [];
+        const session = contextMenu.session;
+        return [
+            {
+                icon: 'external-link',
+                label: 'Open Full Session',
+                tint: true,
+                onPress: async () => {
+                    try {
+                        const data = await fetchWorkoutHistoryBySession(session);
+                        handleSessionSelect(session, data);
+                    } catch (err) { console.error(err); }
+                },
+            },
+            {
+                icon: 'rotate-ccw',
+                label: 'Redo Workout',
+                onPress: async () => {
+                    try {
+                        const rows = await fetchWorkoutHistoryBySession(session);
+                        if (!rows || rows.length === 0) return;
+                        const payload = {
+                            name: rows[0]?.name?.trim() || `Workout #${session}`,
+                            data: buildWorkoutDataFromSession(rows),
+                        };
+                        const start = () => router.push({ pathname: '/current', params: { template: JSON.stringify(payload) } });
+                        if (workoutInProgress) {
+                            customAlert(
+                                "Replace current workout?",
+                                "You have a workout in progress. Redoing this session will replace it.",
+                                [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "Replace", onPress: start, style: "destructive" },
+                                ]
+                            );
+                        } else {
+                            start();
+                        }
+                    } catch (err) { console.error(err); }
+                },
+            },
+            {
+                icon: 'edit-2',
+                label: 'Edit Workout',
+                onPress: () => router.push(`/workout/EditWorkout?session=${session}`),
+            },
+        ];
+    }, [contextMenu, workoutInProgress]);
+
     useEffect(() => {
         if (exercisesList.length > 0) {
             const { targetMuscles, accessoryMuscles } = getExerciseMuscles(props.exerciseID, exercisesList);
@@ -396,25 +541,12 @@ const ExerciseHistory = (props) => {
     };
 
     const handleMuscleStrings = (targetSelected, accessorySelected) => {
-        const workedSlugs = new Set();
-
-        const sluggedTargets = targetSelected.map(target => {
-            const slug = typeof target === 'string' ? target.trim().toLowerCase() : '';
-            workedSlugs.add(slug);
-            return { slug, intensity: 3 };
-        });
-
-        const sluggedAccessories = accessorySelected.map(accessory => {
-            const slug = typeof accessory === 'string' ? accessory.trim().toLowerCase() : '';
-            workedSlugs.add(slug);
-            return { slug, intensity: 2 };
-        });
-
-        const unworked = ALL_MUSCLE_SLUGS
-            .filter(slug => !workedSlugs.has(slug))
-            .map(slug => ({ slug, intensity: 1 }));
-
-        setFormattedTargets([...sluggedTargets, ...sluggedAccessories, ...unworked]);
+        const { data, key } = buildMuscleTargets(targetSelected, accessorySelected);
+        // Skip if the muscle set is unchanged — re-setting an equivalent array
+        // re-renders the body diagram and makes the highlights visibly re-draw.
+        if (key === muscleKeyRef.current) return;
+        muscleKeyRef.current = key;
+        setFormattedTargets(data);
     };
 
     useFocusEffect(
@@ -437,6 +569,9 @@ const ExerciseHistory = (props) => {
             return () => {
                 off(AppEvents.WORKOUT_COMPLETED, handleRefresh);
                 off(AppEvents.WORKOUT_DATA_IMPORTED, handleRefresh);
+                // Close the session hold-menu on blur so its transparent Modal
+                // can't linger over other screens and block their touches.
+                setContextMenu(null);
             };
         }, [props.exerciseID])
     );
@@ -566,6 +701,58 @@ const ExerciseHistory = (props) => {
     const fmtSets = (val) =>
         val == null ? '' : String(val);
 
+    // ── Header copy: eyebrow + insight line ─────────────────────────────────
+    // Both fall back to the snapshot cache so they render complete on first
+    // paint and only silently correct themselves if data changed.
+    const primaryMuscle = currentExerciseDetails?.targetMuscle?.split(',')[0]?.trim()
+        || initialSnapshot?.header?.primaryMuscle
+        || initialSnapshot?.muscles?.target?.[0]?.trim();
+    const workoutCount = workoutHistory.length > 0
+        ? workoutHistory.length
+        : (initialSnapshot?.header?.workoutCount ?? 0);
+    const eyebrowText = [
+        primaryMuscle,
+        workoutCount > 0
+            ? `${workoutCount} ${workoutCount === 1 ? 'WORKOUT' : 'WORKOUTS'}`
+            : null,
+    ].filter(Boolean).join(' · ').toUpperCase() || 'EXERCISE';
+
+    let insightLine = null;
+    if (trend && !isCardioHeader && !isAssistedHeader) {
+        const parts = [];
+        if (trend.pct != null && Math.abs(trend.pct) >= 1) {
+            parts.push(`Est. 1RM ${trend.pct > 0 ? 'up' : 'down'} ${Math.abs(trend.pct).toFixed(0)}% in 6 months`);
+        }
+        if (trend.lastPRTime) {
+            parts.push(`last PR ${relativeTime(trend.lastPRTime)}`);
+        }
+        if (parts.length) insightLine = parts.join(' · ');
+    }
+
+    // Cross-fade the header values exactly like the stat cards: hidden until
+    // the first real values exist, dissolve when they change — never pop.
+    const headerOpacity = useRef(new Animated.Value(initialSnapshot?.header ? 1 : 0)).current;
+    const [displayHeader, setDisplayHeader] = useState({ eyebrow: eyebrowText, insight: insightLine, repRecords });
+
+    useEffect(() => {
+        const changed =
+            displayHeader.eyebrow !== eyebrowText ||
+            displayHeader.insight !== insightLine ||
+            JSON.stringify(displayHeader.repRecords) !== JSON.stringify(repRecords);
+
+        if (!changed) {
+            // Nothing to swap in — reveal once data exists (cached or loaded).
+            if (initialSnapshot?.header || !loading) {
+                Animated.timing(headerOpacity, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+            }
+            return;
+        }
+        Animated.timing(headerOpacity, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => {
+            setDisplayHeader({ eyebrow: eyebrowText, insight: insightLine, repRecords });
+            Animated.timing(headerOpacity, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+        });
+    }, [eyebrowText, insightLine, repRecords, loading]);
+
     return (
         <View style={styles.container}>
             <FlatList
@@ -581,13 +768,23 @@ const ExerciseHistory = (props) => {
                 ListHeaderComponent={
                     <View style={styles.headerWrapper}>
                         <View style={styles.titleRow}>
-                            <Text style={styles.exerciseTitle}>{exerciseName}</Text>
+                            <View style={{ flex: 1, paddingRight: 12 }}>
+                                <Animated.Text style={[styles.eyebrow, { opacity: headerOpacity }]}>
+                                    {displayHeader.eyebrow}
+                                </Animated.Text>
+                                <Text style={styles.exerciseTitle}>{exerciseName}</Text>
+                                {/* Always rendered so the history load doesn't
+                                    push the page down when the line appears. */}
+                                <Animated.Text style={[styles.insightLine, { opacity: headerOpacity }]} numberOfLines={1}>
+                                    {displayHeader.insight || ' '}
+                                </Animated.Text>
+                            </View>
                             <TouchableOpacity
                                 onPress={showEditSheet}
                                 style={styles.editButton}
                                 activeOpacity={0.7}
                             >
-                                <MaterialIcons name="edit" size={20} color={theme.text} />
+                                <MaterialIcons name="edit" size={17} color={theme.textSecondary} />
                             </TouchableOpacity>
                         </View>
 
@@ -617,13 +814,25 @@ const ExerciseHistory = (props) => {
                                 )
                             )}
 
-                            <View style={styles.statCard}>
-                                <Feather name="layers" size={16} color={theme.primary} style={styles.statIcon} />
-                                <Animated.View style={{ opacity: statsOpacity }}>
-                                    <Text style={styles.statValue}>{fmtSets(displayStats.totalSets)}</Text>
-                                </Animated.View>
-                                <Text style={styles.statLabel}>Total Sets</Text>
-                            </View>
+                            {(isCardioHeader || isAssistedHeader) ? (
+                                <View style={styles.statCard}>
+                                    <Feather name="layers" size={16} color={theme.primary} style={styles.statIcon} />
+                                    <Animated.View style={{ opacity: statsOpacity }}>
+                                        <Text style={styles.statValue}>{fmtSets(displayStats.totalSets)}</Text>
+                                    </Animated.View>
+                                    <Text style={styles.statLabel}>Total Sets</Text>
+                                </View>
+                            ) : (
+                                <View style={styles.statCard}>
+                                    <Feather name="trending-up" size={16} color={theme.primary} style={styles.statIcon} />
+                                    <Animated.View style={{ opacity: statsOpacity }}>
+                                        <Text style={styles.statValue}>
+                                            {trend ? fmtWeight(trend.est1RM) : ''}
+                                        </Text>
+                                    </Animated.View>
+                                    <Text style={styles.statLabel}>Est. 1RM</Text>
+                                </View>
+                            )}
 
                             {isCardioHeader ? (
                                 <View style={styles.statCard}>
@@ -652,7 +861,8 @@ const ExerciseHistory = (props) => {
                                     data={formattedTargets}
                                     gender={gender}
                                     side="front"
-                                    scale={0.75}
+                                    // female SVG is slightly taller than the male one
+                                    scale={gender === 'female' ? 0.7 : 0.75}
                                     border={safeBorder}
                                     colors={bodyColors}
                                     defaultFill={theme.bodyFill}
@@ -662,7 +872,7 @@ const ExerciseHistory = (props) => {
                                     data={formattedTargets}
                                     gender={gender}
                                     side="back"
-                                    scale={0.75}
+                                    scale={gender === 'female' ? 0.7 : 0.75}
                                     border={safeBorder}
                                     colors={bodyColors}
                                     defaultFill={theme.bodyFill}
@@ -676,6 +886,27 @@ const ExerciseHistory = (props) => {
                                 exerciseName={exerciseName}
                                 isCompact={true}
                             />
+                        )}
+
+                        {/* Rep records: best weight held for at least N reps */}
+                        {!isCardioHeader && !isAssistedHeader && displayHeader.repRecords.length > 0 && (
+                            <Animated.View style={[styles.repCard, { opacity: headerOpacity }]}>
+                                <Text style={styles.repCardTitle}>Rep Records</Text>
+                                <View style={styles.repGrid}>
+                                    {[displayHeader.repRecords.slice(0, Math.ceil(displayHeader.repRecords.length / 2)), displayHeader.repRecords.slice(Math.ceil(displayHeader.repRecords.length / 2))].map((column, colIdx) => (
+                                        <View key={colIdx} style={styles.repColumn}>
+                                            {column.map(record => (
+                                                <View key={record.reps} style={styles.repRow}>
+                                                    <View style={styles.repBadge}>
+                                                        <Text style={styles.repBadgeText}>{record.reps}</Text>
+                                                    </View>
+                                                    <Text style={styles.repWeight}>{fmtWeight(record.weight)}</Text>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    ))}
+                                </View>
+                            </Animated.View>
                         )}
 
                         <View style={styles.historyHeaderRow}>
@@ -720,6 +951,7 @@ const ExerciseHistory = (props) => {
                         styles={styles}
                         formatDate={formatDate}
                         onSessionSelect={handleSessionSelect}
+                        onSessionMenu={handleSessionMenu}
                         exercisesList={exercisesList}
                         animationKey={filterAnimKey}
                     />
@@ -735,6 +967,13 @@ const ExerciseHistory = (props) => {
                 }
             />
 
+            {contextMenu && (
+                <ContextMenu
+                    anchor={contextMenu}
+                    items={menuItems}
+                    onClose={() => setContextMenu(null)}
+                />
+            )}
         </View>
     );
 };
@@ -761,36 +1000,46 @@ const getStyles = (theme) => StyleSheet.create({
     },
     titleRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 20,
-        position: 'relative',
-        minHeight: 44,
-        paddingHorizontal: 12,
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        marginBottom: 18,
+        paddingHorizontal: 16,
+    },
+    eyebrow: {
+        fontSize: 12,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
+        letterSpacing: 1.1,
+        marginBottom: 2,
     },
     exerciseTitle: {
-        fontSize: 24,
+        fontSize: 26,
         fontFamily: FONTS.bold,
+        letterSpacing: -0.5,
         color: theme.text,
-        textAlign: 'center',
-        paddingHorizontal: 50,
+    },
+    insightLine: {
+        fontSize: 13,
+        fontFamily: FONTS.regular,
+        color: theme.textSecondary,
+        marginTop: 4,
+        lineHeight: 18,
+        minHeight: 18,
     },
     editButton: {
-        position: 'absolute',
-        right: 0,
-        padding: 10,
-        backgroundColor: theme.surface,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: theme.border,
-        marginRight: 12,
-        ...SHADOWS.small,
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: theme.overlayInput,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 4,
     },
     statsRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 24,
-        gap: 12,
+        marginBottom: 20,
+        gap: 10,
         paddingHorizontal: 12,
     },
     statCard: {
@@ -800,9 +1049,7 @@ const getStyles = (theme) => StyleSheet.create({
         paddingVertical: 16,
         paddingHorizontal: 8,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: theme.border,
-        ...SHADOWS.small,
+        ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
     },
     statIcon: {
         marginBottom: 8,
@@ -826,12 +1073,10 @@ const getStyles = (theme) => StyleSheet.create({
         justifyContent: 'space-evenly',
         alignItems: 'center',
         backgroundColor: theme.surface,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: theme.border,
-        marginBottom: 24,
+        borderRadius: 16,
+        marginBottom: 20,
         marginHorizontal: 12,
-        ...SHADOWS.small,
+        ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
     },
     bodyDivider: {
         width: 1,
@@ -856,12 +1101,10 @@ const getStyles = (theme) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: theme.surface,
+        backgroundColor: theme.overlayInput,
         paddingHorizontal: 12,
         paddingVertical: 7,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: theme.border,
+        borderRadius: RADIUS.pill,
     },
     prFilterText: {
         fontSize: 13,
@@ -869,14 +1112,12 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.textSecondary,
     },
     sessionCard: {
-        marginBottom: 16,
+        marginBottom: 14,
         marginHorizontal: 12,
         backgroundColor: theme.surface,
         borderRadius: 16,
-        borderWidth: 1,
-        borderColor: theme.border,
         overflow: 'hidden',
-        ...SHADOWS.small,
+        ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
     },
     sessionHeader: {
         paddingHorizontal: 12,
@@ -885,8 +1126,59 @@ const getStyles = (theme) => StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderBottomWidth: 1,
+    },
+    repCard: {
+        backgroundColor: theme.surface,
+        borderRadius: 16,
+        marginHorizontal: 12,
+        marginBottom: 20,
+        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: 10,
+        ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
+    },
+    repCardTitle: {
+        fontSize: 12,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        marginBottom: 10,
+    },
+    repGrid: {
+        flexDirection: 'row',
+        gap: 24,
+    },
+    repColumn: {
+        flex: 1,
+    },
+    repRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 7,
+        borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: theme.border,
+    },
+    repBadge: {
+        minWidth: 26,
+        height: 21,
+        borderRadius: 6,
+        backgroundColor: theme.overlayInput,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 5,
+    },
+    repBadgeText: {
+        fontSize: 11,
+        fontFamily: FONTS.bold,
+        color: theme.textSecondary,
+    },
+    repWeight: {
+        fontSize: 14,
+        fontFamily: FONTS.semiBold,
+        color: theme.text,
+        fontVariant: ['tabular-nums'],
     },
     sessionTitle: {
         fontSize: 16,

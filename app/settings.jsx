@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { FONTS, SHADOWS } from '../constants/theme';
+import { FONTS, isLightTheme, getThemedShadow } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -105,7 +105,6 @@ const Settings = () => {
         accessoryWeight, updateAccessoryWeight,
         repRangePreset, repRangeMin, repRangeMax, updateRepRange,
         useImperial, updateUnitPref,
-        alternateView, updateAlternateView
     } = useTheme();
 
     const styles = useMemo(() => getStyles(theme), [theme]);
@@ -327,9 +326,6 @@ const Settings = () => {
                     <SettingsBlock theme={theme} styles={styles} title="App Theme" iconNode={<Feather name="droplet" size={20} color={theme.primary} />}>
                         <AppThemeSelector theme={theme} themeID={themeID} onChange={updateTheme} />
                     </SettingsBlock>
-                    <SettingsRow theme={theme} styles={styles} title="Alternate View" iconNode={<Feather name="layout" size={20} color={theme.primary} />} isLast>
-                        {isReady ? <AnimatedSwitch value={alternateView} onValueChange={updateAlternateView} activeColor={theme.primary} inactiveColor={theme.overlayInputFocused} thumbColor={theme.surface} /> : <ActivityIndicator size="small" color={theme.primary} />}
-                    </SettingsRow>
                 </View>
 
                 {/* --- Workouts --- */}
@@ -393,12 +389,12 @@ const Settings = () => {
 
 const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
-    header: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: theme.border },
-    backButton: { padding: 8, marginRight: 16 },
-    title: { fontSize: 20, fontFamily: FONTS.bold, color: theme.text },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+    backButton: { padding: 8, marginRight: 12 },
+    title: { fontSize: 22, fontFamily: FONTS.bold, letterSpacing: -0.4, color: theme.text },
     content: { paddingVertical: 10, paddingHorizontal: 20, paddingBottom: 60 },
     sectionTitle: { fontSize: 13, fontFamily: FONTS.semiBold, color: theme.textSecondary, marginBottom: 8, marginTop: 16, textTransform: 'uppercase', letterSpacing: 1.2, marginLeft: 4 },
-    cardGroup: { backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, ...SHADOWS.small, marginBottom: 20, overflow: 'hidden' },
+    cardGroup: { backgroundColor: theme.surface, borderRadius: 16, ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null), marginBottom: 20, overflow: 'hidden' },
     rowContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 20 },
     rowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 16 },
     rowTextContainer: { marginLeft: 16, flex: 1 },

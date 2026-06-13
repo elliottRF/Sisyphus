@@ -2,10 +2,7 @@ import { View, Text, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React from 'react'
 import { TouchableOpacity } from 'react-native';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
-import Octicons from '@expo/vector-icons/Octicons';
-import Entypo from '@expo/vector-icons/Entypo';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
@@ -61,11 +58,12 @@ const TabBar = ({ state, descriptors, navigation }) => {
         return null;
     }
 
+    // One icon family, filled when focused, outline otherwise.
     const icons = {
-        index: (props) => <FontAwesome name="home" size={24} {...props} />,
-        current: (props) => <Entypo name="circle-with-plus" size={24} {...props} />,
-        history: (props) => <Octicons name="checklist" size={24} {...props} />,
-        profile: (props) => <FontAwesome6 name="dumbbell" size={24} {...props} />
+        index: ({ color, focused }) => <Ionicons name={focused ? 'home' : 'home-outline'} size={23} color={color} />,
+        current: ({ color, focused }) => <Ionicons name={focused ? 'add-circle' : 'add-circle-outline'} size={24} color={color} />,
+        history: ({ color, focused }) => <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={23} color={color} />,
+        profile: ({ color, focused }) => <Ionicons name={focused ? 'barbell' : 'barbell-outline'} size={24} color={color} />
     }
 
     return (
@@ -123,6 +121,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
                                     />
                                 ) : (
                                     icons[route.name]({
+                                        focused: isFocused,
                                         color: isFocused
                                             ? theme.primary
                                             : (route.name === 'current' && workoutInProgress)
@@ -169,16 +168,11 @@ const getStyles = (theme) => StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: withOpacity(
-            theme.surface,
-            isLightTheme(theme) ? 0.95 : 0.95
-        ),
-        width: '85%',
-        paddingVertical: 10,
+        backgroundColor: withOpacity(theme.surface, 0.96),
+        width: '88%',
+        paddingVertical: 9,
         paddingHorizontal: 10,
-        borderRadius: 35,
-        borderWidth: 1,
-        borderColor: isLightTheme(theme) ? theme.overlayBorder : theme.border,
+        borderRadius: 32,
         ...getThemedShadow(theme, 'medium'),
     },
     tabBarItem: {

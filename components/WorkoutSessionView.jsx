@@ -1,13 +1,12 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import React, { useState, useCallback, useRef, useLayoutEffect, forwardRef } from 'react';
-import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
+import React, { useState, useCallback, useRef, useLayoutEffect, useMemo, forwardRef } from 'react';
+import { FONTS, RADIUS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { useScrollHandlers } from 'react-native-actions-sheet';
-import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 import { customAlert } from '../utils/customAlert';
+import { muscleMapping, broadMuscleGroups } from '../constants/muscles';
 
 
 const lightenColor = (color, percent) => {
@@ -93,12 +92,11 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 });
 
 const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, onRepeat, onSaveAsTemplate, onExerciseInfo, contentContainerStyle }, ref) => {
-    const { theme, useImperial, workoutInProgress } = useTheme();
+    const { theme, useImperial, workoutInProgress, accessoryWeight } = useTheme();
     const isDynamic = theme.type === 'dynamic';
     const router = useRouter();
     const styles = getStyles(theme);
     const [expandedWarmups, setExpandedWarmups] = useState({});
-    const handlers = useScrollHandlers();
 
     useLayoutEffect(() => {
         if (ref && typeof ref === 'object') {
@@ -173,15 +171,72 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
         return acc + (ex.is1rmPR || 0) + (ex.isVolumePR || 0) + (ex.isWeightPR || 0);
     }, 0) : 0;
 
+    // ── Summary strip ────────────────────────────────────────────────────────
+    const sessionStats = useMemo(() => {
+        if (isEmpty) return null;
+        let volumeKg = 0;
+        let workingSets = 0;
+        workoutDetails.forEach(set => {
+            if ((set.setType || 'N') === 'W') return;
+            workingSets++;
+            volumeKg += (parseFloat(set.weight) || 0) * (parseInt(set.reps, 10) || 0);
+        });
+        return { volumeKg, workingSets };
+    }, [workoutDetails, isEmpty]);
+
+    const fmtVolume = (kg) => {
+        const v = Math.round(parseFloat(formatWeight(kg, useImperial, 0)) || 0);
+        return `${v.toLocaleString()} ${unitLabel(useImperial)}`;
+    };
+
+    // ── Muscle split: working sets attributed to each broad group ───────────
+    // Target muscles count at full weight, accessory muscles are scaled by
+    // the user's accessory-weight setting — same model as the Home recovery
+    // calculation.
+    const muscleSplit = useMemo(() => {
+        if (isEmpty || !exercisesList?.length) return [];
+        const groupScores = new Map();
+        let total = 0;
+
+        const addScore = (muscleName, score) => {
+            const slug = muscleMapping[muscleName] || muscleName.toLowerCase();
+            const group = broadMuscleGroups.find(g => g.slugs.includes(slug));
+            if (!group) return;
+            groupScores.set(group.label, (groupScores.get(group.label) || 0) + score);
+            total += score;
+        };
+
+        groupedExercises.forEach(exerciseGroup => {
+            const details = exercisesList.find(ex => ex.exerciseID === exerciseGroup[0].exerciseID);
+            if (!details) return;
+            const workingSets = exerciseGroup.filter(s => (s.setType || 'N') !== 'W').length;
+            if (workingSets === 0) return;
+
+            (details.targetMuscle || '').split(',').map(m => m.trim()).filter(Boolean)
+                .forEach(muscle => addScore(muscle, workingSets));
+            (details.accessoryMuscles || '').split(',').map(m => m.trim()).filter(Boolean)
+                .forEach(muscle => addScore(muscle, workingSets * (accessoryWeight ?? 0.5)));
+        });
+
+        if (total <= 0) return [];
+        return [...groupScores.entries()]
+            .map(([label, score]) => ({ label, percent: Math.round((score / total) * 100) }))
+            .sort((a, b) => b.percent - a.percent)
+            .slice(0, 4);
+    }, [groupedExercises, exercisesList, isEmpty, accessoryWeight]);
+
+
+    // NOTE: plain ScrollView on purpose. This screen previously wrapped it in
+    // NativeViewGestureHandler + react-native-actions-sheet scroll handlers
+    // (leftover from a sheet-based layout), which fought the system back
+    // gesture on Android.
     return (
-        <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
-            <ScrollView
-                {...handlers}
-                ref={ref}
-                contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
-                showsVerticalScrollIndicator={false}
-                showsHorizontalScrollIndicator={false}
-            >
+        <ScrollView
+            ref={ref}
+            contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+        >
                 <View style={styles.sleekHeaderContainer}>
                     {/* Action buttons — top right */}
                     <View style={styles.headerActions}>
@@ -231,31 +286,45 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                         )}
                     </View>
 
-                    <View style={styles.metaDataRow}>
-                        {isEmpty ? (
-                            <View style={[styles.metaItem, { opacity: 0 }]}>
-                                <Feather name="clock" size={14} color={theme.text} />
-                                <Text style={styles.metaText}>0m</Text>
-                            </View>
-                        ) : (
+                    {!isEmpty && sessionStats && (
+                        <View style={styles.metaDataRow}>
                             <View style={styles.metaItem}>
-                                <Feather name="clock" size={14} color={theme.text} />
+                                <Feather name="clock" size={13} color={theme.textSecondary} />
                                 <Text style={styles.metaText}>{formatDuration(workoutDuration)}</Text>
                             </View>
-                        )}
-
-                        {!isEmpty && totalPRs > 0 && (
-                            <View style={[
-                                styles.metaItem,
-                                { borderColor: `${lightenColor(theme.primary, 20)}66`, backgroundColor: `${lightenColor(theme.primary, 20)}40` }
-                            ]}>
-                                <MaterialCommunityIcons name="trophy" size={14} color={lightenColor(theme.primary, 20)} />
-                                <Text style={[styles.metaText, { color: lightenColor(theme.primary, 20), fontFamily: FONTS.bold }]}>
-                                    {totalPRs} New PR{totalPRs > 1 ? 's' : ''}
-                                </Text>
+                            {sessionStats.volumeKg > 0 && (
+                                <>
+                                    <View style={styles.metaDivider} />
+                                    <View style={styles.metaItem}>
+                                        <Feather name="bar-chart-2" size={13} color={theme.textSecondary} />
+                                        <Text style={styles.metaText}>{fmtVolume(sessionStats.volumeKg)}</Text>
+                                    </View>
+                                </>
+                            )}
+                            <View style={styles.metaDivider} />
+                            <View style={styles.metaItem}>
+                                <Text style={styles.metaText}>{sessionStats.workingSets} sets</Text>
                             </View>
-                        )}
-                    </View>
+                            {totalPRs > 0 && (
+                                <View style={styles.prPill}>
+                                    <MaterialCommunityIcons name="trophy" size={13} color={lightenColor(theme.primary, 20)} />
+                                    <Text style={styles.prPillText}>
+                                        {totalPRs} PR{totalPRs > 1 ? 's' : ''}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    )}
+
+                    {/* Always rendered so the line's space is reserved before
+                        the exercise list loads — avoids a layout jolt. */}
+                    {!isEmpty && (
+                        <Text style={styles.muscleSplitText} numberOfLines={1}>
+                            {muscleSplit.length > 0
+                                ? muscleSplit.map(g => `${g.label} ${g.percent}%`).join(' · ')
+                                : ' '}
+                        </Text>
+                    )}
                 </View>
 
                 <View style={styles.exercisesList}>
@@ -402,8 +471,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                         );
                     })}
                 </View>
-            </ScrollView>
-        </NativeViewGestureHandler>
+        </ScrollView>
     );
 });
 
@@ -449,24 +517,46 @@ const getStyles = (theme) => {
         metaDataRow: {
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 12,
+            flexWrap: 'wrap',
+            gap: 8,
+            rowGap: 4,
         },
         metaItem: {
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 6,
-            backgroundColor: theme.surface,
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            borderRadius: 6,
-            borderWidth: 1,
-            borderColor: lightTheme ? theme.overlayBorder : theme.border,
-            backgroundColor: lightTheme ? theme.surface : theme.surface,
+            gap: 5,
+        },
+        metaDivider: {
+            width: 1,
+            height: 12,
+            backgroundColor: theme.border,
         },
         metaText: {
-            fontSize: 12,
+            fontSize: 12.5,
             fontFamily: FONTS.medium,
-            color: theme.text,
+            color: theme.textSecondary,
+        },
+        prPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            backgroundColor: withAlpha(theme.primary, lightTheme ? 0.12 : 0.20),
+            paddingHorizontal: 9,
+            paddingVertical: 3,
+            borderRadius: RADIUS.pill,
+            marginLeft: 2,
+        },
+        prPillText: {
+            fontSize: 12,
+            fontFamily: FONTS.bold,
+            color: lightenColor(theme.primary, 20),
+        },
+        muscleSplitText: {
+            fontSize: 12.5,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            marginTop: 8,
+            minHeight: 17,
         },
         exercisesList: {
             gap: 8,

@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions, Animated } from 'react-native';
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LineGraph } from 'react-native-graph';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
@@ -9,6 +9,7 @@ import { Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-ico
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, on, off } from '../utils/events';
 import { formatWeight, unitLabel } from '../utils/units';
+import { getExerciseSnapshotSync, updateExerciseSnapshot } from '../utils/exerciseSnapshots';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DEFAULT_GRAPH_HEIGHT = 130;
@@ -19,10 +20,6 @@ const Y_AXIS_WIDTH = 40;
 const GRAPH_RIGHT_PADDING = 0;
 
 const DEBUG_INTERPOLATE = true;
-
-// --- Cache ---
-let _cachedData = null;
-export const primeGraphData = (data) => { _cachedData = data; };
 
 export const computeGraphPoints = (history, isAssisted = false) => {
     if (!history?.length) return [];
@@ -130,20 +127,56 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         : SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING;
     const graphHeight = isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT;
 
-    const [allData, setAllData] = useState([]);
-    const [loading, setLoading] = useState(true);
+    // Stale-while-revalidate: paint instantly from the persisted snapshot
+    // (warmed into memory at app launch), then loadData() recomputes in the
+    // background and writes the fresh points back.
+    const initialData = useMemo(() => {
+        return getExerciseSnapshotSync(exerciseID)?.graphPoints ?? null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const [allData, setAllData] = useState(initialData ?? []);
+    const [loading, setLoading] = useState(!initialData);
     const [graphMode, setGraphMode] = useState('history');
     const [timeRange, setTimeRange] = useState('ALL');
     const [selectedPoint, setSelectedPoint] = useState(null);
     const [isAssisted, setIsAssisted] = useState(false);
 
     const isTouching = useRef(false);
-    const graphOpacity = useRef(new Animated.Value(0)).current;
+    // Visible immediately when we already have data at mount; otherwise the
+    // chart fades in once loaded.
+    const graphOpacity = useRef(new Animated.Value(initialData ? 1 : 0)).current;
 
+    const allDataRef = useRef(allData);
+    allDataRef.current = allData;
+
+    // Stacked navigation can leave many of these cards mounted on blurred
+    // screens. Events mark them dirty instead of reloading them all at once;
+    // the reload happens when (if) the screen is focused again.
+    const isFocusedRef = useRef(true);
+    const dirtyRef = useRef(false);
+
+    useFocusEffect(
+        useCallback(() => {
+            isFocusedRef.current = true;
+            if (dirtyRef.current) {
+                dirtyRef.current = false;
+                loadData();
+            }
+            return () => { isFocusedRef.current = false; };
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [exerciseID])
+    );
 
     useEffect(() => {
         loadData();
-        const handler = () => loadData();
+        const handler = () => {
+            if (isFocusedRef.current) {
+                loadData();
+            } else {
+                dirtyRef.current = true;
+            }
+        };
         on(AppEvents.REFRESH_HOME, handler);
         on(AppEvents.WORKOUT_COMPLETED, handler);
         on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
@@ -166,7 +199,9 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
 
     const loadData = async () => {
         try {
-            setLoading(true);
+            // Only show the loading placeholder when there's nothing on
+            // screen yet — refreshes happen silently behind existing data.
+            if (allDataRef.current.length === 0) setLoading(true);
 
             const exercises = await fetchExercises();
             const exercise = exercises.find(e => e.exerciseID === exerciseID);
@@ -174,27 +209,16 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
             setIsAssisted(assisted);
             if (assisted) setGraphMode('maxWeight');
 
-            // Use primed cache if available (set by Profile before navigating)
-            if (_cachedData) {
-                setAllData(_cachedData);
-                _cachedData = null;
-                return;
-            }
-
             const history = await fetchExerciseProgress(exerciseID);
-            setAllData(computeGraphPoints(history, assisted));
+            const computed = computeGraphPoints(history, assisted);
+            updateExerciseSnapshot(exerciseID, { graphPoints: computed });
+            setAllData(computed);
         } catch (error) {
             console.error("Error loading graph data:", error);
-            setAllData([]);
         } finally {
             setLoading(false);
             onReady?.();
         }
-    };
-
-    const primeDataForNavigation = () => {
-        // Prime the cache so the history screen doesn't have to re-fetch/re-compute the graph data
-        primeGraphData(allData);
     };
 
     const handleUnpin = async () => {
@@ -224,21 +248,22 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         let tempProcessed = filtered.map(p => ({ date: p.date, value: useValue(p) }))
             .filter(p => isAssisted ? (p.value !== null && p.value !== undefined && p.value !== Infinity && p.value >= 0) : p.value > 0);
 
+        // Keep EVERY point (same dates/count across modes) and carry a running
+        // best instead of filtering down to PR points. Equal point counts are
+        // what let react-native-graph animate the line between mode switches —
+        // filtering produced different-length arrays, so some switches animated
+        // and others snapped.
         if (graphMode === 'truePR') {
             let maxVal = 0;
-            processed = tempProcessed.filter(p => {
-                if (p.value > maxVal) { maxVal = p.value; return true; }
-                return false;
+            processed = tempProcessed.map(p => {
+                if (p.value > maxVal) maxVal = p.value;
+                return { date: p.date, value: maxVal };
             });
         } else if (graphMode === 'maxWeight') {
             let bestVal = isAssisted ? Infinity : 0;
-            processed = [];
-            tempProcessed.forEach(p => {
-                const isNewPR = isAssisted ? p.value < bestVal : p.value > bestVal;
-                if (isNewPR) {
-                    bestVal = p.value;
-                    processed.push({ date: p.date, value: bestVal });
-                }
+            processed = tempProcessed.map(p => {
+                if (isAssisted ? p.value < bestVal : p.value > bestVal) bestVal = p.value;
+                return { date: p.date, value: (isAssisted && bestVal === Infinity) ? p.value : bestVal };
             });
         } else {
             processed = tempProcessed;
@@ -413,10 +438,32 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         } else if (loading) {
             graphOpacity.setValue(0);
         }
-    }, [loading, points]);
+        // Keyed on `loading` only: range/mode switches recompute points without
+        // toggling loading, so they don't trigger this fade-in.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loading]);
+
+    // Crossfade the line when the time range changes. Range switches change the
+    // point count, so react-native-graph can't morph between them — it snaps.
+    // Hiding before paint (useLayoutEffect) then fading in masks the snap.
+    // Mode switches keep opacity at 1 so their line morph stays visible.
+    const isFirstRangeRef = useRef(true);
+    useLayoutEffect(() => {
+        if (isFirstRangeRef.current) {
+            isFirstRangeRef.current = false;
+            return;
+        }
+        graphOpacity.setValue(0);
+        Animated.timing(graphOpacity, {
+            toValue: 1,
+            duration: 260,
+            useNativeDriver: true,
+        }).start();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [timeRange]);
 
     const trendData = useMemo(() => {
-        if (points.length < 2) return { direction: 'flat', label: '0%', period: 'all time' };
+        if (points.length < 2) return { direction: 'flat', label: '0%', delta: `0 ${unitLabel(useImperial)}`, period: 'all time' };
 
         const now = new Date();
         let pastDate = new Date(0);
@@ -447,13 +494,17 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         const diff = current - past;
         const percentChange = past > 0 ? (diff / past) * 100 : 0;
         const formattedPercent = percentChange === 0 ? '0%' : `${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%`;
+        const deltaLabel = Math.abs(diff) < 0.05
+            ? `0 ${unitLabel(useImperial)}`
+            : `${diff > 0 ? '+' : '−'}${Math.abs(diff).toFixed(1)} ${unitLabel(useImperial)}`;
 
         return {
             direction: diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat',
             label: formattedPercent,
+            delta: deltaLabel,
             period: periodLabel
         };
-    }, [points, timeRange, isAssisted]);
+    }, [points, timeRange, isAssisted, useImperial]);
 
     const axisLabels = useMemo(() => {
         if (!points.length) return [];
@@ -539,115 +590,93 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                 style={styles.content}
                 theme={theme}
             >
-                {!isCompact && (
+                {!isCompact && (() => {
+                    // Progress is good when up (or down for assisted). Colour the
+                    // trend accordingly; grey when flat.
+                    const goodDirection = isAssisted ? 'down' : 'up';
+                    const trendColor = trendData.direction === 'flat'
+                        ? theme.textSecondary
+                        : trendData.direction === goodDirection ? theme.success : theme.danger;
+                    return (
                     <View style={styles.header}>
                         <View style={{ flex: 1, marginRight: 8 }}>
                             <TouchableOpacity
-                                onPress={() => {
-                                    primeDataForNavigation();
-                                    router.push(`/exercise/${exerciseID}?name=${encodeURIComponent(exerciseName)}`);
-                                }}
+                                onPress={() => router.push(`/exercise/${exerciseID}?name=${encodeURIComponent(exerciseName)}`)}
                                 activeOpacity={0.7}
                             >
-                                <Text style={[styles.title]}>{exerciseName}</Text>
+                                <Text style={styles.eyebrow} numberOfLines={1}>{exerciseName}</Text>
                             </TouchableOpacity>
-                            <Text style={styles.subtitle}>
-                                {graphMode === 'truePR' ? 'True PRs Only' :
-                                    graphMode === 'maxWeight' ? 'Max Weight PRs' :
-                                        '1RM History'}
-                            </Text>
 
-                            {hasEnoughData && points.length >= 2 && (
-                                <View style={[styles.trendBadge, {
-                                    backgroundColor:
-                                        trendData.direction === 'up' ? (isAssisted ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)') :
-                                            trendData.direction === 'down' ? (isAssisted ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)') :
-                                                'rgba(100, 100, 100, 0.1)'
-                                }]}>
-                                    <Text style={[styles.trendArrow, {
-                                        color: trendData.direction === 'up' ? (isAssisted ? '#ef4444' : '#22c55e') :
-                                            trendData.direction === 'down' ? (isAssisted ? '#22c55e' : '#ef4444') :
-                                                theme.textSecondary
-                                    }]}>
-                                        {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
+                            <View style={styles.heroRow}>
+                                <Text style={styles.heroValue}>
+                                    {hasEnoughData ? currentValue.toFixed(1) : '—'}
+                                </Text>
+                                {hasEnoughData && <Text style={styles.heroUnit}>{unitLabel(useImperial)}</Text>}
+                            </View>
+
+                            <View style={styles.subLine}>
+                                {hasEnoughData && points.length >= 2 ? (
+                                    <View style={[styles.trendBadge, { alignSelf: 'flex-start', backgroundColor: withAlpha(trendColor, isLightTheme(theme) ? 0.12 : 0.18) }]}>
+                                        <Text style={[styles.trendArrow, { color: trendColor }]}>
+                                            {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
+                                        </Text>
+                                        <Text style={[styles.trendText, { color: trendColor, fontFamily: FONTS.bold }]}>
+                                            {trendData.delta}
+                                        </Text>
+                                        <Text style={styles.trendPeriod}>· {trendData.period}</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.subLineText}>
+                                        {graphMode === 'maxWeight' ? 'Heaviest lift' : graphMode === 'truePR' ? 'Top 1RM' : 'Estimated 1RM'}
                                     </Text>
-                                    <Text style={[styles.trendText, {
-                                        color: trendData.direction === 'up' ? (isAssisted ? '#ef4444' : '#22c55e') :
-                                            trendData.direction === 'down' ? (isAssisted ? '#22c55e' : '#ef4444') :
-                                                theme.textSecondary,
-                                        fontFamily: FONTS.bold
-                                    }]}>
-                                        {trendData.label}
-                                    </Text>
-                                    <Text style={styles.trendPeriod}>· {trendData.period}</Text>
-                                </View>
-                            )}
+                                )}
+                            </View>
                         </View>
 
-                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                            <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} theme={theme} styles={styles} />
+                        <View style={{ alignItems: 'flex-end', gap: 8 }}>
                             {onRemove && (
-                                <TouchableOpacity onPress={handleUnpin} style={styles.unpinButton}>
-                                    <Feather name="x" size={16} color={theme.textSecondary} />
+                                <TouchableOpacity onPress={handleUnpin} style={styles.unpinButtonQuiet}>
+                                    <Feather name="x" size={15} color={theme.textSecondary} />
                                 </TouchableOpacity>
                             )}
-                        </View>
-                    </View>
-                )}
-
-                {isCompact && (
-                    <View style={styles.compactHeader}>
-                        <View style={{ flex: 1, marginRight: 12 }}>
-                            <Text style={[styles.title, { fontSize: 16 }]} numberOfLines={1}>{exerciseName}</Text>
-                            <View style={{ height: 4 }} />
                             <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} theme={theme} styles={styles} />
                         </View>
-                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    </View>
+                    );
+                })()}
+
+                {isCompact && (() => {
+                    // Progress is good when up (down for assisted); grey when flat.
+                    const goodDirection = isAssisted ? 'down' : 'up';
+                    const trendColor = trendData.direction === 'flat'
+                        ? theme.textSecondary
+                        : trendData.direction === goodDirection ? theme.success : theme.danger;
+                    return (
+                    // No exercise name (the page is already titled) and no cycling
+                    // mode icon (the segmented toggle below owns mode) — just the
+                    // range selector and the trend.
+                    <View style={styles.compactHeader}>
+                        <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} theme={theme} styles={styles} />
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            {hasEnoughData && points.length >= 2 && (
+                                <View style={[styles.trendBadge, { backgroundColor: withAlpha(trendColor, isLightTheme(theme) ? 0.12 : 0.18) }]}>
+                                    <Text style={[styles.trendArrow, { color: trendColor }]}>
+                                        {trendData.direction === 'up' ? '↑' : trendData.direction === 'down' ? '↓' : '→'}
+                                    </Text>
+                                    <Text style={[styles.trendText, { color: trendColor, fontFamily: FONTS.bold }]}>
+                                        {trendData.delta}
+                                    </Text>
+                                </View>
+                            )}
                             {onRemove && (
-                                <TouchableOpacity onPress={handleUnpin} style={[styles.unpinButton, { padding: 4 }]}>
+                                <TouchableOpacity onPress={handleUnpin} style={styles.unpinButtonQuiet}>
                                     <Feather name="x" size={14} color={theme.textSecondary} />
                                 </TouchableOpacity>
                             )}
-                            {!isAssisted && (
-                                <TouchableOpacity
-                                    onPress={() => setGraphMode(prev =>
-                                        prev === 'history' ? 'truePR' :
-                                            prev === 'truePR' ? 'maxWeight' : 'history'
-                                    )}
-                                    style={[styles.unpinButton, { padding: 4 }]}
-                                >
-                                    <MaterialIcons
-                                        name={graphMode === 'truePR' ? "trending-up" : graphMode === 'maxWeight' ? "fitness-center" : "history"}
-                                        size={14}
-                                        color={theme.primary}
-                                    />
-                                </TouchableOpacity>
-                            )}
-                            {hasEnoughData && points.length >= 2 && (
-                                <View style={[styles.trendBadge, {
-                                    marginVertical: 0,
-                                    paddingVertical: 4,
-                                    height: 26,
-                                    paddingHorizontal: 10,
-                                    backgroundColor:
-                                        trendData.direction === 'up' ? (isAssisted ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)') :
-                                            trendData.direction === 'down' ? (isAssisted ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)') :
-                                                'rgba(100, 100, 100, 0.05)'
-                                }]}>
-                                    <Text style={[styles.trendText, {
-                                        color: trendData.direction === 'up' ? (isAssisted ? '#ef4444' : '#22c55e') :
-                                            trendData.direction === 'down' ? (isAssisted ? '#22c55e' : '#ef4444') :
-                                                theme.textSecondary,
-                                        fontSize: 12,
-                                        fontFamily: FONTS.bold
-                                    }]}>
-                                        {trendData.label}
-                                    </Text>
-                                </View>
-                            )}
                         </View>
                     </View>
-                )}
+                    );
+                })()}
 
                 {!isAssisted && (
                     <View style={[styles.modeToggleContainer, isCompact && { marginBottom: 8 }]}>
@@ -690,12 +719,20 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                                         {selectedPoint.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                     </Text>
                                 </View>
-                            ) : (
+                            ) : isCompact ? (
+                                // Compact has no header hero, so the idle tooltip
+                                // shows the current value for the active mode.
                                 <View style={styles.placeholderTooltip}>
-                                    <Text style={[styles.tooltipValue, isCompact && { fontSize: 20 }]}>{currentValue.toFixed(1)} {unitLabel(useImperial)}</Text>
+                                    <Text style={[styles.tooltipValue, { fontSize: 20 }]}>{currentValue.toFixed(1)} {unitLabel(useImperial)}</Text>
                                     <Text style={styles.tooltipDate}>
-                                        {graphMode === 'maxWeight' ? 'Heaviest Lift' : 'Current PR'}
+                                        {graphMode === 'maxWeight' ? 'Heaviest lift' : graphMode === 'truePR' ? 'Top 1RM' : 'Latest 1RM'}
                                     </Text>
+                                </View>
+                            ) : (
+                                // Full mode: the header hero already shows the value,
+                                // so the idle scrub readout is just a hint.
+                                <View style={styles.activeTooltip}>
+                                    <Text style={styles.tooltipHint}>Drag the graph to explore</Text>
                                 </View>
                             )}
                         </View>
@@ -758,8 +795,15 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                             </View>
                         </View>
                     </>
-                ) : !loading && (
-                    <View style={[styles.emptyState, isCompact ? { height: 100 } : { height: 100 }]}>
+                ) : loading ? (
+                    // Same height as the loaded tooltip + graph block, so the
+                    // card never changes size when data arrives (it used to
+                    // render collapsed during slow loads, then jolt open).
+                    <View style={styles.graphPlaceholder}>
+                        <ActivityIndicator size="small" color={theme.primary} />
+                    </View>
+                ) : (
+                    <View style={[styles.emptyState, styles.graphPlaceholder]}>
                         <Feather name="bar-chart-2" size={isCompact ? 32 : 48} color={theme.textSecondary} style={{ opacity: 0.3, marginBottom: 12 }} />
                         <Text style={styles.emptyText}>Not enough data for this period</Text>
                         <Text style={styles.emptySubText}>Need 2+ workouts to show progress</Text>
@@ -772,14 +816,12 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
 
 const getStyles = (theme, isCompact) => StyleSheet.create({
     container: {
-        marginBottom: isCompact ? 12 : 20,
+        marginBottom: isCompact ? 12 : 16,
         marginHorizontal: isCompact ? 12 : 16,
-        borderRadius: isCompact ? 16 : 24,
+        borderRadius: 16,
         backgroundColor: theme.surface,
-        borderWidth: 1,
-        borderColor: theme.border,
         overflow: 'hidden',
-        ...getThemedShadow(theme, 'medium'),
+        ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
     },
     content: {
         padding: isCompact ? 12 : 20,
@@ -807,12 +849,61 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         fontFamily: FONTS.medium,
         color: theme.textSecondary,
     },
+    eyebrow: {
+        fontSize: 12,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        marginBottom: 4,
+    },
+    heroRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 4,
+    },
+    heroValue: {
+        fontSize: 30,
+        fontFamily: FONTS.bold,
+        letterSpacing: -0.8,
+        color: theme.text,
+        fontVariant: ['tabular-nums'],
+    },
+    heroUnit: {
+        fontSize: 15,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
+    },
+    subLine: {
+        minHeight: 24,
+        justifyContent: 'center',
+        marginTop: 4,
+    },
+    subLineText: {
+        fontSize: 12.5,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+    },
+    tooltipHint: {
+        fontSize: 12.5,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+        opacity: 0.6,
+    },
     unpinButton: {
         padding: 8,
         backgroundColor: isLightTheme(theme) ? theme.overlaySubtle : theme.overlayBorder,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: isLightTheme(theme) ? theme.overlayBorder : 'transparent',
+    },
+    unpinButtonQuiet: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: theme.overlayInput,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     graphRow: {
         flexDirection: 'row',
@@ -866,11 +957,9 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     },
     rangeSelector: {
         flexDirection: 'row',
-        backgroundColor: isLightTheme(theme) ? theme.overlaySubtle : theme.overlayBorder,
-        borderRadius: 8,
+        backgroundColor: theme.overlayInput,
+        borderRadius: 9,
         padding: 2,
-        borderWidth: 1,
-        borderColor: isLightTheme(theme) ? theme.overlayBorder : 'transparent',
     },
     rangeButton: {
         paddingVertical: 4,
@@ -890,12 +979,10 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     },
     modeToggleContainer: {
         flexDirection: 'row',
-        backgroundColor: isLightTheme(theme) ? theme.overlaySubtle : theme.overlayMedium,
-        borderRadius: 14,
+        backgroundColor: theme.overlayInput,
+        borderRadius: 12,
         padding: 4,
         marginBottom: 16,
-        borderWidth: 1,
-        borderColor: isLightTheme(theme) ? theme.overlayBorder : theme.overlaySubtle,
     },
     modeButton: {
         flex: 1,
@@ -907,7 +994,7 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         gap: 8,
     },
     modeButtonActive: {
-        backgroundColor: isLightTheme(theme) ? theme.surface : theme.overlayInput,
+        backgroundColor: isLightTheme(theme) ? theme.surface : (theme.surfaceElevated || theme.overlayInputFocused),
     },
     modeButtonText: {
         fontSize: 12,
@@ -921,6 +1008,13 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         height: 44,
         justifyContent: 'center',
         marginBottom: 6,
+    },
+    // Mirrors tooltipContainer + graphRow so loading/empty/loaded states all
+    // occupy identical space.
+    graphPlaceholder: {
+        height: 44 + (isCompact ? 4 : 6) + (isCompact ? COMPACT_GRAPH_HEIGHT : DEFAULT_GRAPH_HEIGHT) + 30,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     activeTooltip: {
         paddingLeft: Y_AXIS_WIDTH,
@@ -943,11 +1037,10 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
     trendBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
+        paddingHorizontal: 9,
+        paddingVertical: 3,
+        borderRadius: 100,
         gap: 4,
-        marginTop: 4,
     },
     trendArrow: {
         fontSize: 13,

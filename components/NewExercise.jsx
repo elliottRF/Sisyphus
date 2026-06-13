@@ -12,6 +12,7 @@ import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Added this import
+import * as Haptics from 'expo-haptics';
 import { emit, AppEvents } from '../utils/events';
 import { updateExerciseSnapshot, getExerciseSnapshotSync } from '../utils/exerciseSnapshots';
 
@@ -202,6 +203,29 @@ const NewExercise = (props) => {
         }
     };
 
+    // Tap a muscle on the figure to cycle it: unset → primary → secondary → unset
+    // (the same three intensities the diagram already renders). Keeps the body
+    // and the chip lists in perfect sync since both drive the same state.
+    const handleBodyPartPress = (bodyPart) => {
+        if (isCardio) return; // muscles don't apply to cardio
+        const slug = bodyPart?.slug;
+        if (!slug) return;
+        const option = MUSCLE_OPTIONS.find(m => m.toLowerCase() === slug);
+        if (!option) return; // a body part we don't expose as a selectable muscle
+
+        Haptics.selectionAsync();
+        const inTarget = targetSelected.includes(option);
+        const inAccessory = accessorySelected.includes(option);
+        if (!inTarget && !inAccessory) {
+            setTargetSelected(prev => [...prev, option]);
+        } else if (inTarget) {
+            setTargetSelected(prev => prev.filter(m => m !== option));
+            setAccessorySelected(prev => [...prev, option]);
+        } else {
+            setAccessorySelected(prev => prev.filter(m => m !== option));
+        }
+    };
+
     const formatListToString = (list) => {
         if (!Array.isArray(list)) throw new Error('Input must be an array');
         return list.map((item) => String(item).trim()).filter((item) => item.length > 0).join(',');
@@ -301,8 +325,26 @@ const NewExercise = (props) => {
 
     const AnimatedCard = Animated.createAnimatedComponent(TouchableOpacity);
 
+    const canSave = exerciseName.trim().length > 0;
+    // Derive from props (not the async-loaded isEditMode) so the title doesn't
+    // flash "New Exercise" → "Edit Exercise" on open.
+    const headerTitle = isCanonical ? 'Exercise' : props.exerciseID ? 'Edit Exercise' : 'New Exercise';
+
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
+            {props.isScreen && (
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle} numberOfLines={1}>{headerTitle}</Text>
+                    <TouchableOpacity
+                        onPress={() => props.close?.()}
+                        style={styles.headerClose}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.7}
+                    >
+                        <Feather name="x" size={22} color={theme.text} />
+                    </TouchableOpacity>
+                </View>
+            )}
             <NativeViewGestureHandler simultaneousHandlers={handlers.simultaneousHandlers}>
                 <RNScrollView
                     {...handlers}
@@ -314,7 +356,7 @@ const NewExercise = (props) => {
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
                 >
-                    {/* Body highlighter – plain view, no animation */}
+                    {/* Body highlighter – tap a muscle to cycle primary/secondary */}
                     <View style={styles.bodyWrapper}>
                         <Body
                             data={formattedTargets}
@@ -324,6 +366,7 @@ const NewExercise = (props) => {
                             border={safeBorder}
                             colors={safeBodyColors}
                             defaultFill={theme.bodyFill}
+                            onBodyPartPress={handleBodyPartPress}
                         />
                         <View style={styles.bodyDivider} />
                         <Body
@@ -334,8 +377,14 @@ const NewExercise = (props) => {
                             border={safeBorder}
                             colors={safeBodyColors}
                             defaultFill={theme.bodyFill}
+                            onBodyPartPress={handleBodyPartPress}
                         />
                     </View>
+                    {!isCardio && (
+                        <Text style={styles.bodyHint}>
+                            Tap a muscle: once for primary, again for secondary
+                        </Text>
+                    )}
 
                     {/* Rest of content slides + fades in */}
                     <Animated.View style={{ opacity: entranceOpacity, transform: [{ translateY: entranceY }] }}>
@@ -352,6 +401,15 @@ const NewExercise = (props) => {
                                 editable={!isCanonical}
                             />
                         </View>
+
+                        {isCanonical && (
+                            <View style={styles.infoNote}>
+                                <Feather name="info" size={15} color={theme.textSecondary} style={{ marginTop: 1 }} />
+                                <Text style={styles.infoNoteText}>
+                                    Built-in exercise — you can adjust its muscle groups, but the name and type are fixed.
+                                </Text>
+                            </View>
+                        )}
 
                         <AnimatedCard
                             style={[styles.cardioToggleCard, { transform: [{ scale: cardioScale }] }, isCanonical && { opacity: 0.6 }]}
@@ -411,7 +469,12 @@ const NewExercise = (props) => {
                             overflow: 'hidden',
                         }}>
                             <View style={styles.sectionContainer}>
-                                <Text style={styles.sectionTitle}>Target Muscles</Text>
+                                <View style={styles.sectionTitleRow}>
+                                    <Text style={styles.sectionTitle}>Target Muscles</Text>
+                                    {targetSelected.length > 0 && (
+                                        <Text style={styles.sectionCount}>{targetSelected.length}</Text>
+                                    )}
+                                </View>
                                 <MuscleChips
                                     type="target"
                                     selectedData={targetSelected}
@@ -425,7 +488,12 @@ const NewExercise = (props) => {
                             </View>
 
                             <View style={styles.sectionContainer}>
-                                <Text style={styles.sectionTitle}>Secondary Muscles</Text>
+                                <View style={styles.sectionTitleRow}>
+                                    <Text style={styles.sectionTitle}>Secondary Muscles</Text>
+                                    {accessorySelected.length > 0 && (
+                                        <Text style={styles.sectionCount}>{accessorySelected.length}</Text>
+                                    )}
+                                </View>
                                 <MuscleChips
                                     type="accessory"
                                     selectedData={accessorySelected}
@@ -439,17 +507,20 @@ const NewExercise = (props) => {
                             </View>
                         </Animated.View>
 
-                        <TouchableOpacity onPress={handleSave} activeOpacity={0.9}>
+                        <TouchableOpacity onPress={handleSave} activeOpacity={0.9} disabled={!canSave}>
                             <GradientOrView
                                 colors={[theme.primary, theme.secondary]}
                                 theme={theme}
-                                style={styles.saveButton}
+                                style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
                             >
                                 <Text style={styles.saveButtonText}>
                                     {isEditMode ? 'Update Exercise' : 'Create Exercise'}
                                 </Text>
                             </GradientOrView>
                         </TouchableOpacity>
+                        {!canSave && (
+                            <Text style={styles.saveHint}>Add a name to save</Text>
+                        )}
 
                     </Animated.View>
                 </RNScrollView>
@@ -465,6 +536,29 @@ const getStyles = (theme) => {
             flex: 1,
             backgroundColor: theme.background,
         },
+        header: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 20,
+            paddingTop: 8,
+            paddingBottom: 12,
+        },
+        headerTitle: {
+            color: theme.text,
+            fontFamily: FONTS.bold,
+            fontSize: 22,
+            letterSpacing: -0.3,
+            flex: 1,
+        },
+        headerClose: {
+            width: 34,
+            height: 34,
+            borderRadius: 17,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: lightTheme ? theme.overlaySubtle : theme.surface,
+        },
         scrollContent: {
             paddingHorizontal: 20,
         },
@@ -477,8 +571,33 @@ const getStyles = (theme) => {
             borderRadius: 20,
             borderWidth: 1,
             borderColor: theme.border,
-            marginBottom: 24,
+            marginBottom: 10,
             ...getThemedShadow(theme, 'small'),
+        },
+        bodyHint: {
+            color: theme.textSecondary,
+            fontFamily: FONTS.medium,
+            fontSize: 12.5,
+            textAlign: 'center',
+            marginBottom: 20,
+        },
+        infoNote: {
+            flexDirection: 'row',
+            gap: 8,
+            backgroundColor: lightTheme ? theme.overlaySubtle : theme.surface,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: theme.border,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            marginBottom: 20,
+        },
+        infoNoteText: {
+            flex: 1,
+            color: theme.textSecondary,
+            fontFamily: FONTS.regular,
+            fontSize: 13,
+            lineHeight: 18,
         },
         bodyDivider: {
             width: 1,
@@ -540,11 +659,28 @@ const getStyles = (theme) => {
             borderWidth: lightTheme ? 1 : 0,
             borderColor: lightTheme ? theme.overlayBorder : 'transparent',
         },
+        sectionTitleRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 12,
+        },
         sectionTitle: {
             color: theme.text,
             fontFamily: FONTS.bold,
             fontSize: 16,
-            marginBottom: 12,
+        },
+        sectionCount: {
+            minWidth: 20,
+            textAlign: 'center',
+            color: theme.textAlternate ?? '#FFFFFF',
+            backgroundColor: theme.primary,
+            fontFamily: FONTS.bold,
+            fontSize: 12,
+            overflow: 'hidden',
+            borderRadius: 10,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
         },
         chipContainer: {
             flexDirection: 'row',
@@ -570,11 +706,21 @@ const getStyles = (theme) => {
             marginTop: 10,
             ...getThemedShadow(theme, 'medium'),
         },
+        saveButtonDisabled: {
+            opacity: 0.45,
+        },
         saveButtonText: {
-            color: '#FFFFFF',
+            color: theme.textAlternate ?? '#FFFFFF',
             fontSize: 18,
             fontFamily: FONTS.bold,
             letterSpacing: 0.5,
+        },
+        saveHint: {
+            textAlign: 'center',
+            color: theme.textSecondary,
+            fontFamily: FONTS.medium,
+            fontSize: 13,
+            marginTop: 10,
         },
     });
 };

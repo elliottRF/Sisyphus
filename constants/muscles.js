@@ -8,6 +8,18 @@ export const muscleMapping = {
     "Adductors": "adductors", "Neck": "neck", "Obliques": "obliques",
 };
 
+// Broad training groups, for filters and session split summaries.
+export const broadMuscleGroups = [
+    { label: 'Chest', slugs: ['chest'] },
+    { label: 'Back', slugs: ['upper-back', 'lower-back', 'trapezius'] },
+    { label: 'Shoulders', slugs: ['deltoids'] },
+    { label: 'Biceps', slugs: ['biceps'] },
+    { label: 'Triceps', slugs: ['triceps'] },
+    { label: 'Forearms', slugs: ['forearm'] },
+    { label: 'Legs', slugs: ['quadriceps', 'hamstring', 'gluteal', 'calves', 'adductors', 'abductors', 'tibialis'] },
+    { label: 'Core', slugs: ['abs', 'obliques'] },
+];
+
 export const majorMuscles = [
     { label: 'Chest', slugs: ['chest'] },
     { label: 'Back', slugs: ['upper-back', 'trapezius'] },
