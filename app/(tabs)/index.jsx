@@ -1,11 +1,11 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Dimensions } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Dimensions, AppState } from 'react-native'
 import Animated, { FadeInDown, FadeOutDown, LinearTransition } from 'react-native-reanimated';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useScrollToTop } from '@react-navigation/native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import ActionSheet from "react-native-actions-sheet";
-import { FlatList } from 'react-native-gesture-handler';
+// FlatList from the sheet library is pre-wired for scroll/drag coordination.
+import ActionSheet, { FlatList } from "react-native-actions-sheet";
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Body from "react-native-body-highlighter";
@@ -18,7 +18,7 @@ import BodyweightGraphCard from '../../components/bodyweightGraphCard';
 import MuscleRadarChart from '../../components/MuscleRadarChart';
 import ReadinessCard from '../../components/ReadinessCard';
 import { useTheme } from '../../context/ThemeContext';
-import { AppEvents, emit, on, off } from '../../utils/events';
+import { AppEvents, on, off } from '../../utils/events';
 import { muscleMapping, majorMuscles } from '../../constants/muscles';
 import Fuse from 'fuse.js';
 
@@ -35,9 +35,14 @@ const LiveTimer = ({ startTime, style }) => {
             const diff = Date.now() - new Date(startTime).getTime();
             setElapsed(Math.max(0, Math.floor(diff / 1000)));
         };
-        update();
-        const interval = setInterval(update, 1000);
-        return () => clearInterval(interval);
+        // Tick only while foregrounded (don't churn every second for a day in
+        // the background); resync immediately on return.
+        let interval = null;
+        const start = () => { if (interval) return; update(); interval = setInterval(update, 1000); };
+        const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
+        if (AppState.currentState === 'active') start();
+        const sub = AppState.addEventListener('change', s => (s === 'active' ? start() : stop()));
+        return () => { sub.remove(); stop(); };
     }, [startTime]);
 
     const h = Math.floor(elapsed / 3600);
@@ -62,7 +67,6 @@ const Home = () => {
     const [showBodyWeight, setShowBodyWeight] = useState(false);
     const [showMuscleRadar, setShowMuscleRadar] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [allMusclesSorted, setAllMusclesSorted] = useState([]);
     const [workoutCounts, setWorkoutCounts] = useState(new Map());
     const [liveWorkout, setLiveWorkout] = useState(null); // {title, done, total}
@@ -89,7 +93,9 @@ const Home = () => {
             loadModulePrefs();
             loadMuscleData();
             loadPinnedExercises();
-            fetchExerciseWorkoutCounts().then(setWorkoutCounts);
+            // workoutCounts (a full-table GROUP BY) is only needed by the
+            // add-graph sheet, which fetches it fresh in handleAddGraph — so it
+            // doesn't belong on every Home focus.
 
             // Live workout banner data — the Current tab persists the active
             // workout on every change, so this is fresh whenever Home focuses.
@@ -193,17 +199,6 @@ const Home = () => {
         }
     };
 
-    const handleRefresh = async () => {
-        setIsRefreshing(true);
-        try {
-            emit(AppEvents.REFRESH_HOME);
-            await Promise.all([loadMuscleData(), loadPinnedExercises()]);
-        } catch (error) {
-            console.error("Error refreshing data:", error);
-        } finally {
-            setIsRefreshing(false);
-        }
-    };
 
     const handleAddGraph = async () => {
         if (allExercises.length === 0) {
@@ -361,9 +356,6 @@ const Home = () => {
                         <Text style={styles.greeting}>Recovery</Text>
                     </View>
                     <View style={styles.headerButtons}>
-                        <TouchableOpacity onPress={handleRefresh} style={styles.headerIconButton} disabled={isRefreshing}>
-                            {isRefreshing ? <ActivityIndicator size="small" color={theme.textSecondary} /> : <Feather name="refresh-cw" size={17} color={theme.textSecondary} />}
-                        </TouchableOpacity>
                         <TouchableOpacity onPress={() => router.push('/settings')} style={styles.headerIconButton}>
                             <Feather name="settings" size={17} color={theme.textSecondary} />
                         </TouchableOpacity>
@@ -511,7 +503,6 @@ const Home = () => {
                             exerciseID={exercise.exerciseID}
                             exerciseName={exercise.name}
                             onRemove={loadPinnedExercises}
-                            refreshTrigger={isRefreshing}
                         />
                     </Animated.View>
                 ))}
@@ -618,10 +609,7 @@ const Home = () => {
                             </View>
                         }
                         keyboardShouldPersistTaps="always"
-                        showsVerticalScrollIndicator={false}
                         style={styles.list}
-                        nestedScrollEnabled={true}
-                        bounces={false}
                     />
                 </View>
             </ActionSheet>
@@ -872,7 +860,11 @@ const getStyles = (theme) => {
         color: theme.primary
     },
     actionSheetContainer: {
-        backgroundColor: 'transparent',
+        // Sheet-coloured (not transparent) so the bottom safe-area strip under
+        // the Android gesture bar isn't a gap showing the backdrop. Hardcoded
+        // for the dynamic theme since the sheet container can't take a
+        // PlatformColor.
+        backgroundColor: theme.type === 'dynamic' ? '#1e1e1e' : theme.surface,
         height: '100%'
     },
     indicator: {

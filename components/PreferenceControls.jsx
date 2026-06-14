@@ -339,6 +339,40 @@ export const GenderSegment = ({ theme, value, onChange }) => {
 };
 
 // ---------------------------------------------------------------------------
+// UnitSegment (kg / lb)
+// ---------------------------------------------------------------------------
+
+export const UnitSegment = ({ theme, value, onChange }) => {
+  const styles = getStyles(theme);
+  const options = [
+    { imperial: false, label: 'Kilograms', short: 'kg' },
+    { imperial: true, label: 'Pounds', short: 'lb' },
+  ];
+  return (
+    <View style={styles.genderToggleContainer}>
+      {options.map((opt) => {
+        const active = value === opt.imperial;
+        return (
+          <TouchableOpacity
+            key={opt.short}
+            style={[
+              styles.genderOption,
+              active && { backgroundColor: theme.primary, borderColor: theme.primary },
+            ]}
+            onPress={() => onChange(opt.imperial)}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.genderText, active && { color: theme.surface }]}>
+              {opt.label} ({opt.short})
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // AppThemeSelector
 // ---------------------------------------------------------------------------
 

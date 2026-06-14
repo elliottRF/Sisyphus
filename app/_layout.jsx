@@ -177,8 +177,20 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
         }
     }, [shouldShowOnboarding, pathname]);
 
+    // DEV ONLY: force the onboarding flow to show on every app open while we
+    // iterate on it. Set to false (or remove) before shipping. Only the FIRST
+    // (launch) check is forced — the re-check after finishing still reads the
+    // real flag, so "Continue" proceeds into the app normally.
+    const FORCE_ONBOARDING = false;
+    const didForceOnboardingRef = useRef(false);
+
     const loadOnboardingState = async () => {
         try {
+            if (FORCE_ONBOARDING && !didForceOnboardingRef.current) {
+                didForceOnboardingRef.current = true;
+                setShouldShowOnboarding(true);
+                return;
+            }
             const onboardingSeen = await AsyncStorage.getItem(SETTINGS_KEYS.onboardingSeen);
             setShouldShowOnboarding(onboardingSeen !== 'true');
         } catch (error) {

@@ -59,20 +59,17 @@ const PRBadge = React.memo(({ type, theme }) => {
 
     const brightColor = lightenColor(theme.primary, 20);
     const bgColor = `${brightColor}25`;
-    const borderColor = `${brightColor}50`;
 
     return (
         <View style={{
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 6,
-            paddingVertical: 2,
-            borderRadius: 6,
-            borderWidth: 1,
-            gap: 4,
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: 100,
+            gap: 3,
             marginRight: 6,
             backgroundColor: bgColor,
-            borderColor: borderColor
         }}>
             <MaterialCommunityIcons name={iconName} size={10} color={brightColor} />
             <Text style={{ fontSize: 9, fontFamily: FONTS.bold, color: brightColor }}>{label}</Text>
@@ -311,6 +308,20 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
         </Animated.View>
     );
 });
+
+// Friendlier labels than the body-highlighter slugs (e.g. "Upper-Back" → "Back").
+// Keyed case-insensitively so it works for stored capitalised names or slugs.
+const MUSCLE_DISPLAY_NAMES = {
+    'gluteal': 'Glutes',
+    'upper-back': 'Back',
+    'lower-back': 'Lower Back',
+    'forearm': 'Forearms',
+    'hamstring': 'Hamstrings',
+};
+const displayMuscleName = (name) => {
+    if (!name) return name;
+    return MUSCLE_DISPLAY_NAMES[name.toLowerCase()] || name;
+};
 
 // Defined at module level so DEFAULT_MUSCLE_TARGETS is a stable reference
 // that doesn't cause re-renders and isn't recreated per instance.
@@ -704,9 +715,10 @@ const ExerciseHistory = (props) => {
     // ── Header copy: eyebrow + insight line ─────────────────────────────────
     // Both fall back to the snapshot cache so they render complete on first
     // paint and only silently correct themselves if data changed.
-    const primaryMuscle = currentExerciseDetails?.targetMuscle?.split(',')[0]?.trim()
+    const rawPrimaryMuscle = currentExerciseDetails?.targetMuscle?.split(',')[0]?.trim()
         || initialSnapshot?.header?.primaryMuscle
         || initialSnapshot?.muscles?.target?.[0]?.trim();
+    const primaryMuscle = displayMuscleName(rawPrimaryMuscle);
     const workoutCount = workoutHistory.length > 0
         ? workoutHistory.length
         : (initialSnapshot?.header?.workoutCount ?? 0);

@@ -22,6 +22,15 @@ const MUSCLE_OPTIONS = [
     'Calves', 'Adductors', 'Neck', 'Obliques'
 ];
 
+// Map any-cased muscle name or slug back to its canonical MUSCLE_OPTIONS value
+// (the body diagram and snapshot store lowercase slugs; we keep capitalised
+// names so the chips match and Save writes the right format).
+const OPTION_BY_SLUG = MUSCLE_OPTIONS.reduce((acc, opt) => {
+    acc[opt.toLowerCase()] = opt;
+    return acc;
+}, {});
+const canonicalMuscle = (m) => OPTION_BY_SLUG[String(m || '').trim().toLowerCase()] || null;
+
 const MUSCLE_DISPLAY_NAMES = {
     'Gluteal': 'Glutes',
     'Upper-Back': 'Back',
@@ -121,9 +130,19 @@ const NewExercise = (props) => {
     const handlers = useScrollHandlers();
     const insets = useSafeAreaInsets(); // <-- Initialize safe area insets
 
+    // Seed the muscle selection synchronously from the warmed snapshot cache so
+    // the body diagram is highlighted on the first paint (no pop-in). The async
+    // load below reconciles it with the DB (same values → no flicker).
+    const seededMuscles = useMemo(() => {
+        const snap = props.exerciseID ? getExerciseSnapshotSync(props.exerciseID) : null;
+        const norm = (arr) => (Array.isArray(arr) ? arr.map(canonicalMuscle).filter(Boolean) : []);
+        return { target: norm(snap?.muscles?.target), accessory: norm(snap?.muscles?.accessory) };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const [exerciseName, setExerciseName] = useState('');
-    const [targetSelected, setTargetSelected] = useState([]);
-    const [accessorySelected, setAccessorySelected] = useState([]);
+    const [targetSelected, setTargetSelected] = useState(seededMuscles.target);
+    const [accessorySelected, setAccessorySelected] = useState(seededMuscles.accessory);
     const [isCardio, setIsCardio] = useState(false);
     const [isAssisted, setIsAssisted] = useState(false);
     const [originalIsAssisted, setOriginalIsAssisted] = useState(false);

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet, AppState } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React from 'react'
 import { TouchableOpacity } from 'react-native';
@@ -18,9 +18,14 @@ const TabTimer = ({ startTime, color }) => {
             setElapsed(Math.floor((now - start) / 1000));
         };
 
-        update();
-        const interval = setInterval(update, 1000);
-        return () => clearInterval(interval);
+        // Tick only while foregrounded — no point re-rendering every second for
+        // a day while the app is backgrounded; it just keeps the JS thread busy.
+        let interval = null;
+        const start = () => { if (interval) return; update(); interval = setInterval(update, 1000); };
+        const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
+        if (AppState.currentState === 'active') start();
+        const sub = AppState.addEventListener('change', s => (s === 'active' ? start() : stop()));
+        return () => { sub.remove(); stop(); };
     }, [startTime]);
 
     const formatTime = (seconds) => {

@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, StyleSheet, TextInput, Keyboard, FlatList, TouchableOpacity } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TextInput, Keyboard, FlatList, TouchableOpacity, InteractionManager } from 'react-native'
 import Animated, { LinearTransition, FadeIn } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
@@ -90,6 +90,12 @@ const Profile = () => {
     const router = useRouter();
 
     const isNavigatingForward = useRef(false);
+    // Reload the (full-table aggregate) exercise data only when it actually
+    // changed — not on every tab focus. With a large history those GROUP BY
+    // scans are expensive, and re-running them on every Exercises-tab tap was a
+    // major source of the tab-switching slowdown.
+    const isFocusedRef = useRef(false);
+    const dirtyRef = useRef(false);
 
     const loadData = () => {
         const fetchLastSessionIDs = async () => {
@@ -121,10 +127,12 @@ const Profile = () => {
     useEffect(() => {
         loadData();
 
-        // Refresh in the background when a workout finishes, so the Recents
-        // list is already correct when this tab is next focused (no stale
-        // list flashing to the new one).
-        const handler = () => loadData();
+        // Refresh when a workout finishes/imports. If visible, reload now;
+        // otherwise just flag dirty and reload on the next focus.
+        const handler = () => {
+            if (isFocusedRef.current) loadData();
+            else dirtyRef.current = true;
+        };
         on(AppEvents.WORKOUT_COMPLETED, handler);
         on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
         return () => {
@@ -135,9 +143,26 @@ const Profile = () => {
 
     useFocusEffect(
         React.useCallback(() => {
-            loadData();
+            isFocusedRef.current = true;
+
+            // Only reload if the data changed while we were away. Deferred past
+            // the transition so the tab switch stays smooth.
+            let task = null;
+            let ran = false;
+            if (dirtyRef.current) {
+                dirtyRef.current = false;
+                task = InteractionManager.runAfterInteractions(() => {
+                    ran = true;
+                    loadData();
+                });
+            }
 
             return () => {
+                isFocusedRef.current = false;
+                if (task && !ran) {
+                    task.cancel();
+                    dirtyRef.current = true; // blurred before it ran — keep owed
+                }
                 // Dismiss the hold-menu on blur — its transparent Modal would
                 // otherwise persist over other screens and block their touches.
                 setContextMenu(null);

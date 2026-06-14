@@ -77,13 +77,12 @@ const PRBadge = React.memo(({ type, theme }) => {
     let label = type === '1RM' ? "1RM" : type === 'VOL' ? "Vol." : "Weight";
     const brightColor = lightenColor(theme.primary, 20);
     const bgColor = withAlpha(brightColor, isLightTheme(theme) ? 0.14 : 0.25);
-    const borderColor = withAlpha(brightColor, isLightTheme(theme) ? 0.24 : 0.4);
 
     return (
         <View style={{
-            flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6,
-            paddingVertical: 2, borderRadius: 4, borderWidth: 1, gap: 3,
-            marginRight: 6, backgroundColor: bgColor, borderColor: borderColor
+            flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8,
+            paddingVertical: 3, borderRadius: 100, gap: 3,
+            marginRight: 6, backgroundColor: bgColor,
         }}>
             <MaterialCommunityIcons name="trophy" size={10} color={brightColor} />
             <Text style={{ fontSize: 9, fontFamily: FONTS.bold, color: brightColor }}>{label}</Text>

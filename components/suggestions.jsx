@@ -13,41 +13,56 @@ export const DAYS_TO_CHECK = 60;
 /**
  * Predictable progressive overload (unchanged).
  */
-export const computeNextSet = (baseSet, repRangeMin, repRangeMax, isAssisted = false) => {
+// Weights are stored in kg; rounding/increments are done in the user's display
+// unit so they land on real plates (2.5 kg / 5 lb) and convert back cleanly.
+const KG_PER_LB = 0.45359237;
+const roundTo = (v, step) => Math.round(v / step) * step;
+
+const roundWeight = (kg, useImperial) =>
+    useImperial ? roundTo(kg / KG_PER_LB, 5) * KG_PER_LB : roundTo(kg, 2.5);
+
+// Step the weight by ~2.5%, floored at one plate, in the user's unit.
+// dir = +1 to go up (harder), -1 to go down (used for assisted machines).
+const bumpWeight = (kg, useImperial, dir = 1) => {
+    const step = useImperial ? 5 : 2.5;
+    const display = useImperial ? kg / KG_PER_LB : kg;
+    const inc = Math.max(step, roundTo(display * 0.025, step));
+    const next = roundTo(display + dir * inc, step);
+    return useImperial ? next * KG_PER_LB : next;
+};
+
+export const computeNextSet = (baseSet, repRangeMin, repRangeMax, isAssisted = false, useImperial = false) => {
     if (!baseSet || !baseSet.reps || baseSet.reps === 0) return null;
 
     const weight = baseSet.weight || 0;
     const currentReps = baseSet.reps;
 
+    // Below the range — too heavy to reach the minimum reps.
     if (currentReps < repRangeMin) {
         if (isAssisted) {
-            const newWeight = Math.round((weight + 2.5) / 2.5) * 2.5;
-            return { weight: newWeight, reps: repRangeMin, isWeightIncrease: false };
+            // More assistance (easier) so the minimum reps become achievable.
+            return { weight: Math.max(0, bumpWeight(weight, useImperial, +1)), reps: repRangeMin, isWeightIncrease: false };
         }
-
+        // Drop to a weight that should allow the minimum reps (same est-1RM).
         const oneRM = weight * (1 + currentReps / 30);
-        const rawNewWeight = oneRM / (1 + repRangeMin / 30);
-        const roundedWeight = Math.round(rawNewWeight / 2.5) * 2.5;
-
-        return { weight: roundedWeight, reps: repRangeMin, isWeightIncrease: false };
+        const raw = oneRM / (1 + repRangeMin / 30);
+        return { weight: roundWeight(raw, useImperial), reps: repRangeMin, isWeightIncrease: false };
     }
 
+    // Within the range — add a rep at the same weight.
     const targetReps = currentReps + 1;
-
     if (targetReps <= repRangeMax) {
         return { weight, reps: targetReps, isWeightIncrease: false };
     }
 
+    // At/above the top — bump the weight a small, scaled amount and reset to the
+    // bottom of the range. Shown as "min+" (do at least the min, push for more),
+    // so resetting to a low rep count on a wide range isn't misleading.
     if (isAssisted) {
-        const newWeight = Math.max(0, Math.round((weight - 2.5) / 2.5) * 2.5);
-        return { weight: newWeight, reps: repRangeMin, isWeightIncrease: true };
+        // Less assistance (harder).
+        return { weight: Math.max(0, bumpWeight(weight, useImperial, -1)), reps: repRangeMin, isWeightIncrease: true };
     }
-
-    const oneRM = weight * (1 + currentReps / 30);
-    const rawNewWeight = oneRM / (1 + repRangeMin / 30);
-    const roundedWeight = Math.round(rawNewWeight / 2.5) * 2.5;
-
-    return { weight: roundedWeight, reps: repRangeMin, isWeightIncrease: true };
+    return { weight: bumpWeight(weight, useImperial, +1), reps: repRangeMin, isWeightIncrease: true };
 };
 
 /**
@@ -80,7 +95,8 @@ const resolveAgainstRecentHistory = (
     recentWorkingSets,
     repRangeMin,
     repRangeMax,
-    isAssisted
+    isAssisted,
+    useImperial
 ) => {
     if (!suggestion) return null;
 
@@ -91,7 +107,7 @@ const resolveAgainstRecentHistory = (
     if (alreadyAchieved.length === 0) return suggestion;
 
     const bestAchieved = findBestSet(alreadyAchieved);
-    return computeNextSet(bestAchieved, repRangeMin, repRangeMax, isAssisted);
+    return computeNextSet(bestAchieved, repRangeMin, repRangeMax, isAssisted, useImperial);
 };
 
 // Session cache keyed by exerciseID. The reorderable list force-remounts
@@ -107,6 +123,7 @@ export const useWorkoutSuggestions = ({
     repRangeMax,
     isAssisted,
     muscleOccurrenceIndex,
+    useImperial = false,
 }) => {
     const [suggestions, setSuggestions] = useState(
         () => suggestionsCache.get(exerciseID)?.suggestions ?? []
@@ -121,7 +138,7 @@ export const useWorkoutSuggestions = ({
 
         let cancelled = false;
 
-        const cacheKey = `${exerciseID}|${muscleOccurrenceIndex}|${repRangeMin}|${repRangeMax}|${isAssisted ? 1 : 0}`;
+        const cacheKey = `${exerciseID}|${muscleOccurrenceIndex}|${repRangeMin}|${repRangeMax}|${isAssisted ? 1 : 0}|${useImperial ? 1 : 0}`;
 
         // Serve the cached result synchronously so toggling suggestions on
         // goes straight from the previous value to the suggestion instead of
@@ -181,7 +198,7 @@ export const useWorkoutSuggestions = ({
 
             // 5. Compute suggestions
             const computedSuggestions = baseSets.map((baseSet) => {
-                const initial = computeNextSet(baseSet, repRangeMin, repRangeMax, isAssisted);
+                const initial = computeNextSet(baseSet, repRangeMin, repRangeMax, isAssisted, useImperial);
                 if (!initial) return null;
 
                 // 🔥 NEW RULE (exactly what you asked for):
@@ -202,9 +219,9 @@ export const useWorkoutSuggestions = ({
                     return initial;  // ← back to original, no history check
                 }
 
-                const anchorSuggestion = computeNextSet(globalAnchorSet, repRangeMin, repRangeMax, isAssisted);
+                const anchorSuggestion = computeNextSet(globalAnchorSet, repRangeMin, repRangeMax, isAssisted, useImperial);
                 return resolveAgainstRecentHistory(
-                    anchorSuggestion, recentWorkingSets, repRangeMin, repRangeMax, isAssisted
+                    anchorSuggestion, recentWorkingSets, repRangeMin, repRangeMax, isAssisted, useImperial
                 );
             });
 
@@ -223,6 +240,7 @@ export const useWorkoutSuggestions = ({
         repRangeMax,
         isAssisted,
         muscleOccurrenceIndex,
+        useImperial,
     ]);
 
     return suggestions;
@@ -239,17 +257,29 @@ export const getPRType = (suggestion, lifetimePRs, isCardio) => {
 
     const sugWeight = suggestion.weight || 0;
     const sugReps = suggestion.reps || 0;
-    const sug1RM = sugWeight * (1 + sugReps / 30);
+    // Match the stored 1RM formula (a single is just the weight) so an exact
+    // repeat of a past set doesn't read as a fractionally-higher estimated 1RM.
+    const sug1RM = sugReps <= 1 ? sugWeight : sugWeight * (1 + sugReps / 30);
     const sugVol = sugWeight * sugReps;
 
-    if (sug1RM > lifetimePRs.max1RM) return '1RM';
+    // Small tolerances so a tie — or float drift from kg↔lb rounding — with a
+    // performance you've already hit (e.g. one from over 2 months ago) doesn't
+    // get flagged as a new PR. A real PR clears these comfortably.
+    const EPS = 0.01;
+    const VOL_EPS = 0.5;
+    const max1RM = lifetimePRs.max1RM || 0;
+    const maxWeight = lifetimePRs.maxWeight || 0;
+    const maxVolume = lifetimePRs.maxVolume || 0;
+    const maxRepsAtMaxWeight = lifetimePRs.maxRepsAtMaxWeight || 0;
+
+    if (sug1RM > max1RM + EPS) return '1RM';
 
     if (
-        sugWeight > lifetimePRs.maxWeight ||
-        (sugWeight === lifetimePRs.maxWeight && sugReps > lifetimePRs.maxRepsAtMaxWeight)
+        sugWeight > maxWeight + EPS ||
+        (Math.abs(sugWeight - maxWeight) <= EPS && sugReps > maxRepsAtMaxWeight)
     ) return 'Weight';
 
-    if (sugVol > lifetimePRs.maxVolume) return 'Volume';
+    if (sugVol > maxVolume + VOL_EPS) return 'Volume';
 
     return null;
 };

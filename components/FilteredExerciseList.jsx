@@ -1,18 +1,21 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
-import { FlatList } from 'react-native-gesture-handler';
-import ActionSheet from "react-native-actions-sheet";
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard, ScrollView } from 'react-native';
+// The library's own FlatList is pre-wired with the sheet's scroll/drag gesture
+// coordination, so scrolling the list no longer fights the sheet's pan.
+import ActionSheet, { FlatList } from "react-native-actions-sheet";
 import { fetchExercises, fetchLastWorkoutSets, fetchExerciseWorkoutCounts } from '../components/db';
-import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
+import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
+import { broadMuscleGroups, muscleMapping } from '../constants/muscles';
 
 import NewExercise from './NewExercise';
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatWeight } from '../utils/units';
 import Fuse from 'fuse.js';
 
-const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, onExerciseCreated }) => {
+const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, onExerciseCreated, existingExerciseIds = [] }) => {
     const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
     const [searchQuery, setSearchQuery] = useState('');
@@ -20,6 +23,12 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
     const createExerciseActionSheetRef = useRef(null);
     const searchInputRef = useRef(null);
     const [workoutCounts, setWorkoutCounts] = useState(new Map());
+    // Multi-select: stage several exercises, then add them all at once.
+    const [selectedIds, setSelectedIds] = useState(() => new Set());
+    // Quick muscle-group filter (null = All).
+    const [activeFilter, setActiveFilter] = useState(null);
+
+    const existingSet = useMemo(() => new Set(existingExerciseIds), [existingExerciseIds]);
 
     useEffect(() => {
         if (isOpen) {
@@ -56,19 +65,35 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
         }
     };
 
+    // Narrow to the selected muscle group first; search/sort runs on top of this.
+    const muscleFiltered = useMemo(() => {
+        if (!activeFilter) return exercises;
+        const group = broadMuscleGroups.find((g) => g.label === activeFilter);
+        if (!group) return exercises;
+        const groupSlugs = new Set(group.slugs);
+        // Match the primary (target) muscle only — secondary muscles shouldn't
+        // surface an exercise under a group it isn't really for (e.g. a chest
+        // fly with biceps as a secondary muscle showing under "Biceps").
+        return exercises.filter((ex) => {
+            const names = (ex.targetMuscle || '')
+                .split(',').map((m) => m.trim()).filter(Boolean);
+            return names.some((n) => groupSlugs.has(muscleMapping[n] || n.toLowerCase()));
+        });
+    }, [exercises, activeFilter]);
+
     const fuse = useMemo(() => {
-        return new Fuse(exercises, {
+        return new Fuse(muscleFiltered, {
             keys: ['name'],
             threshold: 0.35,
             includeScore: true,
             ignoreLocation: true,
         });
-    }, [exercises]);
+    }, [muscleFiltered]);
 
     const sortedAndFilteredExercises = useMemo(() => {
         // 1. If search is empty, return the full list sorted by frequency (workoutCount), then alphabetically
         if (!searchQuery.trim()) {
-            return [...exercises].sort((a, b) => {
+            return [...muscleFiltered].sort((a, b) => {
                 const countA = workoutCounts.get(a.exerciseID) || 0;
                 const countB = workoutCounts.get(b.exerciseID) || 0;
                 if (countB !== countA) return countB - countA;
@@ -98,18 +123,16 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
                 return a.item.name.localeCompare(b.item.name);
             })
             .map(r => r.item);
-    }, [searchQuery, exercises, fuse]);
+    }, [searchQuery, muscleFiltered, fuse, workoutCounts]);
 
-    const inputExercise = async (item) => {
-        actionSheetRef.current?.hide();
-        const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+    const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
-        // Fetch last workout sets for this exercise
+    // Build a workout group for one exercise, seeded from its last session.
+    const buildWorkoutEntry = async (item) => {
         const history = await fetchLastWorkoutSets(item.exerciseID);
 
         let setsToUse;
         if (history && history.length > 0) {
-            // Use all sets from history including warm-ups
             setsToUse = history.map(hSet => ({
                 id: generateId(),
                 weight: formatWeight(hSet.weight, useImperial),
@@ -120,55 +143,79 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
                 completed: false
             }));
         } else {
-            // No history, create a single empty set
             setsToUse = [{
-                id: generateId(),
-                weight: null,
-                reps: null,
-                distance: null,
-                minutes: null,
-                setType: 'N',
-                completed: false
+                id: generateId(), weight: null, reps: null, distance: null,
+                minutes: null, setType: 'N', completed: false,
             }];
         }
 
-        setCurrentWorkout((prevWorkouts) => [
-            ...prevWorkouts,
-            {
-                id: generateId(),
-                exercises: [
-                    {
-                        id: generateId(),
-                        exerciseID: item.exerciseID,
-                        sets: setsToUse,
-                        notes: ''
-                    }
-                ]
-            }
-        ]);
+        return {
+            id: generateId(),
+            exercises: [{ id: generateId(), exerciseID: item.exerciseID, sets: setsToUse, notes: '' }],
+        };
     };
 
-    const renderItem = ({ item }) => (
-        <TouchableOpacity
-            style={styles.exerciseCard}
-            onPress={() => inputExercise(item)}
-            activeOpacity={0.7}
-        >
-            <View style={styles.exerciseContent}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                    <Text style={styles.exerciseName} numberOfLines={2}>{item.name}</Text>
-                    {workoutCounts.has(item.exerciseID) && (
-                        <Text style={styles.usageCount}>
-                            {workoutCounts.get(item.exerciseID)} {workoutCounts.get(item.exerciseID) === 1 ? 'workout' : 'workouts'}
-                        </Text>
-                    )}
+    // Single add (used by the create-exercise flow): add immediately and close.
+    const inputExercise = async (item) => {
+        actionSheetRef.current?.hide();
+        const entry = await buildWorkoutEntry(item);
+        setCurrentWorkout((prev) => [...prev, entry]);
+    };
+
+    const toggleSelect = (item) => {
+        Haptics.selectionAsync();
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(item.exerciseID)) next.delete(item.exerciseID);
+            else next.add(item.exerciseID);
+            return next;
+        });
+    };
+
+    // Add every staged exercise in selection order, then close.
+    const commitSelection = async () => {
+        const staged = [...selectedIds]
+            .map((id) => exercises.find((e) => e.exerciseID === id))
+            .filter(Boolean);
+        if (staged.length === 0) return;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const entries = await Promise.all(staged.map(buildWorkoutEntry));
+        setCurrentWorkout((prev) => [...prev, ...entries]);
+        actionSheetRef.current?.hide();
+    };
+
+    const renderItem = ({ item }) => {
+        const selected = selectedIds.has(item.exerciseID);
+        const already = existingSet.has(item.exerciseID);
+        return (
+            <TouchableOpacity
+                style={[styles.exerciseCard, selected && styles.exerciseCardSelected]}
+                onPress={() => toggleSelect(item)}
+                activeOpacity={0.7}
+            >
+                <View style={styles.exerciseContent}>
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                        <Text style={styles.exerciseName} numberOfLines={2}>{item.name}</Text>
+                        <View style={styles.metaRow}>
+                            {workoutCounts.has(item.exerciseID) && (
+                                <Text style={styles.usageCount}>
+                                    {workoutCounts.get(item.exerciseID)} {workoutCounts.get(item.exerciseID) === 1 ? 'workout' : 'workouts'}
+                                </Text>
+                            )}
+                            {already && <Text style={styles.inWorkoutTag}>In workout</Text>}
+                        </View>
+                    </View>
+                    <View style={[styles.plusIconContainer, selected && styles.checkIconContainer]}>
+                        <Feather
+                            name={selected ? 'check' : 'plus'}
+                            size={20}
+                            color={selected ? theme.textAlternate : theme.primary}
+                        />
+                    </View>
                 </View>
-                <View style={styles.plusIconContainer}>
-                    <Feather name="plus" size={20} color={theme.primary} />
-                </View>
-            </View>
-        </TouchableOpacity>
-    );
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <ActionSheet
@@ -182,6 +229,8 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
             onClose={() => {
                 setIsOpen(false);
                 setSearchQuery('');
+                setActiveFilter(null);
+                setSelectedIds(new Set());
             }}
         >
             <View style={styles.contentContainer}>
@@ -217,19 +266,58 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
                         </ButtonBackground>
                     </TouchableOpacity>
                 </View>
+
+                {/* Quick muscle-group filters */}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyboardShouldPersistTaps="always"
+                    style={styles.chipsScroll}
+                    contentContainerStyle={styles.chipsRow}
+                >
+                    {['All', ...broadMuscleGroups.map((g) => g.label)].map((label) => {
+                        const active = label === 'All' ? !activeFilter : activeFilter === label;
+                        return (
+                            <TouchableOpacity
+                                key={label}
+                                style={[styles.chip, active && styles.chipActive]}
+                                onPress={() => setActiveFilter(label === 'All' ? null : label)}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
+
                 <FlatList
                     data={sortedAndFilteredExercises}
                     keyExtractor={(item) => item.exerciseID.toString()}
                     renderItem={renderItem}
                     keyboardShouldPersistTaps="always"
                     keyboardDismissMode="on-drag"
-
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                     style={styles.list}
-                    nestedScrollEnabled={true}
-                    bounces={false}
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Feather name="search" size={32} color={theme.textSecondary} style={{ opacity: 0.4, marginBottom: 10 }} />
+                            <Text style={styles.emptyTitle}>No exercises found</Text>
+                            <Text style={styles.emptySubtitle}>Try a different search, or create it with the + button.</Text>
+                        </View>
+                    }
                 />
+
+                {selectedIds.size > 0 && (
+                    <View style={styles.footer}>
+                        <TouchableOpacity style={styles.addSelectedButton} onPress={commitSelection} activeOpacity={0.9}>
+                            <Feather name="plus" size={20} color={theme.textAlternate} />
+                            <Text style={styles.addSelectedText}>
+                                Add {selectedIds.size} exercise{selectedIds.size > 1 ? 's' : ''}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
             </View>
 
             {/* New Create Exercise ActionSheet */}
@@ -295,7 +383,10 @@ const getStyles = (theme) => {
 
     return StyleSheet.create({
         actionSheetContainer: {
-            backgroundColor: 'transparent',
+            // Filled (not transparent) so the bottom safe-area strip the sheet
+            // adds under the Android gesture bar is the sheet colour, not a gap
+            // showing the dimmed backdrop.
+            backgroundColor: safeSurface,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             height: '100%',
@@ -372,12 +463,43 @@ const getStyles = (theme) => {
             borderWidth: 1,
             borderColor: lightTheme ? safeBorder : 'transparent',
         },
+        chipsScroll: {
+            flexGrow: 0,
+            backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: safeBorder,
+        },
+        chipsRow: {
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            gap: 8,
+        },
+        chip: {
+            paddingHorizontal: 14,
+            paddingVertical: 7,
+            borderRadius: 100,
+            backgroundColor: safeBackground,
+            borderWidth: 1,
+            borderColor: safeBorder,
+        },
+        chipActive: {
+            backgroundColor: theme.primary,
+            borderColor: theme.primary,
+        },
+        chipText: {
+            fontSize: 13,
+            fontFamily: FONTS.semiBold,
+            color: safeTextSecondary,
+        },
+        chipTextActive: {
+            color: theme.textAlternate,
+        },
         list: {
             flex: 1,
             paddingHorizontal: 20,
-            paddingBottom: 100,
         },
         listContent: {
+            paddingTop: 16,
             paddingBottom: 40,
         },
         exerciseCard: {
@@ -387,7 +509,12 @@ const getStyles = (theme) => {
             padding: 20,
             borderWidth: 1,
             borderColor: safeBorder,
-            ...getThemedShadow(theme, 'small'),
+            // No shadow: the border separates the cards, and the elevation drew a
+            // hard dark edge (especially over the tinted selected state).
+        },
+        exerciseCardSelected: {
+            borderColor: theme.primary,
+            backgroundColor: withAlpha(theme.primary, isDynamic ? 0.18 : (lightTheme ? 0.08 : 0.14)),
         },
         exerciseContent: {
             flexDirection: 'row',
@@ -399,15 +526,80 @@ const getStyles = (theme) => {
             fontSize: 16,
             fontFamily: FONTS.semiBold,
         },
+        metaRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            marginTop: 3,
+        },
         usageCount: {
             color: safeTextSecondary,
             fontSize: 13,
             fontFamily: FONTS.medium,
-            marginTop: 2,
+        },
+        inWorkoutTag: {
+            color: theme.primary,
+            fontSize: 11,
+            fontFamily: FONTS.bold,
+            textTransform: 'uppercase',
+            letterSpacing: 0.4,
+            backgroundColor: withAlpha(theme.primary, isDynamic ? 0.2 : (lightTheme ? 0.1 : 0.18)),
+            paddingHorizontal: 7,
+            paddingVertical: 2,
+            borderRadius: 100,
+            overflow: 'hidden',
         },
         plusIconContainer: {
+            width: 34,
+            height: 34,
+            borderRadius: 17,
             justifyContent: 'center',
             alignItems: 'center',
+            backgroundColor: withAlpha(theme.primary, isDynamic ? 0.18 : (lightTheme ? 0.1 : 0.16)),
+        },
+        checkIconContainer: {
+            backgroundColor: theme.primary,
+        },
+        footer: {
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: 16,
+            borderTopWidth: 1,
+            borderTopColor: safeBorder,
+            backgroundColor: theme.surface,
+        },
+        addSelectedButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            backgroundColor: theme.primary,
+            borderRadius: 16,
+            minHeight: 54,
+            ...getThemedShadow(theme, 'medium'),
+        },
+        addSelectedText: {
+            color: theme.textAlternate,
+            fontSize: 16,
+            fontFamily: FONTS.bold,
+        },
+        emptyState: {
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingTop: 60,
+            paddingHorizontal: 24,
+        },
+        emptyTitle: {
+            color: safeText,
+            fontSize: 16,
+            fontFamily: FONTS.semiBold,
+        },
+        emptySubtitle: {
+            color: safeTextSecondary,
+            fontSize: 13,
+            fontFamily: FONTS.regular,
+            textAlign: 'center',
+            marginTop: 4,
         },
     });
 };

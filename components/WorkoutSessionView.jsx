@@ -34,20 +34,17 @@ const PRBadge = React.memo(({ type, theme }) => {
     const brightColor = lightenColor(theme.primary, 20);
     const color = brightColor;
     const bgColor = withAlpha(brightColor, isLightTheme(theme) ? 0.14 : 0.25);
-    const borderColor = withAlpha(brightColor, isLightTheme(theme) ? 0.24 : 0.4);
 
     return (
         <View style={{
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 6,
-            paddingVertical: 1,
-            borderRadius: 4,
-            borderWidth: 1,
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: 100,
             gap: 3,
             marginRight: 6,
             backgroundColor: bgColor,
-            borderColor: borderColor
         }}>
             <MaterialCommunityIcons name={iconName} size={10} color={color} />
             <Text style={{ fontSize: 9, fontFamily: FONTS.bold, color: color }}>{label}</Text>

@@ -607,6 +607,7 @@ const ExerciseEditable = ({
         repRangeMax,
         isAssisted,
         muscleOccurrenceIndex,
+        useImperial,
     });
 
     const headerKey = showSuggestion ? 'suggest' : 'prev';
@@ -762,7 +763,9 @@ const ExerciseEditable = ({
                             const suggestIndex = suggestWorkingIndex++;
                             const computed = workingSuggestions[suggestIndex];
                             if (computed) {
-                                suggestionText = `${formatWeight(computed.weight, useImperial)} × ${computed.reps}`;
+                                // "min+" on a weight increase: do at least the min reps, push for more.
+                                const repsLabel = computed.isWeightIncrease ? `${computed.reps}+` : `${computed.reps}`;
+                                suggestionText = `${formatWeight(computed.weight, useImperial)} × ${repsLabel}`;
                                 computedSuggestion = computed;
                                 fillData = { weight: computed.weight, reps: computed.reps };
                             }

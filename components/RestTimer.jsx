@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, runOnJS } from 'react-native-reanimated';
@@ -74,7 +74,13 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     // The notification +30/-30/Stop buttons update native SharedPreferences but
     // the JS RAF loop has no way to know. We poll every 1.5s and resync if the
     // native remaining differs from our JS estimate by more than 2 seconds.
-    useEffect(() => {
+    //
+    // Gated to focus: the workout tab stays mounted for the whole app session
+    // (lazy:false), so a plain useEffect would poll the native bridge — and run
+    // the RAF re-render loop — forever, on every tab and while idle. useFocusEffect
+    // tears both down on blur and resyncs from the (authoritative) native timer
+    // on the next focus, so off the workout tab there's zero rest-timer work.
+    useFocusEffect(useCallback(() => {
         const POLL_MS = 1500;
         const DRIFT_THRESHOLD = 2; // seconds
 
@@ -116,16 +122,33 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
             }
         };
 
-        const intervalId = setInterval(poll, POLL_MS);
-
-        // Also run once immediately on mount to catch a timer that was running before this screen mounted
-        poll();
-
-        return () => {
-            clearInterval(intervalId);
+        let intervalId = null;
+        const startPolling = () => {
+            if (intervalId) return;
+            poll(); // resync immediately (catches a timer started/elapsed while away)
+            intervalId = setInterval(poll, POLL_MS);
+        };
+        const stopPolling = () => {
+            if (intervalId) { clearInterval(intervalId); intervalId = null; }
             if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
         };
-    }, [updateUI]); // updateUI is stable (useCallback with no deps that change)
+
+        // Only poll while the app is in the foreground. Left backgrounded, this
+        // native-bridge poll (and the RAF loop) would otherwise keep firing for
+        // as long as the OS keeps the process alive — thousands of times over a
+        // day — which is a big contributor to the app being sluggish on return.
+        // The native timer is the source of truth, so we resync on resume.
+        if (AppState.currentState === 'active') startPolling();
+        const sub = AppState.addEventListener('change', (state) => {
+            if (state === 'active') startPolling();
+            else stopPolling();
+        });
+
+        return () => {
+            sub.remove();
+            stopPolling();
+        };
+    }, [updateUI])); // updateUI is stable (useCallback with no deps that change)
 
     // Play "Ding" sound helper
     const playDing = async () => {

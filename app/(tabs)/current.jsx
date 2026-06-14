@@ -1127,6 +1127,7 @@ const Current = () => {
                             exercises={exercises}
                             actionSheetRef={actionSheetRef}
                             setCurrentWorkout={setCurrentWorkout}
+                            existingExerciseIds={currentWorkout.flatMap(g => g.exercises.map(e => e.exerciseID))}
                             onExerciseCreated={() => fetchExercises().then(data => setExercises(data))}
                         />
                     </>

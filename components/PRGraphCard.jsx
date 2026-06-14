@@ -21,6 +21,16 @@ const GRAPH_RIGHT_PADDING = 0;
 
 const DEBUG_INTERPOLATE = true;
 
+// Largest "nice" number (1/2/5 × 10ⁿ) that is ≤ x. Used to round the y-axis
+// bounds to tidy values with a *small* step, so snapping can't balloon the band.
+const niceStep = (x) => {
+    if (!(x > 0)) return 1;
+    const base = Math.pow(10, Math.floor(Math.log10(x)));
+    const f = x / base; // 1 ≤ f < 10
+    const mult = f >= 5 ? 5 : f >= 2 ? 2 : 1;
+    return mult * base;
+};
+
 export const computeGraphPoints = (history, isAssisted = false) => {
     if (!history?.length) return [];
 
@@ -41,10 +51,12 @@ export const computeGraphPoints = (history, isAssisted = false) => {
             dailyData[dateKey] = { date: entry.time, max1RM: 0, maxWeight: isAssisted ? Infinity : 0 };
         }
         if (oneRM > dailyData[dateKey].max1RM && !isAssisted) dailyData[dateKey].max1RM = Math.round(oneRM);
+        // Max weight keeps its decimals (e.g. 2.5 kg plates / lb conversions);
+        // only the estimated 1RM is rounded.
         if (isAssisted) {
-            if (weight < dailyData[dateKey].maxWeight) dailyData[dateKey].maxWeight = Math.round(weight);
+            if (weight < dailyData[dateKey].maxWeight) dailyData[dateKey].maxWeight = weight;
         } else {
-            if (weight > dailyData[dateKey].maxWeight) dailyData[dateKey].maxWeight = Math.round(weight);
+            if (weight > dailyData[dateKey].maxWeight) dailyData[dateKey].maxWeight = weight;
         }
     });
 
@@ -399,23 +411,20 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
 
         let yMin, yMax;
 
-        if (rawRange > 6) {
-            const padding = rawRange * 0.2;
-            yMin = Math.floor((minVal - padding) / 5) * 5;
-            yMax = Math.ceil((maxVal + padding) / 5) * 5;
-
-            while ((yMax - yMin) % 10 !== 0) {
-                if (Math.abs(yMax - maxVal) < Math.abs(minVal - yMin)) {
-                    yMax += 5;
-                } else {
-                    yMin -= 5;
-                }
-            }
+        if (rawRange < 0.5) {
+            // Essentially flat — show a small symmetric band so the line sits
+            // mid-chart instead of being stretched to fill noise.
+            const pad = Math.max(1, Math.abs(maxVal) * 0.05);
+            yMin = minVal - pad;
+            yMax = maxVal + pad;
         } else {
-            const rangeVal = rawRange || 10;
-            const padding = Math.max(1, rangeVal * 0.25);
-            yMin = minVal - padding;
-            yMax = maxVal + padding;
+            // Tight 10% padding so the line fills ~80% of the height, then snap
+            // the bounds to a small "nice" step (≤ the padding) for clean axis
+            // labels without re-inflating the band.
+            const pad = rawRange * 0.1;
+            const step = niceStep(pad);
+            yMin = Math.floor((minVal - pad) / step) * step;
+            yMax = Math.ceil((maxVal + pad) / step) * step;
         }
 
         yMin = Math.max(0, yMin);
@@ -583,6 +592,26 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
     const hasEnoughData = allData.length >= 2 && points.length >= 2;
     const currentValue = points[points.length - 1]?.value || 0;
 
+    const renderModeButton = (mode) => (
+        <TouchableOpacity
+            key={mode.key}
+            onPress={() => setGraphMode(mode.key)}
+            style={[styles.modeButton, graphMode === mode.key && styles.modeButtonActive]}
+        >
+            <MaterialCommunityIcons
+                name={mode.icon}
+                size={14}
+                color={graphMode === mode.key ? theme.primary : theme.textSecondary}
+            />
+            <Text style={[
+                styles.modeButtonText,
+                graphMode === mode.key && styles.modeButtonTextActive
+            ]}>
+                {mode.label}
+            </Text>
+        </TouchableOpacity>
+    );
+
     return (
         <View style={styles.container}>
             <GradientOrView
@@ -680,32 +709,14 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
 
                 {!isAssisted && (
                     <View style={[styles.modeToggleContainer, isCompact && { marginBottom: 8 }]}>
-                        {[
-                            { key: 'history', label: '1RM', icon: 'chart-timeline-variant' },
-                            { key: 'truePR', label: 'Top 1RM', icon: 'trending-up' },
-                            { key: 'maxWeight', label: 'Max Wt', icon: 'weight' },
-                        ].map(mode => (
-                            <TouchableOpacity
-                                key={mode.key}
-                                onPress={() => setGraphMode(mode.key)}
-                                style={[
-                                    styles.modeButton,
-                                    graphMode === mode.key && styles.modeButtonActive
-                                ]}
-                            >
-                                <MaterialCommunityIcons
-                                    name={mode.icon}
-                                    size={14}
-                                    color={graphMode === mode.key ? theme.primary : theme.textSecondary}
-                                />
-                                <Text style={[
-                                    styles.modeButtonText,
-                                    graphMode === mode.key && styles.modeButtonTextActive
-                                ]}>
-                                    {mode.label}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
+                        {/* 1RM and Top 1RM share the same underlying data, so
+                            they sit together in a lightly-tinted box; Max Wt
+                            (a different metric) is set apart. */}
+                        <View style={styles.modeGroup}>
+                            {renderModeButton({ key: 'history', label: '1RM', icon: 'chart-timeline-variant' })}
+                            {renderModeButton({ key: 'truePR', label: 'Top 1RM', icon: 'trending-up' })}
+                        </View>
+                        {renderModeButton({ key: 'maxWeight', label: 'Max Wt', icon: 'weight' })}
                     </View>
                 )}
 
@@ -982,7 +993,17 @@ const getStyles = (theme, isCompact) => StyleSheet.create({
         backgroundColor: theme.overlayInput,
         borderRadius: 12,
         padding: 4,
+        gap: 6,
         marginBottom: 16,
+    },
+    // Connects 1RM + Top 1RM into one box (they share the same data). Neutral
+    // gray rather than the theme colour so it reads as a grouping, not a state.
+    modeGroup: {
+        flex: 2,
+        flexDirection: 'row',
+        borderRadius: 9,
+        overflow: 'hidden',
+        backgroundColor: withAlpha(theme.textSecondary, isLightTheme(theme) ? 0.08 : 0.12),
     },
     modeButton: {
         flex: 1,
