@@ -563,6 +563,7 @@ const getStyles = (theme) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
+        marginTop: 4,
         marginBottom: 10,
     },
     searchBar: {

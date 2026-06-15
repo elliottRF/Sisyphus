@@ -59,7 +59,6 @@ const AnimatedMuscleChip = React.memo(({ muscle, isSelected, isDisabled, onPress
         Animated.spring(pressScale, { toValue: 1, speed: 24, bounciness: 5, useNativeDriver: true }).start();
 
     const activeBg = activeProgress.interpolate({ inputRange: [0, 1], outputRange: [inactiveBg, theme.primary] });
-    const activeBorder = activeProgress.interpolate({ inputRange: [0, 1], outputRange: [theme.border, theme.primary] });
     const textColor = activeProgress.interpolate({ inputRange: [0, 1], outputRange: [theme.text, theme.textAlternate ?? '#ffffff'] });
 
     return (
@@ -70,7 +69,7 @@ const AnimatedMuscleChip = React.memo(({ muscle, isSelected, isDisabled, onPress
                 onPressIn={handlePressIn}
                 onPressOut={handlePressOut}
             >
-                <Animated.View style={[styles.chip, { backgroundColor: activeBg, borderColor: activeBorder }]}>
+                <Animated.View style={[styles.chip, { backgroundColor: activeBg }]}>
                     <Animated.Text style={[styles.chipText, { color: textColor }]}>
                         {MUSCLE_DISPLAY_NAMES[muscle] || muscle}
                     </Animated.Text>
@@ -130,19 +129,23 @@ const NewExercise = (props) => {
     const handlers = useScrollHandlers();
     const insets = useSafeAreaInsets(); // <-- Initialize safe area insets
 
-    // Seed the muscle selection synchronously from the warmed snapshot cache so
-    // the body diagram is highlighted on the first paint (no pop-in). The async
+    // Seed the muscle selection and name synchronously from the warmed snapshot cache so
+    // the body diagram and title are rendered on the first paint (no pop-in). The async
     // load below reconciles it with the DB (same values → no flicker).
-    const seededMuscles = useMemo(() => {
+    const seededData = useMemo(() => {
         const snap = props.exerciseID ? getExerciseSnapshotSync(props.exerciseID) : null;
         const norm = (arr) => (Array.isArray(arr) ? arr.map(canonicalMuscle).filter(Boolean) : []);
-        return { target: norm(snap?.muscles?.target), accessory: norm(snap?.muscles?.accessory) };
+        return { 
+            name: snap?.name || '',
+            target: norm(snap?.muscles?.target), 
+            accessory: norm(snap?.muscles?.accessory) 
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const [exerciseName, setExerciseName] = useState('');
-    const [targetSelected, setTargetSelected] = useState(seededMuscles.target);
-    const [accessorySelected, setAccessorySelected] = useState(seededMuscles.accessory);
+    const [exerciseName, setExerciseName] = useState(seededData.name);
+    const [targetSelected, setTargetSelected] = useState(seededData.target);
+    const [accessorySelected, setAccessorySelected] = useState(seededData.accessory);
     const [isCardio, setIsCardio] = useState(false);
     const [isAssisted, setIsAssisted] = useState(false);
     const [originalIsAssisted, setOriginalIsAssisted] = useState(false);
@@ -588,8 +591,6 @@ const getStyles = (theme) => {
             paddingVertical: 0,
             backgroundColor: theme.surface,
             borderRadius: 20,
-            borderWidth: 1,
-            borderColor: theme.border,
             marginBottom: 10,
             ...getThemedShadow(theme, 'small'),
         },
@@ -605,8 +606,6 @@ const getStyles = (theme) => {
             gap: 8,
             backgroundColor: lightTheme ? theme.overlaySubtle : theme.surface,
             borderRadius: 12,
-            borderWidth: 1,
-            borderColor: theme.border,
             paddingHorizontal: 14,
             paddingVertical: 12,
             marginBottom: 20,
@@ -629,8 +628,6 @@ const getStyles = (theme) => {
             alignItems: 'center',
             backgroundColor: lightTheme ? 'rgba(255,255,255,0.94)' : theme.surface,
             borderRadius: 14,
-            borderWidth: 1,
-            borderColor: theme.border,
             paddingHorizontal: 16,
             marginBottom: 20,
             ...getThemedShadow(theme, 'small'),
@@ -652,8 +649,6 @@ const getStyles = (theme) => {
             backgroundColor: theme.surface,
             padding: 18,
             borderRadius: 14,
-            borderWidth: 1,
-            borderColor: theme.border,
             marginBottom: 24,
             ...getThemedShadow(theme, 'small'),
         },
@@ -675,8 +670,6 @@ const getStyles = (theme) => {
             backgroundColor: lightTheme ? 'rgba(255,255,255,0.72)' : 'transparent',
             borderRadius: 18,
             padding: lightTheme ? 16 : 0,
-            borderWidth: lightTheme ? 1 : 0,
-            borderColor: lightTheme ? theme.overlayBorder : 'transparent',
         },
         sectionTitleRow: {
             flexDirection: 'row',
@@ -707,8 +700,6 @@ const getStyles = (theme) => {
             marginHorizontal: -4,
         },
         chip: {
-            borderWidth: 1,
-            borderColor: theme.border,
             paddingHorizontal: 16,
             paddingVertical: 10,
             borderRadius: 20,

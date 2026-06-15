@@ -8,6 +8,13 @@ import {
 } from '../utils/exerciseSnapshots';
 let db;
 
+// Bump this whenever exercises.json or the schema changes in a way that needs
+// the one-time reconciliation (ID migration, canonical sync, assisted-PR fix)
+// to re-run. It's stored in the DB file via PRAGMA user_version, so the heavy
+// reconciliation runs only on fresh install / app update / restore of an older
+// backup — not on every launch.
+const DB_SETUP_VERSION = 1;
+
 const getDb = async () => {
   if (!db) {
     db = await SQLite.openDatabaseAsync('sisyphus.db');
@@ -226,6 +233,16 @@ export const setupDatabase = async () => {
     await ensureColumnExists('bodyWeight', 'datetime', 'TEXT');
     await ensureColumnExists('bodyWeight', 'weight', 'REAL');
 
+    // ── Heavy exercise reconciliation: gate behind the DB's user_version so it
+    // only runs on a fresh install or after an update/restore, not every launch.
+    // (The canonical sync loop and the assisted-PR recalc below otherwise do
+    // hundreds of sequential DB round-trips on every cold start.)
+    const versionRow = await database.getFirstAsync('PRAGMA user_version;');
+    const dbVersion = versionRow?.user_version ?? 0;
+    if (dbVersion === DB_SETUP_VERSION) {
+      return; // already reconciled for this build — skip the expensive work
+    }
+
     // 1. Migrate exercise IDs to be canonical before anything else
     await migrateExerciseIDs(database);
 
@@ -314,6 +331,9 @@ export const setupDatabase = async () => {
       `INSERT OR REPLACE INTO sqlite_sequence (name, seq)
        SELECT 'exercises', MAX(MAX(exerciseID), 999) FROM exercises;`
     );
+
+    // Mark this build's reconciliation as done so future launches skip it.
+    await database.execAsync(`PRAGMA user_version = ${DB_SETUP_VERSION};`);
 
   } catch (error) {
     console.error('Database setup error:', error);

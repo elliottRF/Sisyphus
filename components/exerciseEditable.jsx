@@ -184,6 +184,7 @@ const SetRowBody = React.memo(({
     onToggleSetType, onToggleSetComplete,
     onWeightChange, onRepsChange,
     onDistanceChange, onMinutesChange,
+    fillAllToken,
 }) => {
     const fillFlash = useSharedValue(0);
 
@@ -230,14 +231,30 @@ const SetRowBody = React.memo(({
         opacity: cellTextOpacity.value,
     }));
 
-    const handleFillPress = () => {
-        if (!fillData || set.completed) return;
+    const triggerFlash = () => {
         fillFlash.value = withSequence(
             withTiming(1, { duration: 80 }),
             withTiming(0, { duration: 420 }),
         );
+    };
+
+    const handleFillPress = () => {
+        if (!fillData || set.completed) return;
+        triggerFlash();
         onFillFromPrevious(index, fillData);
     };
+
+    // Flash this row when the "fill all" header button is tapped — but only if
+    // it was actually filled (has a suggestion and isn't ticked), matching
+    // fillAllSuggested. Skips the initial mount.
+    const fillAllTokenRef = useRef(fillAllToken);
+    useEffect(() => {
+        if (fillAllToken === fillAllTokenRef.current) return;
+        fillAllTokenRef.current = fillAllToken;
+        if (!fillData || set.completed) return;
+        triggerFlash();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fillAllToken]);
 
     const color = brightColor;
     const bgColor = withAlpha(brightColor, isLightTheme(theme) ? 0.14 : 0.25);
@@ -415,6 +432,9 @@ const ExerciseEditable = ({
     const [isNoteVisible, setIsNoteVisible] = useState(false);
     const [previousSets, setPreviousSets] = useState(() => prevSetsCache.get(exerciseID) ?? []);
     const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+    // Bumped when the "fill all suggestions" header is tapped, so each filled
+    // set row replays its tap-fill flash.
+    const [fillAllToken, setFillAllToken] = useState(0);
 
     // The reorderable list remounts cells after a drag; suppress entering
     // animations on (re)mount so reordering doesn't make content flash.
@@ -610,6 +630,43 @@ const ExerciseEditable = ({
         useImperial,
     });
 
+    // Tapping the suggestion column header fills every NOT-completed set in this
+    // card with its suggestion (working sets → the computed suggestion, warm-ups
+    // → the previous warm-up shown in that column). Ticked sets are left alone.
+    const fillAllSuggested = () => {
+        if (!showSuggestion) return;
+        let warmupIdx = 0;
+        let workingIdx = 0;
+        const fills = exercise.sets.map((set) => {
+            if (set.setType === 'W') {
+                const prev = prevWarmups[warmupIdx++];
+                return prev ? { weight: prev.weight, reps: prev.reps } : null;
+            }
+            const computed = workingSuggestions[workingIdx++];
+            return computed ? { weight: computed.weight, reps: computed.reps } : null;
+        });
+        if (!fills.some(Boolean)) return;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        // Bump the token so every filled row plays the same tap flash.
+        setFillAllToken(t => t + 1);
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? {
+            ...w,
+            exercises: w.exercises.map(e => e.id === exercise.id ? {
+                ...e,
+                sets: e.sets.map((s, i) => {
+                    if (s.completed) return s; // never overwrite a ticked set
+                    const f = fills[i];
+                    if (!f) return s;
+                    return {
+                        ...s,
+                        weight: f.weight != null ? f.weight.toString() : s.weight,
+                        reps: f.reps != null ? f.reps.toString() : s.reps,
+                    };
+                }),
+            } : e),
+        } : w));
+    };
+
     const headerKey = showSuggestion ? 'suggest' : 'prev';
 
     // Set progress for the header: "2/4" while working, a check when done.
@@ -706,7 +763,14 @@ const ExerciseEditable = ({
                         style={[styles.colPrev, { alignItems: 'center', justifyContent: 'center' }]}
                     >
                         {showSuggestion ? (
-                            <MaterialCommunityIcons name="trending-up" size={12} color={theme.textSecondary} />
+                            // Tap to fill all un-ticked sets with their suggestions.
+                            <TouchableOpacity
+                                onPress={fillAllSuggested}
+                                hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}
+                                style={{ alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <MaterialCommunityIcons name="trending-up" size={14} color={theme.primary} />
+                            </TouchableOpacity>
                         ) : (
                             <Text style={[styles.columnHeader]}>PREVIOUS</Text>
                         )}
@@ -825,6 +889,7 @@ const ExerciseEditable = ({
                                     onRepsChange={handleRepsChange}
                                     onDistanceChange={handleDistanceChange}
                                     onMinutesChange={handleMinutesChange}
+                                    fillAllToken={fillAllToken}
                                 />
                             </SwipeableSetRow>
                         </Animated.View>

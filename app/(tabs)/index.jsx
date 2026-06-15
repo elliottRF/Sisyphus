@@ -1,5 +1,5 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Dimensions, AppState } from 'react-native'
-import Animated, { FadeInDown, FadeOutDown, LinearTransition } from 'react-native-reanimated';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Dimensions, AppState, Linking } from 'react-native'
+import Animated, { FadeInDown, FadeOutDown, LinearTransition, useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useScrollToTop } from '@react-navigation/native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -9,7 +9,8 @@ import ActionSheet, { FlatList } from "react-native-actions-sheet";
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Body from "react-native-body-highlighter";
-import { fetchRecentMuscleUsage, getPinnedExercises, pinExercise, fetchExercises, fetchExerciseWorkoutCounts } from '../../components/db';
+import { fetchRecentMuscleUsage, getPinnedExercises, pinExercise, fetchExercises, fetchExerciseWorkoutCounts, getLatestWorkoutSession } from '../../components/db';
+import * as StoreReview from 'expo-store-review';
 import { FONTS, RADIUS, isLightTheme, getThemedShadow, withAlpha } from '../../constants/theme';
 import { computeMuscleScores, slugRecoveryPercent, SETS_CAP } from '../../utils/recovery';
 import { Feather } from '@expo/vector-icons';
@@ -24,6 +25,14 @@ import Fuse from 'fuse.js';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ── Review prompt config ───────────────────────────────────────────────────
+// Ask for a Play Store rating only once the user is clearly engaged, and never
+// nag: dismissing snoozes it, repeated dismissals stop it, rating ends it.
+const REVIEW_MIN_WORKOUTS = 10;     // logged workouts before we ask
+const REVIEW_SNOOZE_DAYS = 21;      // wait this long after a dismissal
+const REVIEW_MAX_DISMISSALS = 3;    // give up after this many dismissals
+const PLAY_STORE_PACKAGE = 'com.elliottr.sisyphus';
 
 // Elapsed-time ticker for the live workout banner.
 const LiveTimer = ({ startTime, style }) => {
@@ -58,7 +67,7 @@ const LiveTimer = ({ startTime, style }) => {
 
 const Home = () => {
     const insets = useSafeAreaInsets();
-    const { theme, gender, accessoryWeight, workoutInProgress, workoutStartTime } = useTheme();
+    const { theme, gender, accessoryWeight, workoutInProgress, workoutStartTime, settingsLoaded } = useTheme();
     const styles = getStyles(theme);
 
     const [bodyData, setBodyData] = useState([]);
@@ -70,6 +79,7 @@ const Home = () => {
     const [allMusclesSorted, setAllMusclesSorted] = useState([]);
     const [workoutCounts, setWorkoutCounts] = useState(new Map());
     const [liveWorkout, setLiveWorkout] = useState(null); // {title, done, total}
+    const [showReview, setShowReview] = useState(false);
 
     const actionSheetRef = useRef(null);
     const router = useRouter();
@@ -79,6 +89,17 @@ const Home = () => {
     const [muscleStatsData, setMuscleStatsData] = useState({});
     const [majorMuscleList, setMajorMuscleList] = useState([]);
     const [usageData, setUsageData] = useState([]);
+    // Guards against out-of-order muscle loads: on cold launch accessoryWeight
+    // is the default (0.5) until prefs load, so two loads can race and the
+    // slower (stale) one could land last. Only the latest request commits.
+    const muscleReqRef = useRef(0);
+    // One-time fade-in for the body diagram + recovery headline once real data
+    // lands, so it doesn't snap from empty/default to filled on cold launch.
+    const muscleFade = useSharedValue(0);
+    const muscleFadeStyle = useAnimatedStyle(() => ({ opacity: muscleFade.value }));
+    useEffect(() => {
+        if (bodyData.length > 0) muscleFade.value = withTiming(1, { duration: 320 });
+    }, [bodyData, muscleFade]);
     useScrollToTop(scrollRef);
 
     useEffect(() => {
@@ -86,7 +107,7 @@ const Home = () => {
         loadPinnedExercises();
         loadModulePrefs();
         fetchExerciseWorkoutCounts().then(setWorkoutCounts);
-    }, [accessoryWeight]);
+    }, [accessoryWeight, settingsLoaded]);
 
     useFocusEffect(
         React.useCallback(() => {
@@ -118,7 +139,7 @@ const Home = () => {
             } else {
                 setLiveWorkout(null);
             }
-        }, [accessoryWeight, workoutInProgress])
+        }, [accessoryWeight, workoutInProgress, settingsLoaded])
     );
 
     useEffect(() => {
@@ -132,7 +153,62 @@ const Home = () => {
             off(AppEvents.WORKOUT_COMPLETED, handler);
             off(AppEvents.WORKOUT_DATA_IMPORTED, handler);
         };
-    }, [accessoryWeight]);
+    }, [accessoryWeight, settingsLoaded]);
+
+    // Decide whether to show the "leave a review" prompt (see config at top).
+    const checkReviewPrompt = async () => {
+        try {
+            if (workoutInProgress) { setShowReview(false); return; }
+            if (await AsyncStorage.getItem('review_done') === 'true') { setShowReview(false); return; }
+            const dismissCount = parseInt(await AsyncStorage.getItem('review_dismiss_count') || '0', 10);
+            if (dismissCount >= REVIEW_MAX_DISMISSALS) { setShowReview(false); return; }
+            const dismissedAt = parseInt(await AsyncStorage.getItem('review_dismissed_at') || '0', 10);
+            if (dismissedAt && Date.now() - dismissedAt < REVIEW_SNOOZE_DAYS * 86400000) { setShowReview(false); return; }
+            const latest = await getLatestWorkoutSession();
+            setShowReview((latest || 0) >= REVIEW_MIN_WORKOUTS);
+        } catch (e) {
+            setShowReview(false);
+        }
+    };
+
+    useEffect(() => {
+        if (settingsLoaded) checkReviewPrompt();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workoutInProgress, settingsLoaded]);
+
+    const handleRateApp = async () => {
+        setShowReview(false);
+        try { await AsyncStorage.setItem('review_done', 'true'); } catch (e) { }
+
+        // Prefer Google's native in-app review dialog (no leaving the app).
+        try {
+            if (await StoreReview.isAvailableAsync()) {
+                await StoreReview.requestReview();
+                return;
+            }
+        } catch (e) {
+            // fall through to opening the store listing
+        }
+
+        // Fallback: open the Play Store listing directly.
+        const market = `market://details?id=${PLAY_STORE_PACKAGE}`;
+        const web = `https://play.google.com/store/apps/details?id=${PLAY_STORE_PACKAGE}`;
+        try {
+            const canMarket = await Linking.canOpenURL(market);
+            await Linking.openURL(canMarket ? market : web);
+        } catch (e) {
+            try { await Linking.openURL(web); } catch (err) { }
+        }
+    };
+
+    const handleDismissReview = async () => {
+        setShowReview(false);
+        try {
+            const count = parseInt(await AsyncStorage.getItem('review_dismiss_count') || '0', 10) + 1;
+            await AsyncStorage.setItem('review_dismiss_count', String(count));
+            await AsyncStorage.setItem('review_dismissed_at', String(Date.now()));
+        } catch (e) { }
+    };
 
     const loadModulePrefs = async () => {
         try {
@@ -146,8 +222,13 @@ const Home = () => {
     };
 
     const loadMuscleData = async () => {
+        // Don't compute with the default accessoryWeight (0.5) before prefs have
+        // loaded — that's what made the body diagram briefly show stale data.
+        if (!settingsLoaded) return;
+        const reqId = ++muscleReqRef.current;
         try {
             const usageData = await fetchRecentMuscleUsage(5);
+            if (reqId !== muscleReqRef.current) return; // superseded by a newer load
             setUsageData(usageData);
             // Shared fatigue model (utils/recovery) — also drives the
             // template readiness badges on the Current tab.
@@ -390,8 +471,35 @@ const Home = () => {
                     </Animated.View>
                 )}
 
+                {/* ── Review prompt (same slot as the live banner; mutually
+                    exclusive — never shown during an active workout) ────────── */}
+                {showReview && !workoutInProgress && (
+                    <Animated.View entering={FadeInDown.duration(400).delay(40).springify()}>
+                        <TouchableOpacity style={styles.liveCard} onPress={handleRateApp} activeOpacity={0.85}>
+                            <Feather name="star" size={20} color={theme.warning} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.liveEyebrow}>ENJOYING SISYPHUS?</Text>
+                                <Text style={styles.liveTitle} numberOfLines={1}>Leave a review</Text>
+                                <Text style={styles.liveMeta}>A quick rating really helps the app grow.</Text>
+                            </View>
+                            <View style={styles.liveRight}>
+                                <TouchableOpacity
+                                    onPress={handleDismissReview}
+                                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                                >
+                                    <Feather name="x" size={18} color={theme.textSecondary} />
+                                </TouchableOpacity>
+                                <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+                            </View>
+                        </TouchableOpacity>
+                    </Animated.View>
+                )}
+
                 {/* ── Dual Body ──────────────────────────────────────────────── */}
-                <Animated.View entering={FadeInDown.duration(450).delay(80).springify()} style={{ marginTop: 10 }}>
+                {/* 4px below the header (→16 total, matching History/Current) when
+                    it's the first card; a normal gap when a banner (live workout
+                    or review prompt) sits above it. */}
+                <Animated.View entering={FadeInDown.duration(450).delay(80).springify()} style={{ marginTop: ((workoutInProgress && workoutStartTime) || showReview) ? 12 : 4 }}>
                         <View style={styles.altBodyCard}>
                             <View style={styles.altLegendContainer}>
                                 <Text style={styles.altCardTitle}>Fatigue Status</Text>
@@ -407,6 +515,7 @@ const Home = () => {
                                 </View>
                             </View>
 
+                            <Animated.View style={muscleFadeStyle}>
                             <View style={styles.altBodyContentRow}>
                                 <View style={[styles.altBodyPanel, { width: altBodyPanelWidth }]}>
                                     <View style={bodyCropStyle}>
@@ -466,6 +575,7 @@ const Home = () => {
                                     </>
                                 )}
                             </View>
+                            </Animated.View>
                         </View>
 
                         <ReadinessCard
@@ -670,7 +780,7 @@ const getStyles = (theme) => {
         flexDirection: 'row',
         alignItems: 'center',
         marginHorizontal: 16,
-        marginTop: 2,
+        marginTop: 4,
         backgroundColor: withAlpha(theme.primary, lightTheme ? 0.08 : 0.14),
         borderRadius: RADIUS.l,
         paddingVertical: 13,

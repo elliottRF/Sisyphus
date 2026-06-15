@@ -125,6 +125,15 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
         let intervalId = null;
         const startPolling = () => {
             if (intervalId) return;
+            // stopPolling cancels the RAF UI loop on background; restart it here
+            // if a timer is still mid-run, otherwise the on-screen countdown stays
+            // frozen on resume (the notification keeps ticking but the UI loop is
+            // dead). targetEndTimeRef is an absolute timestamp, so it's still
+            // accurate; poll() below then resyncs against the native timer.
+            if (timerRunning.current && targetEndTimeRef.current) {
+                if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
+                updateUI();
+            }
             poll(); // resync immediately (catches a timer started/elapsed while away)
             intervalId = setInterval(poll, POLL_MS);
         };
@@ -187,6 +196,11 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
 
     const restartTimer = useCallback(() => {
 
+        // 0. Auto-start (ticking a set) is also a "first start" — make sure the
+        // one-time notification-permission prompt fires here too, not just on the
+        // manual button. (Idempotent: it no-ops once the user has been asked.)
+        onFirstStart?.();
+
         // 1. Clear any existing UI loops
         if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
 
@@ -209,7 +223,7 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
             withTiming(1.2, { duration: 100 }),
             withTiming(1, { duration: 100 })
         );
-    }, [defaultDuration, isMuted, updateUI]);
+    }, [defaultDuration, isMuted, updateUI, onFirstStart]);
 
     useImperativeHandle(ref, () => ({
         startIfStopped: () => {

@@ -115,7 +115,15 @@ const Current = () => {
     }, [loadMuscleScores]);
 
 
+    // Asked at most once, ever: the persisted flag is set the first time (so a
+    // decline is never re-prompted), and a synchronous in-session ref stops two
+    // near-simultaneous starts (button + set tick) from racing into a double
+    // prompt. Triggered from both rest-timer start paths (button + auto-start).
+    const notifPermAskedRef = useRef(false);
     const requestNotificationPermissionOnce = async () => {
+        if (notifPermAskedRef.current) return;
+        notifPermAskedRef.current = true;
+
         const asked = await AsyncStorage.getItem('notifications_permission_asked');
         if (asked) return;
 
@@ -559,10 +567,12 @@ const Current = () => {
                 try {
                     const storedWorkout = await AsyncStorage.getItem('@currentWorkout');
                     if (storedWorkout) {
-                        const { workout, title } = JSON.parse(storedWorkout);
+                        // Saved as { workout, workoutTitle } — must read the same key
+                        // (was reading `title`, so the name reset to "New Workout").
+                        const { workout, workoutTitle: savedTitle } = JSON.parse(storedWorkout);
                         setCurrentWorkout(current => {
                             if (current.length === 0 && workout && workout.length > 0) {
-                                if (title) setWorkoutTitle(title);
+                                if (savedTitle) setWorkoutTitle(savedTitle);
                                 return workout;
                             }
                             return current;
@@ -618,10 +628,12 @@ const Current = () => {
 
     useEffect(() => {
         if (currentWorkout.length > 0) {
+            // workoutTitle is in deps so a rename persists even when the sets
+            // haven't changed.
             saveWorkoutToAsyncStorage(currentWorkout);
         }
         setWorkoutInProgress(currentWorkout.length > 0 || !!workoutStartTime);
-    }, [currentWorkout, workoutStartTime]);
+    }, [currentWorkout, workoutStartTime, workoutTitle]);
 
     const inputExercise = (item) => {
         actionSheetRef.current?.hide();

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { FONTS, RADIUS, buildCustomTheme, randomThemeInput, isValidHex, DEFAULT_CUSTOM_INPUT } from '../constants/theme';
@@ -25,6 +25,18 @@ const CustomThemeCreator = ({ theme, onCreate, onClose }) => {
     const [name, setName] = useState('');
     const styles = getStyles(theme);
 
+    // Scroll the focused colour field into view so it isn't hidden behind the
+    // keyboard (the lower "Cards"/"Text" rows otherwise sit under it).
+    const scrollRef = useRef(null);
+    const rowYRef = useRef({});
+    const scrollFieldIntoView = (key) => {
+        // Wait for the keyboard to start opening so the scroll lands correctly.
+        setTimeout(() => {
+            const y = rowYRef.current[key];
+            if (y != null) scrollRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true });
+        }, 150);
+    };
+
     // Fall back to defaults for any field that isn't a valid hex yet, so the
     // preview never breaks while typing.
     const preview = useMemo(() => {
@@ -48,7 +60,7 @@ const CustomThemeCreator = ({ theme, onCreate, onClose }) => {
     return (
         <Modal transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
             <View style={styles.scrim}>
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.center}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.center}>
                     <View style={styles.sheet}>
                         <View style={styles.header}>
                             <Text style={styles.title}>New Theme</Text>
@@ -57,7 +69,7 @@ const CustomThemeCreator = ({ theme, onCreate, onClose }) => {
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 48 }}>
                             {/* Live preview */}
                             <View style={[styles.preview, { backgroundColor: preview.background }]}>
                                 <View style={[styles.previewCard, { backgroundColor: preview.surface }]}>
@@ -82,7 +94,11 @@ const CustomThemeCreator = ({ theme, onCreate, onClose }) => {
                                 const value = input[field.key];
                                 const valid = isValidHex(value);
                                 return (
-                                    <View key={field.key} style={styles.row}>
+                                    <View
+                                        key={field.key}
+                                        style={styles.row}
+                                        onLayout={(e) => { rowYRef.current[field.key] = e.nativeEvent.layout.y; }}
+                                    >
                                         <View style={[styles.swatch, { backgroundColor: valid ? value : 'transparent', borderColor: theme.border }]}>
                                             {!valid && <Feather name="alert-circle" size={14} color={theme.danger} />}
                                         </View>
@@ -91,6 +107,7 @@ const CustomThemeCreator = ({ theme, onCreate, onClose }) => {
                                             style={[styles.hexInput, !valid && { color: theme.danger }]}
                                             value={value}
                                             onChangeText={(t) => setInput((prev) => ({ ...prev, [field.key]: normalizeHex(t) }))}
+                                            onFocus={() => scrollFieldIntoView(field.key)}
                                             placeholder="#000000"
                                             placeholderTextColor={theme.textSecondary}
                                             autoCapitalize="characters"
