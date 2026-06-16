@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, ActivityIndicator } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, ActivityIndicator, Keyboard } from 'react-native'
 import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -96,6 +96,7 @@ const EditTemplate = () => {
     }
 
     const actionSheetRef = useRef(null);
+    const nameInputRef = useRef(null);
     const listRef = useRef(null);
 
     const inputExercise = (item) => {
@@ -128,6 +129,10 @@ const EditTemplate = () => {
     };
 
     const plusButtonShowExerciseList = () => {
+        // Drop focus on the (auto-focused) name field so the keyboard doesn't
+        // spring back to it when the exercise sheet closes.
+        nameInputRef.current?.blur();
+        Keyboard.dismiss();
         fetchExercises()
             .then(data => setExercises(data))
             .catch(err => console.error(err));
@@ -362,6 +367,7 @@ const EditTemplate = () => {
 
                 <View style={styles.headerContainer}>
                     <TextInput
+                        ref={nameInputRef}
                         style={styles.templateNameInput}
                         onChangeText={setTemplateName}
                         value={templateName}
@@ -385,6 +391,7 @@ const EditTemplate = () => {
                     contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
+                    onScrollBeginDrag={() => Keyboard.dismiss()}
                     showsVerticalScrollIndicator={false}
                     scrollEnabled={!isReordering}
                     ListFooterComponent={

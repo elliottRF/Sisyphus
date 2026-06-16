@@ -12,7 +12,7 @@ import { AntDesign, Feather, Ionicons, MaterialIcons, MaterialCommunityIcons } f
 
 import * as NavigationBar from 'expo-navigation-bar';
 
-import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, fetchLastWorkoutSets, getTemplate, fetchRecentMuscleUsage } from '../../components/db';
+import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, createTemplate, fetchLastWorkoutSets, getTemplate, fetchRecentMuscleUsage } from '../../components/db';
 import { setPreloadedData } from '../../constants/preloader';
 import { toStorageKg, formatWeight, unitLabel } from '../../utils/units';
 import { computeMuscleScores, slugRecoveryPercent } from '../../utils/recovery';
@@ -25,7 +25,7 @@ import ActionSheet from "react-native-actions-sheet";
 
 
 import FilteredExerciseList from '../../components/FilteredExerciseList';
-import { FONTS, RADIUS, SHADOWS, isLightTheme, getThemedShadow } from '../../constants/theme';
+import { FONTS, RADIUS, SHADOWS, isLightTheme, getThemedShadow, withAlpha } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import Timer from '../../components/Timer';
 import RestTimer from '../../components/RestTimer';
@@ -42,10 +42,19 @@ import { useLocalSearchParams } from 'expo-router';
 
 import * as Notifications from 'expo-notifications';
 import { customAlert } from '../../utils/customAlert';
+import ContextMenu from '../../components/ContextMenu';
 
 
 
 const { width } = Dimensions.get('window');
+
+// Optional Push/Pull/Legs starter templates, offered to users with no templates
+// yet. Exercise IDs are canonical (see db setup), referenced by id.
+const DEFAULT_TEMPLATES = [
+    { name: 'Push', exerciseIDs: [3, 20, 15, 22] },
+    { name: 'Pull', exerciseIDs: [6, 42, 2, 12] },
+    { name: 'Legs', exerciseIDs: [21, 10, 4, 45, 71] },
+];
 
 const Current = () => {
     const insets = useSafeAreaInsets();
@@ -182,10 +191,20 @@ const Current = () => {
                         completed: false
                     }));
                 } else {
+                    // Template-defined sets: leave any unset value (null, empty,
+                    // 0 or NaN) blank so the user fills their own numbers — rather
+                    // than showing NaN (from formatWeight(null)) or a stray 0.
+                    const blankOrNum = (v, fmt) => {
+                        const n = parseFloat(v);
+                        return (isNaN(n) || n === 0) ? null : fmt(n);
+                    };
                     setsToUse = ex.sets.map(set => ({
                         ...set,
                         id: generateId(),
-                        weight: formatWeight(set.weight, useImperial),
+                        weight: blankOrNum(set.weight, (n) => formatWeight(n, useImperial)),
+                        reps: blankOrNum(set.reps, (n) => String(Math.round(n))),
+                        distance: blankOrNum(set.distance, (n) => String(n)),
+                        minutes: blankOrNum(set.minutes, (n) => String(n)),
                         completed: false
                     }));
                 }
@@ -228,6 +247,69 @@ const Current = () => {
         } catch (error) {
             console.error("Error pre-loading template:", error);
             router.push(`/template/${template.id}?v=${Date.now()}`);
+        }
+    };
+
+    // Hold-menu for a template card: { anchor: {x,y}, template }.
+    const [templateMenu, setTemplateMenu] = useState(null);
+
+    const openTemplateMenu = (template, e) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setTemplateMenu({
+            anchor: { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY },
+            template,
+        });
+    };
+
+    const confirmDeleteTemplate = (template) => {
+        customAlert(
+            'Delete Template',
+            `Delete "${template.name}"? This can't be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => removeTemplate(template) },
+            ],
+        );
+    };
+
+    const removeTemplate = async (template) => {
+        // Optimistically drop it from state so the card animates out and the
+        // grid reflows (exiting + layout), rather than flashing to the new state.
+        setTemplates(prev => prev.filter(t => t.id !== template.id));
+        try {
+            await deleteTemplate(template.id);
+        } catch (error) {
+            console.error('Failed to delete template:', error);
+            loadTemplates(); // restore on failure
+        }
+    };
+
+    // One-tap Push/Pull/Legs starter pack (only offered when the user has no
+    // templates). Inserts in order so the grid shows Push · Pull · Legs.
+    const addStarterTemplates = async () => {
+        if (loadingTemplateId) return;
+        setLoadingTemplateId('starter');
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const genId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+        const blankSet = (setType) => ({
+            id: genId(), weight: null, reps: null, distance: null, minutes: null, setType, completed: false,
+        });
+        // One warm-up set followed by three working sets per exercise.
+        const starterSets = () => [blankSet('W'), ...Array.from({ length: 3 }, () => blankSet('N'))];
+        try {
+            for (const tpl of DEFAULT_TEMPLATES) {
+                const data = tpl.exerciseIDs.map(exerciseID => ({
+                    id: genId(),
+                    exercises: [{ id: genId(), exerciseID, notes: '', sets: starterSets() }],
+                }));
+                await createTemplate(tpl.name, data);
+            }
+            await loadTemplates();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (error) {
+            console.error('Failed to add starter templates:', error);
+        } finally {
+            setLoadingTemplateId(null);
         }
     };
 
@@ -307,12 +389,15 @@ const Current = () => {
                 ...exerciseGroup,
                 exercises: exerciseGroup.exercises.map(exercise => ({
                     ...exercise,
-                    sets: exercise.sets.filter(set =>
-                        set.completed && (
-                            (set.weight !== null && set.reps !== null) ||
-                            (set.distance !== null && set.minutes !== null)
-                        )
-                    )
+                    sets: exercise.sets.filter(set => {
+                        if (!set.completed) return false;
+                        const has = (v) => v !== null && v !== undefined && v !== '';
+                        // A completed strength set counts with EITHER weight or
+                        // reps entered — the other blank field stores as 0 (e.g.
+                        // bodyweight reps, or a weighted hold). Cardio needs both
+                        // distance + time.
+                        return has(set.weight) || has(set.reps) || (has(set.distance) && has(set.minutes));
+                    })
                 }))
             }));
 
@@ -432,7 +517,7 @@ const Current = () => {
                             setNum: setNum,
                             exerciseID: exercise.exerciseID,
                             weight: toStorageKg(set.weight, useImperial),
-                            reps: set.reps,
+                            reps: parseInt(set.reps, 10) || 0,
                             oneRM: calculatedOneRM,
                             time: new Date().toISOString(),
                             name: workoutTitle,
@@ -906,11 +991,19 @@ const Current = () => {
                                             const badge = readinessBadge(readiness);
 
                                             return (
-                                                <TouchableOpacity
+                                                <Animated.View
                                                     key={template.id}
+                                                    layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
+                                                    entering={FadeIn.duration(250)}
+                                                    exiting={FadeOut.duration(180)}
+                                                    style={styles.templateCardWrap}
+                                                >
+                                                <TouchableOpacity
                                                     style={styles.templateCard}
                                                     activeOpacity={0.7}
                                                     onPress={() => loadTemplate(template)}
+                                                    onLongPress={(e) => openTemplateMenu(template, e)}
+                                                    delayLongPress={300}
                                                 >
                                                     <View style={{ flex: 1 }}>
                                                         <View style={styles.templateCardHeader}>
@@ -961,10 +1054,43 @@ const Current = () => {
                                                         )}
                                                     </View>
                                                 </TouchableOpacity>
+                                                </Animated.View>
                                             );
                                         })}
 
+                                        {/* Starter pack — only when the user has no templates yet */}
+                                        {templates.length === 0 && (
+                                            <Animated.View
+                                                layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
+                                                exiting={FadeOut.duration(180)}
+                                                style={styles.templateCardWrap}
+                                            >
+                                                <TouchableOpacity
+                                                    style={[styles.templateCard, styles.starterCard]}
+                                                    activeOpacity={0.8}
+                                                    onPress={addStarterTemplates}
+                                                    disabled={!!loadingTemplateId}
+                                                >
+                                                    <View style={styles.addTemplateInner}>
+                                                        {loadingTemplateId === 'starter' ? (
+                                                            <ActivityIndicator color={theme.primary} />
+                                                        ) : (
+                                                            <>
+                                                                <MaterialCommunityIcons name="auto-fix" size={28} color={theme.primary} style={{ marginBottom: 6 }} />
+                                                                <Text style={styles.starterTitle}>Add starter templates</Text>
+                                                                <Text style={styles.starterSub}>Push · Pull · Legs to get you going</Text>
+                                                            </>
+                                                        )}
+                                                    </View>
+                                                </TouchableOpacity>
+                                            </Animated.View>
+                                        )}
+
                                         {/* Add Template Button */}
+                                        <Animated.View
+                                            layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
+                                            style={styles.templateCardWrap}
+                                        >
                                         <TouchableOpacity
                                             style={[styles.templateCard, styles.addTemplateCard]}
                                             activeOpacity={0.7}
@@ -976,6 +1102,7 @@ const Current = () => {
                                                 <Text style={styles.addTemplateText}>New Template</Text>
                                             </View>
                                         </TouchableOpacity>
+                                        </Animated.View>
                                     </Animated.View>
                                     )}
                                 </ScrollView>
@@ -1144,6 +1271,18 @@ const Current = () => {
                         />
                     </>
                 )}
+
+                {templateMenu && (
+                    <ContextMenu
+                        anchor={templateMenu.anchor}
+                        onClose={() => setTemplateMenu(null)}
+                        items={[
+                            { icon: 'play', label: 'Start Workout', tint: true, onPress: () => loadTemplate(templateMenu.template) },
+                            { icon: 'edit-2', label: 'Edit Template', onPress: () => handleLongPressTemplate(templateMenu.template) },
+                            { icon: 'trash-2', label: 'Delete Template', destructive: true, onPress: () => confirmDeleteTemplate(templateMenu.template) },
+                        ]}
+                    />
+                )}
             </View>
         </GestureHandlerRootView>
     );
@@ -1220,6 +1359,9 @@ const getStyles = (theme) => {
             flexWrap: 'wrap',
             gap: gap,
         },
+        templateCardWrap: {
+            width: itemWidth,
+        },
         templateCard: {
             width: itemWidth,
             height: 200,
@@ -1288,6 +1430,32 @@ const getStyles = (theme) => {
             shadowOpacity: 0,
             shadowRadius: 0,
             elevation: 0,
+        },
+        starterCard: {
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: withAlpha(theme.primary, isLightTheme(theme) ? 0.08 : 0.14),
+            borderWidth: 1,
+            borderColor: withAlpha(theme.primary, isLightTheme(theme) ? 0.25 : 0.35),
+            borderStyle: 'dashed',
+            shadowColor: 'transparent',
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            elevation: 0,
+        },
+        starterTitle: {
+            fontSize: 14,
+            fontFamily: FONTS.bold,
+            color: theme.primary,
+            textAlign: 'center',
+        },
+        starterSub: {
+            fontSize: 12,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            textAlign: 'center',
+            marginTop: 3,
+            paddingHorizontal: 8,
         },
         templateEditButton: {
             width: 28,

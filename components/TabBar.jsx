@@ -76,12 +76,18 @@ const TabBar = ({ state, descriptors, navigation }) => {
             <View style={styles.tabBar}>
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
-                    const label =
+                    let label =
                         options.tabBarLabel !== undefined
                             ? options.tabBarLabel
                             : options.title !== undefined
                                 ? options.title
                                 : route.name;
+
+                    // The workout tab reads "Train" until a workout is running,
+                    // then "Current".
+                    if (route.name === 'current') {
+                        label = workoutInProgress ? 'Current' : 'Train';
+                    }
 
                     if (['_sitemap', '+not-found'].includes(route.name)) return null;
                     if (!icons[route.name]) return null;
