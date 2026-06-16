@@ -1012,7 +1012,7 @@ const Current = () => {
                                                         <Text style={styles.templateDetails}>
                                                             {exerciseNames.length} {exerciseNames.length === 1 ? 'exercise' : 'exercises'}
                                                         </Text>
-                                                        <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                                                        <View style={{ alignItems: 'flex-end' }}>
                                                             {badge ? (
                                                                 <View style={styles.readinessPill}>
                                                                     <View style={[styles.readinessPillDot, { backgroundColor: badge.color }]} />
@@ -1025,7 +1025,7 @@ const Current = () => {
                                                             )}
                                                             {badge && readiness < 80 && formatHoursToReadiness(hoursTo80) != null && (
                                                                 <View style={styles.templateTimerRow}>
-                                                                    <Feather name="clock" size={10} color={badge.color} />
+                                                                    <Feather name="clock" size={10} color={badge.color} style={{ opacity: 0.65 }} />
                                                                     <Text style={[styles.templateTimerText, { color: badge.color }]}>
                                                                         {formatHoursToReadiness(hoursTo80)}
                                                                     </Text>
@@ -1292,11 +1292,12 @@ const getStyles = (theme) => {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 3,
+            marginTop: 4,
         },
         templateTimerText: {
             fontSize: 10,
             fontFamily: FONTS.medium,
-            opacity: 0.8,
+            opacity: 0.65,
         },
         templatesGrid: {
             flexDirection: 'row',
@@ -1340,7 +1341,7 @@ const getStyles = (theme) => {
         cardFooter: {
             flexDirection: 'row',
             justifyContent: 'space-between',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             marginTop: 8,
             paddingTop: 8,
             borderTopWidth: 1,
