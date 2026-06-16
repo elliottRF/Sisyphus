@@ -620,7 +620,7 @@ const ExerciseEditable = ({
 
     const showSuggestion = PRMODE && !isTemplate && !hidePrevious && !isCardio && !isAssisted;
 
-    const workingSuggestions = useWorkoutSuggestions({
+    const { working: workingSuggestions, warmups: suggestedWarmups } = useWorkoutSuggestions({
         showSuggestion,
         exerciseID,
         repRangeMin,
@@ -632,15 +632,18 @@ const ExerciseEditable = ({
 
     // Tapping the suggestion column header fills every NOT-completed set in this
     // card with its suggestion (working sets → the computed suggestion, warm-ups
-    // → the previous warm-up shown in that column). Ticked sets are left alone.
+    // → the un-incremented warm-up from the same session the suggestions are
+    // drawn from, falling back to the previous workout's warm-up). Ticked sets
+    // are left alone.
     const fillAllSuggested = () => {
         if (!showSuggestion) return;
         let warmupIdx = 0;
         let workingIdx = 0;
         const fills = exercise.sets.map((set) => {
             if (set.setType === 'W') {
-                const prev = prevWarmups[warmupIdx++];
-                return prev ? { weight: prev.weight, reps: prev.reps } : null;
+                const warm = suggestedWarmups[warmupIdx] || prevWarmups[warmupIdx];
+                warmupIdx++;
+                return warm ? { weight: warm.weight, reps: warm.reps } : null;
             }
             const computed = workingSuggestions[workingIdx++];
             return computed ? { weight: computed.weight, reps: computed.reps } : null;
@@ -677,6 +680,7 @@ const ExerciseEditable = ({
     let prevWarmupIndex = 0;
     let prevWorkingIndex = 0;
     let suggestWorkingIndex = 0;
+    let suggestWarmupIndex = 0;
 
     const headerLeftContent = (
         <>
@@ -819,9 +823,13 @@ const ExerciseEditable = ({
                     if (showSuggestion) {
                         const isWarmup = set.setType === 'W';
                         if (isWarmup) {
-                            if (prevSet) {
-                                suggestionText = `${formatWeight(prevSet.weight, useImperial)} × ${prevSet.reps}`;
-                                fillData = { weight: prevSet.weight || 0, reps: prevSet.reps || 0 };
+                            // Warm-up suggestion = the warm-up from the same session
+                            // the working suggestions come from, shown un-incremented;
+                            // fall back to the previous workout's warm-up.
+                            const warm = suggestedWarmups[suggestWarmupIndex++] || prevSet;
+                            if (warm) {
+                                suggestionText = `${formatWeight(warm.weight, useImperial)} × ${warm.reps}`;
+                                fillData = { weight: warm.weight || 0, reps: warm.reps || 0 };
                             }
                         } else {
                             const suggestIndex = suggestWorkingIndex++;

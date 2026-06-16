@@ -340,7 +340,16 @@ const Current = () => {
         setWorkoutTitle("New Workout");
         restTimerRef.current?.stopTimer();
         setPRMODE(false);
-        await AsyncStorage.removeItem('@currentWorkout');
+        await AsyncStorage.multiRemove(['@currentWorkout', '@prMode']);
+    };
+
+    // PR mode is part of the in-progress workout, so it survives an app close.
+    const togglePRMode = () => {
+        setPRMODE(prev => {
+            const next = !prev;
+            AsyncStorage.setItem('@prMode', next ? 'true' : 'false');
+            return next;
+        });
     };
 
     const calculateOneRepMax = (weight, reps) => {
@@ -578,7 +587,7 @@ const Current = () => {
                 }
             });
 
-            await AsyncStorage.removeItem('@currentWorkout');
+            await AsyncStorage.multiRemove(['@currentWorkout', '@prMode']);
             setCurrentWorkout([]);
             updateWorkoutStartTime(null);
             setWorkoutTitle("New Workout");
@@ -662,8 +671,12 @@ const Current = () => {
                             }
                             return current;
                         });
+                        // PR mode is restored with the workout it belongs to.
+                        const savedPRMode = await AsyncStorage.getItem('@prMode');
+                        if (savedPRMode === 'true') setPRMODE(true);
                     } else {
                         setCurrentWorkout([]);
+                        setPRMODE(false);
                         if (!params.template) {
                             setWorkoutTitle("New Workout");
                         }
@@ -1133,7 +1146,7 @@ const Current = () => {
                                         {workoutStartTime && (
                                             <Animated.View layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                                 <Animated.View layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}>
-                                                    <TouchableOpacity onPress={() => setPRMODE(!PRMODE)}>
+                                                    <TouchableOpacity onPress={togglePRMode}>
                                                         <MaterialCommunityIcons name="trending-up" size={24} color={PRMODE ? theme.primary : theme.textSecondary} />
                                                     </TouchableOpacity>
                                                 </Animated.View>

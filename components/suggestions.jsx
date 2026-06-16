@@ -125,13 +125,14 @@ export const useWorkoutSuggestions = ({
     muscleOccurrenceIndex,
     useImperial = false,
 }) => {
-    const [suggestions, setSuggestions] = useState(
-        () => suggestionsCache.get(exerciseID)?.suggestions ?? []
-    );
+    const [suggestions, setSuggestions] = useState(() => {
+        const c = suggestionsCache.get(exerciseID);
+        return { working: c?.working ?? [], warmups: c?.warmups ?? [] };
+    });
 
     useEffect(() => {
         if (!showSuggestion || !exerciseID) {
-            setSuggestions([]);
+            setSuggestions({ working: [], warmups: [] });
             return;
         }
 
@@ -146,12 +147,12 @@ export const useWorkoutSuggestions = ({
         // in fresher values only if they actually differ.
         const cached = suggestionsCache.get(exerciseID);
         if (cached && cached.key === cacheKey) {
-            setSuggestions(cached.suggestions);
+            setSuggestions({ working: cached.working, warmups: cached.warmups });
         }
 
-        const publish = (computed) => {
-            suggestionsCache.set(exerciseID, { key: cacheKey, suggestions: computed });
-            if (!cancelled) setSuggestions(computed);
+        const publish = (working, warmups) => {
+            suggestionsCache.set(exerciseID, { key: cacheKey, working, warmups });
+            if (!cancelled) setSuggestions({ working, warmups });
         };
 
         const loadAndCompute = async () => {
@@ -177,17 +178,23 @@ export const useWorkoutSuggestions = ({
             }
 
             if (!baseSets || baseSets.length === 0) {
-                publish([]);
+                publish([], []);
                 return;
             }
 
-            // 3. Strip warm-ups
+            // 3. Pull the warm-ups from this same base session — shown as-is
+            //    (never incremented) alongside the working-set suggestions.
+            const baseWarmups = baseSets
+                .filter((set) => set.setType === 'W')
+                .map((set) => ({ weight: set.weight, reps: set.reps }));
+
+            // Strip warm-ups from the working-set computation.
             baseSets = baseSets.filter(
                 (set) => !set.setType || set.setType !== 'W'
             );
 
             if (baseSets.length === 0) {
-                publish([]);
+                publish([], baseWarmups);
                 return;
             }
 
@@ -225,7 +232,7 @@ export const useWorkoutSuggestions = ({
                 );
             });
 
-            publish(computedSuggestions);
+            publish(computedSuggestions, baseWarmups);
         };
 
         loadAndCompute();
