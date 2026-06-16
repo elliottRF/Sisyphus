@@ -1012,26 +1012,24 @@ const Current = () => {
                                                         <Text style={styles.templateDetails}>
                                                             {exerciseNames.length} {exerciseNames.length === 1 ? 'exercise' : 'exercises'}
                                                         </Text>
-                                                        <View style={{ alignItems: 'flex-end' }}>
-                                                            {badge ? (
+                                                        {(() => {
+                                                            const timerLabel = readiness != null && readiness < 80
+                                                                ? formatHoursToReadiness(hoursTo80)
+                                                                : null;
+                                                            const displayBadge = badge && timerLabel
+                                                                ? { ...badge, label: timerLabel }
+                                                                : badge;
+                                                            return displayBadge ? (
                                                                 <View style={styles.readinessPill}>
-                                                                    <View style={[styles.readinessPillDot, { backgroundColor: badge.color }]} />
-                                                                    <Text style={[styles.readinessPillText, { color: badge.color }]}>
-                                                                        {badge.label}
+                                                                    <View style={[styles.readinessPillDot, { backgroundColor: displayBadge.color }]} />
+                                                                    <Text style={[styles.readinessPillText, { color: displayBadge.color }]}>
+                                                                        {displayBadge.label}
                                                                     </Text>
                                                                 </View>
                                                             ) : (
                                                                 <Ionicons name="chevron-forward" size={16} color={theme.primary} opacity={0.5} />
-                                                            )}
-                                                            {badge && readiness < 80 && formatHoursToReadiness(hoursTo80) != null && (
-                                                                <View style={styles.templateTimerRow}>
-                                                                    <Feather name="clock" size={10} color={badge.color} style={{ opacity: 0.65 }} />
-                                                                    <Text style={[styles.templateTimerText, { color: badge.color }]}>
-                                                                        {formatHoursToReadiness(hoursTo80)}
-                                                                    </Text>
-                                                                </View>
-                                                            )}
-                                                        </View>
+                                                            );
+                                                        })()}
                                                     </View>
                                                 </TouchableOpacity>
                                             );
@@ -1288,17 +1286,6 @@ const getStyles = (theme) => {
             fontSize: 12,
             fontFamily: FONTS.bold,
         },
-        templateTimerRow: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 3,
-            marginTop: 4,
-        },
-        templateTimerText: {
-            fontSize: 10,
-            fontFamily: FONTS.medium,
-            opacity: 0.65,
-        },
         templatesGrid: {
             flexDirection: 'row',
             flexWrap: 'wrap',
@@ -1341,7 +1328,7 @@ const getStyles = (theme) => {
         cardFooter: {
             flexDirection: 'row',
             justifyContent: 'space-between',
-            alignItems: 'flex-start',
+            alignItems: 'center',
             marginTop: 8,
             paddingTop: 8,
             borderTopWidth: 1,
