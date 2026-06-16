@@ -73,6 +73,7 @@ const Current = () => {
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
     const [loadingTemplateId, setLoadingTemplateId] = useState(null);
     const [muscleScores, setMuscleScores] = useState(null);
+    const [usageData, setUsageData] = useState(null);
 
     const loadTemplates = async () => {
         try {
@@ -89,7 +90,10 @@ const Current = () => {
     // time — never a cached value).
     const loadMuscleScores = useCallback(() => {
         fetchRecentMuscleUsage(5)
-            .then(usage => setMuscleScores(computeMuscleScores(usage, accessoryWeight)))
+            .then(usage => {
+                setMuscleScores(computeMuscleScores(usage, accessoryWeight));
+                setUsageData(usage);
+            })
             .catch(err => console.error(err));
     }, [accessoryWeight]);
 
@@ -600,30 +604,89 @@ const Current = () => {
     // ── Template readiness: average recovery of each template's target
     // muscles, so the grid can answer "what should I train today?" ──────────
     const templatesWithReadiness = useMemo(() => {
-        const readinessFor = (template) => {
-            if (!muscleScores || exercises.length === 0) return null;
+        const RECOVERY_WINDOW_HOURS = 96;
+        const SETS_CAP_LOCAL = 6;
+        const aw = accessoryWeight ?? 0.5;
+
+        const templateSlugs = (template) => {
             const slugs = new Set();
             (template.data || []).forEach(group => group.exercises.forEach(ex => {
                 const details = exercises.find(e => e.exerciseID === ex.exerciseID);
                 (details?.targetMuscle || '').split(',').map(m => m.trim()).filter(Boolean)
                     .forEach(m => slugs.add(muscleMapping[m] || m.toLowerCase()));
             }));
+            return slugs;
+        };
+
+        const readinessFor = (template) => {
+            if (!muscleScores || exercises.length === 0) return null;
+            const slugs = templateSlugs(template);
             if (slugs.size === 0) return null;
             const percents = [...slugs].map(slug => slugRecoveryPercent(muscleScores, slug));
             return Math.round(percents.reduce((a, b) => a + b, 0) / percents.length);
         };
 
+        const avgRecoveryAt = (slugsArr, tFuture) => {
+            const percents = slugsArr.map(slug => {
+                let raw = 0;
+                (usageData || []).forEach(ex => {
+                    const hoursAgoNow = (Date.now() - new Date(ex.date).getTime()) / (1000 * 60 * 60);
+                    const decay = Math.max(0, 1 - (hoursAgoNow + tFuture) / RECOVERY_WINDOW_HOURS);
+                    if (decay <= 0) return;
+                    const sets = parseInt(ex.sets, 10) || 0;
+                    const targets = (ex.targetMuscle || '').split(',').map(m => m.trim()).filter(Boolean);
+                    const accessories = (ex.accessoryMuscles || '').split(',').map(m => m.trim()).filter(Boolean);
+                    const isPrimary = targets.some(m => (muscleMapping[m] || m.toLowerCase()) === slug);
+                    const isAccessory = !isPrimary && accessories.some(m => (muscleMapping[m] || m.toLowerCase()) === slug);
+                    if (isPrimary) raw += sets * decay;
+                    else if (isAccessory) raw += sets * decay * aw;
+                });
+                const score = Math.min(SETS_CAP_LOCAL, raw);
+                return Math.max(0, Math.min(100, 100 - (score / SETS_CAP_LOCAL) * 100));
+            });
+            return percents.reduce((a, b) => a + b, 0) / percents.length;
+        };
+
+        const hoursTo80For = (template) => {
+            if (!usageData || exercises.length === 0) return null;
+            const slugs = templateSlugs(template);
+            if (slugs.size === 0) return null;
+            const slugsArr = [...slugs];
+            if (avgRecoveryAt(slugsArr, 0) >= 80) return 0;
+            let lo = 0, hi = RECOVERY_WINDOW_HOURS;
+            for (let i = 0; i < 60; i++) {
+                const mid = (lo + hi) / 2;
+                if (avgRecoveryAt(slugsArr, mid) < 80) lo = mid;
+                else hi = mid;
+            }
+            if (avgRecoveryAt(slugsArr, hi) < 80) return null;
+            return hi;
+        };
+
         return [...templates]
             .reverse()
-            .map(template => ({ template, readiness: readinessFor(template) }))
+            .map(template => ({ template, readiness: readinessFor(template), hoursTo80: hoursTo80For(template) }))
             .sort((a, b) => (b.readiness ?? -1) - (a.readiness ?? -1));
-    }, [templates, exercises, muscleScores]);
+    }, [templates, exercises, muscleScores, usageData, accessoryWeight]);
 
     const readinessBadge = (readiness) => {
         if (readiness == null) return null;
         if (readiness >= 80) return { color: theme.success, label: readiness >= 95 ? 'Ready' : `${readiness}%` };
         if (readiness >= 60) return { color: theme.warning, label: `${readiness}%` };
         return { color: theme.danger, label: `${readiness}%` };
+    };
+
+    const formatHoursToReadiness = (hrs) => {
+        if (hrs == null || hrs <= 0) return null;
+        if (hrs < 1) return '< 1h';
+        if (hrs < 24) {
+            const h = Math.floor(hrs);
+            const m = Math.round((hrs - h) * 60);
+            return m > 0 ? `${h}h ${m}m` : `${h}h`;
+        }
+        const d = Math.floor(hrs / 24);
+        const h = Math.round(hrs % 24);
+        return h > 0 ? `${d}d ${h}h` : `${d}d`;
     };
 
     useEffect(() => {
@@ -894,7 +957,7 @@ const Current = () => {
                                         their exercise names popping in on first boot. */}
                                     {(templatesLoaded && exercises.length > 0) && (
                                     <Animated.View entering={FadeIn.duration(300)} style={styles.templatesGrid}>
-                                        {templatesWithReadiness.map(({ template, readiness }) => {
+                                        {templatesWithReadiness.map(({ template, readiness, hoursTo80 }) => {
                                             const exerciseNames = template.data.flatMap(group =>
                                                 group.exercises.map(ex => {
                                                     const detail = exercises.find(e => e.exerciseID === ex.exerciseID);
@@ -949,16 +1012,26 @@ const Current = () => {
                                                         <Text style={styles.templateDetails}>
                                                             {exerciseNames.length} {exerciseNames.length === 1 ? 'exercise' : 'exercises'}
                                                         </Text>
-                                                        {badge ? (
-                                                            <View style={styles.readinessPill}>
-                                                                <View style={[styles.readinessPillDot, { backgroundColor: badge.color }]} />
-                                                                <Text style={[styles.readinessPillText, { color: badge.color }]}>
-                                                                    {badge.label}
-                                                                </Text>
-                                                            </View>
-                                                        ) : (
-                                                            <Ionicons name="chevron-forward" size={16} color={theme.primary} opacity={0.5} />
-                                                        )}
+                                                        <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                                                            {badge ? (
+                                                                <View style={styles.readinessPill}>
+                                                                    <View style={[styles.readinessPillDot, { backgroundColor: badge.color }]} />
+                                                                    <Text style={[styles.readinessPillText, { color: badge.color }]}>
+                                                                        {badge.label}
+                                                                    </Text>
+                                                                </View>
+                                                            ) : (
+                                                                <Ionicons name="chevron-forward" size={16} color={theme.primary} opacity={0.5} />
+                                                            )}
+                                                            {badge && readiness < 80 && formatHoursToReadiness(hoursTo80) != null && (
+                                                                <View style={styles.templateTimerRow}>
+                                                                    <Feather name="clock" size={10} color={badge.color} />
+                                                                    <Text style={[styles.templateTimerText, { color: badge.color }]}>
+                                                                        {formatHoursToReadiness(hoursTo80)}
+                                                                    </Text>
+                                                                </View>
+                                                            )}
+                                                        </View>
                                                     </View>
                                                 </TouchableOpacity>
                                             );
@@ -1214,6 +1287,16 @@ const getStyles = (theme) => {
         readinessPillText: {
             fontSize: 12,
             fontFamily: FONTS.bold,
+        },
+        templateTimerRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 3,
+        },
+        templateTimerText: {
+            fontSize: 10,
+            fontFamily: FONTS.medium,
+            opacity: 0.8,
         },
         templatesGrid: {
             flexDirection: 'row',
