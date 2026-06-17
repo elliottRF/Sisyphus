@@ -604,7 +604,9 @@ const ExerciseEditable = ({
                             minutes: fillData.minutes?.toString() || s.minutes,
                         }
                         : {
-                            weight: fillData.weight?.toString() || s.weight,
+                            // fillData weights are storage kg → fill in the user's
+                            // display unit (was filling kg even when set to lbs).
+                            weight: fillData.weight != null ? formatWeight(fillData.weight, useImperial).toString() : s.weight,
                             reps: fillData.reps?.toString() || s.reps,
                         }
                     )
@@ -661,8 +663,10 @@ const ExerciseEditable = ({
                     const f = fills[i];
                     if (!f) return s;
                     return {
+                        // fill values are storage kg → fill in the user's display
+                        // unit (was filling kg even when set to lbs).
                         ...s,
-                        weight: f.weight != null ? f.weight.toString() : s.weight,
+                        weight: f.weight != null ? formatWeight(f.weight, useImperial).toString() : s.weight,
                         reps: f.reps != null ? f.reps.toString() : s.reps,
                     };
                 }),
