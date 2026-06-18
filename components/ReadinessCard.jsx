@@ -453,7 +453,7 @@ const MuscleReadinessBox = ({ muscle, percent, localStyles, onPress, usageData, 
                 const exMidnight = new Date(exDate.getFullYear(), exDate.getMonth(), exDate.getDate());
                 const daysAgo = Math.round((todayMidnight - exMidnight) / (1000 * 60 * 60 * 24));
                 return {
-                    name: ex.name,
+                    name: (ex.name || '').trim(),
                     sets: parseInt(ex.sets, 10) || 0,
                     daysAgo,
                     isPrimary,
@@ -567,7 +567,7 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, usageData, hori
                         const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                         const exMidnight = new Date(exDate.getFullYear(), exDate.getMonth(), exDate.getDate());
                         const daysAgo = Math.round((todayMidnight - exMidnight) / (1000 * 60 * 60 * 24));
-                        return { name: ex.name, sets: parseInt(ex.sets, 10) || 0, daysAgo, isPrimary, timestamp: exDate.getTime(), slugsInGroup: muscleDef.slugs, targetSlugsInGroup, accessorySlugsInGroup };
+                        return { name: (ex.name || '').trim(), sets: parseInt(ex.sets, 10) || 0, daysAgo, isPrimary, timestamp: exDate.getTime(), slugsInGroup: muscleDef.slugs, targetSlugsInGroup, accessorySlugsInGroup };
                     })
                     .sort((a, b) => b.timestamp - a.timestamp)
                 : [];
