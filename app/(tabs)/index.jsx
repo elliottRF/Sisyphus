@@ -89,6 +89,13 @@ const Home = () => {
     const [muscleStatsData, setMuscleStatsData] = useState({});
     const [majorMuscleList, setMajorMuscleList] = useState([]);
     const [usageData, setUsageData] = useState([]);
+    // First-paint gate: each initial load flips its flag when done; the page is
+    // held back (background only) until all of them have landed, so it appears
+    // fully formed instead of assembling in front of the user on boot.
+    const [muscleReady, setMuscleReady] = useState(false);
+    const [pinnedReady, setPinnedReady] = useState(false);
+    const [prefsReady, setPrefsReady] = useState(false);
+    const [reviewReady, setReviewReady] = useState(false);
     // Guards against out-of-order muscle loads: on cold launch accessoryWeight
     // is the default (0.5) until prefs load, so two loads can race and the
     // slower (stale) one could land last. Only the latest request commits.
@@ -168,6 +175,8 @@ const Home = () => {
             setShowReview((latest || 0) >= REVIEW_MIN_WORKOUTS);
         } catch (e) {
             setShowReview(false);
+        } finally {
+            setReviewReady(true);
         }
     };
 
@@ -218,6 +227,8 @@ const Home = () => {
             setShowMuscleRadar(mrVal === 'true');
         } catch (e) {
             console.error("Failed to load module prefs", e);
+        } finally {
+            setPrefsReady(true);
         }
     };
 
@@ -265,9 +276,11 @@ const Home = () => {
             });
 
             setBodyData(newBodyData);
+            setMuscleReady(true);
 
         } catch (error) {
             console.error("Failed to load muscle usage data:", error);
+            setMuscleReady(true);
         }
     };
 
@@ -277,6 +290,8 @@ const Home = () => {
             setPinnedExercises(pinned);
         } catch (error) {
             console.error("Error loading pinned exercises:", error);
+        } finally {
+            setPinnedReady(true);
         }
     };
 
@@ -420,6 +435,14 @@ const Home = () => {
     const genderScale = isFemaleBody ? 0.86 : 1;
     const altBodyScale = (altBodyWidth / BODY_NATURAL_WIDTH_ALT) * genderScale;
     const bodyCropStyle = isFemaleBody ? styles.altBodyCropFemale : styles.altBodyCrop;
+
+    // Hold the first paint until every initial load has resolved. Until then we
+    // render only the background (same colour the splash fades into), so the
+    // user never sees the cards populate or shift — the page arrives complete.
+    const pageReady = settingsLoaded && muscleReady && pinnedReady && prefsReady && reviewReady;
+    if (!pageReady) {
+        return <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]} />;
+    }
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
