@@ -378,12 +378,16 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                                             />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{
-                                                fontSize: 15,
-                                                fontFamily: FONTS.semiBold,
-                                                color,
-                                                marginBottom: 2,
-                                            }}>
+                                            <Text
+                                                numberOfLines={1}
+                                                ellipsizeMode="tail"
+                                                style={{
+                                                    fontSize: 15,
+                                                    fontFamily: FONTS.semiBold,
+                                                    color,
+                                                    marginBottom: 2,
+                                                }}
+                                            >
                                                 {ex.name}
                                             </Text>
                                             <Text style={{
