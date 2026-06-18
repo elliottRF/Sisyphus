@@ -632,6 +632,55 @@ const ExerciseEditable = ({
         useImperial,
     });
 
+    // When PR mode turns on, grow this card so there's a row for every
+    // suggestion: append blank warm-up rows until they match the suggested
+    // warm-ups, and blank working rows until they match the suggested working
+    // sets. Runs once per activation (the ref resets when PR mode turns off);
+    // rows are only ever added, never removed, and existing/ticked sets are
+    // untouched. New warm-ups slot in after the last existing warm-up; new
+    // working sets append to the end.
+    const prAutoFillDoneRef = useRef(false);
+    useEffect(() => {
+        if (!showSuggestion) { prAutoFillDoneRef.current = false; return; }
+        if (prAutoFillDoneRef.current) return;
+        // Wait until suggestions have actually loaded for this exercise.
+        if (suggestedWarmups.length === 0 && workingSuggestions.length === 0) return;
+
+        prAutoFillDoneRef.current = true;
+
+        const warmCount = exercise.sets.filter(s => s.setType === 'W').length;
+        const workCount = exercise.sets.filter(s => s.setType !== 'W').length;
+        const addWarm = Math.max(0, suggestedWarmups.length - warmCount);
+        const addWork = Math.max(0, workingSuggestions.length - workCount);
+        if (addWarm === 0 && addWork === 0) return;
+
+        const blankSet = (setType) => ({
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            weight: null, reps: null, distance: null, minutes: null, completed: false, setType,
+        });
+        const newWarm = Array.from({ length: addWarm }, () => blankSet('W'));
+        const newWork = Array.from({ length: addWork }, () => blankSet('N'));
+
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? {
+            ...w,
+            exercises: w.exercises.map(e => {
+                if (e.id !== exercise.id) return e;
+                let lastWarmIdx = -1;
+                e.sets.forEach((s, i) => { if (s.setType === 'W') lastWarmIdx = i; });
+                const insertAt = lastWarmIdx + 1;
+                return {
+                    ...e,
+                    sets: [
+                        ...e.sets.slice(0, insertAt),
+                        ...newWarm,
+                        ...e.sets.slice(insertAt),
+                        ...newWork,
+                    ],
+                };
+            }),
+        } : w));
+    }, [showSuggestion, suggestedWarmups, workingSuggestions, exercise.sets, exercise.id, workoutID, updateCurrentWorkout]);
+
     // Tapping the suggestion column header fills every NOT-completed set in this
     // card with its suggestion (working sets → the computed suggestion, warm-ups
     // → the un-incremented warm-up from the same session the suggestions are

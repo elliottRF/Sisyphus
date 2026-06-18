@@ -10,12 +10,16 @@ import { Calendar } from 'react-native-calendars';
 import HistoryList from './HistoryList';
 import { AppEvents, on, off } from '../utils/events';
 import { useTheme } from '../context/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatWeight, unitLabel, toStorageKg } from '../utils/units';
 import { customAlert } from '../utils/customAlert';
 import CustomAlert from './CustomAlert';   // ← Updated import (adjust path if your project structure differs)
 import Reanimated, { useAnimatedStyle, withTiming, Easing, useSharedValue } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Persisted so the user's selected time scale survives a full app restart.
+const RANGE_STORAGE_KEY = 'settings_bodyWeightRange';
+const VALID_RANGES = ['1M', '3M', '1Y', 'ALL'];
 const GRAPH_HEIGHT = 130;
 const CARD_MARGIN = 32;
 const CARD_PADDING = 40;
@@ -27,6 +31,19 @@ const GRAPH_RIGHT_PADDING = 0;
 // 1M/3M/1Y/ALL or when a period has no data). Sized to fit the graph plus
 // its x-axis labels with a little headroom.
 const CHART_AREA_HEIGHT = GRAPH_HEIGHT + 30;
+
+// Even-stride downsample so very long ranges don't hand the graph thousands of
+// daily points. Keeps the first & last, samples the rest evenly. A maxPoints of
+// Infinity is a no-op (used to keep short ranges fully dense).
+const downsample = (arr, maxPoints) => {
+    if (!Array.isArray(arr) || arr.length <= maxPoints) return arr;
+    const result = [];
+    const step = (arr.length - 1) / (maxPoints - 1);
+    for (let i = 0; i < maxPoints; i++) {
+        result.push(arr[Math.round(i * step)]);
+    }
+    return result;
+};
 
 const CustomSelectionDot = ({ isActive, color, borderColor }) => (
     <View style={{
@@ -107,6 +124,19 @@ const BodyweightGraphCard = ({ theme }) => {
 
     // Load on mount
     useEffect(() => { loadData(); }, []);
+
+    // Restore the saved time scale on mount (range only filters in memory, so
+    // no refetch is needed — the points memo recomputes when it applies).
+    useEffect(() => {
+        AsyncStorage.getItem(RANGE_STORAGE_KEY)
+            .then(saved => { if (saved && VALID_RANGES.includes(saved)) setTimeRange(saved); })
+            .catch(() => {});
+    }, []);
+
+    const handleSelectRange = useCallback((r) => {
+        setTimeRange(r);
+        AsyncStorage.setItem(RANGE_STORAGE_KEY, r).catch(() => {});
+    }, []);
 
     // Subscribe to targeted refresh events
     useEffect(() => {
@@ -190,8 +220,65 @@ const BodyweightGraphCard = ({ theme }) => {
         }
 
         const now = new Date();
-        let startDate = new Date(0);
+        const oneDay = 24 * 60 * 60 * 1000;
 
+        // 1. Parse EVERY log (kg), drop garbage, sort ascending — no range
+        //    filter yet. Like the PR graphs, we build the full series first and
+        //    truncate afterwards, so a point inside the window is still
+        //    interpolated from logs that bracket it from outside the window.
+        const parsed = allData
+            .map(r => ({
+                date: new Date(r.datetime),
+                value: Number(r.weight)
+            }))
+            .filter(r => !isNaN(r.date.getTime()) && r.value > 3)
+            .sort((a, b) => a.date - b.date);
+
+        if (parsed.length < 2) return { points: [], yRange: [0, 100] };
+
+        // 2. Dense daily series across the whole history (linear interpolation
+        //    between logs).
+        const start = parsed[0].date;
+        const lastActual = parsed[parsed.length - 1];
+        const dense = [];
+
+        for (let d = start.getTime(); d <= lastActual.date.getTime(); d += oneDay) {
+            const currentDate = new Date(d);
+            const exactMatch = parsed.find(p => Math.abs(p.date.getTime() - d) < (oneDay / 2));
+
+            if (exactMatch) {
+                dense.push({ date: currentDate, value: exactMatch.value });
+            } else {
+                const nextIndex = parsed.findIndex(p => p.date.getTime() > d);
+                if (nextIndex !== -1 && nextIndex > 0) {
+                    const prevPoint = parsed[nextIndex - 1];
+                    const nextPt = parsed[nextIndex];
+                    const ratio = (d - prevPoint.date.getTime()) / (nextPt.date.getTime() - prevPoint.date.getTime());
+                    dense.push({
+                        date: currentDate,
+                        value: prevPoint.value + (nextPt.value - prevPoint.value) * ratio
+                    });
+                }
+            }
+        }
+
+        // 3. Catch up to today: hold the last logged weight flat to the current
+        //    date, so it's treated as the user's current bodyweight.
+        if (now.getTime() > lastActual.date.getTime()) {
+            for (let d = lastActual.date.getTime() + oneDay; d < now.getTime(); d += oneDay) {
+                dense.push({ date: new Date(d), value: lastActual.value });
+            }
+            dense.push({ date: now, value: lastActual.value });
+        } else {
+            const lastDense = dense[dense.length - 1];
+            if (!lastDense || Math.abs(lastDense.date.getTime() - lastActual.date.getTime()) > 1000) {
+                dense.push(lastActual);
+            }
+        }
+
+        // 4. Truncate to the selected window (cut the most recent 1M/3M/1Y off
+        //    the full series). Empty window → a flat line at the latest weight.
+        let startDate = new Date(0);
         if (timeRange === '1M') {
             startDate = new Date();
             startDate.setMonth(now.getMonth() - 1);
@@ -203,48 +290,18 @@ const BodyweightGraphCard = ({ theme }) => {
             startDate.setFullYear(now.getFullYear() - 1);
         }
 
-        const parsed = allData
-            .map(r => ({
-                date: new Date(r.datetime),
-                value: Number(r.weight)
-            }))
-            .filter(r => !isNaN(r.date.getTime()) && r.value > 3)
-            .sort((a, b) => a.date - b.date)
-            .filter(p => p.date >= startDate);
-
-        if (parsed.length === 0) return { points: [], yRange: [0, 100] };
-
-        const densePoints = [];
-        const start = parsed[0].date;
-        const end = parsed[parsed.length - 1].date;
-        const oneDay = 24 * 60 * 60 * 1000;
-
-        for (let d = start.getTime(); d <= end.getTime(); d += oneDay) {
-            const currentDate = new Date(d);
-            const exactMatch = parsed.find(p => Math.abs(p.date.getTime() - d) < (oneDay / 2));
-
-            if (exactMatch) {
-                densePoints.push({ date: currentDate, value: exactMatch.value });
-            } else {
-                const nextIndex = parsed.findIndex(p => p.date.getTime() > d);
-                if (nextIndex !== -1 && nextIndex > 0) {
-                    const prevPoint = parsed[nextIndex - 1];
-                    const nextPt = parsed[nextIndex];
-                    const ratio = (d - prevPoint.date.getTime()) / (nextPt.date.getTime() - prevPoint.date.getTime());
-                    densePoints.push({
-                        date: currentDate,
-                        value: prevPoint.value + (nextPt.value - prevPoint.value) * ratio
-                    });
-                }
-            }
+        let ranged = dense.filter(p => p.date >= startDate);
+        if (ranged.length === 0 && dense.length > 0) {
+            const lastVal = dense[dense.length - 1].value;
+            ranged = [
+                { date: startDate, value: lastVal },
+                { date: now, value: lastVal }
+            ];
         }
 
-        const finalPoints = densePoints.length > 0 ? densePoints : parsed;
-        const lastParsedPoint = parsed[parsed.length - 1];
-        const lastDensePoint = finalPoints[finalPoints.length - 1];
-        if (!lastDensePoint || Math.abs(lastDensePoint.date.getTime() - lastParsedPoint.date.getTime()) > 1000) {
-            finalPoints.push(lastParsedPoint);
-        }
+        // 5. Cap point count on long ranges; keep 1M/3M fully dense.
+        const maxPts = (timeRange === '1M' || timeRange === '3M') ? Infinity : 200;
+        const finalPoints = downsample(ranged, maxPts);
 
         const displayFinalPoints = finalPoints.map(p => ({
             ...p,
@@ -556,7 +613,7 @@ const BodyweightGraphCard = ({ theme }) => {
                             </View>
                             <View style={styles.rangeSelector}>
                                 {['1M', '3M', '1Y', 'ALL'].map(r => (
-                                    <TouchableOpacity key={r} onPress={() => setTimeRange(r)} style={[styles.rangeButton, timeRange === r && styles.rangeButtonActive]}>
+                                    <TouchableOpacity key={r} onPress={() => handleSelectRange(r)} style={[styles.rangeButton, timeRange === r && styles.rangeButtonActive]}>
                                         <Text style={[styles.rangeText, timeRange === r && styles.rangeTextActive]}>{r}</Text>
                                     </TouchableOpacity>
                                 ))}

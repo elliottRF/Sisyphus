@@ -9,6 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MENU_WIDTH = 230;
 const ROW_HEIGHT = 47;
+const HEADER_HEIGHT = 56;
 
 /**
  * Anchored hold-menu, desktop right-click style: zooms in at the press point,
@@ -18,8 +19,9 @@ const ROW_HEIGHT = 47;
  *
  * anchor: { x, y } page coordinates of the press.
  * items:  [{ icon, label, onPress, tint?, destructive? }]
+ * header: optional non-pressable info row { icon, title, subtitle?, color? }
  */
-const ContextMenu = ({ anchor, items, onClose }) => {
+const ContextMenu = ({ anchor, items, onClose, header }) => {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = getStyles(theme);
@@ -34,7 +36,7 @@ const ContextMenu = ({ anchor, items, onClose }) => {
         }, 140);
     };
 
-    const menuHeight = items.length * ROW_HEIGHT;
+    const menuHeight = items.length * ROW_HEIGHT + (header ? HEADER_HEIGHT : 0);
     const position = {
         left: Math.min(Math.max(16, anchor.x - MENU_WIDTH / 2), SCREEN_WIDTH - MENU_WIDTH - 16),
         top: Math.min(Math.max(insets.top + 16, anchor.y - 20), SCREEN_HEIGHT - menuHeight - 60),
@@ -49,6 +51,26 @@ const ContextMenu = ({ anchor, items, onClose }) => {
                         exiting={ZoomOut.duration(120)}
                         style={[styles.menu, position]}
                     >
+                        {header && (
+                            <View style={styles.header}>
+                                <Feather
+                                    name={header.icon}
+                                    size={15}
+                                    color={header.color || theme.textSecondary}
+                                />
+                                <View style={styles.headerTextWrap}>
+                                    <Text style={[styles.headerTitle, header.color && { color: header.color }]} numberOfLines={1}>
+                                        {header.title}
+                                    </Text>
+                                    {header.subtitle ? (
+                                        <Text style={styles.headerSubtitle} numberOfLines={1}>
+                                            {header.subtitle}
+                                        </Text>
+                                    ) : null}
+                                </View>
+                            </View>
+                        )}
+                        {header && <View style={styles.divider} />}
                         {items.map((item, i) => (
                             <React.Fragment key={item.label}>
                                 {i > 0 && <View style={styles.divider} />}
@@ -84,6 +106,27 @@ const getStyles = (theme) => StyleSheet.create({
         overflow: 'hidden',
         ...getThemedShadow(theme, 'medium'),
         elevation: 12,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 16,
+        height: HEADER_HEIGHT,
+    },
+    headerTextWrap: {
+        flex: 1,
+    },
+    headerTitle: {
+        fontSize: 13.5,
+        fontFamily: FONTS.semiBold,
+        color: theme.text,
+    },
+    headerSubtitle: {
+        fontSize: 11.5,
+        fontFamily: FONTS.regular,
+        color: theme.textSecondary,
+        marginTop: 1,
     },
     row: {
         flexDirection: 'row',

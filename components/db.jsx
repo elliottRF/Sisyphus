@@ -968,13 +968,15 @@ export const fetchRecentPRSession = async (exerciseID) => {
 
   if (!prSession?.workoutSession) return [];
 
-  // 2. Return ALL working sets from that exact workout (no rep-range filter)
+  // 2. Return ALL sets from that exact workout (no rep-range filter). Warm-ups
+  //    (setType 'W') are included so the suggestion engine can surface this
+  //    session's warm-ups alongside its working-set suggestions; suggestions.jsx
+  //    separates them from the working sets itself.
   return await database.getAllAsync(
     `SELECT *
          FROM workoutHistory
          WHERE exerciseID = ?
            AND workoutSession = ?
-           AND (setType IS NULL OR setType != 'W')
            AND reps > 0
          ORDER BY setNum ASC;`,
     [exerciseID, prSession.workoutSession]
@@ -1084,9 +1086,11 @@ export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex
 
   if (!prSession?.workoutSession) return [];
 
+  // Include warm-ups (setType 'W') so the suggestion engine can surface this
+  // session's warm-ups; suggestions.jsx separates them from the working sets.
   return await database.getAllAsync(`
       SELECT * FROM workoutHistory
-      WHERE exerciseID = ? AND workoutSession = ? AND (setType IS NULL OR setType != 'W') AND reps > 0
+      WHERE exerciseID = ? AND workoutSession = ? AND reps > 0
       ORDER BY setNum ASC;
   `, [exerciseID, prSession.workoutSession]);
 };

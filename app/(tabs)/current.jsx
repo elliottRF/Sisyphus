@@ -15,7 +15,7 @@ import * as NavigationBar from 'expo-navigation-bar';
 import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, createTemplate, fetchLastWorkoutSets, getTemplate, fetchRecentMuscleUsage } from '../../components/db';
 import { setPreloadedData } from '../../constants/preloader';
 import { toStorageKg, formatWeight, unitLabel } from '../../utils/units';
-import { computeMuscleScores, slugRecoveryPercent } from '../../utils/recovery';
+import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
 import { muscleMapping } from '../../constants/muscles';
 
 
@@ -82,6 +82,9 @@ const Current = () => {
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
     const [loadingTemplateId, setLoadingTemplateId] = useState(null);
     const [muscleScores, setMuscleScores] = useState(null);
+    // Raw usage rows kept alongside the derived scores so the hold-menu can
+    // project readiness forward in time (when a template hits 80% recovered).
+    const [recentUsage, setRecentUsage] = useState(null);
 
     const loadTemplates = async () => {
         try {
@@ -98,7 +101,10 @@ const Current = () => {
     // time — never a cached value).
     const loadMuscleScores = useCallback(() => {
         fetchRecentMuscleUsage(5)
-            .then(usage => setMuscleScores(computeMuscleScores(usage, accessoryWeight)))
+            .then(usage => {
+                setRecentUsage(usage);
+                setMuscleScores(computeMuscleScores(usage, accessoryWeight));
+            })
             .catch(err => console.error(err));
     }, [accessoryWeight]);
 
@@ -250,14 +256,63 @@ const Current = () => {
         }
     };
 
-    // Hold-menu for a template card: { anchor: {x,y}, template }.
+    // Hold-menu for a template card: { anchor: {x,y}, template, readiness }.
     const [templateMenu, setTemplateMenu] = useState(null);
+
+    // Distinct target-muscle slugs across a template's exercises (same mapping
+    // the readiness badge uses).
+    const templateTargetSlugs = useCallback((template) => {
+        const slugs = new Set();
+        (template.data || []).forEach(group => group.exercises.forEach(ex => {
+            const details = exercises.find(e => e.exerciseID === ex.exerciseID);
+            (details?.targetMuscle || '').split(',').map(m => m.trim()).filter(Boolean)
+                .forEach(m => slugs.add(muscleMapping[m] || m.toLowerCase()));
+        }));
+        return [...slugs];
+    }, [exercises]);
+
+    // Human "time until" string, e.g. "45m", "3h 20m", "1d 4h".
+    const formatTimeUntil = (ms) => {
+        const totalMin = Math.max(0, Math.round(ms / 60000));
+        if (totalMin < 60) return `${totalMin}m`;
+        const hours = Math.floor(totalMin / 60);
+        const mins = totalMin % 60;
+        if (hours < 24) return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+        const days = Math.floor(hours / 24);
+        const remHours = hours % 24;
+        return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+    };
+
+    // Header for the hold-menu describing when the template reaches 80% recovered.
+    const buildReadinessHeader = (template) => {
+        const slugs = templateTargetSlugs(template);
+        if (slugs.length === 0 || !muscleScores) return null;
+
+        const readiness = averageSlugRecovery(muscleScores, slugs);
+        if (readiness >= 80) {
+            return {
+                icon: 'check-circle',
+                color: theme.success,
+                title: 'Ready to train',
+                subtitle: `Muscles ${readiness}% recovered`,
+            };
+        }
+
+        const ms = recentUsage ? timeUntilSlugRecovery(recentUsage, accessoryWeight, slugs, 80) : null;
+        return {
+            icon: 'clock',
+            color: theme.warning,
+            title: ms != null ? `80% ready in ${formatTimeUntil(ms)}` : 'Recovering',
+            subtitle: `Currently ${readiness}% recovered`,
+        };
+    };
 
     const openTemplateMenu = (template, e) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setTemplateMenu({
             anchor: { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY },
             template,
+            readiness: buildReadinessHeader(template),
         });
     };
 
@@ -1289,6 +1344,7 @@ const Current = () => {
                     <ContextMenu
                         anchor={templateMenu.anchor}
                         onClose={() => setTemplateMenu(null)}
+                        header={templateMenu.readiness}
                         items={[
                             { icon: 'play', label: 'Start Workout', tint: true, onPress: () => loadTemplate(templateMenu.template) },
                             { icon: 'edit-2', label: 'Edit Template', onPress: () => handleLongPressTemplate(templateMenu.template) },

@@ -15,6 +15,11 @@ import { FONTS, isLightTheme, getThemedShadow, withAlpha } from '../constants/th
 import { fetchRecentMuscleUsage } from './db';
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, on, off } from '../utils/events';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Persisted so the user's selected time scale survives a full app restart.
+const RANGE_STORAGE_KEY = 'settings_muscleBalanceRange';
+const VALID_RANGES = ['1M', '6M', '1Y', 'ALL'];
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_MARGIN = 32;
@@ -56,6 +61,9 @@ const MuscleRadarChart = () => {
     const styles = getStyles(theme);
     const [radarData, setRadarData] = useState({});
     const [timeRange, setTimeRange] = useState('1M');
+    // Hold the first data load until the saved range is restored, so cold
+    // launch fetches the user's range directly instead of 1M-then-saved.
+    const [rangeLoaded, setRangeLoaded] = useState(false);
     const [loading, setLoading] = useState(true);
 
     const chartOpacity = useSharedValue(0);
@@ -136,7 +144,20 @@ const MuscleRadarChart = () => {
         }
     }, [timeRange, accessoryWeight]);
 
-    useEffect(() => { loadData(); }, [loadData]);
+    // Restore the saved time scale once on mount, then allow loads.
+    useEffect(() => {
+        AsyncStorage.getItem(RANGE_STORAGE_KEY)
+            .then(saved => { if (saved && VALID_RANGES.includes(saved)) setTimeRange(saved); })
+            .catch(() => {})
+            .finally(() => setRangeLoaded(true));
+    }, []);
+
+    const handleSelectRange = useCallback((range) => {
+        setTimeRange(range);
+        AsyncStorage.setItem(RANGE_STORAGE_KEY, range).catch(() => {});
+    }, []);
+
+    useEffect(() => { if (rangeLoaded) loadData(); }, [loadData, rangeLoaded]);
 
     useEffect(() => {
         const handler = () => loadData();
@@ -193,7 +214,7 @@ const MuscleRadarChart = () => {
                         {hasData && <Text style={styles.heroLabel}>{getScoreLabel(balanceScore)}</Text>}
                     </View>
                 </View>
-                <TimeRangeSelector selectedRange={timeRange} onSelect={setTimeRange} styles={styles} />
+                <TimeRangeSelector selectedRange={timeRange} onSelect={handleSelectRange} styles={styles} />
             </View>
 
             {/* Insight gets the full card width so the lagging chips fit on
