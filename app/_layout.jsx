@@ -141,7 +141,7 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
             }, 2500);
         };
 
-        on(AppEvents.WORKOUT_COMPLETED, handleWorkoutCompleted);
+        on(AppEvents.WORKOUT_COMPLETED, handleWorkoutCompleted, 'root-layout');
         return () => off(AppEvents.WORKOUT_COMPLETED, handleWorkoutCompleted);
     }, []);
 
@@ -254,7 +254,6 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
                     <Stack.Screen name="onboarding" options={{ headerShown: false }} />
                     <Stack.Screen name="exercise/[id]" options={{ headerShown: false }} />
                     <Stack.Screen name="exercise/new" options={{ headerShown: false }} />
-                    <Stack.Screen name="muscle/[id]" options={{ headerShown: false, animation: 'fade' }} />
                 </Stack>
             )}
 

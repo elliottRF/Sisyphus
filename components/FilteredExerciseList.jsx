@@ -27,6 +27,15 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
     const [selectedIds, setSelectedIds] = useState(() => new Set());
     // Quick muscle-group filter (null = All).
     const [activeFilter, setActiveFilter] = useState(null);
+    // The sheet's keyboard handler leaves the footer's bottom edge just under
+    // the keyboard — give it extra clearance while the keyboard is up.
+    const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+    useEffect(() => {
+        const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+        const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+        return () => { show.remove(); hide.remove(); };
+    }, []);
 
     const existingSet = useMemo(() => new Set(existingExerciseIds), [existingExerciseIds]);
 
@@ -138,7 +147,8 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
                 weight: formatWeight(hSet.weight, useImperial),
                 reps: hSet.reps?.toString() || null,
                 distance: hSet.distance?.toString() || null,
-                minutes: hSet.seconds ? (hSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : null,
+                // Exact fractional minutes — the clock field renders mm:ss.
+                minutes: hSet.seconds ? String(hSet.seconds / 60) : null,
                 setType: hSet.setType || 'N',
                 completed: false
             }));
@@ -309,7 +319,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
                 />
 
                 {selectedIds.size > 0 && (
-                    <View style={styles.footer}>
+                    <View style={[styles.footer, keyboardVisible && styles.footerAboveKeyboard]}>
                         <TouchableOpacity style={styles.addSelectedButton} onPress={commitSelection} activeOpacity={0.9}>
                             <Feather name="plus" size={20} color={theme.textAlternate} />
                             <Text style={styles.addSelectedText}>
@@ -567,6 +577,9 @@ const getStyles = (theme) => {
             borderTopWidth: 1,
             borderTopColor: safeBorder,
             backgroundColor: theme.surface,
+        },
+        footerAboveKeyboard: {
+            paddingBottom: 44,
         },
         addSelectedButton: {
             flexDirection: 'row',

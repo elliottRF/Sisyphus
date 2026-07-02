@@ -15,6 +15,7 @@ import PRGraphCard from "./PRGraphCard";
 import ContextMenu from './ContextMenu';
 import { Stack } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
+import { secondsToClock } from '../utils/time';
 import { getExerciseSnapshotSync, updateExerciseSnapshot, calculateSnapshotFromHistory } from '../utils/exerciseSnapshots';
 import { buildWorkoutDataFromSession } from '../utils/workoutBuilders';
 import { customAlert } from '../utils/customAlert';
@@ -273,7 +274,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                                                 ]}
                                             >
                                                 {isCardio ? (
-                                                    `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)} mins`
+                                                    `${set.distance || 0}km / ${secondsToClock(set.seconds || 0)}`
                                                 ) : (
                                                     `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} x ${set.reps}`
                                                 )}
@@ -502,7 +503,15 @@ const ExerciseHistory = (props) => {
                             name: rows[0]?.name?.trim() || `Workout #${session}`,
                             data: buildWorkoutDataFromSession(rows),
                         };
-                        const start = () => router.push({ pathname: '/current', params: { template: JSON.stringify(payload) } });
+                        // dismissAll first: from a stacked screen, both push AND
+                        // navigate (RN7) mount a duplicate (tabs) navigator (all
+                        // four tabs, lazy:false) that piles up until the app
+                        // crashes. Popping to the real tabs makes navigate a
+                        // plain tab switch.
+                        const start = () => {
+                            router.dismissAll();
+                            router.navigate({ pathname: '/current', params: { template: JSON.stringify(payload) } });
+                        };
                         if (workoutInProgress) {
                             customAlert(
                                 "Replace current workout?",
@@ -574,8 +583,8 @@ const ExerciseHistory = (props) => {
 
             // Refresh when data changes elsewhere
             const handleRefresh = () => loadWorkoutHistory();
-            on(AppEvents.WORKOUT_COMPLETED, handleRefresh);
-            on(AppEvents.WORKOUT_DATA_IMPORTED, handleRefresh);
+            on(AppEvents.WORKOUT_COMPLETED, handleRefresh, 'exercise-screen');
+            on(AppEvents.WORKOUT_DATA_IMPORTED, handleRefresh, 'exercise-screen');
 
             return () => {
                 off(AppEvents.WORKOUT_COMPLETED, handleRefresh);

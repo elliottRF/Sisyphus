@@ -121,8 +121,8 @@ const Current = () => {
             loadTemplates();
             loadMuscleScores();
         };
-        on(AppEvents.WORKOUT_COMPLETED, handler);
-        on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        on(AppEvents.WORKOUT_COMPLETED, handler, 'current-tab');
+        on(AppEvents.WORKOUT_DATA_IMPORTED, handler, 'current-tab');
         return () => {
             off(AppEvents.WORKOUT_COMPLETED, handler);
             off(AppEvents.WORKOUT_DATA_IMPORTED, handler);
@@ -192,7 +192,9 @@ const Current = () => {
                         weight: formatWeight(hSet.weight, useImperial),
                         reps: hSet.reps?.toString() || null,
                         distance: hSet.distance?.toString() || null,
-                        minutes: hSet.seconds ? (hSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : null,
+                        // Exact fractional minutes — the clock field renders mm:ss,
+                        // so rounding here would shift the seconds.
+                        minutes: hSet.seconds ? String(hSet.seconds / 60) : null,
                         setType: hSet.setType || 'N',
                         completed: false
                     }));
@@ -632,7 +634,6 @@ const Current = () => {
             router.push({
                 pathname: `/workout/${nextSessionNumber}`,
                 params: {
-                    session: nextSessionNumber,
                     // Include duration (a separate DB column, not on the entries)
                     // so the summary has everything it needs and can skip the
                     // post-mount re-fetch — that re-render was stuttering the

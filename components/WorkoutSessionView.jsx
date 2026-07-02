@@ -5,6 +5,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useRouter } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
+import { secondsToClock } from '../utils/time';
 import { customAlert } from '../utils/customAlert';
 import { muscleMapping, broadMuscleGroups } from '../constants/muscles';
 
@@ -436,7 +437,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                                             isWarmup && styles.setLiftWarmup,
                                                         ]}>
                                                             {exerciseDetails?.isCardio ? (
-                                                                `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)} mins`
+                                                                `${set.distance || 0}km / ${secondsToClock(set.seconds || 0)}`
                                                             ) : (
                                                                 `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} × ${set.reps}`
                                                             )}

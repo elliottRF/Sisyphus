@@ -21,6 +21,7 @@ import { Feather, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-ico
 import { fetchLastWorkoutSets, fetchLifetimePRs } from './db';
 import { useTheme } from '../context/ThemeContext';
 import { formatWeight, unitLabel } from '../utils/units';
+import { secondsToClock, minutesToClock, clockDigitsToDisplay, clockDigitsToMinutes } from '../utils/time';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import {
@@ -55,8 +56,16 @@ const lightenColor = (color, percent) => {
 
 
 // Compact Scrollable Input
-const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLength, style, placeholderTextColor, editable = true, theme, styles }) => {
+// `clock` turns the field into a digit-fill time input: digits push in from the
+// right (1,1 → "00:11"; another 1 → "01:11"; five 1s → "01:11:11"), the value
+// committed upward is (fractional) minutes, and leaving the field re-renders it
+// normalized — so an over-typed "09:99" repairs itself to "10:39" on blur.
+const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLength, style, placeholderTextColor, editable = true, theme, styles, clock = false }) => {
     const [isFocused, setIsFocused] = useState(false);
+    // Digit stack for clock mode: the digits typed so far, seeded from the
+    // committed value when editing starts (minus padding zeros, so appending
+    // to "00:05" behaves like the user had typed "5").
+    const [clockDigits, setClockDigits] = useState('');
     const inputRef = useRef(null);
 
     useEffect(() => {
@@ -71,9 +80,32 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
 
     const handlePress = () => {
         if (editable) {
+            if (clock) {
+                setClockDigits(minutesToClock(value).replace(/\D/g, '').replace(/^0+/, ''));
+            }
             setIsFocused(true);
             setTimeout(() => inputRef.current?.focus(), 50);
         }
+    };
+
+    const handleClockChange = (text) => {
+        const shown = clockDigitsToDisplay(clockDigits);
+        let digits;
+        if (shown && shown.startsWith(text)) {
+            // Deletion from the end. Deleting a colon (or a padding zero the
+            // user never typed) still pops one real digit off the stack.
+            const removed = shown.slice(text.length).replace(/\D/g, '').length || 1;
+            digits = clockDigits.slice(0, Math.max(0, clockDigits.length - removed));
+        } else if (text.startsWith(shown)) {
+            // Appended at the end — push the new digits onto the stack.
+            digits = (clockDigits + text.slice(shown.length).replace(/\D/g, '')).slice(0, 7);
+        } else {
+            // Replacement (select-all then type, paste, mid-string edit).
+            digits = text.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 7);
+        }
+        setClockDigits(digits);
+        const mins = clockDigitsToMinutes(digits);
+        onChangeText(mins === null ? '' : String(mins));
     };
 
     return (
@@ -92,8 +124,8 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
                             height: '100%',
                         }
                     ]}
-                    value={value || ""}
-                    onChangeText={onChangeText}
+                    value={clock ? clockDigitsToDisplay(clockDigits) : (value || "")}
+                    onChangeText={clock ? handleClockChange : onChangeText}
                     placeholder={placeholder}
                     placeholderTextColor={placeholderTextColor}
                     keyboardType="numeric"
@@ -102,15 +134,21 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
                     onBlur={() => setIsFocused(false)}
                     selectTextOnFocus
                     autoFocus
-                    multiline={Platform.OS === 'android'}
+                    // Clock values ("01:11:11") must stay on one line — a
+                    // single-line input scrolls horizontally instead of wrapping.
+                    multiline={Platform.OS === 'android' && !clock}
                     blurOnSubmit={true}
                     selectionColor={theme.primary}
                     cursorColor={theme.primary}
                     underlineColorAndroid="transparent"
                 />
             ) : (
-                <Text style={[styles.textInputInternal, { color: editable ? theme.text : theme.textSecondary }]}>
-                    {value || placeholder}
+                <Text
+                    style={[styles.textInputInternal, { color: editable ? theme.text : theme.textSecondary }]}
+                    numberOfLines={1}
+                    ellipsizeMode="clip"
+                >
+                    {(clock ? minutesToClock(value) : value) || placeholder}
                 </Text>
             )}
         </Pressable>
@@ -377,10 +415,11 @@ const SetRowBody = React.memo(({
                     style={styles.inputContainer}
                     value={isCardio ? set.minutes?.toString() : set.reps?.toString()}
                     onChangeText={(text) => isCardio ? onMinutesChange(text, index) : onRepsChange(text, index)}
-                    placeholder="-"
+                    placeholder={isCardio ? ":" : "-"}
                     placeholderTextColor={theme.textSecondary}
                     keyboardType="numeric"
-                    maxLength={4}
+                    maxLength={isCardio ? 9 : 4}
+                    clock={isCardio}
                     editable={!set.completed}
                     theme={theme}
                     styles={styles}
@@ -429,7 +468,8 @@ const ExerciseEditable = ({
 }) => {
     const { theme, useImperial, repRangeMin, repRangeMax } = useTheme();
     const styles = getStyles(theme);
-    const [isNoteVisible, setIsNoteVisible] = useState(false);
+    // An existing note starts expanded so it's read, not missed.
+    const [isNoteVisible, setIsNoteVisible] = useState(() => !!(exercise.notes && exercise.notes.length > 0));
     const [previousSets, setPreviousSets] = useState(() => prevSetsCache.get(exerciseID) ?? []);
     const [showDeleteAlert, setShowDeleteAlert] = useState(false);
     // Bumped when the "fill all suggestions" header is tapped, so each filled
@@ -521,8 +561,10 @@ const ExerciseEditable = ({
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, distance: sanitized } : s) } : e) } : w));
     };
     const handleMinutesChange = (text, setIndex) => {
-        const sanitized = sanitizeInteger(text);
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: sanitized } : s) } : e) } : w));
+        // Arrives from the clock field already parsed to (fractional) minutes —
+        // may carry a decimal (12.5 === 12:30), so no integer sanitizing here.
+        const value = text === '' || text == null ? null : String(text);
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: value } : s) } : e) } : w));
     };
 
     const playTapSound = async () => {
@@ -836,7 +878,7 @@ const ExerciseEditable = ({
                     <View style={{ flex: 1 }} />
                 )}
                 <Text style={[styles.columnHeader, styles.colKg]}>{isCardio ? "DIST (km)" : (isAssisted ? `ASSIST (${unitLabel(useImperial)})` : unitLabel(useImperial).toUpperCase())}</Text>
-                <Text style={[styles.columnHeader, styles.colReps]}>{isCardio ? "TIME (min)" : "REPS"}</Text>
+                <Text style={[styles.columnHeader, styles.colReps]}>{isCardio ? "TIME" : "REPS"}</Text>
                 {!isTemplate && <View style={styles.colCheck}><Feather name="check" size={12} color={theme.textSecondary} /></View>}
             </View>
 
@@ -862,8 +904,7 @@ const ExerciseEditable = ({
 
                     if (prevSet) {
                         if (isCardio) {
-                            const prevMins = prevSet.seconds ? (prevSet.seconds / 60).toFixed(1).replace(/\.0$/, '') : '0';
-                            prevSetText = `${prevSet.distance || 0}km / ${prevMins}mins`;
+                            prevSetText = `${prevSet.distance || 0}km / ${secondsToClock(prevSet.seconds || 0)}`;
                         } else {
                             prevSetText = `${formatWeight(prevSet.weight, useImperial)} × ${prevSet.reps}`;
                         }
@@ -899,7 +940,8 @@ const ExerciseEditable = ({
                         if (isCardio) {
                             fillData = {
                                 distance: prevSet.distance || 0,
-                                minutes: prevSet.seconds ? Math.round(prevSet.seconds / 60) : 0,
+                                // Exact fractional minutes so seconds survive the fill.
+                                minutes: prevSet.seconds ? prevSet.seconds / 60 : 0,
                             };
                         } else {
                             fillData = { weight: prevSet.weight || 0, reps: prevSet.reps || 0 };

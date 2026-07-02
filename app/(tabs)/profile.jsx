@@ -133,8 +133,8 @@ const Profile = () => {
             if (isFocusedRef.current) loadData();
             else dirtyRef.current = true;
         };
-        on(AppEvents.WORKOUT_COMPLETED, handler);
-        on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        on(AppEvents.WORKOUT_COMPLETED, handler, 'profile-tab');
+        on(AppEvents.WORKOUT_DATA_IMPORTED, handler, 'profile-tab');
         return () => {
             off(AppEvents.WORKOUT_COMPLETED, handler);
             off(AppEvents.WORKOUT_DATA_IMPORTED, handler);

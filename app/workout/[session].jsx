@@ -182,6 +182,9 @@ const WorkoutDetail = () => {
                 }))
             };
 
+            // dismissAll first — see onDone: navigate from a stacked screen
+            // would push a duplicate (tabs) navigator on RN7.
+            router.dismissAll();
             router.navigate({
                 pathname: "/current",
                 params: { template: JSON.stringify(template) }
@@ -251,9 +254,14 @@ const WorkoutDetail = () => {
                         workoutDetails={effectiveWorkoutDetails}
                         exercisesList={exercisesList}
                         celebrate
-                        // Pops the summary and lands on History (navigate reuses
-                        // the existing tab — no duplicate-tabs remount).
-                        onDone={() => router.navigate('/history')}
+                        // Pop everything stacked over the real tabs BEFORE
+                        // navigating: on React Navigation 7, navigate from a
+                        // stacked screen no longer rewinds to the existing
+                        // (tabs) — it pushes a duplicate navigator that leaks.
+                        onDone={() => {
+                            router.dismissAll();
+                            router.navigate('/history');
+                        }}
                         contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
                     />
                 ) : (

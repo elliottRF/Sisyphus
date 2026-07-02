@@ -154,8 +154,8 @@ const Home = () => {
             loadMuscleData();
             loadPinnedExercises();
         };
-        on(AppEvents.WORKOUT_COMPLETED, handler);
-        on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        on(AppEvents.WORKOUT_COMPLETED, handler, 'home-tab');
+        on(AppEvents.WORKOUT_DATA_IMPORTED, handler, 'home-tab');
         return () => {
             off(AppEvents.WORKOUT_COMPLETED, handler);
             off(AppEvents.WORKOUT_DATA_IMPORTED, handler);

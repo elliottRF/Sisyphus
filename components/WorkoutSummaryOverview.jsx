@@ -10,6 +10,7 @@ import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { formatWeight, unitLabel } from '../utils/units';
+import { secondsToClock } from '../utils/time';
 import { muscleMapping, broadMuscleGroups } from '../constants/muscles';
 
 // Count a number up from 0 → value on mount; used for the celebratory stats.
@@ -429,7 +430,7 @@ const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDo
                                                             isWarmup && styles.setLiftWarmup,
                                                         ]}>
                                                             {exerciseDetails?.isCardio ? (
-                                                                `${set.distance || 0}km / ${(set.seconds / 60).toFixed(1)} mins`
+                                                                `${set.distance || 0}km / ${secondsToClock(set.seconds || 0)}`
                                                             ) : (
                                                                 `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} × ${set.reps}`
                                                             )}

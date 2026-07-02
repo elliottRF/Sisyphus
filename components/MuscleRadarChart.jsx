@@ -161,9 +161,9 @@ const MuscleRadarChart = () => {
 
     useEffect(() => {
         const handler = () => loadData();
-        on(AppEvents.REFRESH_HOME, handler);
-        on(AppEvents.WORKOUT_COMPLETED, handler);
-        on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        on(AppEvents.REFRESH_HOME, handler, 'muscle-radar');
+        on(AppEvents.WORKOUT_COMPLETED, handler, 'muscle-radar');
+        on(AppEvents.WORKOUT_DATA_IMPORTED, handler, 'muscle-radar');
         return () => {
             off(AppEvents.REFRESH_HOME, handler);
             off(AppEvents.WORKOUT_COMPLETED, handler);

@@ -141,8 +141,8 @@ const BodyweightGraphCard = ({ theme }) => {
     // Subscribe to targeted refresh events
     useEffect(() => {
         const handler = () => loadData();
-        on(AppEvents.REFRESH_HOME, handler);
-        on(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler);
+        on(AppEvents.REFRESH_HOME, handler, 'bodyweight-graph');
+        on(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler, 'bodyweight-graph');
         return () => {
             off(AppEvents.REFRESH_HOME, handler);
             off(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler);

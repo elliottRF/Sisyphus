@@ -595,8 +595,8 @@ const History = () => {
                 dirtyRef.current = true;
             }
         };
-        on(AppEvents.WORKOUT_COMPLETED, markDirty);
-        on(AppEvents.WORKOUT_DATA_IMPORTED, markDirty);
+        on(AppEvents.WORKOUT_COMPLETED, markDirty, 'history-tab');
+        on(AppEvents.WORKOUT_DATA_IMPORTED, markDirty, 'history-tab');
         return () => {
             off(AppEvents.WORKOUT_COMPLETED, markDirty);
             off(AppEvents.WORKOUT_DATA_IMPORTED, markDirty);
@@ -668,7 +668,10 @@ const History = () => {
         if (!menu) return;
 
         const start = () => {
-            router.push({
+            // navigate, NOT push: pushing a tab route mounts a duplicate (tabs)
+            // navigator (all four tabs, lazy:false) that piles up until the app
+            // crashes — navigate reuses the existing tabs and switches to it.
+            router.navigate({
                 pathname: '/current',
                 params: {
                     template: JSON.stringify({

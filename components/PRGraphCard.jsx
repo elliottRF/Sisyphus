@@ -189,9 +189,9 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
                 dirtyRef.current = true;
             }
         };
-        on(AppEvents.REFRESH_HOME, handler);
-        on(AppEvents.WORKOUT_COMPLETED, handler);
-        on(AppEvents.WORKOUT_DATA_IMPORTED, handler);
+        on(AppEvents.REFRESH_HOME, handler, 'pr-graph');
+        on(AppEvents.WORKOUT_COMPLETED, handler, 'pr-graph');
+        on(AppEvents.WORKOUT_DATA_IMPORTED, handler, 'pr-graph');
         return () => {
             off(AppEvents.REFRESH_HOME, handler);
             off(AppEvents.WORKOUT_COMPLETED, handler);
