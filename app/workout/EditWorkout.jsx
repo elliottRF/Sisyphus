@@ -1,11 +1,10 @@
 // COMPLETE FIXED EditWorkout.js
 
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, FlatList } from 'react-native'
 import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, Stack, router } from 'expo-router'; // FIXED: Added router
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -37,6 +36,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { toStorageKg, formatWeight } from '../../utils/units';
 import { customAlert } from '../../utils/customAlert';
+
+// Layout animations off — see the matching flag in exerciseEditable.jsx
+// (Reanimated churn leak on this RN version; revisit on a newer SDK).
+const DISABLE_LAYOUT_ANIMS = true;
+const layoutAnim = DISABLE_LAYOUT_ANIMS ? undefined : LinearTransition.duration(200).easing(Easing.out(Easing.ease));
 
 // FIXED: Component now uses route params instead of props
 const EditWorkout = () => {
@@ -118,11 +122,6 @@ const EditWorkout = () => {
         }
     };
 
-    const handleReorder = useCallback(({ from, to }) => {
-        setCurrentWorkout((prevWorkout) => reorderItems(prevWorkout, from, to));
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }, []);
-
     const { session: reorderSession, overlayRef, listWrapperRef, fingerY, startReorder, endReorder, handleScrollToIndexFailed, isReordering } =
         useOverlayReorder(listRef, currentWorkout, setCurrentWorkout);
 
@@ -145,7 +144,7 @@ const EditWorkout = () => {
             <Animated.View
                 collapsable={false}
                 style={styles.exerciseWrapper}
-                layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+                layout={layoutAnim}
             >
                 {item.exercises.map((exercise, exerciseIndex) => {
                     const exerciseDetails = exercises.find(
@@ -349,7 +348,19 @@ const EditWorkout = () => {
                             // Brief delay to allow the confirmation alert to dismiss smoothly
                             setTimeout(() => {
                                 customAlert("Deleted", "Workout deleted.", [
-                                    { text: "OK", onPress: () => router.back() }
+                                    {
+                                        text: "OK",
+                                        onPress: () => {
+                                            // Pop straight to the tabs and land on
+                                            // History. Backing into the now-empty
+                                            // session screen flashed it briefly and
+                                            // it popped itself — chained transitions
+                                            // interrupting each other, which retained
+                                            // the screen's views (~370 per delete).
+                                            if (router.canDismiss()) router.dismissAll();
+                                            router.navigate('/history');
+                                        }
+                                    }
                                 ]);
                             }, 300);
                         } catch (err) {
@@ -512,78 +523,93 @@ const EditWorkout = () => {
                 </View>
 
                 <View ref={listWrapperRef} style={{ flex: 1 }} collapsable={false}>
-                <ReorderableList
-                    ref={listRef}
-                    data={currentWorkout}
-                    onReorder={handleReorder}
-                    onScrollToIndexFailed={handleScrollToIndexFailed}
-                    keyExtractor={(item) => String(item.id)}
-                    renderItem={renderItem}
-                    itemLayoutAnimation={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
-                    style={styles.list}
-                    contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
-                    keyboardShouldPersistTaps="handled"
-                    keyboardDismissMode="on-drag"
-                    scrollEnabled={!isReordering}
-                    ListFooterComponent={
-                        <Animated.View
-                            layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
-                            style={styles.footer}
-                        >
-                            <TouchableOpacity
-                                style={styles.addExerciseButton}
-                                onPress={plusButtonShowExerciseList}
-                                activeOpacity={0.7}
+                    {/* Core FlatList, NOT ReorderableList: the reorderable list's
+                    Reanimated cell wrappers left the whole screen's views
+                    permanently retained after unmount once it had been scrolled
+                    (Reanimated 4.x churn leak — see project memory). Hold-to-
+                    reorder is handled by the custom overlay, which only needs a
+                    scrollable container. */}
+                    <FlatList
+                        ref={listRef}
+                        data={currentWorkout}
+                        onScrollToIndexFailed={handleScrollToIndexFailed}
+                        keyExtractor={(item) => String(item.id)}
+                        renderItem={renderItem}
+                        // Workouts are a handful of cards — keep every cell mounted
+                        // so scrolling never churns unmounts (churned cells with
+                        // gesture/animation content leak views on this stack).
+                        initialNumToRender={50}
+                        maxToRenderPerBatch={50}
+                        windowSize={99}
+                        // Android defaults this ON for FlatList: scrolled-out
+                        // views get natively detached ("clipped"), and views
+                        // clipped at screen-unmount time leak. History's list
+                        // already runs with it off for the same Android issues.
+                        removeClippedSubviews={false}
+                        style={styles.list}
+                        contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
+                        keyboardShouldPersistTaps="handled"
+                        keyboardDismissMode="on-drag"
+                        scrollEnabled={!isReordering}
+                        ListFooterComponent={
+                            <Animated.View
+                                layout={layoutAnim}
+                                style={styles.footer}
                             >
-                                <Text style={styles.addExerciseText}>Add Exercise</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.addExerciseButton}
+                                    onPress={plusButtonShowExerciseList}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={styles.addExerciseText}>Add Exercise</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity
-                                onPress={() => {
-                                    customAlert(
-                                        "Save Changes?",
-                                        "Are you sure you want to save the changes to this workout?",
-                                        [
-                                            { text: "Cancel", style: "cancel" },
-                                            { text: "Save", onPress: saveWorkout }
-                                        ]
-                                    );
-                                }}
-                                activeOpacity={0.8}
-                                style={styles.finishButtonContainer}
-                            >
-                                <ButtonBackground style={styles.finishButton}>
-                                    <Text style={styles.finishButtonText}>Save Changes</Text>
-                                </ButtonBackground>
-                            </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        customAlert(
+                                            "Save Changes?",
+                                            "Are you sure you want to save the changes to this workout?",
+                                            [
+                                                { text: "Cancel", style: "cancel" },
+                                                { text: "Save", onPress: saveWorkout }
+                                            ]
+                                        );
+                                    }}
+                                    activeOpacity={0.8}
+                                    style={styles.finishButtonContainer}
+                                >
+                                    <ButtonBackground style={styles.finishButton}>
+                                        <Text style={styles.finishButtonText}>Save Changes</Text>
+                                    </ButtonBackground>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity
-                                onPress={deleteWorkout}
-                                activeOpacity={0.8}
-                                style={styles.deleteButton}
-                            >
-                                <Text style={styles.deleteButtonText}>Delete Workout</Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={deleteWorkout}
+                                    activeOpacity={0.8}
+                                    style={styles.deleteButton}
+                                >
+                                    <Text style={styles.deleteButtonText}>Delete Workout</Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity
-                                onPress={() => router.back()}
-                                activeOpacity={0.7}
-                                style={styles.clearButton}
-                            >
-                                <Text style={styles.clearButtonText}>Cancel Edit</Text>
-                            </TouchableOpacity>
-                        </Animated.View>
-                    }
-                />
-                {reorderSession && (
-                    <ReorderOverlay
-                        ref={overlayRef}
-                        rows={reorderRows}
-                        activeId={reorderSession.activeId}
-                        fingerY={fingerY}
-                        frame={reorderSession.frame}
+                                <TouchableOpacity
+                                    onPress={() => router.back()}
+                                    activeOpacity={0.7}
+                                    style={styles.clearButton}
+                                >
+                                    <Text style={styles.clearButtonText}>Cancel Edit</Text>
+                                </TouchableOpacity>
+                            </Animated.View>
+                        }
                     />
-                )}
+                    {reorderSession && (
+                        <ReorderOverlay
+                            ref={overlayRef}
+                            rows={reorderRows}
+                            activeId={reorderSession.activeId}
+                            fingerY={fingerY}
+                            frame={reorderSession.frame}
+                        />
+                    )}
                 </View>
 
                 <FilteredExerciseList

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicator, Modal, Pressable, Dimensions, InteractionManager, Animated as RNAnimated } from 'react-native'
+import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicator, Modal, Pressable, Dimensions, Animated as RNAnimated } from 'react-native'
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { useScrollToTop } from '@react-navigation/native';
@@ -492,10 +492,9 @@ const History = () => {
     const knownSessionsRef = useRef(
         getCachedWorkoutHistory() == null ? null : new Set(seededHistory.map(([s]) => s))
     );
+    // Whether this tab is visible — removal animations only run then; refreshes
+    // that arrive while covered commit directly (frozen trees can't animate).
     const isFocusedRef = useRef(false);
-    // Set when a mutation fires while this tab is covered; triggers a deferred
-    // reload on the next focus instead of a heavy reload mid-celebration.
-    const dirtyRef = useRef(false);
 
     // Removal animation: sessions mid-exit, and the post-exit list to commit.
     const [exitingSessions, setExitingSessions] = useState(() => new Set());
@@ -550,9 +549,13 @@ const History = () => {
             // Session(s) removed (e.g. deleted): keep the current list so those
             // cards stay mounted, flag them to collapse+fade, and commit the new
             // list once their exit finishes. (List virtualization won't animate
-            // a plain row removal.)
+            // a plain row removal.) ONLY when this tab is actually visible —
+            // deletes land while it's covered/frozen (EditWorkout is the only
+            // delete UI), and starting the exit machinery on a frozen tree
+            // can't run its animations or commit, which left the list wedged
+            // mid-swap and churning views. Covered tab → commit directly.
             const removedIds = [...prev].filter(id => !ids.has(id));
-            if (removedIds.length > 0) {
+            if (removedIds.length > 0 && isFocusedRef.current) {
                 pendingDataRef.current = groupedHistory;
                 knownSessionsRef.current = ids;
                 setExitingSessions(new Set(removedIds));
@@ -560,8 +563,11 @@ const History = () => {
             }
 
             // New cards just appear (no entrance animation). A plain reload
-            // commits the data.
+            // commits the data. Also clear any wedged exit state so a pending
+            // (never-animated) swap can't hold the committed list hostage.
             knownSessionsRef.current = ids;
+            pendingDataRef.current = null;
+            setExitingSessions(prevExiting => (prevExiting.size ? new Set() : prevExiting));
             setWorkoutHistory(groupedHistory);
         } catch (error) {
             console.error("Error loading workout history:", error);
@@ -580,26 +586,19 @@ const History = () => {
     useEffect(() => {
         loadAll();
 
-        // A data mutation refreshes the list — but only reload right now if this
-        // tab is actually visible. When it's covered (e.g. by the post-workout
-        // summary), reloading immediately runs a full fetch + group + list
-        // re-render on the JS thread, which stutters the summary's count-up.
-        // Instead just flag dirty and reload when the tab is next focused — by
-        // then the summary is gone, so there's no contention. (The cache was
-        // already refreshed by insertWorkoutHistory, so a cold-mounted History
-        // still paints the new session immediately from its seed.)
-        const markDirty = () => {
-            if (isFocusedRef.current) {
-                loadAll();
-            } else {
-                dirtyRef.current = true;
-            }
-        };
-        on(AppEvents.WORKOUT_COMPLETED, markDirty, 'history-tab');
-        on(AppEvents.WORKOUT_DATA_IMPORTED, markDirty, 'history-tab');
+        // A data mutation refreshes the list immediately, even while this tab
+        // is covered (e.g. by the post-workout summary): the covered tab is
+        // frozen (freezeOnBlur), so the re-render is deferred until it's next
+        // shown — meaning the new session is already in the list when the tab
+        // repaints, instead of visibly popping in after the user lands on it.
+        // The summary's count-up is protected by WORKOUT_COMPLETED itself
+        // being emitted on a delay after a finish.
+        const refresh = () => loadAll();
+        on(AppEvents.WORKOUT_COMPLETED, refresh, 'history-tab');
+        on(AppEvents.WORKOUT_DATA_IMPORTED, refresh, 'history-tab');
         return () => {
-            off(AppEvents.WORKOUT_COMPLETED, markDirty);
-            off(AppEvents.WORKOUT_DATA_IMPORTED, markDirty);
+            off(AppEvents.WORKOUT_COMPLETED, refresh);
+            off(AppEvents.WORKOUT_DATA_IMPORTED, refresh);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -607,18 +606,6 @@ const History = () => {
     useFocusEffect(
         React.useCallback(() => {
             isFocusedRef.current = true;
-
-            // Reload only if a mutation happened while we were away. Deferred
-            // past the transition so the flip into this tab stays smooth.
-            let task = null;
-            let ran = false;
-            if (dirtyRef.current) {
-                dirtyRef.current = false;
-                task = InteractionManager.runAfterInteractions(() => {
-                    ran = true;
-                    loadAll();
-                });
-            }
             return () => {
                 isFocusedRef.current = false;
                 // Dismiss any open hold-menu on blur. Its transparent Modal
@@ -626,12 +613,7 @@ const History = () => {
                 // switch it silently swallows touches on other screens.
                 setContextMenu(null);
                 setMenuClosing(false);
-                if (task && !ran) {
-                    task.cancel();
-                    dirtyRef.current = true; // blurred before it ran — keep owed
-                }
             };
-            // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [])
     );
 

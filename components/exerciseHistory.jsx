@@ -509,7 +509,7 @@ const ExerciseHistory = (props) => {
                         // crashes. Popping to the real tabs makes navigate a
                         // plain tab switch.
                         const start = () => {
-                            router.dismissAll();
+                            if (router.canDismiss()) router.dismissAll();
                             router.navigate({ pathname: '/current', params: { template: JSON.stringify(payload) } });
                         };
                         if (workoutInProgress) {

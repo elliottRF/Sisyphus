@@ -6,7 +6,8 @@ import { emit, AppEvents } from '../utils/events';
 import {
   invalidateExerciseSnapshot
 } from '../utils/exerciseSnapshots';
-let db;
+let dbPromise = null;
+let lastLivenessProbe = 0;
 
 // Bump this whenever exercises.json or the schema changes in a way that needs
 // the one-time reconciliation (ID migration, canonical sync, assisted-PR fix)
@@ -16,10 +17,27 @@ let db;
 const DB_SETUP_VERSION = 1;
 
 const getDb = async () => {
-  if (!db) {
-    db = await SQLite.openDatabaseAsync('sisyphus.db');
+  // Cache the PROMISE, not the instance: concurrent first callers previously
+  // raced the `if (!db)` check and opened two connections.
+  if (!dbPromise) {
+    dbPromise = SQLite.openDatabaseAsync('sisyphus.db');
   }
-  return db;
+  try {
+    const db = await dbPromise;
+    // Liveness probe (throttled — getDb sits on hot paths): the native handle
+    // can be released out from under the JS cache (dev reloads, host
+    // restarts), after which every query throws "shared object that was
+    // already released". Detect and reopen instead of erroring forever.
+    if (Date.now() - lastLivenessProbe > 2000) {
+      await db.getFirstAsync('SELECT 1;');
+      lastLivenessProbe = Date.now();
+    }
+    return db;
+  } catch (e) {
+    dbPromise = SQLite.openDatabaseAsync('sisyphus.db');
+    lastLivenessProbe = Date.now();
+    return await dbPromise;
+  }
 };
 
 const migrateExerciseIDs = async (database) => {
@@ -1700,13 +1718,15 @@ export const prepareDatabaseBackup = async () => {
  * Closes the cached database handle so the underlying file can be replaced.
  */
 export const closeDatabase = async () => {
-  if (db) {
+  if (dbPromise) {
     try {
-      await db.closeAsync();
+      const database = await dbPromise;
+      await database.closeAsync();
     } catch (e) {
       console.warn('Error closing database:', e);
     }
-    db = null;
+    dbPromise = null;
+    lastLivenessProbe = 0;
   }
 };
 
@@ -1723,7 +1743,8 @@ export const isValidSQLiteHeader = (headerBase64) => {
  * Reopens the database after a restore and re-runs setup/migrations.
  */
 export const reopenDatabaseAfterRestore = async () => {
-  db = null;
+  dbPromise = null;
+  lastLivenessProbe = 0;
   await setupDatabase();
   emit(AppEvents.WORKOUT_DATA_IMPORTED);
   emit(AppEvents.BODYWEIGHT_DATA_IMPORTED);

@@ -184,7 +184,7 @@ const WorkoutDetail = () => {
 
             // dismissAll first — see onDone: navigate from a stacked screen
             // would push a duplicate (tabs) navigator on RN7.
-            router.dismissAll();
+            if (router.canDismiss()) router.dismissAll();
             router.navigate({
                 pathname: "/current",
                 params: { template: JSON.stringify(template) }
@@ -259,7 +259,7 @@ const WorkoutDetail = () => {
                         // stacked screen no longer rewinds to the existing
                         // (tabs) — it pushes a duplicate navigator that leaks.
                         onDone={() => {
-                            router.dismissAll();
+                            if (router.canDismiss()) router.dismissAll();
                             router.navigate('/history');
                         }}
                         contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}

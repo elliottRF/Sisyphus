@@ -13,7 +13,11 @@ export const AppEvents = {
 };
 
 export function emit(event, data) {
-  if (__DEV__ && event !== AppEvents.SHOW_CUSTOM_ALERT) {
+  // Deliberately NOT __DEV__-gated: these fire only on workout mutations, and
+  // release builds still pipe console to logcat (tag ReactNativeJS), so the
+  // leak canary stays readable via `adb logcat -s ReactNativeJS` on standalone
+  // builds — where the slowdown bug actually reproduces.
+  if (event !== AppEvents.SHOW_CUSTOM_ALERT) {
     // Listener counts are a leak canary. The per-label breakdown tells piled-up
     // screens apart: pr-graph×N is stacked exercise screens (drops when you
     // back out); any tab label at ×2+ means a duplicate (tabs) navigator.
@@ -40,10 +44,10 @@ export function on(event, callback, label) {
   // Mount trail: tab screens should only ever subscribe once each — a second
   // subscription means a duplicate (tabs) navigator just mounted, and this log
   // timestamps exactly which user action spawned it.
-  if (__DEV__ && label && label.endsWith('-tab') && event === AppEvents.WORKOUT_COMPLETED) {
+  if (label && label.endsWith('-tab') && event === AppEvents.WORKOUT_COMPLETED) {
     console.log(`[AppEvents] + ${label} subscribed (now ×${labelCount(event, label)})`);
   }
-  if (__DEV__ && listeners[event].length > 24) {
+  if (listeners[event].length > 24) {
     console.warn(`[AppEvents] ${event} now has ${listeners[event].length} listeners — likely accumulating duplicate screens`);
   }
 }
@@ -52,7 +56,7 @@ export function off(event, callback) {
   if (!listeners[event]) return;
   listeners[event] = listeners[event].filter(cb => cb !== callback);
   const label = callback.__label;
-  if (__DEV__ && label && label.endsWith('-tab') && event === AppEvents.WORKOUT_COMPLETED) {
+  if (label && label.endsWith('-tab') && event === AppEvents.WORKOUT_COMPLETED) {
     console.log(`[AppEvents] - ${label} unsubscribed (now ×${labelCount(event, label)})`);
   }
 }

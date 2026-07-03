@@ -9,7 +9,6 @@ import Animated, {
     runOnJS,
     LinearTransition,
     FadeIn,
-    FadeOut,
     ZoomIn,
     Easing,
 } from 'react-native-reanimated';
@@ -32,6 +31,14 @@ import CustomAlert from './CustomAlert';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
+
+// Reanimated 4.x on this RN version leaks native views when layout animations
+// are churned (measured: EditWorkout retained ~350 views per open/close with
+// them on, flat with them off) — so they stay OFF and deletes snap instead of
+// slide. Revisit when the Expo SDK unlocks a newer Reanimated: flip to false
+// and re-run the dumpsys-Views churn tests documented in the project memory.
+const DISABLE_LAYOUT_ANIMS = true;
+const layoutAnim = DISABLE_LAYOUT_ANIMS ? undefined : LinearTransition.duration(200).easing(Easing.out(Easing.ease));
 
 // Session caches: the reorderable list force-remounts cells after a drag,
 // which resets component state. These warm-start remounted cards so the
@@ -108,6 +115,13 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
         onChangeText(mins === null ? '' : String(mins));
     };
 
+    // Once hours appear ("01:11:11") the value outgrows the column at the
+    // normal size, so drop the font a notch instead of wrapping — multiline
+    // must STAY on for Android (it's the long-standing remedy for a centered
+    // single-line input parking the cursor at the far right after a delete).
+    const clockText = clock ? (isFocused ? clockDigitsToDisplay(clockDigits) : minutesToClock(value)) : null;
+    const clockCompact = clock && (clockText?.length ?? 0) > 5;
+
     return (
         <Pressable
             style={[style, isFocused && styles.inputFocused, !editable && styles.inputDisabled]}
@@ -122,9 +136,10 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
                             color: editable ? theme.text : theme.textSecondary,
                             width: '100%',
                             height: '100%',
-                        }
+                        },
+                        clockCompact && { fontSize: 13 },
                     ]}
-                    value={clock ? clockDigitsToDisplay(clockDigits) : (value || "")}
+                    value={clock ? clockText : (value || "")}
                     onChangeText={clock ? handleClockChange : onChangeText}
                     placeholder={placeholder}
                     placeholderTextColor={placeholderTextColor}
@@ -134,9 +149,7 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
                     onBlur={() => setIsFocused(false)}
                     selectTextOnFocus
                     autoFocus
-                    // Clock values ("01:11:11") must stay on one line — a
-                    // single-line input scrolls horizontally instead of wrapping.
-                    multiline={Platform.OS === 'android' && !clock}
+                    multiline={Platform.OS === 'android'}
                     blurOnSubmit={true}
                     selectionColor={theme.primary}
                     cursorColor={theme.primary}
@@ -144,11 +157,15 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
                 />
             ) : (
                 <Text
-                    style={[styles.textInputInternal, { color: editable ? theme.text : theme.textSecondary }]}
+                    style={[
+                        styles.textInputInternal,
+                        { color: editable ? theme.text : theme.textSecondary },
+                        clockCompact && { fontSize: 13 },
+                    ]}
                     numberOfLines={1}
                     ellipsizeMode="clip"
                 >
-                    {(clock ? minutesToClock(value) : value) || placeholder}
+                    {(clock ? clockText : value) || placeholder}
                 </Text>
             )}
         </Pressable>
@@ -300,11 +317,14 @@ const SetRowBody = React.memo(({
 
     return (
         <View style={styles.setRow}>
+            {/* No `exiting` on this: deleting a card runs exit animations for
+                every descendant, and rapid deletes interrupt them — Reanimated
+                then retains the detached views forever (see the set-row
+                wrapper below). Un-ticking now clears instantly. */}
             {set.completed && (
                 <Animated.View
                     style={styles.completedBackground}
                     entering={hasMountedRef.current ? FadeIn.duration(180) : undefined}
-                    exiting={FadeOut.duration(150)}
                 />
             )}
 
@@ -794,7 +814,7 @@ const ExerciseEditable = ({
     return (
         <Animated.View
             style={[styles.container, animatedDeleteStyle]}
-            layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+            layout={layoutAnim}
         >
             {/* Header */}
             <View style={styles.header}>
@@ -885,7 +905,7 @@ const ExerciseEditable = ({
             {/* Sets */}
             <Animated.View
                 style={styles.setsContainer}
-                layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+                layout={layoutAnim}
             >
                 {exercise.sets.reduce((acc, set, index) => {
                     let displayNumber = index + 1;
@@ -960,8 +980,15 @@ const ExerciseEditable = ({
                         <Animated.View
                             key={set.id || index}
                             entering={hasMountedRef.current ? FadeIn.duration(180) : undefined}
-                            exiting={FadeOut.duration(150)}
-                            layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+                            // No `exiting` here: rapid removals interrupt exit
+                            // animations mid-flight and Reanimated permanently
+                            // retains the detached views (measured: Views count
+                            // never recovers). It's also visually redundant — a
+                            // swiped row has already slid off-screen, and rows
+                            // removed with a whole card are covered by the
+                            // card's own fade. The layout transition below
+                            // still slides the remaining rows up.
+                            layout={layoutAnim}
                         >
                             <SwipeableSetRow
                                 onDelete={() => deleteSet(index)}
@@ -1002,7 +1029,7 @@ const ExerciseEditable = ({
             </Animated.View>
 
             {/* Footer */}
-            <Animated.View layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}>
+            <Animated.View layout={layoutAnim}>
                 <TouchableOpacity style={styles.addSetButton} onPress={addNewSet} activeOpacity={0.6}>
                     <Text style={styles.addSetText}>+ ADD SET</Text>
                 </TouchableOpacity>
