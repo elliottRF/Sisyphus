@@ -618,7 +618,23 @@ const History = () => {
     );
 
     // ── Month sections ───────────────────────────────────────────────────────
-    const sections = useMemo(() => {
+    // Windowed: only the most recent months are fed to the list, with a footer
+    // button extending the range. VirtualizedList on this RN version ignores
+    // its window and progressively mounts EVERY cell at idle — with 500+
+    // sessions that's ~13k retained native views (measured) on a screen where
+    // the user rarely looks past the last few weeks. The full history stays in
+    // `workoutHistory` for the heatmap and header count; old sessions remain
+    // reachable via the button (and deep links fetch by id regardless).
+    const [visibleMonths, setVisibleMonths] = useState(3);
+    // Guards the footer button against "tap to stop the fling" presses: a
+    // finger landing on it mid-momentum reads as a press on janky frames.
+    const isMomentumScrollingRef = useRef(false);
+    const showEarlier = () => {
+        if (isMomentumScrollingRef.current) return;
+        setVisibleMonths(m => m + 6);
+    };
+
+    const { sections, hiddenSessionCount } = useMemo(() => {
         const map = new Map();
         workoutHistory.forEach(item => {
             const d = new Date(item[1][0].time);
@@ -633,8 +649,11 @@ const History = () => {
             }
             map.get(key).data.push(item);
         });
-        return [...map.values()];
-    }, [workoutHistory]);
+        const all = [...map.values()];
+        const shown = all.slice(0, visibleMonths);
+        const hiddenSessionCount = all.slice(visibleMonths).reduce((n, s) => n + s.data.length, 0);
+        return { sections: shown, hiddenSessionCount };
+    }, [workoutHistory, visibleMonths]);
 
     const handleOpenSession = (session) => {
         router.push(`/workout/${session}`);
@@ -775,6 +794,21 @@ const History = () => {
                         </View>
                     )
                 }
+                onMomentumScrollBegin={() => { isMomentumScrollingRef.current = true; }}
+                onMomentumScrollEnd={() => { isMomentumScrollingRef.current = false; }}
+                ListFooterComponent={
+                    hiddenSessionCount > 0 ? (
+                        <TouchableOpacity
+                            style={styles.showEarlierButton}
+                            onPress={showEarlier}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.showEarlierText}>
+                                Show earlier workouts ({hiddenSessionCount})
+                            </Text>
+                        </TouchableOpacity>
+                    ) : null
+                }
                 initialNumToRender={8}
                 maxToRenderPerBatch={8}
                 updateCellsBatchingPeriod={50}
@@ -870,6 +904,21 @@ const getStyles = (theme) => {
         flex: 1,
         width: '100%',
         backgroundColor: theme.background,
+    },
+    showEarlierButton: {
+        marginTop: 8,
+        marginBottom: 4,
+        paddingVertical: 14,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
+        alignItems: 'center',
+    },
+    showEarlierText: {
+        color: theme.textSecondary,
+        fontSize: 14,
+        fontFamily: FONTS.semiBold,
     },
     listContentContainer: {
         paddingTop: 4,

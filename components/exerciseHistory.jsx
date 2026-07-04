@@ -467,7 +467,10 @@ const ExerciseHistory = (props) => {
             pathname: `/workout/${session}`,
             params: {
                 initialData: JSON.stringify(data),
-                readOnly: 'false'
+                readOnly: 'false',
+                // Session opened from an exercise page: hide its exercise->history
+                // links so browsing can't chain exercise->session->exercise forever.
+                fromExercise: '1'
             }
         });
     };

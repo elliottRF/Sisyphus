@@ -12,7 +12,7 @@ import { customAlert } from '../../utils/customAlert';
 
 const WorkoutDetail = () => {
     const insets = useSafeAreaInsets();
-    const { session, initialData, readOnly, viewMode } = useLocalSearchParams();
+    const { session, initialData, readOnly, viewMode, fromExercise } = useLocalSearchParams();
     const router = useRouter();
     const { theme, useImperial } = useTheme();
     const styles = getStyles(theme);
@@ -272,7 +272,9 @@ const WorkoutDetail = () => {
                         onEdit={readOnly === 'true' ? null : showEditPage}
                         onRepeat={readOnly === 'true' ? null : handleRepeat}
                         onSaveAsTemplate={readOnly === 'true' ? null : handleSaveAsTemplate}
-                        onExerciseInfo={readOnly === 'true' ? null : showExerciseInfo}
+                        // No exercise->history links when this session was opened
+                        // FROM an exercise page (prevents endless browse chains).
+                        onExerciseInfo={(readOnly === 'true' || fromExercise === '1') ? null : showExerciseInfo}
                         contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
                     />
                 )}

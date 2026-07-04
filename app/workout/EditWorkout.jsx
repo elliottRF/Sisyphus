@@ -26,8 +26,6 @@ import {
 } from '../../components/db';
 
 import ExerciseEditable from '../../components/exerciseEditable'
-import ActionSheet from "react-native-actions-sheet";
-import ExerciseHistory from "../../components/exerciseHistory"
 import FilteredExerciseList from '../../components/FilteredExerciseList';
 import { useOverlayReorder } from '../../utils/useOverlayReorder';
 import ReorderOverlay from '../../components/ReorderOverlay';
@@ -37,9 +35,9 @@ import { useTheme } from '../../context/ThemeContext';
 import { toStorageKg, formatWeight } from '../../utils/units';
 import { customAlert } from '../../utils/customAlert';
 
-// Layout animations off — see the matching flag in exerciseEditable.jsx
-// (Reanimated churn leak on this RN version; revisit on a newer SDK).
-const DISABLE_LAYOUT_ANIMS = true;
+// See the matching flag in exerciseEditable.jsx — layout animations restored
+// after the leak was pinned on scrolled-wrapper retention instead.
+const DISABLE_LAYOUT_ANIMS = false;
 const layoutAnim = DISABLE_LAYOUT_ANIMS ? undefined : LinearTransition.duration(200).easing(Easing.out(Easing.ease));
 
 // FIXED: Component now uses route params instead of props
@@ -59,10 +57,7 @@ const EditWorkout = () => {
     const [isLoading, setIsLoading] = useState(true); // ADDED: Loading state
 
     // UI State
-    const [selectedExerciseId, setSelectedExerciseId] = useState(null);
-    const [currentExerciseName, setCurrentExerciseName] = useState(null);
     const actionSheetRef = useRef(null);
-    const exerciseInfoActionSheetRef = useRef(null);
     const listRef = useRef(null);
 
     // --- Utility Functions ---
@@ -114,11 +109,11 @@ const EditWorkout = () => {
         actionSheetRef.current?.show();
     };
 
+    // Navigate to the exercise page like everywhere else in the app (this used
+    // to open an embedded full-height ActionSheet copy of ExerciseHistory).
     const showExerciseInfo = (exerciseDetails) => {
         if (exerciseDetails) {
-            setSelectedExerciseId(exerciseDetails.exerciseID);
-            setCurrentExerciseName(exerciseDetails.name);
-            exerciseInfoActionSheetRef.current?.show();
+            router.push(`/exercise/${exerciseDetails.exerciseID}?name=${encodeURIComponent(exerciseDetails.name || '')}`);
         }
     };
 
@@ -620,22 +615,6 @@ const EditWorkout = () => {
                     onExerciseCreated={() => fetchExercises().then(data => setExercises(data))}
                 />
 
-                <ActionSheet
-                    ref={exerciseInfoActionSheetRef}
-                    enableGestureBack={true}
-                    closeOnPressBack={true}
-                    androidCloseOnBackPress={true}
-                    containerStyle={{ height: '100%', backgroundColor: safeSurface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
-                    indicatorStyle={{ backgroundColor: isDynamic ? '#aaaaaa' : theme.textSecondary }}
-                    snapPoints={[100]}
-                    initialSnapIndex={0}
-                >
-                    <ExerciseHistory
-                        exerciseID={selectedExerciseId}
-                        exerciseName={currentExerciseName}
-                        onClose={() => exerciseInfoActionSheetRef.current?.hide()}
-                    />
-                </ActionSheet>
             </View>
         </GestureHandlerRootView>
     );

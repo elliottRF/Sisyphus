@@ -32,12 +32,12 @@ import CustomAlert from './CustomAlert';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
 
-// Reanimated 4.x on this RN version leaks native views when layout animations
-// are churned (measured: EditWorkout retained ~350 views per open/close with
-// them on, flat with them off) — so they stay OFF and deletes snap instead of
-// slide. Revisit when the Expo SDK unlocks a newer Reanimated: flip to false
-// and re-run the dumpsys-Views churn tests documented in the project memory.
-const DISABLE_LAYOUT_ANIMS = true;
+// Kill-switch for the LinearTransition layout animations, kept from the leak
+// investigation (project memory: perf-slowdown-investigation). The proven
+// leaks were scrolled-Animated.View retention and interrupted `exiting`
+// animations — layout transitions were likely convicted by confounded tests,
+// so they're back ON. If a Views-drill ever implicates them again, flip this.
+const DISABLE_LAYOUT_ANIMS = false;
 const layoutAnim = DISABLE_LAYOUT_ANIMS ? undefined : LinearTransition.duration(200).easing(Easing.out(Easing.ease));
 
 // Session caches: the reorderable list force-remounts cells after a drag,
