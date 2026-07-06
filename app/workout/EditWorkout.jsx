@@ -33,6 +33,7 @@ import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../../constants
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { toStorageKg, formatWeight } from '../../utils/units';
+import { estimateOneRMForStorage } from '../../utils/oneRM';
 import { customAlert } from '../../utils/customAlert';
 
 // See the matching flag in exerciseEditable.jsx — layout animations restored
@@ -60,18 +61,6 @@ const EditWorkout = () => {
     const actionSheetRef = useRef(null);
     const listRef = useRef(null);
 
-    // --- Utility Functions ---
-    const calculateOneRepMax = (weight, reps) => {
-        let oneRepMax;
-        if (reps === 0) {
-            oneRepMax = 0;
-        } else if (reps === 1) {
-            oneRepMax = weight;
-        } else {
-            oneRepMax = weight * (1 + reps / 30);
-        }
-        return parseFloat(oneRepMax.toFixed(2));
-    };
 
     const inputExercise = (item) => {
         actionSheetRef.current?.hide();
@@ -206,7 +195,7 @@ const EditWorkout = () => {
 
                     for (const set of exercise.sets) {
                         const weightKg = toStorageKg(set.weight, useImperial);
-                        const calculatedOneRM = calculateOneRepMax(
+                        const calculatedOneRM = estimateOneRMForStorage(
                             weightKg,
                             parseInt(set.reps)
                         );
@@ -254,7 +243,7 @@ const EditWorkout = () => {
 
                     for (const set of exercise.sets) {
                         const weightKg = toStorageKg(set.weight, useImperial);
-                        const calculatedOneRM = calculateOneRepMax(
+                        const calculatedOneRM = estimateOneRMForStorage(
                             weightKg,
                             parseInt(set.reps)
                         );
@@ -325,7 +314,9 @@ const EditWorkout = () => {
             console.error("Error saving edited workout:", error);
             customAlert("Error", "Could not save workout. Please check console.");
         }
-    }, [currentWorkout, workoutTitle, originalStartTime, originalDurationMinutes, WORKOUT_SESSION_NUMBER]);
+        // useImperial drives the kg conversion — it must be current when the
+        // edit is saved.
+    }, [currentWorkout, workoutTitle, originalStartTime, originalDurationMinutes, WORKOUT_SESSION_NUMBER, useImperial]);
 
 
     const deleteWorkout = useCallback(() => {

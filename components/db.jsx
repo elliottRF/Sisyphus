@@ -6,6 +6,7 @@ import { emit, AppEvents } from '../utils/events';
 import {
   invalidateExerciseSnapshot
 } from '../utils/exerciseSnapshots';
+import { estimateOneRMForStorage } from '../utils/oneRM';
 let dbPromise = null;
 let lastLivenessProbe = 0;
 
@@ -989,13 +990,14 @@ export const fetchRecentPRSession = async (exerciseID) => {
   // 2. Return ALL sets from that exact workout (no rep-range filter). Warm-ups
   //    (setType 'W') are included so the suggestion engine can surface this
   //    session's warm-ups alongside its working-set suggestions; suggestions.jsx
-  //    separates them from the working sets itself.
+  //    separates them from the working sets itself. Warm-ups pass even with
+  //    reps = 0 — a weight-only warm-up is still worth showing.
   return await database.getAllAsync(
     `SELECT *
          FROM workoutHistory
          WHERE exerciseID = ?
            AND workoutSession = ?
-           AND reps > 0
+           AND (reps > 0 OR setType = 'W')
          ORDER BY setNum ASC;`,
     [exerciseID, prSession.workoutSession]
   );
@@ -1018,9 +1020,11 @@ export const fetchMostRecentSession = async (exerciseID) => {
 
   if (!recentSession?.workoutSession) return [];
 
+  // Warm-ups (setType 'W') pass even with reps = 0 so the suggestion engine
+  // can surface this session's warm-ups.
   return await database.getAllAsync(
     `SELECT * FROM workoutHistory
-         WHERE exerciseID = ? AND workoutSession = ? AND reps > 0
+         WHERE exerciseID = ? AND workoutSession = ? AND (reps > 0 OR setType = 'W')
          ORDER BY setNum ASC;`,
     [exerciseID, recentSession.workoutSession]
   );
@@ -1106,9 +1110,10 @@ export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex
 
   // Include warm-ups (setType 'W') so the suggestion engine can surface this
   // session's warm-ups; suggestions.jsx separates them from the working sets.
+  // Warm-ups pass even with reps = 0 (weight-only warm-up).
   return await database.getAllAsync(`
       SELECT * FROM workoutHistory
-      WHERE exerciseID = ? AND workoutSession = ? AND reps > 0
+      WHERE exerciseID = ? AND workoutSession = ? AND (reps > 0 OR setType = 'W')
       ORDER BY setNum ASC;
   `, [exerciseID, prSession.workoutSession]);
 };
@@ -1276,15 +1281,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               setType = 'D';
             }
 
-            let oneRM;
-            if (reps === 0) {
-              oneRM = 0;
-            } else if (reps === 1) {
-              oneRM = weight;
-            } else {
-              oneRM = weight * (1 + reps / 30);
-            }
-            oneRM = parseFloat(oneRM.toFixed(2));
+            const oneRM = estimateOneRMForStorage(weight, reps);
 
             const setData = {
               exerciseName,

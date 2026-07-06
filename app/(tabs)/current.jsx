@@ -16,6 +16,7 @@ import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculat
 import { setPreloadedData } from '../../constants/preloader';
 import { toStorageKg, formatWeight, unitLabel } from '../../utils/units';
 import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
+import { estimateOneRMForStorage } from '../../utils/oneRM';
 import { muscleMapping } from '../../constants/muscles';
 
 
@@ -58,7 +59,7 @@ const DEFAULT_TEMPLATES = [
 
 const Current = () => {
     const insets = useSafeAreaInsets();
-    const { theme, setWorkoutInProgress, useImperial, workoutStartTime, updateWorkoutStartTime, accessoryWeight } = useTheme();
+    const { theme, setWorkoutInProgress, useImperial, workoutStartTime, updateWorkoutStartTime, accessoryWeight, recoveryRate } = useTheme();
     const styles = getStyles(theme);
 
     const [exercises, setExercises] = useState([]);
@@ -103,10 +104,10 @@ const Current = () => {
         fetchRecentMuscleUsage(5)
             .then(usage => {
                 setRecentUsage(usage);
-                setMuscleScores(computeMuscleScores(usage, accessoryWeight));
+                setMuscleScores(computeMuscleScores(usage, accessoryWeight, undefined, recoveryRate));
             })
             .catch(err => console.error(err));
-    }, [accessoryWeight]);
+    }, [accessoryWeight, recoveryRate]);
 
     // Compute at launch (and when the accessory-weight setting settles) so the
     // pills are accurate the first time the tab opens, not only after a focus.
@@ -300,7 +301,7 @@ const Current = () => {
             };
         }
 
-        const ms = recentUsage ? timeUntilSlugRecovery(recentUsage, accessoryWeight, slugs, 80) : null;
+        const ms = recentUsage ? timeUntilSlugRecovery(recentUsage, accessoryWeight, slugs, 80, recoveryRate) : null;
         return {
             icon: 'clock',
             color: theme.warning,
@@ -409,17 +410,6 @@ const Current = () => {
         });
     };
 
-    const calculateOneRepMax = (weight, reps) => {
-        let oneRepMax;
-        if (reps === 0) {
-            oneRepMax = 0;
-        } else if (reps === 1) {
-            oneRepMax = weight;
-        } else {
-            oneRepMax = weight * (1 + reps / 30);
-        }
-        return parseFloat(oneRepMax.toFixed(2));
-    };
 
 
     const [currentWorkout, setCurrentWorkout] = useState([]);
@@ -486,7 +476,7 @@ const Current = () => {
 
                     for (const set of exercise.sets) {
                         const weightKg = toStorageKg(set.weight, useImperial);
-                        const calculatedOneRM = calculateOneRepMax(
+                        const calculatedOneRM = estimateOneRMForStorage(
                             weightKg,
                             parseInt(set.reps) || 0
                         );
@@ -549,7 +539,7 @@ const Current = () => {
 
                     for (const set of exercise.sets) {
                         const weightKg = toStorageKg(set.weight, useImperial);
-                        const calculatedOneRM = calculateOneRepMax(
+                        const calculatedOneRM = estimateOneRMForStorage(
                             weightKg,
                             parseInt(set.reps) || 0
                         );
@@ -653,7 +643,9 @@ const Current = () => {
         catch (error) {
             console.error("Error saving workout:", error);
         }
-    }, [currentWorkout, workoutStartTime, workoutTitle]);
+        // exercises drives the isAssisted lookups (PR flags) and useImperial the
+        // kg conversion — both must be current when the workout is saved.
+    }, [currentWorkout, workoutStartTime, workoutTitle, exercises, useImperial]);
 
     const plusButtonShowExerciseList = () => {
         fetchExercises()
@@ -748,7 +740,7 @@ const Current = () => {
                 }
             };
             checkActiveWorkout();
-        }, [accessoryWeight])
+        }, [accessoryWeight, recoveryRate])
     );
 
     // ── Template readiness: average recovery of each template's target
@@ -909,7 +901,7 @@ const Current = () => {
                 const weightKg = toStorageKg(set.weight, useImperial) || 0;
                 const reps = parseInt(set.reps, 10) || 0;
                 if (weightKg <= 0 || reps <= 0) return;
-                bestOneRM = Math.max(bestOneRM, calculateOneRepMax(weightKg, reps));
+                bestOneRM = Math.max(bestOneRM, estimateOneRMForStorage(weightKg, reps));
                 bestWeight = Math.max(bestWeight, weightKg);
                 bestVolume = Math.max(bestVolume, weightKg * reps);
             });

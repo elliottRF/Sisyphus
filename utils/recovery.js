@@ -9,8 +9,12 @@ export const RECOVERY_WINDOW_DAYS = 4;
  * fatigue model — Home's body map / readiness grid and the template
  * readiness badges all derive from it.
  */
-export const computeMuscleScores = (usageData, accessoryWeight = 0.5, now = new Date()) => {
+export const computeMuscleScores = (usageData, accessoryWeight = 0.5, now = new Date(), recoveryRate = 1) => {
     const muscleStats = {};
+
+    // A higher recovery rate means the user recovers faster, so training load
+    // decays over a shorter window (window = base window / rate).
+    const windowDays = RECOVERY_WINDOW_DAYS / (recoveryRate || 1);
 
     (usageData || []).forEach(exercise => {
         if (!exercise.date) return;
@@ -18,9 +22,9 @@ export const computeMuscleScores = (usageData, accessoryWeight = 0.5, now = new 
         const exerciseDate = new Date(exercise.date);
         const hoursAgo = (now - exerciseDate) / (1000 * 60 * 60);
         const daysAgoDecimal = hoursAgo / 24;
-        if (daysAgoDecimal >= RECOVERY_WINDOW_DAYS || daysAgoDecimal < 0) return;
+        if (daysAgoDecimal >= windowDays || daysAgoDecimal < 0) return;
 
-        const decayFactor = 1 - (daysAgoDecimal / RECOVERY_WINDOW_DAYS);
+        const decayFactor = 1 - (daysAgoDecimal / windowDays);
         const sets = parseInt(exercise.sets, 10) || 0;
         if (sets === 0) return;
 
@@ -66,19 +70,19 @@ export const averageSlugRecovery = (muscleStats, slugs) => {
  * Returns milliseconds until the target (0 if already met), or null if there's
  * nothing to project from.
  */
-export const timeUntilSlugRecovery = (usageData, accessoryWeight, slugs, targetPercent = 80) => {
+export const timeUntilSlugRecovery = (usageData, accessoryWeight, slugs, targetPercent = 80, recoveryRate = 1) => {
     if (!slugs || slugs.length === 0) return null;
 
     const now = new Date();
     const readinessAt = (date) =>
-        averageSlugRecovery(computeMuscleScores(usageData, accessoryWeight, date), slugs);
+        averageSlugRecovery(computeMuscleScores(usageData, accessoryWeight, date, recoveryRate), slugs);
 
     if (readinessAt(now) >= targetPercent) return 0;
 
-    // Once every usage row has decayed out (RECOVERY_WINDOW from now) every
-    // muscle reads 100%, so the target is always reached within the window.
+    // Once every usage row has decayed out (window from now) every muscle reads
+    // 100%, so the target is always reached within the window.
     const STEP_MS = 15 * 60 * 1000; // 15-minute resolution
-    const maxOffsetMs = RECOVERY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const maxOffsetMs = (RECOVERY_WINDOW_DAYS / (recoveryRate || 1)) * 24 * 60 * 60 * 1000;
     for (let offset = STEP_MS; offset <= maxOffsetMs; offset += STEP_MS) {
         if (readinessAt(new Date(now.getTime() + offset)) >= targetPercent) {
             return offset;

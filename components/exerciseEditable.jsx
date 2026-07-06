@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, UIManager, Dimensions, Pressable, Keyboard, TextInput } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, Pressable, Keyboard, TextInput } from 'react-native'
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -22,11 +22,11 @@ import { useTheme } from '../context/ThemeContext';
 import { formatWeight, unitLabel } from '../utils/units';
 import { secondsToClock, minutesToClock, clockDigitsToDisplay, clockDigitsToMinutes } from '../utils/time';
 import * as Haptics from 'expo-haptics';
-import { Audio } from 'expo-av';
 import {
     getPRType,
     useWorkoutSuggestions,
 } from './suggestions';
+import { on, AppEvents } from '../utils/events';
 import CustomAlert from './CustomAlert';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -46,6 +46,13 @@ const layoutAnim = DISABLE_LAYOUT_ANIMS ? undefined : LinearTransition.duration(
 // "-" while the data refetches.
 const prevSetsCache = new Map();
 const lifetimePRsCache = new Map();
+
+// Each card refetches fresh data on mount, so these only seed the first paint —
+// but seeds captured before a finish/import would flash stale previous sets or
+// PR targets on the next workout's cards. Drop them when history changes.
+const clearCardCaches = () => { prevSetsCache.clear(); lifetimePRsCache.clear(); };
+on(AppEvents.WORKOUT_COMPLETED, clearCardCaches, 'exercise-card-caches');
+on(AppEvents.WORKOUT_DATA_IMPORTED, clearCardCaches, 'exercise-card-caches');
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -180,7 +187,6 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
     const pan = Gesture.Pan()
         .activeOffsetX([-10, 10])
         .failOffsetY([-5, 5])
-        .failOffsetY([-5, 5])
         .onUpdate((event) => {
             if (isExerciseDragging) return;
             translateX.value = Math.min(event.translationX, 0);
@@ -310,10 +316,6 @@ const SetRowBody = React.memo(({
         triggerFlash();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fillAllToken]);
-
-    const color = brightColor;
-    const bgColor = withAlpha(brightColor, isLightTheme(theme) ? 0.14 : 0.25);
-    const borderColor = withAlpha(brightColor, isLightTheme(theme) ? 0.24 : 0.4);
 
     return (
         <View style={styles.setRow}>
@@ -587,23 +589,6 @@ const ExerciseEditable = ({
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: value } : s) } : e) } : w));
     };
 
-    const playTapSound = async () => {
-        try {
-            const { sound } = await Audio.Sound.createAsync(
-                require('../assets/notifications/tap.mp3'),
-                { volume: 0 }
-            );
-            await sound.playAsync();
-            sound.setOnPlaybackStatusUpdate(async (status) => {
-                if (status.didJustFinish) {
-                    await sound.unloadAsync();
-                }
-            });
-        } catch (error) {
-            console.error("Failed to play tap sound", error);
-        }
-    };
-
     const toggleSetComplete = (setIndex) => {
         if (isTemplate) return;
         const set = exercise.sets[setIndex];
@@ -746,17 +731,17 @@ const ExerciseEditable = ({
     // Tapping the suggestion column header fills every NOT-completed set in this
     // card with its suggestion (working sets → the computed suggestion, warm-ups
     // → the un-incremented warm-up from the same session the suggestions are
-    // drawn from, falling back to the previous workout's warm-up). Ticked sets
-    // are left alone.
+    // drawn from — never the previous workout's, matching the column display).
+    // Ticked sets are left alone.
     const fillAllSuggested = () => {
         if (!showSuggestion) return;
         let warmupIdx = 0;
         let workingIdx = 0;
         const fills = exercise.sets.map((set) => {
             if (set.setType === 'W') {
-                const warm = suggestedWarmups[warmupIdx] || prevWarmups[warmupIdx];
-                warmupIdx++;
-                return warm ? { weight: warm.weight, reps: warm.reps } : null;
+                const warm = suggestedWarmups[warmupIdx++];
+                // reps || null: a weight-only warm-up leaves the reps field alone.
+                return warm ? { weight: warm.weight, reps: warm.reps || null } : null;
             }
             const computed = workingSuggestions[workingIdx++];
             return computed ? { weight: computed.weight, reps: computed.reps } : null;
@@ -938,12 +923,18 @@ const ExerciseEditable = ({
                         const isWarmup = set.setType === 'W';
                         if (isWarmup) {
                             // Warm-up suggestion = the warm-up from the same session
-                            // the working suggestions come from, shown un-incremented;
-                            // fall back to the previous workout's warm-up.
-                            const warm = suggestedWarmups[suggestWarmupIndex++] || prevSet;
+                            // the working suggestions come from, shown un-incremented.
+                            // No fallback to the previous workout's warm-ups — mixing
+                            // sessions is misleading; if the base session has none,
+                            // the row shows "-".
+                            const warm = suggestedWarmups[suggestWarmupIndex++];
                             if (warm) {
-                                suggestionText = `${formatWeight(warm.weight, useImperial)} × ${warm.reps}`;
-                                fillData = { weight: warm.weight || 0, reps: warm.reps || 0 };
+                                // A weight-only warm-up (reps 0) shows just the
+                                // weight and leaves the reps field alone on fill.
+                                suggestionText = warm.reps > 0
+                                    ? `${formatWeight(warm.weight, useImperial)} × ${warm.reps}`
+                                    : `${formatWeight(warm.weight, useImperial)}`;
+                                fillData = { weight: warm.weight || 0, reps: warm.reps || null };
                             }
                         } else {
                             const suggestIndex = suggestWorkingIndex++;

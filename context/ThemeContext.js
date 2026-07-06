@@ -16,6 +16,7 @@ export const ThemeProvider = ({ children }) => {
 
     const [gender, setGender] = useState('male');
     const [accessoryWeight, setAccessoryWeight] = useState(0.5);
+    const [recoveryRate, setRecoveryRate] = useState(1);
     const [repRangePreset, setRepRangePreset] = useState(DEFAULT_REP_RANGE_PRESET);
     const [repRangeMin, setRepRangeMin] = useState(DEFAULT_REP_RANGE.min);
     const [repRangeMax, setRepRangeMax] = useState(DEFAULT_REP_RANGE.max);
@@ -34,6 +35,7 @@ export const ThemeProvider = ({ children }) => {
                 storedThemeID,
                 storedGender,
                 storedAccessoryWeight,
+                storedRecoveryRate,
                 storedUnitPref,
                 storedRepRangePreset,
                 storedRepRangeMin,
@@ -44,6 +46,7 @@ export const ThemeProvider = ({ children }) => {
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
                 AsyncStorage.getItem('user_accessory_weight'),
+                AsyncStorage.getItem('user_recovery_rate'),
                 AsyncStorage.getItem('user_unit_imperial'),
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangePreset),
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangeMin),
@@ -77,6 +80,9 @@ export const ThemeProvider = ({ children }) => {
             }
             if (storedAccessoryWeight !== null) {
                 setAccessoryWeight(parseFloat(storedAccessoryWeight));
+            }
+            if (storedRecoveryRate !== null) {
+                setRecoveryRate(parseFloat(storedRecoveryRate));
             }
             if (storedUnitPref !== null) {
                 setUseImperial(storedUnitPref === 'true');
@@ -167,6 +173,15 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updateRecoveryRate = async (rate) => {
+        setRecoveryRate(rate);
+        try {
+            await AsyncStorage.setItem('user_recovery_rate', rate.toString());
+        } catch (error) {
+            console.error("Failed to save recovery rate:", error);
+        }
+    };
+
     const updateRepRangePreset = async (preset) => {
         setRepRangePreset(preset);
         try {
@@ -226,6 +241,8 @@ export const ThemeProvider = ({ children }) => {
             updateGender,
             accessoryWeight,
             updateAccessoryWeight,
+            recoveryRate,
+            updateRecoveryRate,
             repRangePreset,
             updateRepRangePreset,
             repRangeMin,

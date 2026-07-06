@@ -46,7 +46,7 @@ const shortMuscleNames = {
 // ─── Overlay ──────────────────────────────────────────────────────────────────
 
 const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
-    const { x, y, w, h, bg, color, percent, displayName, fullName, exercises, accessoryWeight } = card;
+    const { x, y, w, h, bg, color, percent, displayName, fullName, exercises, accessoryWeight, recoveryRate } = card;
 
     const overlayTitle = fullName || displayName;
 
@@ -112,7 +112,7 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
 
     const pillBg = `${color}20`;
 
-    const RECOVERY_WINDOW_HOURS = 96;
+    const RECOVERY_WINDOW_HOURS = 96 / (recoveryRate || 1);
     const SETS_CAP = 6;
     const TARGET_SCORE = (1 - 80 / 100) * SETS_CAP;
     const aw = accessoryWeight ?? 0.5;
@@ -418,7 +418,7 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
 // ─── Individual card ──────────────────────────────────────────────────────────
 
 const MuscleReadinessBox = ({ muscle, percent, localStyles, onPress, usageData, horizontal, showPercentage = true }) => {
-    const { theme, accessoryWeight } = useTheme();
+    const { theme, accessoryWeight, recoveryRate } = useTheme();
     const ref = useRef(null);
     const displayName = shortMuscleNames[muscle] || muscle;
 
@@ -477,6 +477,7 @@ const MuscleReadinessBox = ({ muscle, percent, localStyles, onPress, usageData, 
                 bg, color, percent, displayName, fullName: muscle,
                 exercises: getContributingExercises(),
                 accessoryWeight,
+                recoveryRate,
             });
         });
     };
@@ -534,7 +535,7 @@ const MuscleReadinessBox = ({ muscle, percent, localStyles, onPress, usageData, 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, usageData, horizontal, showPercentage = true }, ref) => {
-    const { theme, accessoryWeight } = useTheme();
+    const { theme, accessoryWeight, recoveryRate } = useTheme();
     const localStyles = getStyles(theme);
     const insets = useSafeAreaInsets();
     const [activeCard, setActiveCard] = useState(null);
@@ -588,9 +589,10 @@ const ReadinessCard = forwardRef(({ allMusclesSorted, cardWidth, usageData, hori
                 fullName: label,
                 exercises,
                 accessoryWeight,
+                recoveryRate,
             });
         },
-    }), [allMusclesSorted, usageData, theme, accessoryWeight]);
+    }), [allMusclesSorted, usageData, theme, accessoryWeight, recoveryRate]);
 
     // ─── Horizontal layout ────────────────────────────────────────────────────
     if (horizontal) {

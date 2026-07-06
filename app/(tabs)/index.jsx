@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Dimensions, AppState, Linking } from 'react-native'
-import Animated, { FadeInDown, FadeOutDown, LinearTransition, useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeOutDown, LinearTransition } from 'react-native-reanimated';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useScrollToTop } from '@react-navigation/native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -67,7 +67,7 @@ const LiveTimer = ({ startTime, style }) => {
 
 const Home = () => {
     const insets = useSafeAreaInsets();
-    const { theme, gender, accessoryWeight, workoutInProgress, workoutStartTime, settingsLoaded } = useTheme();
+    const { theme, gender, accessoryWeight, recoveryRate, workoutInProgress, workoutStartTime, settingsLoaded } = useTheme();
     const styles = getStyles(theme);
 
     const [bodyData, setBodyData] = useState([]);
@@ -100,13 +100,6 @@ const Home = () => {
     // is the default (0.5) until prefs load, so two loads can race and the
     // slower (stale) one could land last. Only the latest request commits.
     const muscleReqRef = useRef(0);
-    // One-time fade-in for the body diagram + recovery headline once real data
-    // lands, so it doesn't snap from empty/default to filled on cold launch.
-    const muscleFade = useSharedValue(0);
-    const muscleFadeStyle = useAnimatedStyle(() => ({ opacity: muscleFade.value }));
-    useEffect(() => {
-        if (bodyData.length > 0) muscleFade.value = withTiming(1, { duration: 320 });
-    }, [bodyData, muscleFade]);
     useScrollToTop(scrollRef);
 
     useEffect(() => {
@@ -114,7 +107,7 @@ const Home = () => {
         loadPinnedExercises();
         loadModulePrefs();
         fetchExerciseWorkoutCounts().then(setWorkoutCounts);
-    }, [accessoryWeight, settingsLoaded]);
+    }, [accessoryWeight, recoveryRate, settingsLoaded]);
 
     useFocusEffect(
         React.useCallback(() => {
@@ -146,7 +139,7 @@ const Home = () => {
             } else {
                 setLiveWorkout(null);
             }
-        }, [accessoryWeight, workoutInProgress, settingsLoaded])
+        }, [accessoryWeight, recoveryRate, workoutInProgress, settingsLoaded])
     );
 
     useEffect(() => {
@@ -160,7 +153,7 @@ const Home = () => {
             off(AppEvents.WORKOUT_COMPLETED, handler);
             off(AppEvents.WORKOUT_DATA_IMPORTED, handler);
         };
-    }, [accessoryWeight, settingsLoaded]);
+    }, [accessoryWeight, recoveryRate, settingsLoaded]);
 
     // Decide whether to show the "leave a review" prompt (see config at top).
     const checkReviewPrompt = async () => {
@@ -243,7 +236,7 @@ const Home = () => {
             setUsageData(usageData);
             // Shared fatigue model (utils/recovery) — also drives the
             // template readiness badges on the Current tab.
-            const muscleStats = computeMuscleScores(usageData, accessoryWeight);
+            const muscleStats = computeMuscleScores(usageData, accessoryWeight, undefined, recoveryRate);
 
             const allMusclesWithPercent = majorMuscles.map(muscle => {
                 const maxScore = muscle.slugs.reduce((max, slug) => {
@@ -538,7 +531,8 @@ const Home = () => {
                                 </View>
                             </View>
 
-                            <Animated.View style={muscleFadeStyle}>
+                            {muscleReady && (
+                            <Animated.View entering={FadeIn.duration(320)}>
                             <View style={styles.altBodyContentRow}>
                                 <View style={[styles.altBodyPanel, { width: altBodyPanelWidth }]}>
                                     <View style={bodyCropStyle}>
@@ -599,6 +593,7 @@ const Home = () => {
                                 )}
                             </View>
                             </Animated.View>
+                            )}
                         </View>
 
                         <ReadinessCard

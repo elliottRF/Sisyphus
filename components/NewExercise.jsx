@@ -350,7 +350,7 @@ const NewExercise = (props) => {
     const canSave = exerciseName.trim().length > 0;
     // Derive from props (not the async-loaded isEditMode) so the title doesn't
     // flash "New Exercise" → "Edit Exercise" on open.
-    const headerTitle = isCanonical ? 'Exercise' : props.exerciseID ? 'Edit Exercise' : 'New Exercise';
+    const headerTitle = props.exerciseID ? 'Edit Exercise' : 'New Exercise';
 
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -364,6 +364,20 @@ const NewExercise = (props) => {
                         activeOpacity={0.7}
                     >
                         <Feather name="x" size={22} color={theme.text} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={handleSave}
+                        disabled={!canSave}
+                        activeOpacity={0.9}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <GradientOrView
+                            colors={[theme.primary, theme.secondary]}
+                            theme={theme}
+                            style={[styles.headerSaveButton, !canSave && styles.saveButtonDisabled]}
+                        >
+                            <Text style={styles.headerSaveButtonText}>Save</Text>
+                        </GradientOrView>
                     </TouchableOpacity>
                 </View>
             )}
@@ -529,19 +543,23 @@ const NewExercise = (props) => {
                             </View>
                         </Animated.View>
 
-                        <TouchableOpacity onPress={handleSave} activeOpacity={0.9} disabled={!canSave}>
-                            <GradientOrView
-                                colors={[theme.primary, theme.secondary]}
-                                theme={theme}
-                                style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
-                            >
-                                <Text style={styles.saveButtonText}>
-                                    {isEditMode ? 'Update Exercise' : 'Create Exercise'}
-                                </Text>
-                            </GradientOrView>
-                        </TouchableOpacity>
-                        {!canSave && (
-                            <Text style={styles.saveHint}>Add a name to save</Text>
+                        {!props.isScreen && (
+                            <>
+                                <TouchableOpacity onPress={handleSave} activeOpacity={0.9} disabled={!canSave}>
+                                    <GradientOrView
+                                        colors={[theme.primary, theme.secondary]}
+                                        theme={theme}
+                                        style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
+                                    >
+                                        <Text style={styles.saveButtonText}>
+                                            {isEditMode ? 'Update Exercise' : 'Create Exercise'}
+                                        </Text>
+                                    </GradientOrView>
+                                </TouchableOpacity>
+                                {!canSave && (
+                                    <Text style={styles.saveHint}>Add a name to save</Text>
+                                )}
+                            </>
                         )}
 
                     </Animated.View>
@@ -580,6 +598,21 @@ const getStyles = (theme) => {
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: lightTheme ? theme.overlaySubtle : theme.surface,
+        },
+        headerSaveButton: {
+            marginLeft: 10,
+            paddingHorizontal: 18,
+            height: 34,
+            borderRadius: 17,
+            alignItems: 'center',
+            justifyContent: 'center',
+            ...getThemedShadow(theme, 'small'),
+        },
+        headerSaveButtonText: {
+            color: theme.textAlternate ?? '#FFFFFF',
+            fontSize: 15,
+            fontFamily: FONTS.bold,
+            letterSpacing: 0.3,
         },
         scrollContent: {
             paddingHorizontal: 20,

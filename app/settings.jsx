@@ -17,7 +17,8 @@ import {
     AppThemeSelector,
     GenderSegment,
     RepRangeSelector,
-    SecondaryVolumeSlider
+    SecondaryVolumeSlider,
+    RecoveryRateSlider
 } from '../components/PreferenceControls';
 
 // --- Sub-components (Helpers) ---
@@ -103,6 +104,7 @@ const Settings = () => {
         theme, themeID, updateTheme,
         gender, updateGender,
         accessoryWeight, updateAccessoryWeight,
+        recoveryRate, updateRecoveryRate,
         repRangePreset, repRangeMin, repRangeMax, updateRepRange,
         useImperial, updateUnitPref,
     } = useTheme();
@@ -111,12 +113,14 @@ const Settings = () => {
 
     // Local state for sliders to prevent lag
     const [localAccessoryWeight, setLocalAccessoryWeight] = useState(accessoryWeight);
+    const [localRecoveryRate, setLocalRecoveryRate] = useState(recoveryRate);
     const [localRepMin, setLocalRepMin] = useState(repRangeMin);
     const [localRepMax, setLocalRepMax] = useState(repRangeMax);
     const [localRepPreset, setLocalRepPreset] = useState(repRangePreset);
     const pendingRangeRef = useRef({ min: repRangeMin, max: repRangeMax, preset: repRangePreset });
 
     useEffect(() => { setLocalAccessoryWeight(accessoryWeight); }, [accessoryWeight]);
+    useEffect(() => { setLocalRecoveryRate(recoveryRate); }, [recoveryRate]);
     useEffect(() => {
         setLocalRepMin(repRangeMin);
         setLocalRepMax(repRangeMax);
@@ -339,6 +343,9 @@ const Settings = () => {
                     </SettingsBlock>
                     <SettingsBlock theme={theme} styles={styles} title="Secondary Volume" description="Weight for supporting muscles (0.0-1.0)." iconNode={<MaterialCommunityIcons name="chart-bell-curve-cumulative" size={20} color={theme.primary} />}>
                         <SecondaryVolumeSlider theme={theme} value={localAccessoryWeight} onChange={setLocalAccessoryWeight} onSlidingComplete={(val) => { updateAccessoryWeight(val); emit(AppEvents.WORKOUT_DATA_IMPORTED); }} />
+                    </SettingsBlock>
+                    <SettingsBlock theme={theme} styles={styles} title="Recovery Rate" description="How quickly muscles recover for readiness & templates." iconNode={<MaterialCommunityIcons name="heart-pulse" size={20} color={theme.primary} />}>
+                        <RecoveryRateSlider theme={theme} value={localRecoveryRate} onChange={setLocalRecoveryRate} onSlidingComplete={(val) => { updateRecoveryRate(val); emit(AppEvents.WORKOUT_DATA_IMPORTED); }} />
                     </SettingsBlock>
                     <SettingsBlock theme={theme} styles={styles} title="Muscle Model" description="Gender for highlighter model." iconNode={<MaterialCommunityIcons name="human-male-female" size={20} color={theme.primary} />} isLast>
                         <GenderSegment theme={theme} value={gender} onChange={updateGender} />

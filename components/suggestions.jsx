@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
-    fetchLastWorkoutSets,
-    fetchLifetimePRs,
     fetchRecentPRSession,
     fetchMostRecentSession,
     fetchRecentSets,
     fetchBestSessionMatchingOccurrence
 } from './db';
+import { estimateOneRM } from '../utils/oneRM';
+import { on, AppEvents } from '../utils/events';
 
 export const DAYS_TO_CHECK = 60;
 
@@ -115,6 +115,13 @@ const resolveAgainstRecentHistory = (
 // its last computed suggestions immediately (then refresh/dissolve to new
 // values if the inputs actually changed) instead of flashing "-".
 const suggestionsCache = new Map();
+
+// The hook always recomputes from the DB, so the cache only seeds the first
+// paint — but seed values computed before a finish/import would flash stale
+// numbers on the next workout's cards. Drop them when history changes.
+const clearSuggestionsCache = () => suggestionsCache.clear();
+on(AppEvents.WORKOUT_COMPLETED, clearSuggestionsCache, 'suggestions-cache');
+on(AppEvents.WORKOUT_DATA_IMPORTED, clearSuggestionsCache, 'suggestions-cache');
 
 export const useWorkoutSuggestions = ({
     showSuggestion,
@@ -264,9 +271,9 @@ export const getPRType = (suggestion, lifetimePRs, isCardio) => {
 
     const sugWeight = suggestion.weight || 0;
     const sugReps = suggestion.reps || 0;
-    // Match the stored 1RM formula (a single is just the weight) so an exact
-    // repeat of a past set doesn't read as a fractionally-higher estimated 1RM.
-    const sug1RM = sugReps <= 1 ? sugWeight : sugWeight * (1 + sugReps / 30);
+    // Shared estimate (a single is just the weight) so an exact repeat of a
+    // past set doesn't read as a fractionally-higher estimated 1RM.
+    const sug1RM = estimateOneRM(sugWeight, sugReps);
     const sugVol = sugWeight * sugReps;
 
     // Small tolerances so a tie — or float drift from kg↔lb rounding — with a

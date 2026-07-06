@@ -308,6 +308,111 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange, onSlidingComplet
 };
 
 // ---------------------------------------------------------------------------
+// RecoveryRateSlider
+// ---------------------------------------------------------------------------
+
+export const RECOVERY_RATE_MIN = 0.5;
+export const RECOVERY_RATE_MAX = 2;
+
+const recoveryRateLabel = (rate) => {
+  if (rate < 0.85) return 'Slower';
+  if (rate > 1.15) return 'Faster';
+  return 'Normal';
+};
+
+export const RecoveryRateSlider = ({ theme, value, onChange, onSlidingComplete }) => {
+  const styles = getStyles(theme);
+  const span = RECOVERY_RATE_MAX - RECOVERY_RATE_MIN;
+
+  const sliderWidthRef = useRef(220);
+
+  const handleMoveRef = useRef(null);
+  handleMoveRef.current = (locationX) => {
+    const width = Math.max(sliderWidthRef.current, 1);
+    const raw = clamp(locationX / width, 0, 1);
+    const rate = RECOVERY_RATE_MIN + raw * span;
+    const stepped = Math.round(rate / 0.05) * 0.05;
+    const val = parseFloat(stepped.toFixed(2));
+    onChange(val);
+    return val;
+  };
+
+  const onSlidingCompleteRef = useRef(onSlidingComplete);
+  onSlidingCompleteRef.current = onSlidingComplete;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderGrant: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
+      onPanResponderMove: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
+      onPanResponderRelease: (evt) => {
+        const val = handleMoveRef.current(evt.nativeEvent.locationX);
+        onSlidingCompleteRef.current?.(val);
+      },
+    }),
+  ).current;
+
+  const fillPercent = clamp((value - RECOVERY_RATE_MIN) / span, 0, 1) * 100;
+
+  return (
+    <View style={styles.sliderContainer}>
+      <View
+        style={styles.sliderTrack}
+        onLayout={(e) => { sliderWidthRef.current = e.nativeEvent.layout.width; }}
+      >
+        <View
+          style={[styles.sliderFill, { width: `${fillPercent}%`, backgroundColor: theme.primary }]}
+        />
+        <View
+          style={[
+            styles.sliderThumb,
+            { left: `${fillPercent}%`, borderColor: theme.primary, backgroundColor: theme.surface },
+          ]}
+        />
+        <View
+          {...panResponder.panHandlers}
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
+        />
+      </View>
+
+      <View style={styles.sliderLabels}>
+        <Text style={styles.sliderValueText}>Slower</Text>
+        <Text style={[styles.sliderValueText, { color: theme.primary, fontFamily: FONTS.bold }]}>
+          {recoveryRateLabel(value)} · {value.toFixed(2)}×
+        </Text>
+        <Text style={styles.sliderValueText}>Faster</Text>
+      </View>
+
+      <View style={styles.weightQuickSelect}>
+        {[0.5, 0.75, 1, 1.5, 2].map((preset) => {
+          const active = value === preset;
+          return (
+            <TouchableOpacity
+              key={preset}
+              style={[
+                styles.weightOption,
+                active && { backgroundColor: theme.primary, borderColor: theme.primary },
+              ]}
+              onPress={() => {
+                onChange(preset);
+                onSlidingComplete?.(preset);
+              }}
+            >
+              <Text style={[styles.weightOptionText, active && { color: theme.surface }]}>
+                {preset}×
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // GenderSegment
 // ---------------------------------------------------------------------------
 

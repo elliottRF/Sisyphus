@@ -16,6 +16,7 @@ import ContextMenu from './ContextMenu';
 import { Stack } from 'expo-router';
 import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 import { secondsToClock } from '../utils/time';
+import { estimateOneRM } from '../utils/oneRM';
 import { getExerciseSnapshotSync, updateExerciseSnapshot, calculateSnapshotFromHistory } from '../utils/exerciseSnapshots';
 import { buildWorkoutDataFromSession } from '../utils/workoutBuilders';
 import { customAlert } from '../utils/customAlert';
@@ -415,7 +416,7 @@ const ExerciseHistory = (props) => {
             const weight = parseFloat(set.weight) || 0;
             const t = new Date(set.time).getTime();
             if (reps > 0 && weight > 0) {
-                const oneRM = reps === 1 ? weight : weight * (1 + reps / 30);
+                const oneRM = estimateOneRM(weight, reps);
                 est1RM = Math.max(est1RM, oneRM);
                 if (t < cutoff) est1RMBefore = Math.max(est1RMBefore, oneRM);
             }

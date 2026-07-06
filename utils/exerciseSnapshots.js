@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { estimateOneRM } from './oneRM';
 
 const SNAPSHOT_KEY_PREFIX = 'exercise_snapshot_';
 const MEMORY_CACHE = new Map();
@@ -99,7 +100,7 @@ export function calculateSnapshotFromHistory(exerciseID, history, exerciseDetail
         const weight = parseFloat(entry.weight) || 0;
         const t = new Date(entry.time).getTime();
         if (reps > 0 && weight > 0) {
-            const oneRM = reps === 1 ? weight : weight * (1 + reps / 30);
+            const oneRM = estimateOneRM(weight, reps);
             est1RM = Math.max(est1RM, oneRM);
             if (t < sixMonthCutoff) est1RMBefore = Math.max(est1RMBefore, oneRM);
         }
