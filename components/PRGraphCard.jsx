@@ -110,17 +110,9 @@ const TimeRangeSelector = ({ selectedRange, onSelect, theme, styles }) => {
 };
 
 const GradientOrView = ({ colors, style, theme, children }) => {
-    if (theme?.type === 'dynamic') {
-        return (
-            <View style={[style, { backgroundColor: theme.surface || '#ffffff' }]}>
-                {children}
-            </View>
-        );
-    }
-
     const safeColors = Array.isArray(colors) && colors.every(c => !!c)
         ? colors
-        : ['#transparent', '#transparent'];
+        : ['transparent', 'transparent'];
 
     return (
         <LinearGradient colors={safeColors} style={style}>
@@ -571,8 +563,8 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
     const onGestureEnd = useCallback(() => { isTouching.current = false; setSelectedPoint(null); }, []);
 
     const { graphColor, maxWeightColor, gradientFill, maxWeightGradient } = useMemo(() => {
-        const primary = theme.type === 'dynamic' ? '#2DC4B6' : theme.primary;
-        const secondary = theme.type === 'dynamic' ? '#A29BFE' : theme.secondary;
+        const primary = theme.primary;
+        const secondary = theme.secondary;
         return {
             graphColor: primary,
             maxWeightColor: secondary,

@@ -52,9 +52,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
         }
     }, [isOpen]);
 
-    const isDynamic = theme.type === 'dynamic';
-    const safeBackground = isDynamic ? '#121212' : theme.background;
-    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
+    const safeBackground = theme.background;
 
     const openCreateExerciseSheet = () => {
         createExerciseActionSheetRef.current?.show();
@@ -351,22 +349,6 @@ const ButtonBackground = ({ children, style, theme }) => {
     // 1. Safety check: Fallback to a default hex if theme or colors are missing
     const primary = theme?.primary || '#444444';
     const secondary = theme?.secondary || '#222222';
-    const isDynamic = theme?.type === 'dynamic';
-
-    if (isDynamic) {
-        return (
-            <View style={[
-                style,
-                {
-                    backgroundColor: primary,
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                }
-            ]}>
-                {children}
-            </View>
-        );
-    }
 
     return (
         <LinearGradient
@@ -383,13 +365,12 @@ const ButtonBackground = ({ children, style, theme }) => {
 
 const getStyles = (theme) => {
     // Safe Colors for Reanimated (ActionSheet)
-    const isDynamic = theme.type === 'dynamic';
     const lightTheme = isLightTheme(theme);
-    const safeBackground = isDynamic ? '#121212' : theme.background;
-    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
-    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
-    const safeText = isDynamic ? '#FFFFFF' : theme.text;
-    const safeTextSecondary = isDynamic ? '#aaaaaa' : theme.textSecondary;
+    const safeBackground = theme.background;
+    const safeSurface = theme.surface;
+    const safeBorder = theme.border;
+    const safeText = theme.text;
+    const safeTextSecondary = theme.textSecondary;
 
     return StyleSheet.create({
         actionSheetContainer: {
@@ -524,7 +505,7 @@ const getStyles = (theme) => {
         },
         exerciseCardSelected: {
             borderColor: theme.primary,
-            backgroundColor: withAlpha(theme.primary, isDynamic ? 0.18 : (lightTheme ? 0.08 : 0.14)),
+            backgroundColor: withAlpha(theme.primary, lightTheme ? 0.08 : 0.14),
         },
         exerciseContent: {
             flexDirection: 'row',
@@ -553,7 +534,7 @@ const getStyles = (theme) => {
             fontFamily: FONTS.bold,
             textTransform: 'uppercase',
             letterSpacing: 0.4,
-            backgroundColor: withAlpha(theme.primary, isDynamic ? 0.2 : (lightTheme ? 0.1 : 0.18)),
+            backgroundColor: withAlpha(theme.primary, lightTheme ? 0.1 : 0.18),
             paddingHorizontal: 7,
             paddingVertical: 2,
             borderRadius: 100,
@@ -565,7 +546,7 @@ const getStyles = (theme) => {
             borderRadius: 17,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: withAlpha(theme.primary, isDynamic ? 0.18 : (lightTheme ? 0.1 : 0.16)),
+            backgroundColor: withAlpha(theme.primary, lightTheme ? 0.1 : 0.16),
         },
         checkIconContainer: {
             backgroundColor: theme.primary,

@@ -701,11 +701,8 @@ const ExerciseHistory = (props) => {
         });
     };
 
-    const isDynamic = theme.type === 'dynamic';
-    const bodyColors = isDynamic
-        ? [theme.bodyFill, '#2DC4B660', '#2DC4B6']
-        : [theme.bodyFill, `${theme.primary}60`, theme.primary];
-    const safeBorder = isDynamic ? '#4d4d4d' : theme.border;
+    const bodyColors = [theme.bodyFill, `${theme.primary}60`, theme.primary];
+    const safeBorder = theme.border;
 
     const currentExerciseDetails = exercisesList.find(e => e.exerciseID === props.exerciseID);
     const isCardioHeader = !!currentExerciseDetails?.isCardio;

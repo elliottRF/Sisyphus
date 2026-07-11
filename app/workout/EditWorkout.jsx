@@ -32,8 +32,8 @@ import ReorderOverlay from '../../components/ReorderOverlay';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
-import { toStorageKg, formatWeight } from '../../utils/units';
-import { estimateOneRMForStorage } from '../../utils/oneRM';
+import { formatWeight } from '../../utils/units';
+import { filterCompletedSets, buildWorkoutEntries } from '../../utils/workoutEntries';
 import { customAlert } from '../../utils/customAlert';
 
 // See the matching flag in exerciseEditable.jsx — layout animations restored
@@ -158,147 +158,29 @@ const EditWorkout = () => {
         );
     }, [setCurrentWorkout, exercises, startReorder, endReorder, fingerY]);
 
-    // FIXED: Save workout function
     const saveWorkout = useCallback(async () => {
         try {
             if (!currentWorkout || !currentWorkout.length) {
-                customAlert("Error", "Workout is empty. Cannot save.");
+                customAlert("Empty Workout", "Add at least one completed set before saving.");
                 return;
             }
 
-            const filteredWorkout = currentWorkout.map(exerciseGroup => ({
-                ...exerciseGroup,
-                exercises: exerciseGroup.exercises.map(exercise => ({
-                    ...exercise,
-                    sets: exercise.sets.filter(set =>
-                        set.completed && (
-                            (set.weight !== null && set.reps !== null) ||
-                            (set.distance !== null && set.minutes !== null)
-                        )
-                    )
-                }))
-            }));
+            const filteredWorkout = filterCompletedSets(currentWorkout);
 
-            const workoutEntries = [];
-            let globalExerciseNum = 1;
+            // Same engine as finishing a workout on the Current tab — identical
+            // set-filtering and PR-flag rules. Historical PRs exclude the
+            // session being rewritten so its own old rows don't block its new
+            // flags; overwriteWorkoutSession recalculates PRs afterwards.
+            const workoutEntries = await buildWorkoutEntries({
+                workout: filteredWorkout,
+                exercises,
+                useImperial,
+                sessionNumber: WORKOUT_SESSION_NUMBER,
+                time: originalStartTime,
+                workoutTitle,
+                getHistoricalPRs: (exerciseID) => getExercisePRs(exerciseID, WORKOUT_SESSION_NUMBER),
+            });
 
-            const maxOneRmsInWorkout = new Map();
-            const maxVolumesInWorkout = new Map();
-            const maxWeightsInWorkout = new Map();
-
-            for (const exerciseGroup of filteredWorkout) {
-                for (const exercise of exerciseGroup.exercises) {
-                    let maxOneRM = 0;
-                    let maxVolume = 0;
-                    let maxWeight = 0;
-                    let maxRepsAtMaxWeight = 0;
-
-                    for (const set of exercise.sets) {
-                        const weightKg = toStorageKg(set.weight, useImperial);
-                        const calculatedOneRM = estimateOneRMForStorage(
-                            weightKg,
-                            parseInt(set.reps)
-                        );
-                        if (calculatedOneRM > maxOneRM) maxOneRM = calculatedOneRM;
-
-                        const volume = weightKg * parseInt(set.reps);
-                        if (volume > maxVolume) maxVolume = volume;
-
-                        const weight = weightKg;
-                        const reps = parseInt(set.reps);
-                        if (reps > 0) {
-                            if (weight > maxWeight) {
-                                maxWeight = weight;
-                                maxRepsAtMaxWeight = reps;
-                            } else if (weight === maxWeight && reps > maxRepsAtMaxWeight) {
-                                maxRepsAtMaxWeight = reps;
-                            }
-                        }
-                    }
-                    maxOneRmsInWorkout.set(exercise.exerciseID, maxOneRM);
-                    maxVolumesInWorkout.set(exercise.exerciseID, maxVolume);
-                    maxWeightsInWorkout.set(exercise.exerciseID, { weight: maxWeight, reps: maxRepsAtMaxWeight });
-                }
-            }
-
-            for (const exerciseGroup of filteredWorkout) {
-                for (const exercise of exerciseGroup.exercises) {
-                    let setNum = 1;
-
-                    const maxOneRMForExercise = maxOneRmsInWorkout.get(exercise.exerciseID);
-                    const maxVolumeForExercise = maxVolumesInWorkout.get(exercise.exerciseID);
-                    const maxWeightInfo = maxWeightsInWorkout.get(exercise.exerciseID);
-
-                    const historicalPRs = await getExercisePRs(exercise.exerciseID, WORKOUT_SESSION_NUMBER);
-
-                    const isOverall1rmPR = maxOneRMForExercise > historicalPRs.maxOneRM;
-                    const isOverallVolumePR = maxVolumeForExercise > historicalPRs.maxVolume;
-                    const isOverallWeightPR =
-                        maxWeightInfo.weight > historicalPRs.maxWeight ||
-                        (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight);
-
-                    let pr1rmAssigned = false;
-                    let prVolumeAssigned = false;
-                    let prWeightAssigned = false;
-
-                    for (const set of exercise.sets) {
-                        const weightKg = toStorageKg(set.weight, useImperial);
-                        const calculatedOneRM = estimateOneRMForStorage(
-                            weightKg,
-                            parseInt(set.reps)
-                        );
-                        const volume = weightKg * parseInt(set.reps);
-                        const weight = weightKg;
-                        const reps = parseInt(set.reps);
-
-                        let is1rmPR = 0;
-                        if (!pr1rmAssigned && calculatedOneRM === maxOneRMForExercise && isOverall1rmPR) {
-                            is1rmPR = 1;
-                            pr1rmAssigned = true;
-                        }
-
-                        let isVolumePR = 0;
-                        if (!prVolumeAssigned && volume === maxVolumeForExercise && isOverallVolumePR) {
-                            isVolumePR = 1;
-                            prVolumeAssigned = true;
-                        }
-
-                        let isWeightPR = 0;
-                        if (!prWeightAssigned && reps > 0 && weight === maxWeightInfo.weight && reps === maxWeightInfo.reps && isOverallWeightPR) {
-                            isWeightPR = 1;
-                            prWeightAssigned = true;
-                        }
-
-                        const isPR = is1rmPR;
-
-                        workoutEntries.push({
-                            workoutSession: WORKOUT_SESSION_NUMBER,
-                            exerciseNum: globalExerciseNum,
-                            setNum: setNum,
-                            exerciseID: exercise.exerciseID,
-                            weight: toStorageKg(set.weight, useImperial), // always store in kg
-                            reps: set.reps,
-                            oneRM: calculatedOneRM,
-                            time: originalStartTime,
-                            name: workoutTitle,
-                            pr: isPR,
-                            setType: set.setType || 'N',
-                            notes: exercise.notes || '',
-                            is1rmPR: is1rmPR,
-                            isVolumePR: isVolumePR,
-                            isWeightPR: isWeightPR,
-                            distance: set.distance || null,
-                            seconds: set.minutes ? Math.round(parseFloat(set.minutes) * 60) : null
-                        });
-
-                        setNum++;
-                    }
-
-                    globalExerciseNum++;
-                }
-            }
-
-            // FIXED: Use overwriteWorkoutSession with correct parameters
             await overwriteWorkoutSession(
                 WORKOUT_SESSION_NUMBER,
                 workoutEntries,
@@ -311,12 +193,14 @@ const EditWorkout = () => {
             ]);
 
         } catch (error) {
+            // The overwrite is transactional, so a failure leaves the stored
+            // session untouched and the edits still on screen.
             console.error("Error saving edited workout:", error);
-            customAlert("Error", "Could not save workout. Please check console.");
+            customAlert("Save Failed", "Your changes couldn't be saved. Nothing was lost — please try again.");
         }
-        // useImperial drives the kg conversion — it must be current when the
-        // edit is saved.
-    }, [currentWorkout, workoutTitle, originalStartTime, originalDurationMinutes, WORKOUT_SESSION_NUMBER, useImperial]);
+        // exercises drives the isAssisted lookups (PR flags) and useImperial the
+        // kg conversion — both must be current when the edit is saved.
+    }, [currentWorkout, workoutTitle, originalStartTime, originalDurationMinutes, WORKOUT_SESSION_NUMBER, exercises, useImperial]);
 
 
     const deleteWorkout = useCallback(() => {
@@ -446,31 +330,16 @@ const EditWorkout = () => {
     }, [WORKOUT_SESSION_NUMBER]);
 
     // UI variables
-    const isDynamic = theme.type === 'dynamic';
-    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
-    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
-    const safeText = isDynamic ? '#FFFFFF' : theme.text;
-    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
-
-    const ButtonBackground = ({ children, style }) => {
-        if (isDynamic) {
-            return (
-                <View style={[style, { backgroundColor: safePrimary, alignItems: 'center', justifyContent: 'center' }]}>
-                    {children}
-                </View>
-            );
-        }
-        return (
-            <LinearGradient
-                colors={[theme.primary, theme.secondary]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={style}
-            >
-                {children}
-            </LinearGradient>
-        );
-    };
+    const ButtonBackground = ({ children, style }) => (
+        <LinearGradient
+            colors={[theme.primary, theme.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={style}
+        >
+            {children}
+        </LinearGradient>
+    );
 
     if (isLoading) {
         return (
@@ -612,11 +481,10 @@ const EditWorkout = () => {
 };
 
 const getStyles = (theme) => {
-    const isDynamic = theme.type === 'dynamic';
     const lightTheme = isLightTheme(theme);
-    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
-    const safeText = isDynamic ? '#FFFFFF' : theme.text;
-    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
+    const safePrimary = theme.primary;
+    const safeText = theme.text;
+    const safeBorder = theme.border;
 
     return StyleSheet.create({
         container: {

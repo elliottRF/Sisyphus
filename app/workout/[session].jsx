@@ -295,9 +295,8 @@ const WorkoutDetail = () => {
 };
 
 const getStyles = (theme) => {
-    const isDynamic = theme.type === 'dynamic';
-    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
-    const safeIndicator = isDynamic ? '#aaaaaa' : theme.textSecondary;
+    const safeSurface = theme.surface;
+    const safeIndicator = theme.textSecondary;
 
     return StyleSheet.create({
         container: {

@@ -1049,12 +1049,10 @@ const ExerciseEditable = ({
 };
 
 const getStyles = (theme) => {
-    const isDynamic = theme.type === 'dynamic';
     const lightTheme = isLightTheme(theme);
-    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
-    const safeError = isDynamic ? '#EF4444' : (theme.error || '#EF4444');
-    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
-    const safeSuccess = isDynamic ? '#22c55e' : (theme.success || '#22c55e');
+    const safeError = theme.error || '#EF4444';
+    const safePrimary = theme.primary;
+    const safeSuccess = theme.success || '#22c55e';
     const completedFill = withAlpha(safeSuccess, lightTheme ? 0.06 : 0.045);
     const fillFlashColor = withAlpha(safePrimary, lightTheme ? 0.12 : 0.18);
 

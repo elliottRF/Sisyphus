@@ -91,7 +91,6 @@ const SetNumberBadge = React.memo(({ type, number, theme }) => {
 
 const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, onRepeat, onSaveAsTemplate, onExerciseInfo, contentContainerStyle }, ref) => {
     const { theme, useImperial, workoutInProgress, accessoryWeight } = useTheme();
-    const isDynamic = theme.type === 'dynamic';
     const router = useRouter();
     const styles = getStyles(theme);
     const [expandedWarmups, setExpandedWarmups] = useState({});

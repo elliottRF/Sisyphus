@@ -104,14 +104,6 @@ const MuscleChips = ({ type, selectedData, handleMuscleToggle, accessorySelected
 );
 
 const GradientOrView = ({ colors, style, theme, children }) => {
-    if (theme?.type === 'dynamic') {
-        return (
-            <View style={[style, { backgroundColor: theme.surface || '#ffffff' }]}>
-                {children}
-            </View>
-        );
-    }
-
     const safeColors = Array.isArray(colors) && colors.every(c => !!c)
         ? colors
         : ['transparent', 'transparent'];
@@ -302,10 +294,8 @@ const NewExercise = (props) => {
         props.close(newExerciseObj);
     };
 
-    const safeBorder = theme.type === 'dynamic' ? '#4d4d4d' : theme.border;
-    const safeBodyColors = theme.type === 'dynamic'
-        ? [theme.bodyFill, '#2DC4B6', '#2DC4B680']
-        : [theme.bodyFill, theme.primary, `${theme.primary}60`];
+    const safeBorder = theme.border;
+    const safeBodyColors = [theme.bodyFill, theme.primary, `${theme.primary}60`];
     const chipInactiveBg = isLightTheme(theme) ? theme.background : theme.surface;
 
     // ── Entrance animation ──────────────────────────────────────────────────────

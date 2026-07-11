@@ -327,30 +327,16 @@ const EditTemplate = () => {
         load();
     }, [TEMPLATE_ID, params.v]);
 
-    const isDynamic = theme.type === 'dynamic';
-    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
-    const safeText = isDynamic ? '#FFFFFF' : theme.text;
-    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
-
-    const ButtonBackground = ({ children, style }) => {
-        if (isDynamic) {
-            return (
-                <View style={[style, { backgroundColor: safePrimary, alignItems: 'center', justifyContent: 'center' }]}>
-                    {children}
-                </View>
-            );
-        }
-        return (
-            <LinearGradient
-                colors={[theme.primary, theme.secondary]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={style}
-            >
-                {children}
-            </LinearGradient>
-        );
-    };
+    const ButtonBackground = ({ children, style }) => (
+        <LinearGradient
+            colors={[theme.primary, theme.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={style}
+        >
+            {children}
+        </LinearGradient>
+    );
 
     if (isLoading) {
         return (
@@ -462,11 +448,10 @@ const EditTemplate = () => {
 };
 
 const getStyles = (theme) => {
-    const isDynamic = theme.type === 'dynamic';
     const lightTheme = isLightTheme(theme);
-    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
-    const safeText = isDynamic ? '#FFFFFF' : theme.text;
-    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
+    const safePrimary = theme.primary;
+    const safeText = theme.text;
+    const safeBorder = theme.border;
 
     return StyleSheet.create({
         container: {

@@ -71,9 +71,8 @@ const MuscleRadarChart = () => {
         opacity: chartOpacity.value,
     }));
 
-    const isDynamic = theme.type === 'dynamic';
-    const accentColor = isDynamic ? '#2DC4B6' : theme.primary;
-    const textColor = isDynamic ? '#FFFFFF' : theme.text;
+    const accentColor = theme.primary;
+    const textColor = theme.text;
 
     const axes = ['Chest', 'Delts', 'Back', 'Biceps', 'Triceps', 'Quads', 'Hams', 'Glutes', 'Abs'];
     const angleStep = (Math.PI * 2) / axes.length;

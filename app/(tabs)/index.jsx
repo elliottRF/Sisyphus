@@ -409,12 +409,9 @@ const Home = () => {
         };
     }, [allMusclesSorted, theme]);
 
-    const isDynamic = theme.type === 'dynamic';
-    const bodyColors = isDynamic
-        ? [theme.bodyFill, '#2DC4B655', '#2DC4B6CC']
-        : [theme.bodyFill, `${theme.primary}55`, `${theme.primary}CC`];
+    const bodyColors = [theme.bodyFill, `${theme.primary}55`, `${theme.primary}CC`];
 
-    const safeBorder = isDynamic ? '#4d4d4dff' : theme.border;
+    const safeBorder = theme.border;
     const cardWidth = (SCREEN_WIDTH - 32 - 12) / 2;
 
     // Force both SVGs to identical width so front/back are symmetric
@@ -989,10 +986,8 @@ const getStyles = (theme) => {
     },
     actionSheetContainer: {
         // Sheet-coloured (not transparent) so the bottom safe-area strip under
-        // the Android gesture bar isn't a gap showing the backdrop. Hardcoded
-        // for the dynamic theme since the sheet container can't take a
-        // PlatformColor.
-        backgroundColor: theme.type === 'dynamic' ? '#1e1e1e' : theme.surface,
+        // the Android gesture bar isn't a gap showing the backdrop.
+        backgroundColor: theme.surface,
         height: '100%'
     },
     indicator: {

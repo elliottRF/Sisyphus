@@ -86,7 +86,6 @@ const Onboarding = () => {
     updateUnitPref,
   } = useTheme();
   const styles = getStyles(theme);
-  const isDynamicTheme = theme.type === 'dynamic';
 
   const [isReady, setIsReady] = useState(false);
   const [hasWorkoutHistory, setHasWorkoutHistory] = useState(false);
@@ -413,16 +412,12 @@ const Onboarding = () => {
 
   return (
     <Animated.View style={[styles.container, { paddingTop: insets.top, opacity: masterOpacity }]}>
-      {isDynamicTheme ? (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
-      ) : (
-        <LinearGradient
-          colors={[theme.background, theme.surface, theme.background]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-      )}
+      <LinearGradient
+        colors={[theme.background, theme.surface, theme.background]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
 
       <View style={styles.progressRow}>
         {Array.from({ length: STEP_COUNT }).map((_, i) => (
@@ -462,7 +457,7 @@ const Onboarding = () => {
         {viewH > 0 && contentH > viewH + 8 && contentH - viewH - scrollY > 8 && (
           <LinearGradient
             pointerEvents="none"
-            colors={['transparent', isDynamicTheme ? '#151517' : theme.background]}
+            colors={['transparent', theme.background]}
             style={styles.scrollCue}
           >
             <Feather name="chevron-down" size={20} color={theme.textSecondary} />
@@ -490,20 +485,14 @@ const Onboarding = () => {
           activeOpacity={0.9}
           disabled={importing}
         >
-          {isDynamicTheme ? (
-            <View style={[styles.continueGradient, { backgroundColor: theme.primary }]}>
-              <Text style={styles.continueText}>{primaryLabel}</Text>
-            </View>
-          ) : (
-            <LinearGradient
-              colors={[theme.primary, theme.primaryDark || theme.primary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.continueGradient}
-            >
-              <Text style={styles.continueText}>{primaryLabel}</Text>
-            </LinearGradient>
-          )}
+          <LinearGradient
+            colors={[theme.primary, theme.primaryDark || theme.primary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.continueGradient}
+          >
+            <Text style={styles.continueText}>{primaryLabel}</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </Animated.View>

@@ -361,28 +361,17 @@ const Profile = () => {
         );
     };
 
-    // Safe Colors for Reanimated / Linear Gradient fallbacks
-    const isDynamic = theme.type === 'dynamic';
-    const safeBackground = isDynamic ? '#121212' : theme.background;
+    const safeBackground = theme.background;
 
     // Helper for Button Gradient
-    const ButtonBackground = ({ children, style }) => {
-        if (isDynamic) {
-            return (
-                <View style={[style, { backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' }]}>
-                    {children}
-                </View>
-            );
-        }
-        return (
-            <LinearGradient
-                colors={[theme.primary, theme.secondary]}
-                style={style}
-            >
-                {children}
-            </LinearGradient>
-        );
-    };
+    const ButtonBackground = ({ children, style }) => (
+        <LinearGradient
+            colors={[theme.primary, theme.secondary]}
+            style={style}
+        >
+            {children}
+        </LinearGradient>
+    );
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>

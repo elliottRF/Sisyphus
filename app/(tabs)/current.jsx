@@ -17,6 +17,7 @@ import { setPreloadedData } from '../../constants/preloader';
 import { toStorageKg, formatWeight, unitLabel } from '../../utils/units';
 import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
 import { estimateOneRMForStorage } from '../../utils/oneRM';
+import { filterCompletedSets, buildWorkoutEntries } from '../../utils/workoutEntries';
 import { muscleMapping } from '../../constants/muscles';
 
 
@@ -433,6 +434,10 @@ const Current = () => {
 
 
     const endWorkout = useCallback(async () => {
+        // Flags whether the DB write landed, so the catch below can tell a
+        // failed save (alert the user — their workout is still intact) from a
+        // post-save hiccup (sound/navigation — the data is already safe).
+        let saved = false;
         try {
             const latestSessionQuery = await getLatestWorkoutSession();
             const nextSessionNumber = latestSessionQuery + 1;
@@ -441,159 +446,17 @@ const Current = () => {
                 return;
             }
 
-            const filteredWorkout = currentWorkout.map(exerciseGroup => ({
-                ...exerciseGroup,
-                exercises: exerciseGroup.exercises.map(exercise => ({
-                    ...exercise,
-                    sets: exercise.sets.filter(set => {
-                        if (!set.completed) return false;
-                        const has = (v) => v !== null && v !== undefined && v !== '';
-                        // A completed strength set counts with EITHER weight or
-                        // reps entered — the other blank field stores as 0 (e.g.
-                        // bodyweight reps, or a weighted hold). Cardio needs both
-                        // distance + time.
-                        return has(set.weight) || has(set.reps) || (has(set.distance) && has(set.minutes));
-                    })
-                }))
-            }));
+            const filteredWorkout = filterCompletedSets(currentWorkout);
 
-            const workoutEntries = [];
-            let globalExerciseNum = 1;
-            const maxOneRmsInWorkout = new Map();
-            const maxVolumesInWorkout = new Map();
-            const maxWeightsInWorkout = new Map();
-
-            for (const exerciseGroup of filteredWorkout) {
-                for (const exercise of exerciseGroup.exercises) {
-                    let maxOneRM = 0;
-                    let maxVolume = 0;
-                    let maxWeight = 0;
-                    let minWeight = Infinity;
-                    let maxRepsAtMaxWeight = 0;
-
-                    const exerciseDetails = exercises.find(e => e.exerciseID === exercise.exerciseID);
-                    const isAssisted = !!exerciseDetails?.isAssisted;
-
-                    for (const set of exercise.sets) {
-                        const weightKg = toStorageKg(set.weight, useImperial);
-                        const calculatedOneRM = estimateOneRMForStorage(
-                            weightKg,
-                            parseInt(set.reps) || 0
-                        );
-                        if (calculatedOneRM > maxOneRM) maxOneRM = calculatedOneRM;
-
-                        const volume = weightKg * (parseInt(set.reps) || 0);
-                        if (volume > maxVolume) maxVolume = volume;
-
-                        const weight = weightKg;
-                        const reps = parseInt(set.reps) || 0;
-                        if (reps > 0) {
-                            if (isAssisted) {
-                                if (weight < minWeight) {
-                                    minWeight = weight;
-                                    maxRepsAtMaxWeight = reps;
-                                } else if (weight === minWeight && reps > maxRepsAtMaxWeight) {
-                                    maxRepsAtMaxWeight = reps;
-                                }
-                            } else {
-                                if (weight > maxWeight) {
-                                    maxWeight = weight;
-                                    maxRepsAtMaxWeight = reps;
-                                } else if (weight === maxWeight && reps > maxRepsAtMaxWeight) {
-                                    maxRepsAtMaxWeight = reps;
-                                }
-                            }
-                        }
-                    }
-                    maxOneRmsInWorkout.set(exercise.exerciseID, maxOneRM);
-                    maxVolumesInWorkout.set(exercise.exerciseID, maxVolume);
-                    maxWeightsInWorkout.set(exercise.exerciseID, { weight: isAssisted ? minWeight : maxWeight, reps: maxRepsAtMaxWeight });
-                }
-            }
-
-            for (const exerciseGroup of filteredWorkout) {
-                for (const exercise of exerciseGroup.exercises) {
-                    let setNum = 1;
-
-                    const exerciseDetails = exercises.find(e => e.exerciseID === exercise.exerciseID);
-                    const isAssisted = !!exerciseDetails?.isAssisted;
-
-                    const maxOneRMForExercise = maxOneRmsInWorkout.get(exercise.exerciseID);
-                    const maxVolumeForExercise = maxVolumesInWorkout.get(exercise.exerciseID);
-                    const maxWeightInfo = maxWeightsInWorkout.get(exercise.exerciseID);
-
-                    const historicalPRs = await getExercisePRs(exercise.exerciseID);
-
-                    const isOverall1rmPR = isAssisted ? false : (maxOneRMForExercise > historicalPRs.maxOneRM);
-                    const isOverallVolumePR = isAssisted ? false : (maxVolumeForExercise > historicalPRs.maxVolume);
-
-                    const isOverallWeightPR = isAssisted
-                        ? (maxWeightInfo.weight < historicalPRs.maxWeight ||
-                            (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight))
-                        : (maxWeightInfo.weight > historicalPRs.maxWeight ||
-                            (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight));
-
-                    let pr1rmAssigned = false;
-                    let prVolumeAssigned = false;
-                    let prWeightAssigned = false;
-
-                    for (const set of exercise.sets) {
-                        const weightKg = toStorageKg(set.weight, useImperial);
-                        const calculatedOneRM = estimateOneRMForStorage(
-                            weightKg,
-                            parseInt(set.reps) || 0
-                        );
-                        const volume = weightKg * (parseInt(set.reps) || 0);
-                        const weight = weightKg;
-                        const reps = parseInt(set.reps) || 0;
-
-                        let is1rmPR = 0;
-                        if (!pr1rmAssigned && !isAssisted && calculatedOneRM === maxOneRMForExercise && isOverall1rmPR) {
-                            is1rmPR = 1;
-                            pr1rmAssigned = true;
-                        }
-
-                        let isVolumePR = 0;
-                        if (!prVolumeAssigned && !isAssisted && volume === maxVolumeForExercise && isOverallVolumePR) {
-                            isVolumePR = 1;
-                            prVolumeAssigned = true;
-                        }
-
-                        let isWeightPR = 0;
-                        if (!prWeightAssigned && reps > 0 && weight === maxWeightInfo.weight && reps === maxWeightInfo.reps && isOverallWeightPR) {
-                            isWeightPR = 1;
-                            prWeightAssigned = true;
-                        }
-
-                        const isPR = is1rmPR;
-
-                        workoutEntries.push({
-                            workoutSession: nextSessionNumber,
-                            exerciseNum: globalExerciseNum,
-                            setNum: setNum,
-                            exerciseID: exercise.exerciseID,
-                            weight: toStorageKg(set.weight, useImperial),
-                            reps: parseInt(set.reps, 10) || 0,
-                            oneRM: calculatedOneRM,
-                            time: new Date().toISOString(),
-                            name: workoutTitle,
-                            pr: isPR,
-                            setType: set.setType || 'N',
-                            notes: exercise.notes || '',
-                            is1rmPR: is1rmPR,
-                            isVolumePR: isVolumePR,
-                            isWeightPR: isWeightPR,
-                            distance: set.distance || null,
-                            seconds: set.minutes ? Math.round(parseFloat(set.minutes) * 60) : null
-                        });
-
-                        setNum++;
-                    }
-
-                    globalExerciseNum++;
-                }
-            }
-
+            const workoutEntries = await buildWorkoutEntries({
+                workout: filteredWorkout,
+                exercises,
+                useImperial,
+                sessionNumber: nextSessionNumber,
+                time: new Date().toISOString(),
+                workoutTitle,
+                getHistoricalPRs: (exerciseID) => getExercisePRs(exerciseID),
+            });
             const endTime = Date.now();
             const startTimeMs = workoutStartTime ? new Date(workoutStartTime).getTime() : endTime;
             const durationMs = endTime - startTimeMs;
@@ -602,6 +465,7 @@ const Current = () => {
             // showCelebration:false) — the trophy now plays inline on the
             // summary page instead of a full-screen overlay.
             await insertWorkoutHistory(workoutEntries, workoutTitle, durationMinutes);
+            saved = true;
 
             try {
                 const { sound } = await Audio.Sound.createAsync(
@@ -642,6 +506,14 @@ const Current = () => {
         }
         catch (error) {
             console.error("Error saving workout:", error);
+            if (!saved) {
+                // The workout state is untouched on a failed save, so the user
+                // can simply try finishing again.
+                customAlert(
+                    "Save Failed",
+                    "Your workout couldn't be saved. Nothing was lost — please try finishing again."
+                );
+            }
         }
         // exercises drives the isAssisted lookups (PR flags) and useImperial the
         // kg conversion — both must be current when the workout is saved.
@@ -988,32 +860,16 @@ const Current = () => {
         );
     }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap, PRMODE, startReorder, endReorder, fingerY]);
 
-    const isDynamic = theme.type === 'dynamic';
-    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
-    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
-    const safeText = isDynamic ? '#FFFFFF' : theme.text;
-    const safeBorder = isDynamic ? 'rgba(255,255,255,0.1)' : theme.border;
-    const safeDanger = isDynamic ? '#FF4444' : theme.danger;
-
-    const ButtonBackground = ({ children, style }) => {
-        if (isDynamic) {
-            return (
-                <View style={[style, { backgroundColor: safePrimary, alignItems: 'center', justifyContent: 'center' }]}>
-                    {children}
-                </View>
-            );
-        }
-        return (
-            <LinearGradient
-                colors={[theme.primary, theme.secondary]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={style}
-            >
-                {children}
-            </LinearGradient>
-        );
-    };
+    const ButtonBackground = ({ children, style }) => (
+        <LinearGradient
+            colors={[theme.primary, theme.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={style}
+        >
+            {children}
+        </LinearGradient>
+    );
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -1353,11 +1209,10 @@ const Current = () => {
 
 
 const getStyles = (theme) => {
-    const isDynamic = theme.type === 'dynamic';
-    const safePrimary = isDynamic ? '#2DC4B6' : theme.primary;
-    const safeText = isDynamic ? '#FFFFFF' : theme.text;
-    const safeBorder = isDynamic ? theme.overlayInput : theme.border;
-    const safeDanger = isDynamic ? '#FF4444' : theme.danger;
+    const safePrimary = theme.primary;
+    const safeText = theme.text;
+    const safeBorder = theme.border;
+    const safeDanger = theme.danger;
 
     const numColumns = 2;
     const gap = 12;

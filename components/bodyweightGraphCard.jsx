@@ -63,14 +63,6 @@ const CustomSelectionDot = ({ isActive, color, borderColor }) => (
 );
 
 const GradientOrView = ({ colors, style, theme, children }) => {
-    if (theme?.type === 'dynamic') {
-        return (
-            <View style={[style, { backgroundColor: theme.surface || '#ffffff' }]}>
-                {children}
-            </View>
-        );
-    }
-
     const safeColors = Array.isArray(colors) && colors.every(c => !!c)
         ? colors
         : ['transparent', 'transparent'];
@@ -84,9 +76,8 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 
 const BodyweightGraphCard = ({ theme }) => {
     const styles = getStyles(theme);
-    const isDynamic = theme.type === 'dynamic';
-    const accentColor = isDynamic ? '#2DC4B6' : theme.primary;
-    const safeSurface = isDynamic ? '#1e1e1e' : theme.surface;
+    const accentColor = theme.primary;
+    const safeSurface = theme.surface;
     const graphWidth = SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING;
     const { useImperial } = useTheme();
 
@@ -674,7 +665,7 @@ const BodyweightGraphCard = ({ theme }) => {
                                             points={points}
                                             animated
                                             color={accentColor}
-                                            gradientFillColors={isDynamic ? ['#2DC4B6CC', '#2DC4B600'] : [`${theme.primary}CC`, `${theme.primary}00`]}
+                                            gradientFillColors={[`${theme.primary}CC`, `${theme.primary}00`]}
                                             enablePanGesture={true}
                                             enableIndicator
                                             onPointSelected={onPointSelected}
