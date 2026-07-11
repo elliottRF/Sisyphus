@@ -20,5 +20,21 @@ allprojects {
   }
 }
 
+// Windows MAX_PATH workaround: this checkout lives in a deep worktree path, and
+// CMake/ninja (1.10) loop forever ("Re-running CMake") once object paths under
+// the default <module>/.cxx staging dir exceed ~250 chars. Relocate native
+// build staging for the deep-treed C++ modules to a short path instead.
+allprojects {
+  afterEvaluate { project ->
+    if (["react-native-reanimated", "react-native-worklets"].contains(project.name)) {
+      def androidExt = project.extensions.findByName("android")
+      if (androidExt != null) {
+        androidExt.externalNativeBuild.cmake.buildStagingDirectory =
+          new File(System.getProperty("user.home"), ".rncxx/${project.name}")
+      }
+    }
+  }
+}
+
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"

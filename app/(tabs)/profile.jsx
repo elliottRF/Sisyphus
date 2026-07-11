@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, StyleSheet, TextInput, Keyboard, FlatList, TouchableOpacity, InteractionManager } from 'react-native'
 import Animated, { LinearTransition, FadeIn } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useScrollToTop } from '@react-navigation/native';
+import { useScrollToTop } from 'expo-router';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchExercises, fetchExerciseWorkoutCounts, fetchExerciseStats, getPinnedExercises, pinExercise, unpinExercise, getLatestWorkoutSession, fetchWorkoutHistoryBySession } from '../../components/db';

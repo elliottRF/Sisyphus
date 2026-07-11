@@ -19,10 +19,10 @@
   "homepage": "https://github.com/elliottRF/elliottr-android-timer#readme",
   "dependencies": {},
   "devDependencies": {
-    "@types/react": "~19.1.0",
+    "@types/react": "~19.2.0",
     "expo-module-scripts": "^5.0.8",
-    "expo": "^54.0.27",
-    "react-native": "0.81.5"
+    "expo": "^57.0.0",
+    "react-native": "0.86.0"
   },
   "peerDependencies": {
     "expo": "*",

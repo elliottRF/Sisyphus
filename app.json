@@ -2,17 +2,11 @@
   "expo": {
     "name": "Sisyphus",
     "slug": "sisyphus",
-    "version": "1.3.2",
-    "sdkVersion": "54.0.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0c0c0c"
-    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -28,10 +22,7 @@
         "backgroundColor": "#0c0c0c"
       },
       "package": "com.elliottr.sisyphus",
-      "versionCode": 38,
-      "compileSdkVersion": 34,
-      "targetSdkVersion": 34,
-      "minSdkVersion": 21,
+      "versionCode": 50,
       "permissions": [
         "FOREGROUND_SERVICE",
         "WAKE_LOCK",
@@ -49,6 +40,14 @@
       "expo-router",
       "expo-asset",
       "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0c0c0c"
+        }
+      ],
       [
         "expo-notifications",
         {
@@ -72,7 +71,10 @@
           "iosUserTrackingPermission": "This identifier will be used to track app installs and measure the effectiveness of our Meta ad campaigns."
         }
       ],
-      "expo-tracking-transparency"
+      "expo-tracking-transparency",
+      "expo-sharing",
+      "expo-sqlite",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

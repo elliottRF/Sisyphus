@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicator, Modal, Pressable, Dimensions, Animated as RNAnimated } from 'react-native'
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
-import { useScrollToTop } from '@react-navigation/native';
+import { useScrollToTop } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession, createTemplate, getCachedWorkoutHistory, getCachedExercises } from '../../components/db';
 import { useFocusEffect, useRouter } from 'expo-router';

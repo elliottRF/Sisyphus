@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Dimensions, AppState, Linking } from 'react-native'
 import Animated, { FadeIn, FadeInDown, FadeOutDown, LinearTransition } from 'react-native-reanimated';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { useScrollToTop } from '@react-navigation/native';
+import { useScrollToTop } from 'expo-router';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // FlatList from the sheet library is pre-wired for scroll/drag coordination.

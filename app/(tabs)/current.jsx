@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, Dimensions, Modal } from 'react-native'
 import Animated, { LinearTransition, FadeIn, FadeOut, Easing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useScrollToTop } from '@react-navigation/native';
+import { useScrollToTop } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
@@ -34,7 +34,7 @@ import RestTimer from '../../components/RestTimer';
 import { useOverlayReorder } from '../../utils/useOverlayReorder';
 import ReorderOverlay from '../../components/ReorderOverlay';
 import { useFocusEffect, router } from 'expo-router';
-import { Audio } from 'expo-av';
+import { createAudioPlayer } from 'expo-audio';
 import LottieView from 'lottie-react-native';
 
 import { useTheme } from '../../context/ThemeContext';
@@ -468,16 +468,14 @@ const Current = () => {
             saved = true;
 
             try {
-                const { sound } = await Audio.Sound.createAsync(
-                    require('../../assets/notifications/greatSuccess.mp3'),
-                    { volume: 0.6 }
-                );
-                await sound.playAsync();
-                sound.setOnPlaybackStatusUpdate(async (status) => {
+                const player = createAudioPlayer(require('../../assets/notifications/greatSuccess.mp3'));
+                player.volume = 0.6;
+                player.addListener('playbackStatusUpdate', (status) => {
                     if (status.didJustFinish) {
-                        await sound.unloadAsync();
+                        player.remove();
                     }
                 });
+                player.play();
             } catch (e) {
                 console.warn("Error playing success sound", e);
             }

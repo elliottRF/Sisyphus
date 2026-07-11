@@ -5,7 +5,7 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, runOnJS } from 'react-native-reanimated';
 
 import { MaterialIcons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
+import { createAudioPlayer } from 'expo-audio';
 import { FONTS } from '../constants/theme';
 import { useFocusEffect } from 'expo-router';
 import Timer from '../app/timer/androidTimerModule';
@@ -164,18 +164,14 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
         if (isMuted) return;
 
         try {
-            const { sound } = await Audio.Sound.createAsync(
-                require('../assets/notifications/dingnoti.wav'),
-                { volume: 1 }
-            );
-            await sound.playAsync();
-
-            // Cleanup when done
-            sound.setOnPlaybackStatusUpdate(async (status) => {
+            const player = createAudioPlayer(require('../assets/notifications/dingnoti.wav'));
+            player.volume = 1;
+            player.addListener('playbackStatusUpdate', (status) => {
                 if (status.didJustFinish) {
-                    await sound.unloadAsync();
+                    player.remove();
                 }
             });
+            player.play();
         } catch (error) {
             console.error("Failed to play ding", error);
         }
