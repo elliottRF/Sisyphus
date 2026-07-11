@@ -122,11 +122,11 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
 
     useEffect(() => {
         if (Platform.OS === 'android') {
-            NavigationBar.setButtonStyleAsync(theme.statusBar);
-            // setBackgroundColorAsync only accepts strings, so we check for PlatformColor
-            if (typeof theme.background === 'string') {
-                NavigationBar.setBackgroundColorAsync(theme.background);
-            }
+            // SDK 55+ enforces edge-to-edge: the nav bar is transparent and the
+            // old setButtonStyleAsync/setBackgroundColorAsync setters no longer
+            // exist. setStyle controls button contrast; background comes from
+            // the app's own UI behind the transparent bar.
+            NavigationBar.setStyle(theme.statusBar);
         }
     }, [theme]);
 
