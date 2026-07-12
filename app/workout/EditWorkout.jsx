@@ -390,17 +390,11 @@ const EditWorkout = () => {
                         onScrollToIndexFailed={handleScrollToIndexFailed}
                         keyExtractor={(item) => String(item.id)}
                         renderItem={renderItem}
-                        // Workouts are a handful of cards — keep every cell mounted
-                        // so scrolling never churns unmounts (churned cells with
-                        // gesture/animation content leak views on this stack).
-                        initialNumToRender={50}
-                        maxToRenderPerBatch={50}
-                        windowSize={99}
-                        // Android defaults this ON for FlatList: scrolled-out
-                        // views get natively detached ("clipped"), and views
-                        // clipped at screen-unmount time leak. History's list
-                        // already runs with it off for the same Android issues.
-                        removeClippedSubviews={false}
+                        // The old anti-leak overrides (windowSize 99, initialNumToRender 50,
+                        // removeClippedSubviews false) are gone: on RN 0.86's list
+                        // implementation a huge windowSize inflates the layout region
+                        // (cells laid out across ~250k px → content renders invisible),
+                        // and the Reanimated 4.5 upgrade removed the leak they mitigated.
                         style={styles.list}
                         contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                         keyboardShouldPersistTaps="handled"

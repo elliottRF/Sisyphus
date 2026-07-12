@@ -1151,13 +1151,15 @@ const getStyles = (theme) => {
             ...StyleSheet.absoluteFillObject,
             flexDirection: 'row',
             justifyContent: 'flex-end',
-            alignItems: 'center',
+            // No alignItems:'center' here — the action region must stretch to
+            // the row height via the default cross-axis stretch. Its previous
+            // `height: '100%'` blows up on RN 0.86's Yoga (resolves against an
+            // indefinite parent → ~16k-px rows spread invisibly down the card).
         },
         deleteActionRegion: {
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: safeError,
-            height: '100%',
         },
         deleteIconContainer: {
             alignItems: 'center',
