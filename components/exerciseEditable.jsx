@@ -217,13 +217,13 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
 
     return (
         <Animated.View style={[styles.swipeableContainer]}>
-            <Animated.View style={styles.deleteBackground}>
+            <View style={styles.deleteBackground}>
                 <Animated.View style={[styles.deleteActionRegion, rRedBoxStyle]}>
                     <Animated.View style={[styles.deleteIconContainer, rIconStyle]}>
                         <Feather name="trash-2" size={18} color={theme.text} />
                     </Animated.View>
                 </Animated.View>
-            </Animated.View>
+            </View>
             <GestureDetector gesture={pan}>
                 <Animated.View style={[styles.rowForeground, rStyle]}>
                     {children}
@@ -332,7 +332,7 @@ const SetRowBody = React.memo(({
 
             {/* Fill-tap flash overlay */}
             <Animated.View
-                style={[StyleSheet.absoluteFillObject, styles.fillFlashOverlay, flashOverlayStyle]}
+                style={[StyleSheet.absoluteFill, styles.fillFlashOverlay, flashOverlayStyle]}
                 pointerEvents="none"
             />
 
@@ -1147,14 +1147,15 @@ const getStyles = (theme) => {
             backgroundColor: theme.surface,
             marginBottom: -StyleSheet.hairlineWidth,
         },
+        // RN 0.86 removed StyleSheet.absoluteFillObject — spreading it yielded
+        // undefined (views silently fell into normal flow). absoluteFill is the
+        // surviving equivalent; keep using it for all overlay fills.
         deleteBackground: {
-            ...StyleSheet.absoluteFillObject,
+            ...StyleSheet.absoluteFill,
             flexDirection: 'row',
             justifyContent: 'flex-end',
-            // No alignItems:'center' here — the action region must stretch to
-            // the row height via the default cross-axis stretch. Its previous
-            // `height: '100%'` blows up on RN 0.86's Yoga (resolves against an
-            // indefinite parent → ~16k-px rows spread invisibly down the card).
+            // The action region stretches to row height via the default
+            // cross-axis stretch (no alignItems:'center' / height:'100%').
         },
         deleteActionRegion: {
             alignItems: 'center',
@@ -1178,7 +1179,7 @@ const getStyles = (theme) => {
             position: 'relative',
         },
         completedBackground: {
-            ...StyleSheet.absoluteFillObject,
+            ...StyleSheet.absoluteFill,
             backgroundColor: completedFill,
             zIndex: -1,
         },

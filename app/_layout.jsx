@@ -278,7 +278,7 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
             )}
 
             <Modal transparent visible={isWorkoutFinishing} animationType="fade">
-                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }]}>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }]}>
                     <LottieView
                         source={require('../assets/notifications/win.json')}
                         autoPlay

@@ -152,7 +152,7 @@ const OverlayRow = ({ row, initialIndex, isActive, orderSV, fingerY, frameY, sta
 
 const getStyles = (theme) => StyleSheet.create({
     overlay: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: theme.background,
         zIndex: 1000,
         elevation: 1000,

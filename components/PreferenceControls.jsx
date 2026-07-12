@@ -646,7 +646,7 @@ const getStyles = (theme) =>
       shadowRadius: 3,
       elevation: 3,
     },
-    rangeTouchOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent' },
+    rangeTouchOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'transparent' },
     rangeScale: { position: 'relative', height: 18, marginTop: 2 },
     scaleLabel: {
       position: 'absolute',

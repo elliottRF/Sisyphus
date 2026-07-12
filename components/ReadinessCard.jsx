@@ -82,7 +82,7 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
     }, []);
 
     const scrimStyle = useAnimatedStyle(() => ({
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: theme.surface,
         opacity: scrimOpacity.value,
     }));

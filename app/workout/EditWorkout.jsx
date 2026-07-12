@@ -391,10 +391,9 @@ const EditWorkout = () => {
                         keyExtractor={(item) => String(item.id)}
                         renderItem={renderItem}
                         // The old anti-leak overrides (windowSize 99, initialNumToRender 50,
-                        // removeClippedSubviews false) are gone: on RN 0.86's list
-                        // implementation a huge windowSize inflates the layout region
-                        // (cells laid out across ~250k px → content renders invisible),
-                        // and the Reanimated 4.5 upgrade removed the leak they mitigated.
+                        // removeClippedSubviews false) are gone — the Reanimated 4.5
+                        // upgrade removed the scrolled-cell retention leak they mitigated,
+                        // so the default virtualization behavior is fine here again.
                         style={styles.list}
                         contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                         keyboardShouldPersistTaps="handled"
