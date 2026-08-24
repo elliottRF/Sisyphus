@@ -1,4 +1,6 @@
 import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicator, Modal, Pressable, Dimensions, Animated as RNAnimated } from 'react-native'
+import ActionSheet from 'react-native-actions-sheet';
+import { Calendar } from 'react-native-calendars';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { useScrollToTop } from 'expo-router';
@@ -86,6 +88,63 @@ const formatVolume = (kg, useImperial) => {
 
 const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
+// react-native-calendars keys days as local "YYYY-MM-DD".
+const calendarDateString = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// ─── Weekly streak ────────────────────────────────────────────────────────────
+// A week counts as trained if it holds at least one session. Weeks start on
+// Monday, matching the heatmap grid. Stepping with setDate (rather than
+// subtracting 7×86400000) keeps the arithmetic correct across DST changes.
+
+const startOfWeek = (date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Mon = 0
+    return d;
+};
+
+const weekKey = (date) => startOfWeek(date).getTime();
+
+const computeWeeklyStreak = (workoutHistory, now = new Date()) => {
+    const trained = new Set();
+    workoutHistory.forEach(([, exercises]) => {
+        const d = new Date(exercises[0]?.time);
+        if (!isNaN(d.getTime())) trained.add(weekKey(d));
+    });
+    if (trained.size === 0) return { current: 0, best: 0, thisWeekTrained: false };
+
+    const thisWeek = startOfWeek(now);
+    const thisWeekTrained = trained.has(thisWeek.getTime());
+
+    // The current week doesn't break a streak until it's over, so an untrained
+    // week-so-far still counts as held while last week is trained.
+    const cursor = new Date(thisWeek);
+    if (!thisWeekTrained) cursor.setDate(cursor.getDate() - 7);
+
+    let current = 0;
+    while (trained.has(cursor.getTime())) {
+        current++;
+        cursor.setDate(cursor.getDate() - 7);
+    }
+
+    let best = 0;
+    let run = 0;
+    const ordered = [...trained].sort((a, b) => a - b);
+    ordered.forEach((wk, i) => {
+        if (i === 0) {
+            run = 1;
+        } else {
+            const prev = new Date(ordered[i - 1]);
+            prev.setDate(prev.getDate() + 7);
+            run = prev.getTime() === wk ? run + 1 : 1;
+        }
+        best = Math.max(best, run);
+    });
+
+    return { current, best, thisWeekTrained };
+};
+
 // ─── Contribution graph ───────────────────────────────────────────────────────
 // GitHub-style training heatmap: one cell per day, tinted by session volume.
 // Always visible under the page header; tapping a trained day opens it.
@@ -96,6 +155,8 @@ const CELL_GAP = 3;
 const ContributionGraph = ({ workoutHistory, theme, styles, onOpenSession }) => {
     // 0 = the window ending today; each page steps back a full window.
     const [page, setPage] = useState(0);
+
+    const streak = useMemo(() => computeWeeklyStreak(workoutHistory), [workoutHistory]);
 
     const { dayMap, maxVolume, earliestTime } = useMemo(() => {
         const map = new Map();
@@ -244,6 +305,31 @@ const ContributionGraph = ({ workoutHistory, theme, styles, onOpenSession }) => 
                         })}
                     </View>
                 ))}
+            </View>
+
+            <View style={styles.streakRow}>
+                <MaterialCommunityIcons
+                    name="fire"
+                    size={15}
+                    color={streak.current > 0 ? theme.primary : theme.textSecondary}
+                />
+                {streak.current > 0 ? (
+                    <>
+                        <Text style={styles.streakText}>
+                            {streak.current} week{streak.current === 1 ? '' : 's'} in a row
+                        </Text>
+                        {!streak.thisWeekTrained && (
+                            <Text style={styles.streakHint}>· train this week to keep it</Text>
+                        )}
+                        {streak.best > streak.current && (
+                            <Text style={styles.streakHint}>· best {streak.best}</Text>
+                        )}
+                    </>
+                ) : (
+                    <Text style={styles.streakHint}>
+                        Train this week to start a streak
+                    </Text>
+                )}
             </View>
         </View>
     );
@@ -530,6 +616,37 @@ const History = () => {
 
     const scrollRef = useRef(null);
     useScrollToTop(scrollRef);
+    const calendarActionSheetRef = useRef(null);
+
+    // Marks every trained day. Keys are built from local date parts (not
+    // toISOString, which is UTC and can shift a late-evening session onto the
+    // wrong day) so the calendar agrees with the heatmap above it.
+    const markedDates = useMemo(() => {
+        const marked = {};
+        workoutHistory.forEach(([, exercises]) => {
+            const d = new Date(exercises[0]?.time);
+            if (isNaN(d.getTime())) return;
+            marked[calendarDateString(d)] = {
+                customStyles: {
+                    container: { backgroundColor: withAlpha(theme.primary, 0.14), borderRadius: 8 },
+                    text: { color: theme.primary, fontFamily: FONTS.bold },
+                },
+            };
+        });
+        return marked;
+    }, [workoutHistory, theme]);
+
+    const handleDatePress = (day) => {
+        const match = workoutHistory.find(([, exercises]) => {
+            const d = new Date(exercises[0]?.time);
+            return !isNaN(d.getTime()) && calendarDateString(d) === day.dateString;
+        });
+        if (!match) return;
+        calendarActionSheetRef.current?.hide();
+        // Let the sheet finish closing before pushing, so the transitions don't
+        // interrupt each other.
+        setTimeout(() => router.push(`/workout/${match[0]}`), 300);
+    };
 
     const loadWorkoutHistory = async () => {
         try {
@@ -737,6 +854,13 @@ const History = () => {
                     </Text>
                     <Text style={styles.title}>History</Text>
                 </View>
+                <TouchableOpacity
+                    style={styles.calendarButton}
+                    onPress={() => calendarActionSheetRef.current?.show()}
+                    accessibilityLabel="Open calendar"
+                >
+                    <Feather name="calendar" size={22} color={theme.text} />
+                </TouchableOpacity>
             </View>
             <SectionList
                 ref={scrollRef}
@@ -817,6 +941,43 @@ const History = () => {
                 // fight over child view indices on Android (addViewAt crash).
                 removeClippedSubviews={false}
             />
+
+            <ActionSheet
+                ref={calendarActionSheetRef}
+                containerStyle={styles.actionSheetContainer}
+                indicatorStyle={styles.indicator}
+                gestureEnabled={true}
+            >
+                <View style={styles.calendarContainer}>
+                    <Calendar
+                        theme={{
+                            backgroundColor: theme.surface,
+                            calendarBackground: theme.surface,
+                            textSectionTitleColor: theme.textSecondary,
+                            selectedDayBackgroundColor: theme.primary,
+                            selectedDayTextColor: theme.surface,
+                            todayTextColor: theme.primary,
+                            dayTextColor: theme.text,
+                            textDisabledColor: withAlpha(theme.text, 0.25),
+                            dotColor: theme.primary,
+                            selectedDotColor: theme.surface,
+                            arrowColor: theme.primary,
+                            disabledArrowColor: withAlpha(theme.text, 0.15),
+                            monthTextColor: theme.text,
+                            indicatorColor: theme.primary,
+                            textDayFontFamily: FONTS.medium,
+                            textMonthFontFamily: FONTS.bold,
+                            textDayHeaderFontFamily: FONTS.semiBold,
+                            textDayFontSize: 14,
+                            textMonthFontSize: 18,
+                            textDayHeaderFontSize: 12,
+                        }}
+                        markedDates={markedDates}
+                        onDayPress={handleDatePress}
+                        markingType={'custom'}
+                    />
+                </View>
+            </ActionSheet>
 
             {/* ── Hold context menu ──────────────────────────────────────────── */}
             {contextMenu && (
@@ -900,6 +1061,28 @@ const getStyles = (theme) => {
         paddingTop: 16,
         paddingBottom: 12,
     },
+    calendarButton: {
+        padding: 10,
+        backgroundColor: theme.surface,
+        borderRadius: RADIUS.m,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: theme.border,
+        ...getThemedShadow(theme, 'small'),
+    },
+    actionSheetContainer: {
+        backgroundColor: theme.surface,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+    },
+    indicator: {
+        backgroundColor: theme.textSecondary,
+        width: 40,
+    },
+    calendarContainer: {
+        padding: 10,
+        paddingBottom: 24,
+        backgroundColor: theme.surface,
+    },
     list: {
         flex: 1,
         width: '100%',
@@ -951,6 +1134,25 @@ const getStyles = (theme) => {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+    },
+    streakRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 12,
+        paddingTop: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: theme.border,
+    },
+    streakText: {
+        fontSize: 12,
+        fontFamily: FONTS.semiBold,
+        color: theme.text,
+    },
+    streakHint: {
+        fontSize: 11,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
     },
     graphRangeText: {
         fontSize: 11,
