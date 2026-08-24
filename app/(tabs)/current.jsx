@@ -775,24 +775,47 @@ const Current = () => {
             const hist = prCacheRef.current.get(ex.exerciseID);
             if (!hist) return;
             const details = exercises.find(e => e.exerciseID === ex.exerciseID);
-            if (details?.isAssisted || details?.isCardio) return;
+            if (details?.isCardio) return;
+            // Assisted exercises were skipped entirely here, so their PRs only
+            // ever appeared after finishing. Mirror buildWorkoutEntries instead:
+            // less assistance is better, and they get no 1RM/volume PRs.
+            const isAssisted = !!details?.isAssisted;
 
             let bestOneRM = 0;
-            let bestWeight = 0;
             let bestVolume = 0;
+            let bestWeight = isAssisted ? Infinity : 0;
+            let repsAtBestWeight = 0;
+            let hasCountableSet = false;
             ex.sets.forEach(set => {
                 if (!set.completed) return;
                 const weightKg = toStorageKg(set.weight, useImperial) || 0;
                 const reps = parseInt(set.reps, 10) || 0;
-                if (weightKg <= 0 || reps <= 0) return;
+                // Zero-weight sets still count: a bodyweight exercise's record is
+                // reps at 0kg, and its 1RM/volume stay 0 so they can't false-fire.
+                if (reps <= 0) return;
+                hasCountableSet = true;
                 bestOneRM = Math.max(bestOneRM, estimateOneRMForStorage(weightKg, reps));
-                bestWeight = Math.max(bestWeight, weightKg);
                 bestVolume = Math.max(bestVolume, weightKg * reps);
+                const isBetterWeight = isAssisted ? weightKg < bestWeight : weightKg > bestWeight;
+                if (isBetterWeight) {
+                    bestWeight = weightKg;
+                    repsAtBestWeight = reps;
+                } else if (weightKg === bestWeight && reps > repsAtBestWeight) {
+                    repsAtBestWeight = reps;
+                }
             });
+            if (!hasCountableSet) return;
 
-            if (bestOneRM > (hist.maxOneRM || 0)) count++;
-            if (bestVolume > (hist.maxVolume || 0)) count++;
-            if (bestWeight > (hist.maxWeight || 0)) count++;
+            if (!isAssisted && bestOneRM > (hist.maxOneRM || 0)) count++;
+            if (!isAssisted && bestVolume > (hist.maxVolume || 0)) count++;
+
+            // Same rule buildWorkoutEntries uses at save time: a better weight, OR
+            // the same weight held for more reps. Testing only `>` meant beating
+            // 39kg×5 with 39kg×6 showed no live PR but was flagged once saved.
+            const histWeight = hist.maxWeight || 0;
+            const beatsWeight = isAssisted ? bestWeight < histWeight : bestWeight > histWeight;
+            if (beatsWeight ||
+                (bestWeight === histWeight && repsAtBestWeight > (hist.maxRepsAtMaxWeight || 0))) count++;
         }));
         return count;
         // eslint-disable-next-line react-hooks/exhaustive-deps
