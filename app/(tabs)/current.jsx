@@ -68,6 +68,9 @@ const Current = () => {
 
     const actionSheetRef = useRef(null);
     const restTimerRef = useRef(null);
+    // True while the current title came from a template (redo/repeat/start) —
+    // see the guard in checkActiveWorkout.
+    const templateAppliedRef = useRef(false);
     const listRef = useRef(null);
     const emptyStateScrollRef = useRef(null);
     const isFirstLaunch = useRef(true);
@@ -396,6 +399,7 @@ const Current = () => {
     const clearWorkout = async () => {
         setCurrentWorkout([]);
         updateWorkoutStartTime(null);
+        templateAppliedRef.current = false;
         setWorkoutTitle("New Workout");
         restTimerRef.current?.stopTimer();
         setPRMODE(false);
@@ -418,15 +422,18 @@ const Current = () => {
 
 
 
+
     const params = useLocalSearchParams();
 
     useEffect(() => {
         if (params.template) {
             try {
                 const parsed = JSON.parse(params.template);
+                templateAppliedRef.current = true;
                 loadTemplate(parsed);
                 router.setParams({ template: "" });
             } catch (e) {
+                templateAppliedRef.current = false;
                 console.error("Invalid template passed:", e);
             }
         }
@@ -498,6 +505,7 @@ const Current = () => {
             await AsyncStorage.multiRemove(['@currentWorkout', '@prMode']);
             setCurrentWorkout([]);
             updateWorkoutStartTime(null);
+            templateAppliedRef.current = false;
             setWorkoutTitle("New Workout");
             restTimerRef.current?.stopTimer();
             setPRMODE(false);
@@ -595,7 +603,13 @@ const Current = () => {
                     } else {
                         setCurrentWorkout([]);
                         setPRMODE(false);
-                        if (!params.template) {
+                        // This branch resumes from its AsyncStorage await AFTER
+                        // the route-param effect has already applied a template
+                        // and set its name, so it used to clobber that name back
+                        // to "New Workout" on redo/repeat. `params.template`
+                        // can't guard it — the param is cleared by then, and this
+                        // focus callback closes over stale params either way.
+                        if (!params.template && !templateAppliedRef.current) {
                             setWorkoutTitle("New Workout");
                         }
                     }
