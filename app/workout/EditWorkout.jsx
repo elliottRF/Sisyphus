@@ -181,6 +181,18 @@ const EditWorkout = () => {
                 getHistoricalPRs: (exerciseID) => getExercisePRs(exerciseID, WORKOUT_SESSION_NUMBER),
             });
 
+            // overwriteWorkoutSession deletes the session's rows before inserting
+            // these, so saving an empty set would silently erase the whole
+            // workout while reporting success. The guard above only counts
+            // exercise groups — a card whose last set was removed still passes it.
+            if (workoutEntries.length === 0) {
+                customAlert(
+                    "Nothing to Save",
+                    "This workout has no completed sets left. Tick at least one set, or use Delete Workout if you meant to remove it."
+                );
+                return;
+            }
+
             await overwriteWorkoutSession(
                 WORKOUT_SESSION_NUMBER,
                 workoutEntries,

@@ -723,12 +723,16 @@ export const getExercisePRs = async (exerciseID, excludeSessionNumber = null) =>
     repsParams.push(excludeSessionNumber);
   }
 
-  const repsAtMaxWeight = maxWeight > 0 ? await database.getFirstAsync(
+  // No `maxWeight > 0` gate: bodyweight exercises (Hanging Leg Raise etc.)
+  // legitimately have a best weight of 0, and skipping this query left
+  // maxRepsAtMaxWeight at 0 — so ANY rep count read as a weight PR, forever.
+  // With no history at all the query simply finds no rows and still yields 0.
+  const repsAtMaxWeight = await database.getFirstAsync(
     `SELECT MAX(reps) as maxReps
      FROM workoutHistory
      ${repsQueryCond};`,
     repsParams
-  ) : null;
+  );
 
   return {
     maxOneRM: isAssisted ? 0 : (result?.maxOneRM || 0),
