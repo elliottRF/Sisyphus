@@ -1484,7 +1484,10 @@ const getStyles = (theme) => {
             alignItems: 'center',
             gap: 8,
             marginBottom: 9,
-            minHeight: 20,
+            // Matches livePRPill's height: the pill is the tallest thing that can
+            // appear here, so reserving its height keeps the cards below from
+            // shifting down when a PR lands mid-workout.
+            minHeight: 22,
         },
         liveStatsText: {
             fontSize: 12.5,
@@ -1503,7 +1506,9 @@ const getStyles = (theme) => {
             gap: 4,
             backgroundColor: theme.overlayInput,
             paddingHorizontal: 8,
-            paddingVertical: 3,
+            // Fixed height rather than vertical padding, so it can never grow
+            // the row it sits in (see liveStatsRow.minHeight).
+            height: 22,
             borderRadius: RADIUS.pill,
             marginLeft: 2,
         },
