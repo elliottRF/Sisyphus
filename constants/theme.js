@@ -292,13 +292,106 @@ export const buildCustomTheme = ({ primary, background, surface, text }) => {
     };
 };
 
-// A coherent random palette (background/surface tinted by the accent hue).
+// ─── Random palettes ──────────────────────────────────────────────────────────
+// Variety comes from varying the accent's SATURATION and LIGHTNESS as well as
+// its hue, and from occasionally breaking the background away from the accent
+// hue. (The old version used a single recipe — S≈70/75, L≈48/62 — rotated
+// around the wheel, so every roll came out the same washed-out tone.)
+//
+// Perceived brightness differs wildly between hues at the same HSL lightness
+// (yellow reads far lighter than blue), so rather than hand-tuning per hue, the
+// accent's lightness is nudged until it actually clears a contrast ratio
+// against its background. That lets deep and neon accents both be safe.
+
+const relLuminance = (hex) => {
+    const c = parseHex(hex);
+    if (!c) return 0;
+    const f = (v) => {
+        const x = v / 255;
+        return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+};
+
+const contrastRatio = (a, b) => {
+    const la = relLuminance(a);
+    const lb = relLuminance(b);
+    return la > lb ? (la + 0.05) / (lb + 0.05) : (lb + 0.05) / (la + 0.05);
+};
+
+const rand = (min, max) => min + Math.random() * (max - min);
+const randInt = (min, max) => Math.round(rand(min, max));
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// Accent characters. Pastel is kept — it's a legitimate look — but it's now one
+// option among several rather than the only outcome.
+const ACCENT_FLAVOURS = {
+    vivid: { dark: { s: [82, 96], l: [54, 66] }, light: { s: [80, 95], l: [40, 50] } },
+    neon: { dark: { s: [95, 100], l: [58, 70] }, light: { s: [92, 100], l: [44, 54] } },
+    deep: { dark: { s: [70, 92], l: [42, 54] }, light: { s: [72, 95], l: [26, 38] } },
+    muted: { dark: { s: [26, 48], l: [52, 68] }, light: { s: [22, 45], l: [32, 44] } },
+    pastel: { dark: { s: [42, 68], l: [70, 82] }, light: { s: [45, 70], l: [52, 64] } },
+};
+
+// Weighted so vivid/deep dominate and pastel is occasional.
+const FLAVOUR_BAG = ['vivid', 'vivid', 'vivid', 'deep', 'deep', 'neon', 'muted', 'pastel'];
+
 export const randomThemeInput = () => {
-    const hue = Math.floor(Math.random() * 360);
-    const dark = Math.random() > 0.4;
-    return dark
-        ? { primary: hslToHex(hue, 75, 62), background: hslToHex(hue, 14, 8), surface: hslToHex(hue, 12, 14), text: '#FFFFFF' }
-        : { primary: hslToHex(hue, 70, 48), background: hslToHex(hue, 30, 97), surface: '#FFFFFF', text: hslToHex(hue, 25, 12) };
+    const hue = randInt(0, 359);
+    const dark = Math.random() > 0.35;
+    const flavour = pick(FLAVOUR_BAG);
+    const recipe = ACCENT_FLAVOURS[flavour][dark ? 'dark' : 'light'];
+    const sat = randInt(recipe.s[0], recipe.s[1]);
+
+    // How the chrome relates to the accent: usually tinted with it, sometimes
+    // near-neutral so a vivid accent really pops, sometimes pulled to another
+    // part of the wheel entirely.
+    const harmony = pick(['match', 'match', 'match', 'neutral', 'offset', 'offset']);
+    const bgHue = harmony === 'offset'
+        ? (hue + pick([150, 180, 210, -40, 40]) + 360) % 360
+        : hue;
+    const bgSat = harmony === 'neutral' ? randInt(0, 5) : (dark ? randInt(8, 22) : randInt(6, 30));
+
+    let background;
+    let surface;
+    let text;
+
+    if (dark) {
+        const bgL = rand(4, 12);
+        background = hslToHex(bgHue, bgSat, bgL);
+        surface = hslToHex(bgHue, Math.max(0, bgSat - 2), bgL + rand(5, 8));
+        // Slightly hue-tinted whites read warmer than flat #FFF.
+        text = Math.random() > 0.5 ? '#FFFFFF' : hslToHex(bgHue, randInt(4, 12), 97);
+    } else {
+        // Kept a touch off pure white so a white surface still reads as a card.
+        const bgL = rand(92, 96);
+        background = hslToHex(bgHue, bgSat, bgL);
+        surface = Math.random() > 0.4 ? '#FFFFFF' : hslToHex(bgHue, Math.max(0, bgSat - 3), Math.min(100, bgL + 3.5));
+        text = hslToHex(bgHue, randInt(8, 28), randInt(8, 16));
+    }
+
+    // Walk the accent's lightness until it satisfies both jobs it has to do:
+    // reading as accent text on the background, AND carrying a legible
+    // black/white label when used as a solid button fill. Mid-lightness accents
+    // fail the second (neither black nor white works on them), so the same
+    // nudge fixes both — dark themes brighten, light themes darken.
+    const MIN_BG_CONTRAST = 3.4;
+    const MIN_LABEL_CONTRAST = 4.5;
+    const labelOn = (hex) => (isLight(hex) ? '#000000' : '#FFFFFF');
+    const step = dark ? 3 : -3;
+    let lightness = rand(recipe.l[0], recipe.l[1]);
+    let primary = hslToHex(hue, sat, lightness);
+    for (let i = 0; i < 30; i++) {
+        const bgOk = contrastRatio(primary, background) >= MIN_BG_CONTRAST;
+        const labelOk = contrastRatio(labelOn(primary), primary) >= MIN_LABEL_CONTRAST;
+        if (bgOk && labelOk) break;
+        const next = Math.max(6, Math.min(94, lightness + step));
+        if (next === lightness) break;
+        lightness = next;
+        primary = hslToHex(hue, sat, lightness);
+    }
+
+    return { primary, background, surface, text };
 };
 
 // Deprecated: Backwards compatibility for now, will be removed
