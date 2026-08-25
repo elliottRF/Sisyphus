@@ -415,8 +415,11 @@ const getStyles = (theme) => StyleSheet.create({
     dataBlock: { padding: 20, gap: 12 },
     actionButton: { backgroundColor: theme.primary, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
     actionButtonText: { fontSize: 16, fontFamily: FONTS.semiBold, color: theme.surface },
-    actionButtonOutline: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-    actionButtonOutlineText: { fontSize: 16, fontFamily: FONTS.semiBold },
+    // Horizontal padding is deliberately larger than vertical: when a label
+    // wraps to two lines it fills the whole inner width, which leaves the
+    // centred row's icon sitting exactly `padding` from the border.
+    actionButtonOutline: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+    actionButtonOutlineText: { fontSize: 16, fontFamily: FONTS.semiBold, flexShrink: 1, textAlign: 'center' },
     divider: { height: 1, backgroundColor: theme.border, marginVertical: 4 },
     buttonRowWithHelp: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     infoButton: { padding: 8, backgroundColor: theme.background, borderRadius: 10, borderWidth: 1, borderColor: theme.border },
