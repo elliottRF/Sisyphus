@@ -146,7 +146,7 @@ const Settings = () => {
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const {
-        theme, themeID, updateTheme,
+        theme, themeID, updateTheme, customThemes,
         gender, updateGender,
         accessoryWeight, updateAccessoryWeight,
         recoveryRate, updateRecoveryRate,
