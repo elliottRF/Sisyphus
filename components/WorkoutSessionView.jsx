@@ -556,26 +556,26 @@ const getStyles = (theme) => {
             minHeight: 17,
         },
         exercisesList: {
-            gap: 8,
+            gap: 14,
             paddingHorizontal: 12,
         },
+        // Matches the session cards on the exercise page: rounded, borderless,
+        // and lifted with a shadow only on light themes (on dark ones the
+        // surface/background contrast is the separation, and a border just
+        // draws a hard line around everything).
         exerciseCard: {
             backgroundColor: theme.surface,
-            borderRadius: 12,
+            borderRadius: 16,
             overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: theme.border,
-            ...getThemedShadow(theme, 'small'),
+            ...(lightTheme ? getThemedShadow(theme, 'small') : null),
         },
         exerciseHeader: {
             paddingHorizontal: 12,
-            paddingVertical: 10,
-            backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlayMedium,
+            paddingVertical: 14,
+            backgroundColor: theme.overlaySubtle,
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
         },
         exerciseName: {
             fontSize: 15,
@@ -604,9 +604,7 @@ const getStyles = (theme) => {
             justifyContent: 'space-between',
             paddingHorizontal: 12,
             paddingVertical: 8,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.overlayBorder,
-            backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlaySubtle,
+            backgroundColor: theme.overlaySubtle,
         },
         warmupToggleText: {
             fontSize: 12,
@@ -618,9 +616,7 @@ const getStyles = (theme) => {
         },
         setsHeaderRow: {
             flexDirection: 'row',
-            paddingVertical: 6,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.overlayBorder,
+            paddingVertical: 8,
             paddingHorizontal: 12,
         },
         colHeader: {
@@ -636,11 +632,10 @@ const getStyles = (theme) => {
             paddingLeft: 6,
         },
         colHeader1RM: { flex: 1, textAlign: 'center' },
+        // Rows are separated by the zebra striping below, not by rules.
         setRowContainer: {
-            paddingVertical: 3,
+            paddingVertical: 6,
             paddingHorizontal: 12,
-            borderTopWidth: 1,
-            borderTopColor: lightTheme ? withAlpha(theme.border, 0.45) : 'transparent',
         },
         setRow: {
             flexDirection: 'row',
