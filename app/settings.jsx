@@ -424,9 +424,14 @@ const Settings = () => {
                         <Text style={styles.expandedHint}>How quickly muscles recover, driving readiness percentages.</Text>
                         <RecoveryRateSlider theme={theme} value={localRecoveryRate} onChange={setLocalRecoveryRate} onSlidingComplete={(val) => { updateRecoveryRate(val); emit(AppEvents.WORKOUT_DATA_IMPORTED); }} />
                     </ExpandableRow>
-                    <SettingsRow theme={theme} styles={styles} title="Muscle Model" iconNode={<MaterialCommunityIcons name="human-male-female" size={20} color={theme.primary} />} isLast>
+                    <ExpandableRow
+                        theme={theme} styles={styles} title="Muscle Model" value={gender === 'female' ? 'Female' : 'Male'}
+                        iconNode={<MaterialCommunityIcons name="human-male-female" size={20} color={theme.primary} />}
+                        expanded={openRow === 'gender'} onToggle={() => toggleRow('gender')} isLast
+                    >
+                        <Text style={styles.expandedHint}>Which figure the muscle highlighter draws.</Text>
                         <GenderSegment theme={theme} value={gender} onChange={updateGender} />
-                    </SettingsRow>
+                    </ExpandableRow>
                 </View>
 
                 {/* --- Rest Timer --- */}
