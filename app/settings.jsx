@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Animated, TextInput } from 'react-native';
+import Reanimated, { FadeIn, LinearTransition, Easing as REasing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -15,6 +16,7 @@ import { AppEvents, emit } from '../utils/events';
 import { customAlert } from '../utils/customAlert';
 import {
     AppThemeSelector,
+    recoveryRateLabel,
     GenderSegment,
     RepRangeSelector,
     SecondaryVolumeSlider,
@@ -84,15 +86,58 @@ const SettingsRow = ({ iconNode, title, description, children, isLast, theme, st
     </View>
 );
 
-const SettingsBlock = ({ iconNode, title, description, children, theme, styles }) => (
-    <View style={styles.blockContainer}>
-        <View style={styles.cardHeader}>
+// A settings row that shows its current value and reveals the real control
+// only when tapped. The heavy controls (rep range, sliders, theme picker) were
+// all rendered expanded at all times, which is what made this page endless.
+const ExpandableRow = ({ iconNode, title, value, expanded, onToggle, children, isLast, theme, styles }) => (
+    <Reanimated.View
+        layout={LinearTransition.duration(200).easing(REasing.out(REasing.ease))}
+        style={!isLast && !expanded ? { borderBottomWidth: 1, borderBottomColor: theme.border } : null}
+    >
+        <TouchableOpacity style={styles.rowContainer} onPress={onToggle} activeOpacity={0.6}>
+            <View style={styles.rowLeft}>
+                {iconNode}
+                <View style={styles.rowTextContainer}>
+                    <Text style={[styles.rowTitle, { color: theme.text }]}>{title}</Text>
+                </View>
+            </View>
+            <View style={styles.rowValueGroup}>
+                {value != null && <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>}
+                <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={theme.textSecondary} />
+            </View>
+        </TouchableOpacity>
+        {expanded && (
+            <Reanimated.View
+                entering={FadeIn.duration(160)}
+                style={[styles.expandedContent, !isLast && { borderBottomWidth: 1, borderBottomColor: theme.border }]}
+            >
+                {children}
+            </Reanimated.View>
+        )}
+    </Reanimated.View>
+);
+
+// A plain tappable row for one-shot actions (backup, import, export). Full
+// labels rather than an icon grid — these are destructive-adjacent and need to
+// say exactly what they do.
+const ActionRow = ({ iconNode, title, description, onPress, disabled, busy, isLast, theme, styles }) => (
+    <TouchableOpacity
+        style={[styles.rowContainer, !isLast && { borderBottomWidth: 1, borderBottomColor: theme.border }, disabled && { opacity: 0.5 }]}
+        onPress={onPress}
+        disabled={disabled}
+        activeOpacity={0.6}
+    >
+        <View style={styles.rowLeft}>
             {iconNode}
-            <Text style={[styles.cardTitle, { color: theme.text }]}>{title}</Text>
+            <View style={styles.rowTextContainer}>
+                <Text style={[styles.rowTitle, { color: theme.text }]}>{title}</Text>
+                {description && <Text style={[styles.rowDescription, { color: theme.textSecondary }]}>{description}</Text>}
+            </View>
         </View>
-        {description && <Text style={[styles.cardDescription, { color: theme.textSecondary }]}>{description}</Text>}
-        {children}
-    </View>
+        {busy
+            ? <ActivityIndicator size="small" color={theme.primary} />
+            : <Feather name="chevron-right" size={18} color={theme.textSecondary} />}
+    </TouchableOpacity>
 );
 
 // --- Main Component ---
@@ -313,6 +358,19 @@ const Settings = () => {
         }
     };
 
+    // Only one row is open at a time - the point is a short page.
+    const [openRow, setOpenRow] = useState(null);
+    const toggleRow = (key) => setOpenRow((prev) => (prev === key ? null : key));
+
+    const activeThemeName = React.useMemo(() => {
+        const custom = customThemes?.find((t) => t.id === themeID);
+        if (custom) return custom.name;
+        return (themeID || 'DEFAULT')
+            .split('_')
+            .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+            .join(' ');
+    }, [themeID, customThemes]);
+
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
             <View style={styles.header}>
@@ -327,9 +385,13 @@ const Settings = () => {
                 {/* --- Appearance --- */}
                 <Text style={styles.sectionTitle}>Appearance</Text>
                 <View style={styles.cardGroup}>
-                    <SettingsBlock theme={theme} styles={styles} title="App Theme" iconNode={<Feather name="droplet" size={20} color={theme.primary} />}>
-                        <AppThemeSelector theme={theme} themeID={themeID} onChange={updateTheme} />
-                    </SettingsBlock>
+                    <ExpandableRow
+                        theme={theme} styles={styles} title="App Theme" value={activeThemeName}
+                        iconNode={<Feather name="droplet" size={20} color={theme.primary} />}
+                        expanded={openRow === 'theme'} onToggle={() => toggleRow('theme')} isLast
+                    >
+                        <AppThemeSelector theme={theme} themeID={themeID} onChange={updateTheme} horizontal />
+                    </ExpandableRow>
                 </View>
 
                 {/* --- Workouts --- */}
@@ -338,24 +400,39 @@ const Settings = () => {
                     <SettingsRow theme={theme} styles={styles} title="Use Pounds (lbs)" iconNode={<MaterialCommunityIcons name="weight" size={20} color={theme.primary} />}>
                         {isReady ? <AnimatedSwitch value={useImperial} onValueChange={updateUnitPref} activeColor={theme.primary} inactiveColor={theme.overlayInputFocused} thumbColor={theme.surface} /> : <ActivityIndicator size="small" color={theme.primary} />}
                     </SettingsRow>
-                    <SettingsBlock theme={theme} styles={styles} title="Target Rep Range" description="Rep range for progressive overload suggestions." iconNode={<Feather name="sliders" size={20} color={theme.primary} />}>
+                    <ExpandableRow
+                        theme={theme} styles={styles} title="Target Rep Range" value={localRepMin + '-' + localRepMax + ' reps'}
+                        iconNode={<Feather name="sliders" size={20} color={theme.primary} />}
+                        expanded={openRow === 'reps'} onToggle={() => toggleRow('reps')}
+                    >
+                        <Text style={styles.expandedHint}>Used for progressive overload suggestions.</Text>
                         <RepRangeSelector theme={theme} value={localRepPreset} min={localRepMin} max={localRepMax} onRangeChange={(r) => { setLocalRepMin(r.min); setLocalRepMax(r.max); setLocalRepPreset(r.preset); pendingRangeRef.current = r; }} onRangeChangeComplete={() => updateRepRange(pendingRangeRef.current)} compact />
-                    </SettingsBlock>
-                    <SettingsBlock theme={theme} styles={styles} title="Secondary Volume" description="Weight for supporting muscles (0.0-1.0)." iconNode={<MaterialCommunityIcons name="chart-bell-curve-cumulative" size={20} color={theme.primary} />}>
+                    </ExpandableRow>
+                    <ExpandableRow
+                        theme={theme} styles={styles} title="Secondary Volume" value={Number(localAccessoryWeight).toFixed(1)}
+                        iconNode={<MaterialCommunityIcons name="chart-bell-curve-cumulative" size={20} color={theme.primary} />}
+                        expanded={openRow === 'volume'} onToggle={() => toggleRow('volume')}
+                    >
+                        <Text style={styles.expandedHint}>How much supporting muscles count towards volume.</Text>
                         <SecondaryVolumeSlider theme={theme} value={localAccessoryWeight} onChange={setLocalAccessoryWeight} onSlidingComplete={(val) => { updateAccessoryWeight(val); emit(AppEvents.WORKOUT_DATA_IMPORTED); }} />
-                    </SettingsBlock>
-                    <SettingsBlock theme={theme} styles={styles} title="Recovery Rate" description="How quickly muscles recover for readiness & templates." iconNode={<MaterialCommunityIcons name="heart-pulse" size={20} color={theme.primary} />}>
+                    </ExpandableRow>
+                    <ExpandableRow
+                        theme={theme} styles={styles} title="Recovery Rate" value={recoveryRateLabel(localRecoveryRate)}
+                        iconNode={<MaterialCommunityIcons name="heart-pulse" size={20} color={theme.primary} />}
+                        expanded={openRow === 'recovery'} onToggle={() => toggleRow('recovery')}
+                    >
+                        <Text style={styles.expandedHint}>How quickly muscles recover, driving readiness percentages.</Text>
                         <RecoveryRateSlider theme={theme} value={localRecoveryRate} onChange={setLocalRecoveryRate} onSlidingComplete={(val) => { updateRecoveryRate(val); emit(AppEvents.WORKOUT_DATA_IMPORTED); }} />
-                    </SettingsBlock>
-                    <SettingsBlock theme={theme} styles={styles} title="Muscle Model" description="Gender for highlighter model." iconNode={<MaterialCommunityIcons name="human-male-female" size={20} color={theme.primary} />} isLast>
+                    </ExpandableRow>
+                    <SettingsRow theme={theme} styles={styles} title="Muscle Model" iconNode={<MaterialCommunityIcons name="human-male-female" size={20} color={theme.primary} />} isLast>
                         <GenderSegment theme={theme} value={gender} onChange={updateGender} />
-                    </SettingsBlock>
+                    </SettingsRow>
                 </View>
 
                 {/* --- Rest Timer --- */}
                 <Text style={styles.sectionTitle}>Rest Timer</Text>
                 <View style={styles.cardGroup}>
-                    <SettingsRow theme={theme} styles={styles} title="Default Duration" description="In seconds" iconNode={<Feather name="clock" size={20} color={theme.primary} />}>
+                    <SettingsRow theme={theme} styles={styles} title="Default Duration" iconNode={<Feather name="clock" size={20} color={theme.primary} />}>
                         <View style={styles.timerInputWrapper}>
                             <TextInput style={[styles.timerInput, { color: theme.text }]} value={defaultTimer} onChangeText={saveTimerSetting} keyboardType="numeric" placeholder="180" maxLength={4} />
                             <Text style={[styles.unitText, { color: theme.textSecondary }]}>s</Text>
@@ -372,22 +449,27 @@ const Settings = () => {
                 {/* --- Data --- */}
                 <Text style={styles.sectionTitle}>Data & Backup</Text>
                 <View style={styles.cardGroup}>
-                    <View style={styles.dataBlock}>
-                        <TouchableOpacity style={styles.actionButton} onPress={handleBackupDatabase}><MaterialCommunityIcons name="database-export" size={18} color={theme.surface} /><Text style={styles.actionButtonText}>Backup Everything</Text></TouchableOpacity>
-                        <TouchableOpacity style={styles.actionButtonOutline} onPress={handleRestoreDatabase}><MaterialCommunityIcons name="database-import" size={18} color={theme.primary} /><Text style={[styles.actionButtonOutlineText, { color: theme.primary }]}>Restore From Backup</Text></TouchableOpacity>
-                        <View style={styles.divider} />
-                        <TouchableOpacity style={styles.actionButton} onPress={handleExportData}><Feather name="upload" size={18} color={theme.surface} /><Text style={styles.actionButtonText}>Export Workouts</Text></TouchableOpacity>
-                        <TouchableOpacity style={styles.actionButton} onPress={handleExportBodyWeight}><Feather name="upload" size={18} color={theme.surface} /><Text style={styles.actionButtonText}>Export Body Weight</Text></TouchableOpacity>
-                        <View style={styles.divider} />
-                        <TouchableOpacity style={styles.actionButtonOutline} onPress={handleImportData} disabled={importingWorkouts}><Feather name="download" size={18} color={theme.primary} /><Text style={[styles.actionButtonOutlineText, { color: theme.primary }]}>Import Workouts Sisyphus/Strong</Text></TouchableOpacity>
-                        <View style={styles.buttonRowWithHelp}>
-                            <TouchableOpacity style={[styles.actionButtonOutline, { flex: 1 }]} onPress={handleImportBodyWeight} disabled={importingBodyWeight}><Feather name="download" size={18} color={theme.primary} /><Text style={[styles.actionButtonOutlineText, { color: theme.primary }]}>Import Body Weight</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => customAlert("Weight Import", "Extract Strong measurements ZIP file for weight.csv")} style={styles.infoButton}><Feather name="help-circle" size={22} color={theme.textSecondary} /></TouchableOpacity>
-                        </View>
-                        {(importingWorkouts || importingBodyWeight) && importProgress && (
-                            <Text style={[styles.progressText, { color: theme.textSecondary }]}>{importProgress}</Text>
-                        )}
-                    </View>
+                    <ActionRow theme={theme} styles={styles} title="Backup Everything" description="Save a full .db file"
+                        iconNode={<MaterialCommunityIcons name="database-export" size={20} color={theme.primary} />}
+                        onPress={handleBackupDatabase} />
+                    <ActionRow theme={theme} styles={styles} title="Restore From Backup" description="Replaces all current data"
+                        iconNode={<MaterialCommunityIcons name="database-import" size={20} color={theme.primary} />}
+                        onPress={handleRestoreDatabase} />
+                    <ActionRow theme={theme} styles={styles} title="Import Workouts" description="From a Sisyphus or Strong CSV"
+                        iconNode={<Feather name="download" size={20} color={theme.primary} />}
+                        onPress={handleImportData} disabled={importingWorkouts} busy={importingWorkouts} />
+                    <ActionRow theme={theme} styles={styles} title="Import Body Weight" description="weight.csv from Strong's measurements ZIP"
+                        iconNode={<Feather name="download" size={20} color={theme.primary} />}
+                        onPress={handleImportBodyWeight} disabled={importingBodyWeight} busy={importingBodyWeight} />
+                    <ActionRow theme={theme} styles={styles} title="Export Workouts" description="Share as CSV"
+                        iconNode={<Feather name="upload" size={20} color={theme.primary} />}
+                        onPress={handleExportData} />
+                    <ActionRow theme={theme} styles={styles} title="Export Body Weight" description="Share as CSV"
+                        iconNode={<Feather name="upload" size={20} color={theme.primary} />}
+                        onPress={handleExportBodyWeight} isLast />
+                    {(importingWorkouts || importingBodyWeight) && importProgress && (
+                        <Text style={[styles.progressText, { color: theme.textSecondary }]}>{importProgress}</Text>
+                    )}
                 </View>
             </ScrollView>
         </View>
@@ -399,30 +481,19 @@ const getStyles = (theme) => StyleSheet.create({
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
     backButton: { padding: 8, marginRight: 12 },
     title: { fontSize: 22, fontFamily: FONTS.bold, letterSpacing: -0.4, color: theme.text },
-    content: { paddingVertical: 10, paddingHorizontal: 20, paddingBottom: 60 },
-    sectionTitle: { fontSize: 13, fontFamily: FONTS.semiBold, color: theme.textSecondary, marginBottom: 8, marginTop: 16, textTransform: 'uppercase', letterSpacing: 1.2, marginLeft: 4 },
-    cardGroup: { backgroundColor: theme.surface, borderRadius: 16, ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null), marginBottom: 20, overflow: 'hidden' },
-    rowContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 20 },
+    content: { paddingVertical: 8, paddingHorizontal: 20, paddingBottom: 48 },
+    sectionTitle: { fontSize: 13, fontFamily: FONTS.semiBold, color: theme.textSecondary, marginBottom: 6, marginTop: 14, textTransform: 'uppercase', letterSpacing: 1.2, marginLeft: 4 },
+    cardGroup: { backgroundColor: theme.surface, borderRadius: 16, ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null), marginBottom: 14, overflow: 'hidden' },
+    rowContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, paddingHorizontal: 18 },
     rowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 16 },
     rowTextContainer: { marginLeft: 16, flex: 1 },
     rowTitle: { fontSize: 16, fontFamily: FONTS.medium },
     rowDescription: { fontSize: 13, fontFamily: FONTS.regular, marginTop: 2 },
     rowRight: { justifyContent: 'center', alignItems: 'flex-end' },
-    blockContainer: { paddingVertical: 16, paddingHorizontal: 20 },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 12 },
-    cardTitle: { fontSize: 16, fontFamily: FONTS.medium },
-    cardDescription: { fontSize: 13, fontFamily: FONTS.regular, marginBottom: 16, lineHeight: 18 },
-    dataBlock: { padding: 20, gap: 12 },
-    actionButton: { backgroundColor: theme.primary, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-    actionButtonText: { fontSize: 16, fontFamily: FONTS.semiBold, color: theme.surface },
-    // Horizontal padding is deliberately larger than vertical: when a label
-    // wraps to two lines it fills the whole inner width, which leaves the
-    // centred row's icon sitting exactly `padding` from the border.
-    actionButtonOutline: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-    actionButtonOutlineText: { fontSize: 16, fontFamily: FONTS.semiBold, flexShrink: 1, textAlign: 'center' },
-    divider: { height: 1, backgroundColor: theme.border, marginVertical: 4 },
-    buttonRowWithHelp: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    infoButton: { padding: 8, backgroundColor: theme.background, borderRadius: 10, borderWidth: 1, borderColor: theme.border },
+    rowValueGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+    rowValue: { fontSize: 14, fontFamily: FONTS.medium, color: theme.textSecondary, flexShrink: 1 },
+    expandedContent: { paddingHorizontal: 18, paddingBottom: 16 },
+    expandedHint: { fontSize: 13, fontFamily: FONTS.regular, color: theme.textSecondary, marginBottom: 12, lineHeight: 17 },
     progressText: { fontSize: 14, fontFamily: FONTS.medium, marginTop: 8, textAlign: 'center' },
     timerInputWrapper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background, borderRadius: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border, height: 40, minWidth: 80 },
     timerInput: { fontFamily: FONTS.semiBold, fontSize: 16, textAlign: 'center', paddingVertical: 0, textAlignVertical: 'center', paddingRight: 2 },

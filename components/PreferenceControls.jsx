@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, PanResponder, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { FONTS, THEMES } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -314,7 +314,7 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange, onSlidingComplet
 export const RECOVERY_RATE_MIN = 0.5;
 export const RECOVERY_RATE_MAX = 2;
 
-const recoveryRateLabel = (rate) => {
+export const recoveryRateLabel = (rate) => {
   if (rate < 0.85) return 'Slower';
   if (rate > 1.15) return 'Faster';
   return 'Normal';
@@ -481,7 +481,7 @@ export const UnitSegment = ({ theme, value, onChange }) => {
 // AppThemeSelector
 // ---------------------------------------------------------------------------
 
-export const AppThemeSelector = ({ theme, themeID, onChange, compact = false }) => {
+export const AppThemeSelector = ({ theme, themeID, onChange, compact = false, horizontal = false }) => {
   const styles = getStyles(theme);
   const { customThemes = [], addCustomTheme, deleteCustomTheme } = useTheme();
   const [creating, setCreating] = useState(false);
@@ -508,6 +508,7 @@ export const AppThemeSelector = ({ theme, themeID, onChange, compact = false }) 
         key={key}
         style={[
           styles.themeOption,
+          horizontal && styles.themeOptionHorizontal,
           { backgroundColor: itemTheme.surface, borderColor: isActive ? theme.primary : itemTheme.border },
         ]}
         onPress={() => onChange(key)}
@@ -525,27 +526,42 @@ export const AppThemeSelector = ({ theme, themeID, onChange, compact = false }) 
     );
   };
 
+  const tiles = (
+    <>
+      {visibleThemes.map((key) => renderTile(key, THEMES[key], prettyName(key)))}
+
+      {customThemes.map((item) =>
+        renderTile(item.id, item, item.name, { onLongPress: () => confirmDelete(item) })
+      )}
+
+      {/* Create-theme tile */}
+      <TouchableOpacity
+        style={[styles.themeOption, horizontal && styles.themeOptionHorizontal, styles.themeOptionCreate]}
+        onPress={() => setCreating(true)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.themePreview, styles.themePreviewCreate]}>
+          <Feather name="plus" size={22} color={theme.primary} />
+        </View>
+        <Text style={[styles.themeName, { color: theme.primary }]}>Create</Text>
+      </TouchableOpacity>
+    </>
+  );
+
   return (
     <>
-      <View style={[styles.themeSelectorGrid, compact && styles.themeSelectorGridCompact]}>
-        {visibleThemes.map((key) => renderTile(key, THEMES[key], prettyName(key)))}
-
-        {customThemes.map((item) =>
-          renderTile(item.id, item, item.name, { onLongPress: () => confirmDelete(item) })
-        )}
-
-        {/* Create-theme tile */}
-        <TouchableOpacity
-          style={[styles.themeOption, styles.themeOptionCreate]}
-          onPress={() => setCreating(true)}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.themePreview, styles.themePreviewCreate]}>
-            <Feather name="plus" size={22} color={theme.primary} />
-          </View>
-          <Text style={[styles.themeName, { color: theme.primary }]}>Create</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Horizontal keeps this a fixed height however many custom themes exist;
+          the wrapping grid grows another row every three. Onboarding keeps the
+          grid, where three tiles stretch to fill the width. */}
+      {horizontal ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.themeSelectorRow}>
+          {tiles}
+        </ScrollView>
+      ) : (
+        <View style={[styles.themeSelectorGrid, compact && styles.themeSelectorGridCompact]}>
+          {tiles}
+        </View>
+      )}
 
       {customThemes.length > 0 && (
         <Text style={styles.themeHint}>Long-press a custom theme to delete it.</Text>
@@ -719,6 +735,7 @@ const getStyles = (theme) =>
     },
     weightOptionText: { fontSize: 12, fontFamily: FONTS.bold, color: theme.text },
     themeSelectorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    themeSelectorRow: { flexDirection: 'row', gap: 12, paddingRight: 4 },
     themeSelectorGridCompact: { gap: 10 },
     themeOption: {
       flexBasis: '30%',
@@ -730,6 +747,7 @@ const getStyles = (theme) =>
       alignItems: 'center',
       gap: 10,
     },
+    themeOptionHorizontal: { width: 96, flexBasis: 'auto', flexGrow: 0 },
     themeOptionActive: {},
     themeOptionCreate: {
       backgroundColor: theme.overlaySubtle,
