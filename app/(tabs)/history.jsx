@@ -7,7 +7,7 @@ import { useScrollToTop } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession, createTemplate, getCachedWorkoutHistory, getCachedExercises } from '../../components/db';
 import { useFocusEffect, useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../../utils/haptics';
 import { FONTS, RADIUS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -422,7 +422,7 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
     };
 
     const handleLongPress = (e) => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.commit();
         onShowMenu({
             x: e.nativeEvent.pageX,
             y: e.nativeEvent.pageY,
@@ -827,7 +827,7 @@ const History = () => {
         if (!menu) return;
         try {
             await createTemplate(sessionDisplayName(menu), buildWorkoutDataFromSession(menu.exercises));
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            haptics.success();
             customAlert("Template Saved", `"${sessionDisplayName(menu)}" was added to your templates.`, [{ text: "OK" }]);
         } catch (e) {
             console.error("Error saving template from session:", e);

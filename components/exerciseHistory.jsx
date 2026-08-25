@@ -7,7 +7,7 @@ import Body from "react-native-body-highlighter";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../utils/haptics';
 import { fetchExerciseHistory, fetchExercises, fetchWorkoutHistoryBySession } from './db';
 import { FONTS, RADIUS, isLightTheme, getThemedShadow } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -477,7 +477,7 @@ const ExerciseHistory = (props) => {
     };
 
     const handleSessionMenu = (e, session) => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.commit();
         setContextMenu({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, session });
     };
 

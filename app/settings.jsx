@@ -9,10 +9,11 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { importStrongData, exportWorkoutData, importBodyWeightData, exportBodyWeightData, prepareDatabaseBackup, closeDatabase, isValidSQLiteHeader, reopenDatabaseAfterRestore } from '../components/db';
 import * as Sharing from 'expo-sharing';
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../utils/haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { AppEvents, emit } from '../utils/events';
+import { getHapticsEnabled, setHapticsEnabled } from '../utils/haptics';
 import { customAlert } from '../utils/customAlert';
 import {
     AppThemeSelector,
@@ -52,7 +53,7 @@ const AnimatedSwitch = ({ value, onValueChange, activeColor, inactiveColor, thum
         <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => {
-                Haptics.selectionAsync();
+                haptics.select();
                 onValueChange(!value);
             }}
         >
@@ -359,6 +360,7 @@ const Settings = () => {
     };
 
     // Only one row is open at a time - the point is a short page.
+    const [hapticsOn, setHapticsOn] = useState(getHapticsEnabled());
     const [openRow, setOpenRow] = useState(null);
     const toggleRow = (key) => setOpenRow((prev) => (prev === key ? null : key));
 
@@ -446,8 +448,11 @@ const Settings = () => {
                     <SettingsRow theme={theme} styles={styles} title="Auto-Start Timer" iconNode={<Feather name="play-circle" size={20} color={theme.primary} />}>
                         {isReady ? <AnimatedSwitch value={isAutoTimerEnabled} onValueChange={(v) => { setIsAutoTimerEnabled(v); AsyncStorage.setItem('settings_auto_timer', v.toString()); }} activeColor={theme.primary} inactiveColor={theme.overlayInputFocused} thumbColor={theme.surface} /> : <ActivityIndicator size="small" color={theme.primary} />}
                     </SettingsRow>
-                    <SettingsRow theme={theme} styles={styles} title="Mute Audio" iconNode={<Feather name="volume-x" size={20} color={theme.primary} />} isLast>
+                    <SettingsRow theme={theme} styles={styles} title="Mute Audio" iconNode={<Feather name="volume-x" size={20} color={theme.primary} />}>
                         {isReady ? <AnimatedSwitch value={isTimerMuted} onValueChange={(v) => { setIsTimerMuted(v); AsyncStorage.setItem('settings_timer_muted', v.toString()); }} activeColor={theme.primary} inactiveColor={theme.overlayInputFocused} thumbColor={theme.surface} /> : <ActivityIndicator size="small" color={theme.primary} />}
+                    </SettingsRow>
+                    <SettingsRow theme={theme} styles={styles} title="Haptic Feedback" description="Vibration on taps, PRs and timer end" iconNode={<MaterialCommunityIcons name="vibrate" size={20} color={theme.primary} />} isLast>
+                        {isReady ? <AnimatedSwitch value={hapticsOn} onValueChange={(v) => { setHapticsOn(v); setHapticsEnabled(v); }} activeColor={theme.primary} inactiveColor={theme.overlayInputFocused} thumbColor={theme.surface} /> : <ActivityIndicator size="small" color={theme.primary} />}
                     </SettingsRow>
                 </View>
 

@@ -6,7 +6,7 @@ import { useScrollToTop } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchExercises, fetchExerciseWorkoutCounts, fetchExerciseStats, getPinnedExercises, pinExercise, unpinExercise, getLatestWorkoutSession, fetchWorkoutHistoryBySession } from '../../components/db';
 import ActionSheet from "react-native-actions-sheet";
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../../utils/haptics';
 
 import NewExercise from "../../components/NewExercise"
 
@@ -252,7 +252,7 @@ const Profile = () => {
 
     // ── Hold menu ────────────────────────────────────────────────────────────
     const handleLongPressRow = (e, exercise) => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.commit();
         setContextMenu({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, exercise });
     };
 
@@ -276,7 +276,7 @@ const Profile = () => {
                             await unpinExercise(exercise.exerciseID);
                         } else {
                             await pinExercise(exercise.exerciseID);
-                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            haptics.success();
                         }
                         const pinned = await getPinnedExercises();
                         setPinnedIds(new Set(pinned.map(p => p.exerciseID)));
@@ -432,7 +432,7 @@ const Profile = () => {
                                 key={group.label}
                                 style={[styles.chip, isActive && styles.chipActive]}
                                 onPress={() => {
-                                    Haptics.selectionAsync();
+                                    haptics.select();
                                     setActiveGroup(group.label);
                                 }}
                                 activeOpacity={0.7}

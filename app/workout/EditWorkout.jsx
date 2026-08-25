@@ -5,7 +5,6 @@ import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, Stack, router } from 'expo-router'; // FIXED: Added router
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';

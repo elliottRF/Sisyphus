@@ -21,7 +21,7 @@ import { fetchLastWorkoutSets, fetchLifetimePRs } from './db';
 import { useTheme } from '../context/ThemeContext';
 import { formatWeight, unitLabel } from '../utils/units';
 import { secondsToClock, minutesToClock, clockDigitsToDisplay, clockDigitsToMinutes } from '../utils/time';
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../utils/haptics';
 import {
     getPRType,
     useWorkoutSuggestions,
@@ -184,14 +184,26 @@ const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isEx
     const styles = getStyles(theme);
     const translateX = useSharedValue(0);
 
+    // Crossing the delete threshold buzzes once, so you know the row will go
+    // when you let go rather than finding out afterwards. armedRef lives on the
+    // JS thread; the gesture callbacks run on the UI thread, hence runOnJS.
+    const swipeArmedRef = useRef(false);
+    const setSwipeArmed = (armed) => {
+        if (swipeArmedRef.current === armed) return;
+        swipeArmedRef.current = armed;
+        if (armed) haptics.tap();
+    };
+
     const pan = Gesture.Pan()
         .activeOffsetX([-10, 10])
         .failOffsetY([-5, 5])
         .onUpdate((event) => {
             if (isExerciseDragging) return;
             translateX.value = Math.min(event.translationX, 0);
+            runOnJS(setSwipeArmed)(translateX.value < SWIPE_THRESHOLD);
         })
         .onEnd(() => {
+            runOnJS(setSwipeArmed)(false);
             if (translateX.value < SWIPE_THRESHOLD) {
                 translateX.value = withTiming(-SCREEN_WIDTH, { duration: 300 }, (finished) => {
                     if (finished) runOnJS(onDelete)();
@@ -597,13 +609,14 @@ const ExerciseEditable = ({
         const set = exercise.sets[setIndex];
         if (!set.completed) {
             Keyboard.dismiss();
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            haptics.tap();
             if (onSetComplete) onSetComplete();
         }
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
     };
 
     const toggleSetType = (setIndex) => {
+        haptics.select();
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => { if (i === setIndex) { const t = s.setType || 'N'; const n = t === 'N' ? 'W' : t === 'W' ? 'D' : 'N'; return { ...s, setType: n }; } return s; }) } : e) } : w));
     };
     const handleNoteChange = (text) => {
@@ -641,7 +654,7 @@ const ExerciseEditable = ({
         if (!fillData) return;
         const currentSet = exercise.sets[setIndex];
         if (currentSet.completed) return;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.commit();
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? {
             ...w,
             exercises: w.exercises.map(e => e.id === exercise.id ? {
@@ -750,7 +763,7 @@ const ExerciseEditable = ({
             return computed ? { weight: computed.weight, reps: computed.reps } : null;
         });
         if (!fills.some(Boolean)) return;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.commit();
         // Bump the token so every filled row plays the same tap flash.
         setFillAllToken(t => t + 1);
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? {

@@ -6,7 +6,7 @@ import ActionSheet, { FlatList } from "react-native-actions-sheet";
 import { fetchExercises, fetchLastWorkoutSets, fetchExerciseWorkoutCounts } from '../components/db';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../utils/haptics';
 import { useTheme } from '../context/ThemeContext';
 import { broadMuscleGroups, muscleMapping } from '../constants/muscles';
 
@@ -171,7 +171,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
     };
 
     const toggleSelect = (item) => {
-        Haptics.selectionAsync();
+        haptics.select();
         setSelectedIds((prev) => {
             const next = new Set(prev);
             if (next.has(item.exerciseID)) next.delete(item.exerciseID);
@@ -186,7 +186,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
             .map((id) => exercises.find((e) => e.exerciseID === id))
             .filter(Boolean);
         if (staged.length === 0) return;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.commit();
         const entries = await Promise.all(staged.map(buildWorkoutEntry));
         setCurrentWorkout((prev) => [...prev, ...entries]);
         actionSheetRef.current?.hide();

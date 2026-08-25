@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../../utils/haptics';
 import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Dimensions } from 'react-native';
@@ -147,7 +147,7 @@ const EditTemplate = () => {
 
     const handleReorder = useCallback(({ from, to }) => {
         setCurrentWorkout((prevWorkout) => reorderItems(prevWorkout, from, to));
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        haptics.tap();
     }, []);
 
     const { session: reorderSession, overlayRef, listWrapperRef, fingerY, startReorder, endReorder, handleScrollToIndexFailed, isReordering } =

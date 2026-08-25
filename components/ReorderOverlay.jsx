@@ -10,7 +10,7 @@ import Animated, {
     runOnJS,
 } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../utils/haptics';
 import { FONTS } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
@@ -60,7 +60,7 @@ const ReorderOverlay = forwardRef(({ rows, activeId, fingerY, frame }, ref) => {
         getOrder: () => orderSV.value,
     }), [orderSV]);
 
-    const tick = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const tick = () => haptics.tap();
 
     // Finger position -> target slot. Reordering happens entirely on the UI
     // thread; only the haptic tick hops to JS.

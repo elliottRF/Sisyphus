@@ -5,7 +5,7 @@ import { useScrollToTop } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReorderableList, { reorderItems } from 'react-native-reorderable-list';
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../../utils/haptics';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AntDesign, Feather, Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -237,12 +237,12 @@ const Current = () => {
         }));
 
         setCurrentWorkout(workoutWithDynamicData);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        haptics.success();
     };
 
     const handleLongPressTemplate = async (template) => {
         setLoadingTemplateId(template.id);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.commit();
 
         try {
             const [fullTemplate, exercisesData] = await Promise.all([
@@ -315,7 +315,7 @@ const Current = () => {
     };
 
     const openTemplateMenu = (template, e) => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.commit();
         setTemplateMenu({
             anchor: { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY },
             template,
@@ -351,7 +351,7 @@ const Current = () => {
     const addStarterTemplates = async () => {
         if (loadingTemplateId) return;
         setLoadingTemplateId('starter');
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.commit();
         const genId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
         const blankSet = (setType) => ({
             id: genId(), weight: null, reps: null, distance: null, minutes: null, setType, completed: false,
@@ -367,7 +367,7 @@ const Current = () => {
                 await createTemplate(tpl.name, data);
             }
             await loadTemplates();
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            haptics.success();
         } catch (error) {
             console.error('Failed to add starter templates:', error);
         } finally {
@@ -377,7 +377,7 @@ const Current = () => {
 
     const handleAddTemplate = async () => {
         setLoadingTemplateId('new');
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        haptics.tap();
 
         try {
             const [exercisesData] = await Promise.all([
@@ -697,7 +697,7 @@ const Current = () => {
 
     const handleReorder = useCallback(({ from, to }) => {
         setCurrentWorkout((prevWorkout) => reorderItems(prevWorkout, from, to));
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        haptics.tap();
     }, []);
 
     // Hold-to-reorder: holding a card's header opens an overlay of compact
@@ -821,6 +821,30 @@ const Current = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentWorkout, exercises, useImperial, prCacheVersion]);
 
+
+    // Landing a PR mid-workout is the best moment the app has and had no
+    // feedback at all. Driving it off livePRCount covers all three PR types
+    // without duplicating the comparison logic.
+    //
+    // Both counts must rise together: on a cold start an in-progress workout
+    // restores its completed sets and then the PR cache resolves, which would
+    // otherwise fire a celebration for PRs set yesterday.
+    const completedSetCount = useMemo(
+        () => currentWorkout.reduce(
+            (n, g) => n + g.exercises.reduce((m, e) => m + e.sets.filter((st) => st.completed).length, 0),
+            0,
+        ),
+        [currentWorkout],
+    );
+
+    const prWatchRef = useRef({ prs: 0, sets: 0, armed: false });
+    useEffect(() => {
+        const prev = prWatchRef.current;
+        if (prev.armed && livePRCount > prev.prs && completedSetCount > prev.sets) {
+            haptics.success();
+        }
+        prWatchRef.current = { prs: livePRCount, sets: completedSetCount, armed: true };
+    }, [livePRCount, completedSetCount]);
 
     const getFirstOccurrenceMap = (currentWorkout, exercisesData) => {
         const seenMuscles = {};

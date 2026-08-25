@@ -12,7 +12,7 @@ import { useScrollHandlers } from 'react-native-actions-sheet';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Added this import
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../utils/haptics';
 import { emit, AppEvents } from '../utils/events';
 import { updateExerciseSnapshot, getExerciseSnapshotSync } from '../utils/exerciseSnapshots';
 
@@ -227,7 +227,7 @@ const NewExercise = (props) => {
         const option = MUSCLE_OPTIONS.find(m => m.toLowerCase() === slug);
         if (!option) return; // a body part we don't expose as a selectable muscle
 
-        Haptics.selectionAsync();
+        haptics.select();
         const inTarget = targetSelected.includes(option);
         const inAccessory = accessorySelected.includes(option);
         if (!inTarget && !inAccessory) {

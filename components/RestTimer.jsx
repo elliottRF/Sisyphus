@@ -10,7 +10,7 @@ import { FONTS } from '../constants/theme';
 import { useFocusEffect } from 'expo-router';
 import Timer from '../app/timer/androidTimerModule';
 import { useTheme } from '../context/ThemeContext';
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../utils/haptics';
 
 const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     const { theme } = useTheme();
@@ -60,6 +60,9 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
             setTimeLeft(0);
             timerRunning.current = false;
             targetEndTimeRef.current = null;
+            // Rest is over. This is the one moment the phone is likely in a
+            // pocket, and the audio cue can be muted, so buzz regardless.
+            haptics.success();
             return;
         }
 
@@ -239,7 +242,7 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     }));
 
     const startTimer = () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        haptics.tap();
 
         if (timerRunning.current) {
             // STOP (Manual Tap -> NO SOUND)

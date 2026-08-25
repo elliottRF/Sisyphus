@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, InteractionManage
 import React, { useState, useCallback, useMemo, useLayoutEffect, useEffect, forwardRef } from 'react';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import LottieView from 'lottie-react-native';
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../utils/haptics';
 import { FONTS, RADIUS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -218,7 +218,7 @@ const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDo
     // A celebratory haptic timed to the Achievements reveal.
     useEffect(() => {
         if (celebrate && prHighlights && prHighlights.length > 0) {
-            const t = setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success), 480);
+            const t = setTimeout(() => haptics.success(), 480);
             return () => clearTimeout(t);
         }
     }, [celebrate, prHighlights]);

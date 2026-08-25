@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
 import { FONTS, SHADOWS } from '../constants/theme';
-import * as Haptics from 'expo-haptics';
+import * as haptics from '../utils/haptics';
 import Svg, { Path } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
@@ -81,7 +81,7 @@ const CustomAlert = ({
                 opacity.value = withTiming(1, { duration: 180 });
                 scale.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
             });
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            haptics.commit();
         } else {
             opacity.value = withTiming(0, { duration: 150 });
             scale.value = withTiming(0.95, { duration: 150 });
