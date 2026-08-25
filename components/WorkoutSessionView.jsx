@@ -356,20 +356,41 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
 
                         return (
                             <View key={index} style={styles.exerciseCard}>
+                                {/* Not `disabled` when there's no info handler — that would
+                                    also swallow taps meant for the nested buttons below. */}
                                 <TouchableOpacity
                                     activeOpacity={onExerciseInfo ? 0.8 : 1}
                                     onPress={() => onExerciseInfo?.(exerciseId, exerciseName)}
                                     style={styles.exerciseHeader}
-                                    disabled={!onExerciseInfo}
                                 >
-                                    <Text style={styles.exerciseName}>{exerciseName}</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                    <Text style={styles.exerciseName} numberOfLines={1}>{exerciseName}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                         {!hasMuscles && exerciseDetails && !exerciseDetails.isCardio && (
                                             <TouchableOpacity
                                                 onPress={() => router.push(`/exercise/new?id=${exerciseId}`)}
                                                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                             >
                                                 <Feather name="help-circle" size={18} color={theme.textSecondary} />
+                                            </TouchableOpacity>
+                                        )}
+                                        {/* Warm-up count lives here rather than on its own
+                                            row: it's one number, and a second full-width
+                                            tinted band directly under the header made the
+                                            two read as a single block. */}
+                                        {warmups.length > 0 && (
+                                            <TouchableOpacity
+                                                onPress={(e) => toggleWarmups(exerciseId, e)}
+                                                activeOpacity={0.7}
+                                                hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                                                style={styles.warmupPill}
+                                            >
+                                                <MaterialCommunityIcons name="fire" size={13} color={theme.textSecondary} />
+                                                <Text style={styles.warmupToggleText}>{warmups.length}</Text>
+                                                <Feather
+                                                    name={warmupsExpanded ? 'chevron-up' : 'chevron-down'}
+                                                    size={13}
+                                                    color={theme.textSecondary}
+                                                />
                                             </TouchableOpacity>
                                         )}
                                         {onExerciseInfo && <Feather name="chevron-right" size={18} color={theme.textSecondary} />}
@@ -386,24 +407,6 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                         />
                                         <Text style={styles.noteText}>{exerciseNote}</Text>
                                     </View>
-                                )}
-
-                                {warmups.length > 0 && (
-                                    <TouchableOpacity
-                                        onPress={(e) => toggleWarmups(exerciseId, e)}
-                                        activeOpacity={0.8}
-                                        style={styles.warmupToggle}
-                                    >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                            <MaterialCommunityIcons name="fire" size={14} color={theme.textSecondary} />
-                                            <Text style={styles.warmupToggleText}>{warmups.length}</Text>
-                                        </View>
-                                        <Feather
-                                            name={warmupsExpanded ? 'chevron-down' : 'chevron-right'}
-                                            size={16}
-                                            color={theme.textSecondary}
-                                        />
-                                    </TouchableOpacity>
                                 )}
 
                                 <View style={styles.setsContainer}>
@@ -556,7 +559,7 @@ const getStyles = (theme) => {
             minHeight: 17,
         },
         exercisesList: {
-            gap: 14,
+            gap: 10,
             paddingHorizontal: 12,
         },
         // Matches the session cards on the exercise page: rounded, borderless,
@@ -571,7 +574,7 @@ const getStyles = (theme) => {
         },
         exerciseHeader: {
             paddingHorizontal: 12,
-            paddingVertical: 14,
+            paddingVertical: 11,
             backgroundColor: theme.overlaySubtle,
             flexDirection: 'row',
             justifyContent: 'space-between',
@@ -598,13 +601,14 @@ const getStyles = (theme) => {
             fontStyle: 'italic',
             lineHeight: 16,
         },
-        warmupToggle: {
+        warmupPill: {
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            backgroundColor: theme.overlaySubtle,
+            gap: 4,
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: RADIUS.pill,
+            backgroundColor: theme.overlayInput,
         },
         warmupToggleText: {
             fontSize: 12,
@@ -616,7 +620,7 @@ const getStyles = (theme) => {
         },
         setsHeaderRow: {
             flexDirection: 'row',
-            paddingVertical: 8,
+            paddingVertical: 5,
             paddingHorizontal: 12,
         },
         colHeader: {
@@ -634,7 +638,7 @@ const getStyles = (theme) => {
         colHeader1RM: { flex: 1, textAlign: 'center' },
         // Rows are separated by the zebra striping below, not by rules.
         setRowContainer: {
-            paddingVertical: 6,
+            paddingVertical: 4,
             paddingHorizontal: 12,
         },
         setRow: {
