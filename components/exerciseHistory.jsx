@@ -949,14 +949,17 @@ const ExerciseHistory = (props) => {
                                         },
                                     ]}
                                 >
+                                    {/* textAlternate, not white: once the pill fills with
+                                        theme.primary this is a solid-primary control, and a
+                                        light accent needs black text to stay readable. */}
                                     <MaterialCommunityIcons
                                         name="trophy"
                                         size={13}
-                                        color={showOnlyPRs ? '#fff' : theme.textSecondary}
+                                        color={showOnlyPRs ? theme.textAlternate : theme.textSecondary}
                                     />
                                     <Text style={[
                                         styles.prFilterText,
-                                        showOnlyPRs && { color: '#fff', fontFamily: FONTS.bold },
+                                        showOnlyPRs && { color: theme.textAlternate, fontFamily: FONTS.bold },
                                     ]}>
                                         PRs Only
                                     </Text>

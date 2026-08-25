@@ -116,6 +116,11 @@ const isLight = (color) => {
     return brightness > 128;
 };
 
+// Same test, exported for components that must pick black/white text over a
+// colour they derived themselves (e.g. a lightened primary) rather than over
+// theme.primary, which is what theme.textAlternate is computed against.
+export const isLightColor = isLight;
+
 
 // ─── THEME DEFINITIONS ───────────────────────────────────────────────────────
 // Two themes, both built strictly from the iOS system palette.

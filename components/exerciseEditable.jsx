@@ -15,7 +15,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme'
+import { FONTS, getThemedShadow, isLightTheme, isLightColor, withAlpha } from '../constants/theme'
 import { Feather, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchLastWorkoutSets, fetchLifetimePRs } from './db';
 import { useTheme } from '../context/ThemeContext';
@@ -389,7 +389,10 @@ const SetRowBody = React.memo(({
                                         {displayedText}
                                     </Text>
                                     <View style={[styles.prTargetBadge, { backgroundColor: brightColor }]}>
-                                        <Text style={styles.prTargetBadgeText}>PR</Text>
+                                        {/* Judged against brightColor, not theme.primary:
+                                            this badge is filled with a lightened accent, so
+                                            a pale theme needs black text here. */}
+                                        <Text style={[styles.prTargetBadgeText, { color: isLightColor(brightColor) ? '#000000' : '#FFFFFF' }]}>PR</Text>
                                     </View>
                                 </LinearGradient>
                             ) : showSuggestion && fillData && displayedText !== '-' ? (
