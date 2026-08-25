@@ -515,7 +515,11 @@ const getStyles = (theme) => {
         finishButtonText: {
             fontSize: 18,
             fontFamily: FONTS.bold,
-            color: safeText,
+            // Sits on the primary-filled gradient, so it needs textAlternate
+            // (black or white by the accent's brightness) — theme.text is the
+            // colour for text on the background, and went unreadable on themes
+            // where those two differ. Matches Finish Workout / Save Changes.
+            color: theme.textAlternate,
         },
         deleteButton: {
             paddingVertical: 14,

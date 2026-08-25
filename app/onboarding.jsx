@@ -637,7 +637,10 @@ const getStyles = (theme) =>
     },
     importButtonText: {
       fontSize: 15,
-      color: theme.surface,
+      // Filled with theme.primary, so it needs textAlternate — theme.surface
+      // happens to contrast on the stock themes but disappears whenever the
+      // accent is as dark as the surface.
+      color: theme.textAlternate,
       fontFamily: FONTS.bold,
     },
     restoreButton: {
