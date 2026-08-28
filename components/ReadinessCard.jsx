@@ -1,4 +1,4 @@
-import React, { useRef, useState, useImperativeHandle, forwardRef } from 'react';
+import React, { useRef, useState, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { View, Text, ScrollView, Pressable, Modal, Dimensions, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -45,8 +45,127 @@ const shortMuscleNames = {
 
 // ─── Overlay ──────────────────────────────────────────────────────────────────
 
+// Typography and surfaces here follow the same tokens as the rest of the app:
+// theme.text for content, theme.textSecondary for supporting detail, and the
+// readiness colour only on the status pill, the percentage and the bar. It used
+// to tint every single element, which is why the sheet looked unrelated to the
+// app around it.
+const overlayStyles = (theme) => StyleSheet.create({
+    eyebrow: {
+        fontSize: 12,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
+        letterSpacing: 1.2,
+        textTransform: 'uppercase',
+        marginBottom: 4,
+    },
+    title: {
+        fontSize: 32,
+        fontFamily: FONTS.bold,
+        color: theme.text,
+        letterSpacing: -0.6,
+        marginBottom: 12,
+    },
+    statusPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: RADIUS.pill,
+    },
+    statusDot: { width: 6, height: 6, borderRadius: 3 },
+    statusPillText: { fontSize: 13, fontFamily: FONTS.semiBold },
+    hero: {
+        fontSize: 64,
+        fontFamily: FONTS.bold,
+        letterSpacing: -2,
+        lineHeight: 68,
+    },
+    heroUnit: { fontSize: 28, letterSpacing: -0.5 },
+    heroCaption: {
+        fontSize: 14,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+        marginBottom: 16,
+    },
+    track: {
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: theme.overlayInput,
+        overflow: 'hidden',
+        marginBottom: 24,
+    },
+    infoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: theme.overlaySubtle,
+        borderRadius: RADIUS.m,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginBottom: 28,
+    },
+    infoLabel: {
+        fontSize: 13,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+        flex: 1,
+    },
+    infoValue: { fontSize: 14, fontFamily: FONTS.bold, color: theme.text },
+    sectionTitle: {
+        fontSize: 12,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
+        letterSpacing: 1.2,
+        textTransform: 'uppercase',
+        marginBottom: 10,
+    },
+    advice: {
+        fontSize: 15,
+        lineHeight: 22,
+        color: theme.text,
+        fontFamily: FONTS.medium,
+        marginBottom: 32,
+    },
+    card: {
+        backgroundColor: theme.overlaySubtle,
+        borderRadius: RADIUS.l,
+        overflow: 'hidden',
+        marginBottom: 20,
+    },
+    exerciseRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+    },
+    exerciseIcon: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        backgroundColor: theme.overlayInput,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    exerciseName: {
+        fontSize: 15,
+        fontFamily: FONTS.semiBold,
+        color: theme.text,
+        marginBottom: 2,
+    },
+    exerciseMeta: {
+        fontSize: 12,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
+    },
+});
+
+
 const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
     const { x, y, w, h, bg, color, percent, displayName, fullName, exercises, accessoryWeight, recoveryRate } = card;
+    const ov = useMemo(() => overlayStyles(theme), [theme]);
 
     const overlayTitle = fullName || displayName;
 
@@ -186,88 +305,45 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                             width: 34,
                             height: 34,
                             borderRadius: 17,
-                            backgroundColor: pillBg,
+                            backgroundColor: theme.overlayInput,
                             alignItems: 'center',
                             justifyContent: 'center',
                         }}
                     >
-                        <Feather name="x" size={16} color={color} />
+                        <Feather name="x" size={16} color={theme.text} />
                     </Pressable>
 
                     <ScrollView
                         contentContainerStyle={{
                             paddingTop: insets.top + 16,
                             paddingBottom: insets.bottom + 40,
-                            paddingHorizontal: 28,
+                            paddingHorizontal: 20,
                         }}
                         showsVerticalScrollIndicator={false}
                     >
-                        <Text style={{
-                            fontSize: 12,
-                            fontFamily: FONTS.bold,
-                            color,
-                            opacity: 0.6,
-                            letterSpacing: 1.8,
-                            textTransform: 'uppercase',
-                            marginBottom: 6,
-                        }}>
-                            Muscle
-                        </Text>
-                        <Text style={{
-                            fontSize: 46,
-                            fontFamily: FONTS.bold,
-                            color,
-                            letterSpacing: -1.5,
-                            marginBottom: 4,
-                        }}>
-                            {overlayTitle}
-                        </Text>
+                        {/* Header - same eyebrow + title idiom as every other
+                            screen. The status colour is reserved for the things
+                            that actually report status (pill, number, bar), so
+                            this reads as part of the app rather than a green page. */}
+                        <Text style={ov.eyebrow}>Muscle</Text>
+                        <Text style={ov.title}>{overlayTitle}</Text>
 
-                        <View style={{ flexDirection: 'row', marginBottom: 36 }}>
-                            <View style={{
-                                paddingHorizontal: 12,
-                                paddingVertical: 5,
-                                borderRadius: 20,
-                                backgroundColor: pillBg,
-                            }}>
-                                <Text style={{
-                                    fontSize: 13,
-                                    fontFamily: FONTS.semiBold,
-                                    color,
-                                }}>
-                                    {readinessLabel}
-                                </Text>
+                        <View style={{ flexDirection: 'row', marginBottom: 28 }}>
+                            <View style={[ov.statusPill, { backgroundColor: pillBg }]}>
+                                <View style={[ov.statusDot, { backgroundColor: color }]} />
+                                <Text style={[ov.statusPillText, { color }]}>{readinessLabel}</Text>
                             </View>
                         </View>
 
-                        <Text style={{
-                            fontSize: 100,
-                            fontFamily: FONTS.bold,
-                            color,
-                            letterSpacing: -5,
-                            lineHeight: 100,
-                            marginBottom: 2,
-                        }}>
-                            {readiness}
-                            <Text style={{ fontSize: 40, letterSpacing: -1 }}>%</Text>
-                        </Text>
-                        <Text style={{
-                            fontSize: 14,
-                            color,
-                            opacity: 0.6,
-                            fontFamily: FONTS.medium,
-                            marginBottom: 20,
-                        }}>
-                            recovered
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                            <Text style={[ov.hero, { color }]}>
+                                {readiness}
+                                <Text style={ov.heroUnit}>%</Text>
+                            </Text>
+                        </View>
+                        <Text style={ov.heroCaption}>recovered</Text>
 
-                        <View style={{
-                            height: 5,
-                            borderRadius: 3,
-                            backgroundColor: pillBg,
-                            overflow: 'hidden',
-                            marginBottom: 20,
-                        }}>
+                        <View style={ov.track}>
                             <View style={{
                                 width: `${readiness}%`,
                                 height: '100%',
@@ -276,54 +352,18 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
                             }} />
                         </View>
 
-                        <View style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: pillBg,
-                            borderRadius: 14,
-                            paddingHorizontal: 14,
-                            paddingVertical: 10,
-                            marginBottom: 36,
-                            gap: 10,
-                        }}>
-                            <Feather name="clock" size={14} color={color} />
-                            <Text style={{
-                                fontSize: 13,
-                                fontFamily: FONTS.medium,
-                                color,
-                                opacity: 0.7,
-                                flex: 1,
-                            }}>
+                        <View style={ov.infoRow}>
+                            <Feather name="clock" size={14} color={theme.textSecondary} />
+                            <Text style={ov.infoLabel}>
                                 {hoursToTarget <= 0 ? 'Ready to train' : 'Ready to train in'}
                             </Text>
-                            <Text style={{
-                                fontSize: 14,
-                                fontFamily: FONTS.bold,
-                                color,
-                            }}>
+                            <Text style={[ov.infoValue, hoursToTarget <= 0 && { color }]}>
                                 {recoveryLabel}
                             </Text>
                         </View>
 
-                        <Text style={{
-                            fontSize: 12,
-                            fontFamily: FONTS.bold,
-                            color,
-                            opacity: 0.6,
-                            letterSpacing: 1.8,
-                            textTransform: 'uppercase',
-                            marginBottom: 12,
-                        }}>
-                            Advice
-                        </Text>
-                        <Text style={{
-                            fontSize: 16,
-                            lineHeight: 25,
-                            color,
-                            opacity: 0.85,
-                            fontFamily: FONTS.medium,
-                            marginBottom: 44,
-                        }}>
+                        <Text style={ov.sectionTitle}>Advice</Text>
+                        <Text style={ov.advice}>
                             {(() => {
                                 const isPlural = overlayTitle.toLowerCase().endsWith('s');
                                 const verb = isPlural ? 'are' : 'is';
@@ -342,70 +382,40 @@ const MuscleDetailOverlay = ({ card, onClose, theme, insets }) => {
 
                         {exercises.length > 0 && (
                             <>
-                                <Text style={{
-                                    fontSize: 12,
-                                    fontFamily: FONTS.bold,
-                                    color,
-                                    opacity: 0.6,
-                                    letterSpacing: 1.8,
-                                    textTransform: 'uppercase',
-                                    marginBottom: 16,
-                                }}>
-                                    Contributing Exercises
-                                </Text>
-
-                                {exercises.map((ex, i) => (
-                                    <View key={i} style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        paddingVertical: 14,
-                                        borderTopWidth: 1,
-                                        borderTopColor: pillBg,
-                                    }}>
-                                        <View style={{
-                                            width: 34,
-                                            height: 34,
-                                            borderRadius: 10,
-                                            backgroundColor: pillBg,
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            marginRight: 14,
-                                        }}>
-                                            <Feather
-                                                name={ex.isPrimary ? 'zap' : 'activity'}
-                                                size={15}
-                                                color={color}
-                                            />
+                                <Text style={ov.sectionTitle}>Contributing Exercises</Text>
+                                <View style={ov.card}>
+                                    {exercises.map((ex, i) => (
+                                        <View
+                                            key={i}
+                                            style={[
+                                                ov.exerciseRow,
+                                                i < exercises.length - 1 && {
+                                                    borderBottomWidth: StyleSheet.hairlineWidth,
+                                                    borderBottomColor: theme.border,
+                                                },
+                                            ]}
+                                        >
+                                            <View style={ov.exerciseIcon}>
+                                                <Feather
+                                                    name={ex.isPrimary ? 'zap' : 'activity'}
+                                                    size={15}
+                                                    color={ex.isPrimary ? theme.primary : theme.textSecondary}
+                                                />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text numberOfLines={1} ellipsizeMode="tail" style={ov.exerciseName}>
+                                                    {ex.name}
+                                                </Text>
+                                                <Text style={ov.exerciseMeta}>
+                                                    {ex.isPrimary ? 'Primary' : 'Secondary'} · {ex.sets} {ex.sets === 1 ? 'set' : 'sets'} · {ex.daysAgo === 0 ? 'Today' :
+                                                        ex.daysAgo === 1 ? 'Yesterday' :
+                                                            ex.daysAgo === 2 ? '2 days ago' :
+                                                                `${ex.daysAgo}d ago`}
+                                                </Text>
+                                            </View>
                                         </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text
-                                                numberOfLines={1}
-                                                ellipsizeMode="tail"
-                                                style={{
-                                                    fontSize: 15,
-                                                    fontFamily: FONTS.semiBold,
-                                                    color,
-                                                    marginBottom: 2,
-                                                }}
-                                            >
-                                                {ex.name}
-                                            </Text>
-                                            <Text style={{
-                                                fontSize: 12,
-                                                fontFamily: FONTS.medium,
-                                                color,
-                                                opacity: 0.6,
-                                            }}>
-                                                {ex.isPrimary ? 'Primary' : 'Secondary'} · {ex.sets} {ex.sets === 1 ? 'set' : 'sets'} · {ex.daysAgo === 0 ? 'Today' :
-                                                    ex.daysAgo === 1 ? 'Yesterday' :
-                                                        ex.daysAgo === 2 ? '2 days ago' :
-                                                            `${ex.daysAgo}d ago`}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                ))}
-
-                                <View style={{ borderTopWidth: 1, borderTopColor: pillBg }} />
+                                    ))}
+                                </View>
                             </>
                         )}
                     </ScrollView>
