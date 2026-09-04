@@ -612,7 +612,12 @@ const History = () => {
     const router = useRouter();
     const { theme, useImperial, workoutInProgress } = useTheme();
 
-    const styles = getStyles(theme);
+    // Memoised because `styles` is handed to the React.memo'd HistoryCard (and
+    // to ContributionGraph). Rebuilding it each render gave every card a new
+    // prop identity, so the memo never held and every visible session card
+    // re-rendered on any state change here — opening the menu, the calendar,
+    // a card animating out.
+    const styles = useMemo(() => getStyles(theme), [theme]);
 
     const scrollRef = useRef(null);
     useScrollToTop(scrollRef);

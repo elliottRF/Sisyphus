@@ -117,7 +117,9 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 
 const NewExercise = (props) => {
     const { theme, gender } = useTheme();
-    const styles = getStyles(theme);
+    // Memoised: `styles` is a prop of the React.memo'd AnimatedMuscleChip, and
+    // there is one chip per muscle — a new object each render re-rendered them all.
+    const styles = useMemo(() => getStyles(theme), [theme]);
     const handlers = useScrollHandlers();
     const insets = useSafeAreaInsets(); // <-- Initialize safe area insets
 

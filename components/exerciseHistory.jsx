@@ -361,7 +361,9 @@ const buildMuscleTargets = (targetSlugs = [], accessorySlugs = []) => {
 const ExerciseHistory = (props) => {
     const { theme, gender, useImperial } = useTheme();
     const router = useRouter();
-    const styles = getStyles(theme);
+    // Memoised: `styles` is a prop of the React.memo'd HistorySessionCard, so a
+    // fresh object each render defeated the memo on every row.
+    const styles = useMemo(() => getStyles(theme), [theme]);
 
     const initialSnapshot = useMemo(() => getExerciseSnapshotSync(props.exerciseID), [props.exerciseID]);
     const statsOpacity = useRef(new Animated.Value(initialSnapshot ? 1 : 0)).current;
