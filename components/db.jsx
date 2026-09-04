@@ -458,6 +458,29 @@ export const fetchWorkoutHistory = async () => {
   return rows;
 };
 
+// Fold just-written sessions into the cache instead of re-reading every row.
+// The rows are read back from the DB rather than rebuilt from the entries we
+// wrote, so they land in exactly the shape SELECT * yields (defaults applied,
+// same column set) — rebuilding them by hand is where this would quietly drift.
+// Sessions already present are replaced, so this is safe for an overwrite as
+// well as an insert, and History regroups and sorts by session, so appending
+// at the end needs no ordering care.
+const mergeSessionsIntoHistoryCache = async (database, sessions) => {
+  // Nothing warmed yet — there is no cache to append to, and History falls
+  // back to its own fetch, so leave it cold rather than paying for a full read.
+  if (_workoutHistoryCache == null) return;
+  const ids = [...new Set(sessions.filter(sn => sn != null))];
+  if (!ids.length) return;
+  const rows = await database.getAllAsync(
+    `SELECT * FROM workoutHistory WHERE workoutSession IN (${ids.map(() => '?').join(',')});`,
+    ids
+  );
+  const replaced = new Set(ids);
+  _workoutHistoryCache = _workoutHistoryCache
+    .filter(r => !replaced.has(r.workoutSession))
+    .concat(rows);
+};
+
 export const getWorkoutHistoryCount = async () => {
   const database = await getDb();
   const result = await database.getFirstAsync('SELECT COUNT(*) as count FROM workoutHistory;');
@@ -504,8 +527,15 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
     }
   });
   // Refresh the cache so a cold-mounted History (navigated to from the summary)
-  // paints the new session immediately — no spinner, no flash.
-  try { await fetchWorkoutHistory(); } catch (e) { /* cache refresh is best-effort */ }
+  // paints the new session immediately — no spinner, no flash. Only the rows we
+  // just wrote are read back (indexed on workoutSession) and merged in: the old
+  // fetchWorkoutHistory here was a SELECT * over the whole table, so every
+  // finish put a full-table read plus ~12k rows of marshalling on the JS thread
+  // at exactly the moment the summary's count-up animates — the same JS-thread
+  // contention the deferred broadcast below already works around.
+  try {
+    await mergeSessionsIntoHistoryCache(database, workoutEntries.map(e => e.workoutSession));
+  } catch (e) { /* cache refresh is best-effort */ }
   // Defer the refresh broadcast until after the post-finish celebration.
   // Every mounted tab reloads on this event (Home's muscle radar + PR graphs,
   // Exercises, History) — firing it immediately runs all that fetch + re-render
