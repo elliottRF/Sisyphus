@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, Pressable, Keyboard, TextInput } from 'react-native'
 import Animated, {
     useSharedValue,
@@ -181,7 +181,7 @@ const ScrollableInput = ({ value, onChangeText, placeholder, keyboardType, maxLe
 
 const SwipeableSetRow = ({ children, onDelete, index, simultaneousHandlers, isExerciseDragging, completed }) => {
     const { theme } = useTheme();
-    const styles = getStyles(theme);
+    const styles = useMemo(() => getStyles(theme), [theme]);
     const translateX = useSharedValue(0);
 
     // Crossing the delete threshold buzzes once, so you know the row will go
@@ -504,7 +504,14 @@ const ExerciseEditable = ({
     reorderFingerY
 }) => {
     const { theme, useImperial, repRangeMin, repRangeMax } = useTheme();
-    const styles = getStyles(theme);
+    const styles = useMemo(() => getStyles(theme), [theme]);
+    // The parent's callback is keyed by id/name rather than closing over this
+    // card, so wrap it here instead of passing an inline arrow to Pressable.
+    // This also stops the press event being handed over as the first argument.
+    const handleOpenDetails = useCallback(
+        () => onOpenDetails?.(exerciseID, exerciseName),
+        [onOpenDetails, exerciseID, exerciseName]
+    );
     // An existing note starts expanded so it's read, not missed.
     const [isNoteVisible, setIsNoteVisible] = useState(() => !!(exercise.notes && exercise.notes.length > 0));
     const [previousSets, setPreviousSets] = useState(() => prevSetsCache.get(exerciseID) ?? []);
@@ -804,7 +811,7 @@ const ExerciseEditable = ({
                 <MaterialIcons name="drag-indicator" size={20} color={theme.textSecondary} />
             </View>
             <TouchableOpacity
-                onPress={onOpenDetails}
+                onPress={handleOpenDetails}
                 style={{ flex: 1 }}
             >
                 <Text style={styles.exerciseName} numberOfLines={1}>{exerciseName}</Text>

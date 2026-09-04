@@ -61,7 +61,7 @@ const DEFAULT_TEMPLATES = [
 const Current = () => {
     const insets = useSafeAreaInsets();
     const { theme, setWorkoutInProgress, useImperial, workoutStartTime, updateWorkoutStartTime, accessoryWeight, recoveryRate } = useTheme();
-    const styles = getStyles(theme);
+    const styles = useMemo(() => getStyles(theme), [theme]);
 
     const [exercises, setExercises] = useState([]);
     const [isReady, setIsReady] = useState(false);
@@ -533,11 +533,14 @@ const Current = () => {
         actionSheetRef.current?.show();
     };
 
-    const showExerciseInfo = (exerciseDetails) => {
-        if (exerciseDetails) {
-            router.push(`/exercise/${exerciseDetails.exerciseID}?name=${encodeURIComponent(exerciseDetails.name || '')}`);
-        }
-    };
+    // Stable identity on purpose: this is handed to the React.memo'd
+    // ExerciseEditable, and as an inline arrow it was the single prop keeping
+    // that memo from ever holding. It takes the id and name rather than the
+    // details object so the card can supply them from props it already has.
+    const showExerciseInfo = useCallback((exerciseID, exerciseName) => {
+        if (exerciseID == null) return;
+        router.push(`/exercise/${exerciseID}?name=${encodeURIComponent(exerciseName || '')}`);
+    }, [router]);
 
     const saveWorkoutToAsyncStorage = async (workout) => {
         const dataToSave = {
@@ -902,7 +905,7 @@ const Current = () => {
                             exercise={exercise}
                             exerciseName={exerciseDetails ? exerciseDetails.name : 'Unknown Exercise'}
                             updateCurrentWorkout={setCurrentWorkout}
-                            onOpenDetails={() => showExerciseInfo(exerciseDetails)}
+                            onOpenDetails={showExerciseInfo}
                             simultaneousHandlers={listRef}
                             onSetComplete={handleSetComplete}
                             isCardio={!!exerciseDetails?.isCardio}
@@ -917,7 +920,7 @@ const Current = () => {
                 })}
             </Animated.View>
         );
-    }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap, PRMODE, startReorder, endReorder, fingerY]);
+    }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap, PRMODE, startReorder, endReorder, fingerY, styles, showExerciseInfo]);
 
     const ButtonBackground = ({ children, style }) => (
         <LinearGradient
