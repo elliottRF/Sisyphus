@@ -724,6 +724,16 @@ export const fetchLastWorkoutSets = async (exerciseID) => {
 };
 
 
+// Recency cutoffs are built in JS as ISO strings rather than with SQLite's
+// datetime(). Rows store `time` as new Date().toISOString() —
+// "2026-09-04T18:30:00.000Z" — whereas datetime('now', '-60 days') yields
+// "2026-07-06 18:30:00". SQLite compares TEXT bytewise and 'T' (0x54) sorts
+// above ' ' (0x20), so on the cutoff day *every* row compared as >= the cutoff
+// no matter its clock time, and the window quietly ran up to a day long.
+// One day in sixty is small, but it scales badly: the same mistake in a 7-day
+// window would be a 14% error.
+const isoDaysAgo = (days) => new Date(Date.now() - days * 86400000).toISOString();
+
 export const fetchRecentSets = async (exerciseID, days) => {
   const database = await getDb();
 
@@ -731,9 +741,9 @@ export const fetchRecentSets = async (exerciseID, days) => {
     `SELECT *
      FROM workoutHistory
      WHERE exerciseID = ?
-     AND time >= datetime('now', ?)
+     AND time >= ?
      ORDER BY time DESC, setNum ASC;`,
-    [exerciseID, `-${days} days`]
+    [exerciseID, isoDaysAgo(days)]
   );
 };
 
@@ -1030,12 +1040,12 @@ export const fetchRecentPRSession = async (exerciseID) => {
     `SELECT workoutSession
          FROM workoutHistory
          WHERE exerciseID = ?
-           AND time >= datetime('now', ?)
+           AND time >= ?
            AND (setType IS NULL OR setType != 'W')
            AND reps > 0
          ORDER BY weight DESC, reps DESC, time DESC
          LIMIT 1;`,
-    [exerciseID, `-${DAYS_TO_CHECK} days`]
+    [exerciseID, isoDaysAgo(DAYS_TO_CHECK)]
   );
 
   if (!prSession?.workoutSession) return [];
@@ -1091,9 +1101,9 @@ export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex
   const recentSessions = await database.getAllAsync(`
     SELECT workoutSession
     FROM workoutHistory
-    WHERE exerciseID = ? AND time >= datetime('now', '-60 days') AND (setType IS NULL OR setType != 'W')
+    WHERE exerciseID = ? AND time >= ? AND (setType IS NULL OR setType != 'W')
     GROUP BY workoutSession
-  `, [exerciseID]);
+  `, [exerciseID, isoDaysAgo(60)]);
 
   const validSessions = [];
 
