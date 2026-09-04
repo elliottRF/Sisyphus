@@ -491,7 +491,10 @@ export const getWorkoutHistoryCount = async () => {
 export const getLatestWorkoutSession = async () => {
   const database = await getDb();
   const result = await database.getFirstAsync('SELECT MAX(workoutSession) as latestSession FROM workoutHistory;');
-  return result?.latestSession !== null ? result.latestSession : 0;
+  // `result?.` then `result.` — if result really were nullish the guard passed
+  // and the access below threw. ?? matches how every other aggregate read in
+  // this file is written, and behaves identically on the cases that do occur.
+  return result?.latestSession ?? 0;
 };
 
 // Insert workout history entries
