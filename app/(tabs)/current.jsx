@@ -85,6 +85,14 @@ const Current = () => {
     // Real template data
     const [templates, setTemplates] = useState([]);
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
+    // Whether the saved workout has been read back from AsyncStorage yet.
+    // workoutStartTime restores from context BEFORE this screen finishes its own
+    // async read, so for a moment an in-progress workout is "started" with an
+    // empty exercise list. Rendering the active view in that window put the
+    // footer buttons at the top of the page, on top of nothing, and the title
+    // back to "New Workout". Once true this stays true, so switching tabs later
+    // never blanks the screen.
+    const [workoutRestored, setWorkoutRestored] = useState(false);
     const [loadingTemplateId, setLoadingTemplateId] = useState(null);
     const [muscleScores, setMuscleScores] = useState(null);
     // Raw usage rows kept alongside the derived scores so the hold-menu can
@@ -624,6 +632,8 @@ const Current = () => {
                     }
                 } catch (e) {
                     console.error("Error recovering active workout state:", e);
+                } finally {
+                    setWorkoutRestored(true);
                 }
             };
             checkActiveWorkout();
@@ -940,7 +950,7 @@ const Current = () => {
                     <View style={styles.loadingContainer} />
                 ) : (
                     <>
-                        {!workoutStartTime && currentWorkout.length === 0 && (
+                        {workoutRestored && !workoutStartTime && currentWorkout.length === 0 && (
                             <View style={{ flex: 1 }}>
                                 {/* Header lives OUTSIDE the scroll so it sits in the
                                     exact same spot as the other tabs' headers. */}
@@ -1096,7 +1106,7 @@ const Current = () => {
                             </View>
                         )}
 
-                        {(workoutStartTime || currentWorkout.length > 0) && (
+                        {workoutRestored && (workoutStartTime || currentWorkout.length > 0) && (
                             <View style={{ flex: 1 }}>
                                 {/* Header */}
                                 <View style={styles.headerContainer}>
@@ -1171,11 +1181,13 @@ const Current = () => {
                                     showsVerticalScrollIndicator={false}
                                     keyboardDismissMode="on-drag"
                                     scrollEnabled={!isReordering}
+                                    // The footer is deliberately NOT layout-animated.
+                                    // Animating its position meant that when the list went
+                                    // from empty to populated it slid down from the top
+                                    // rather than simply being there, and an interrupted or
+                                    // dropped animation left it stranded over the sets.
                                     ListFooterComponent={
-                                        <Animated.View
-                                            layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
-                                            style={styles.footer}
-                                        >
+                                        <Animated.View style={styles.footer}>
                                             <TouchableOpacity
                                                 style={styles.addExerciseButton}
                                                 onPress={plusButtonShowExerciseList}
