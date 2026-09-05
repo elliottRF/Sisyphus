@@ -1354,14 +1354,23 @@ export const deleteTemplate = async (id) => {
   }
 };
 
-export const updateTemplate = async (id, name, workoutData) => {
+// `splitId` is optional and distinguishes "leave the split alone" (undefined,
+// what every pre-existing caller does) from "move it to this split".
+export const updateTemplate = async (id, name, workoutData, splitId = undefined) => {
   const database = await getDb();
   try {
     const dataString = JSON.stringify(workoutData);
-    await database.runAsync(
-      `UPDATE workoutTemplates SET name = ?, data = ? WHERE id = ?;`,
-      [name, dataString, id]
-    );
+    if (splitId === undefined) {
+      await database.runAsync(
+        `UPDATE workoutTemplates SET name = ?, data = ? WHERE id = ?;`,
+        [name, dataString, id]
+      );
+    } else {
+      await database.runAsync(
+        `UPDATE workoutTemplates SET name = ?, data = ?, splitId = ? WHERE id = ?;`,
+        [name, dataString, splitId, id]
+      );
+    }
   } catch (error) {
     console.error('Error updating template:', error);
     throw error;

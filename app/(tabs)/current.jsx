@@ -100,7 +100,8 @@ const Current = () => {
     const [workoutRestored, setWorkoutRestored] = useState(false);
     const [splits, setSplits] = useState([]);
     const [activeSplitIndex, setActiveSplitIndex] = useState(0);
-    const [templateSort, setTemplateSort] = useState(SORT_READINESS);
+    // Newest-first by default; readiness is available behind the eyebrow toggle.
+    const [templateSort, setTemplateSort] = useState(SORT_CREATED);
     // { mode: 'create' | 'rename', split, name } — drives the split name dialog.
     const [splitEditor, setSplitEditor] = useState(null);
     const [splitMenu, setSplitMenu] = useState(false);
@@ -1248,7 +1249,16 @@ const Current = () => {
                                 {/* Header lives OUTSIDE the pager so it sits in the
                                     exact same spot as the other tabs' headers. */}
                                 <View style={styles.emptyStateHeader}>
-                                    <View style={styles.emptyStateHeaderText}>
+                                    {/* Re-keyed on the page index so the eyebrow and
+                                        title fade in when you swipe to another split,
+                                        rather than snapping to the new name mid-gesture.
+                                        The key remounts them, which is what gives
+                                        `entering` something to animate. */}
+                                    <Animated.View
+                                        key={`split-head-${activeSplitIndex}`}
+                                        entering={FadeIn.duration(260)}
+                                        style={styles.emptyStateHeaderText}
+                                    >
                                         <TouchableOpacity onPress={toggleTemplateSort} activeOpacity={0.6} hitSlop={8}>
                                             <Text style={styles.eyebrow}>
                                                 {activeTemplateCount > 0
@@ -1259,7 +1269,7 @@ const Current = () => {
                                         <Text style={styles.emptyStateTitle} numberOfLines={1}>
                                             {activeSplit ? activeSplit.name : 'Train'}
                                         </Text>
-                                    </View>
+                                    </Animated.View>
                                     {activeSplit && (
                                         <TouchableOpacity
                                             style={styles.splitEditButton}
@@ -1504,7 +1514,7 @@ const Current = () => {
                     <ContextMenu
                         anchor={{ x: width - 40, y: insets.top + 60 }}
                         onClose={() => setSplitMenu(false)}
-                        header={activeSplit.name}
+                        header={{ icon: 'layers', title: activeSplit.name }}
                         items={[
                             { icon: 'edit-2', label: 'Rename Split', onPress: () => openRenameSplit(activeSplit) },
                             { icon: 'plus', label: 'New Split', tint: true, onPress: openCreateSplit },

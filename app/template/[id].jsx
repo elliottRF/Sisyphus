@@ -11,6 +11,7 @@ import { Dimensions } from 'react-native';
 import { getPreloadedData, clearPreloadedData } from '../../constants/preloader';
 
 import {
+    getSplits,
     fetchExercises,
     createTemplate,
     updateTemplate,
@@ -110,6 +111,29 @@ const EditTemplate = () => {
         () => currentWorkout.reduce((n, g) => n + (g.exercises?.length || 0), 0),
         [currentWorkout]
     );
+
+    // Which split this template belongs to. Chosen here rather than being
+    // decided by whichever page of the Train tab happened to be on screen when
+    // the template was created — and editable afterwards, so a template can be
+    // moved without going back to the tab and using the hold-menu.
+    const [splits, setSplits] = useState([]);
+    const [selectedSplitId, setSelectedSplitId] = useState(
+        params.splitId ? Number(params.splitId) : null
+    );
+
+    useEffect(() => {
+        let cancelled = false;
+        getSplits()
+            .then(rows => {
+                if (cancelled) return;
+                setSplits(rows);
+                // Fall back to the first split so the chip row always shows a
+                // selection; createTemplate applies the same rule server-side.
+                setSelectedSplitId(prev => prev ?? rows[0]?.id ?? null);
+            })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
 
     const actionSheetRef = useRef(null);
     const nameInputRef = useRef(null);
@@ -248,12 +272,12 @@ const EditTemplate = () => {
             }));
 
             if (TEMPLATE_ID === 'new') {
-                await createTemplate(templateName, templateData, params.splitId ? Number(params.splitId) : null);
+                await createTemplate(templateName, templateData, selectedSplitId);
                 customAlert("Success", "Template created successfully!", [
                     { text: "OK", onPress: () => router.back() }
                 ]);
             } else {
-                await updateTemplate(TEMPLATE_ID, templateName, templateData);
+                await updateTemplate(TEMPLATE_ID, templateName, templateData, selectedSplitId ?? undefined);
                 customAlert("Success", "Template updated successfully!", [
                     { text: "OK", onPress: () => router.back() }
                 ]);
@@ -327,6 +351,7 @@ const EditTemplate = () => {
                         }));
                         setTemplateName(template.name);
                         setCurrentWorkout(convertedData);
+                        if (template.splitId != null) setSelectedSplitId(template.splitId);
                     }
                 } else {
                     if (!templateName && currentWorkout.length === 0) {
@@ -371,6 +396,32 @@ const EditTemplate = () => {
                         placeholderTextColor={theme.textSecondary}
                         autoFocus={TEMPLATE_ID === 'new'}
                     />
+
+                    {splits.length > 1 && (
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.splitPickerRow}
+                            contentContainerStyle={styles.splitPickerContent}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            {splits.map(split => {
+                                const selected = split.id === selectedSplitId;
+                                return (
+                                    <TouchableOpacity
+                                        key={split.id}
+                                        onPress={() => { haptics.select(); setSelectedSplitId(split.id); }}
+                                        activeOpacity={0.75}
+                                        style={[styles.splitChip, selected && styles.splitChipSelected]}
+                                    >
+                                        <Text style={[styles.splitChipText, selected && styles.splitChipTextSelected]}>
+                                            {split.name}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    )}
                 </View>
 
                 <View ref={listWrapperRef} style={{ flex: 1 }} collapsable={false}>
@@ -490,6 +541,33 @@ const getStyles = (theme) => {
             // Zeroed so the field sits on the text baseline like a title rather
             // than in an input's default vertical padding.
             paddingVertical: 0,
+        },
+        // Only shown when there is more than one split — with a single split
+        // there is no choice to make, and a row of one chip is just noise.
+        splitPickerRow: {
+            marginTop: SPACING.m,
+            marginHorizontal: -SPACING.l,
+        },
+        splitPickerContent: {
+            paddingHorizontal: SPACING.l,
+            gap: SPACING.s,
+        },
+        splitChip: {
+            paddingHorizontal: SPACING.m,
+            paddingVertical: SPACING.s,
+            borderRadius: RADIUS.pill,
+            backgroundColor: theme.overlayInput,
+        },
+        splitChipSelected: {
+            backgroundColor: theme.primary,
+        },
+        splitChipText: {
+            fontSize: TYPE.subhead,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
+        },
+        splitChipTextSelected: {
+            color: theme.textAlternate,
         },
         exerciseWrapper: {
             paddingHorizontal: SPACING.m,
