@@ -328,8 +328,16 @@ const Settings = () => {
 
             customAlert(
                 "Backup Ready",
-                "Save it to this device, or back it up to Drive or another app.",
+                "Back it up to Drive or another app, or save a copy to this device.",
                 [
+                    {
+                        text: 'Back up',
+                        style: 'default',
+                        onPress: () => {
+                            Sharing.shareAsync(destUri, { dialogTitle: 'Save Sisyphus backup' })
+                                .catch(e => console.error("Backup share error:", e));
+                        },
+                    },
                     {
                         text: 'Save to Device',
                         style: 'default',
@@ -343,14 +351,6 @@ const Settings = () => {
                                 console.error("Backup save error:", e);
                                 customAlert("Error", "Could not write the backup to that folder.");
                             }
-                        },
-                    },
-                    {
-                        text: 'Back up',
-                        style: 'default',
-                        onPress: () => {
-                            Sharing.shareAsync(destUri, { dialogTitle: 'Save Sisyphus backup' })
-                                .catch(e => console.error("Backup share error:", e));
                         },
                     },
                     { text: 'Cancel', style: 'cancel' },
