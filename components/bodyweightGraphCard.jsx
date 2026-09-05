@@ -45,6 +45,30 @@ const downsample = (arr, maxPoints) => {
     return result;
 };
 
+// ─── Calendar days vs. instants ──────────────────────────────────────────────
+// `logDate` is a CALENDAR DAY the user is logging against, not an instant, so
+// it has to be derived from local date parts. toISOString() reports the UTC
+// day, which during BST is still yesterday between midnight and 1am — so a
+// weigh-in at 00:30 was offered, and the calendar marked, as the previous day.
+// Same helper as calendarDateString in history.jsx, which exists for this.
+const localDateKey = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// Turn a calendar day back into the instant to store: that local day, at the
+// current local time of day. It has to go through the Date constructor's
+// local-time form. Pasting the day in front of toISOString()'s time part —
+// the obvious-looking fix — concatenates a local date with a UTC clock time,
+// which at 00:30 BST stores the entry a full day in the FUTURE. Backdating
+// had the same flaw already: picking 1 Aug at 00:30 on 5 Sep stored
+// 2026-08-01T23:30Z, which the history list then renders as 2 August.
+const instantForCalendarDay = (dayKey, now) => {
+    const [y, m, d] = dayKey.split('-').map(Number);
+    return new Date(
+        y, m - 1, d,
+        now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds()
+    ).toISOString();
+};
+
 const CustomSelectionDot = ({ isActive, color, borderColor }) => (
     <View style={{
         width: 12,
@@ -93,7 +117,7 @@ const BodyweightGraphCard = ({ theme }) => {
     const [modalVisible, setModalVisible] = useState(false);
     const [newWeight, setNewWeight] = useState('');
     const [saving, setSaving] = useState(false);
-    const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
+    const [logDate, setLogDate] = useState(() => localDateKey(new Date()));
     const [showCalendar, setShowCalendar] = useState(false);
 
     // History Sheet Ref
@@ -152,9 +176,7 @@ const BodyweightGraphCard = ({ theme }) => {
                 return;
             }
             const weightKg = toStorageKg(weightVal, useImperial);
-            const now = new Date();
-            const timePart = now.toISOString().split('T')[1];
-            const fullIso = `${logDate}T${timePart}`;
+            const fullIso = instantForCalendarDay(logDate, new Date());
 
             if (editingEntry) {
                 await deleteBodyWeight(editingEntry.datetime);
@@ -164,7 +186,7 @@ const BodyweightGraphCard = ({ theme }) => {
 
             setModalVisible(false);
             setNewWeight('');
-            setLogDate(new Date().toISOString().split('T')[0]);
+            setLogDate(localDateKey(new Date()));
             setEditingEntry(null);
             setShowCalendar(false);
             loadData();
@@ -199,7 +221,12 @@ const BodyweightGraphCard = ({ theme }) => {
 
     const handleEdit = (entry) => {
         setNewWeight(formatWeight(entry.weight, useImperial).toString());
-        setLogDate(entry.datetime.split('T')[0]);
+        // The stored value is an instant; the list renders it with
+        // toLocaleDateString, so the calendar has to agree on the LOCAL day it
+        // falls on. Splitting the raw ISO string gave the UTC day instead, so
+        // editing a 00:30 BST entry opened the calendar on the day before the
+        // one the user had just tapped in the list.
+        setLogDate(localDateKey(new Date(entry.datetime)));
         setEditingEntry(entry);
         historySheetRef.current?.hide();
         setModalVisible(true);
@@ -478,7 +505,7 @@ const BodyweightGraphCard = ({ theme }) => {
                 >
                     <Feather name="calendar" size={16} color={theme.text} />
                     <Text style={[styles.dateButtonText, { color: theme.text }]}>
-                        {logDate === new Date().toISOString().split('T')[0] ? 'Today' : logDate}
+                        {logDate === localDateKey(new Date()) ? 'Today' : logDate}
                     </Text>
                 </Pressable>
 
@@ -595,7 +622,7 @@ const BodyweightGraphCard = ({ theme }) => {
                                     // Pre-fill with the latest weight so a small daily
                                     // adjustment is a tiny edit, not a fresh entry.
                                     setNewWeight(currentDisplayWeight != null ? currentDisplayWeight.toFixed(1) : '');
-                                    setLogDate(new Date().toISOString().split('T')[0]);
+                                    setLogDate(localDateKey(new Date()));
                                     setModalVisible(true);
                                 }}>
                                     <Feather name="plus" size={16} color={theme.textAlternate} />
