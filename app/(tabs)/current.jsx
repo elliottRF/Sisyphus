@@ -761,10 +761,12 @@ const Current = () => {
 
         const withReadiness = templates.map(template => ({ template, readiness: readinessFor(template) }));
 
-        // Newest first when sorting by creation (getTemplates returns id DESC);
-        // otherwise most-recovered first, which is the default.
+        // Sorting by creation means the order they were added — oldest first, so
+        // the grid reads in the order you built it. Sorted on id explicitly
+        // rather than leaning on getTemplates returning id DESC, so it doesn't
+        // silently flip if that query's direction ever changes.
         return templateSort === SORT_CREATED
-            ? withReadiness
+            ? [...withReadiness].sort((a, b) => a.template.id - b.template.id)
             : [...withReadiness].sort((a, b) => (b.readiness ?? -1) - (a.readiness ?? -1));
     }, [templates, exercises, muscleScores, templateSort]);
 
@@ -1268,7 +1270,7 @@ const Current = () => {
                                         <TouchableOpacity onPress={toggleTemplateSort} activeOpacity={0.6} hitSlop={8}>
                                             <Text style={styles.eyebrow}>
                                                 {activeTemplateCount > 0
-                                                    ? `${activeTemplateCount} ${activeTemplateCount === 1 ? 'TEMPLATE' : 'TEMPLATES'} · ${templateSort === SORT_READINESS ? 'READY FIRST' : 'NEWEST FIRST'}`
+                                                    ? `${activeTemplateCount} ${activeTemplateCount === 1 ? 'TEMPLATE' : 'TEMPLATES'} · ${templateSort === SORT_READINESS ? 'READY FIRST' : 'OLDEST FIRST'}`
                                                     : 'READY WHEN YOU ARE'}
                                             </Text>
                                         </TouchableOpacity>
