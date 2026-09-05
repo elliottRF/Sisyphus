@@ -248,7 +248,7 @@ const EditTemplate = () => {
             }));
 
             if (TEMPLATE_ID === 'new') {
-                await createTemplate(templateName, templateData);
+                await createTemplate(templateName, templateData, params.splitId ? Number(params.splitId) : null);
                 customAlert("Success", "Template created successfully!", [
                     { text: "OK", onPress: () => router.back() }
                 ]);

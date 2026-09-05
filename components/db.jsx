@@ -242,6 +242,54 @@ export const setupDatabase = async () => {
     `);
 
     await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS splits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        position INTEGER DEFAULT 0,
+        createdAt TEXT
+      );
+    `);
+
+    await ensureColumnExists('workoutTemplates', 'splitId', 'INTEGER');
+
+    // Always leave at least one split behind, even on a fresh install — the
+    // Train tab pages over splits, so with none it would have nothing to show
+    // and no way to add a template.
+    const splitCount = await database.getFirstAsync('SELECT COUNT(*) as count FROM splits;');
+    if ((splitCount?.count || 0) === 0) {
+      await database.runAsync(
+        'INSERT INTO splits (name, position, createdAt) VALUES (?, ?, ?);',
+        ['My Templates', 0, new Date().toISOString()]
+      );
+    }
+
+    // Adopt every template that isn't in a live split. This deliberately does
+    // NOT run only when there are no splits, which is what it used to do and
+    // which silently loses templates: a database can hold splits AND unassigned
+    // templates at the same time. Both of the owner's real backups are in that
+    // state — splits created by one build, then templates created by a build
+    // that had been rolled back and no longer set splitId. The guard saw splits
+    // present, skipped, and left every template unreachable, because the Train
+    // tab only renders templates grouped under a split.
+    //
+    // Keying on the templates themselves rather than on a global "have we
+    // migrated" flag also covers a template whose split was deleted, and makes
+    // the whole thing idempotent: a template already in a live split is never
+    // touched, so deliberate organisation survives.
+    const homeSplit = await database.getFirstAsync(
+      'SELECT id FROM splits ORDER BY position ASC, id ASC LIMIT 1;'
+    );
+    if (homeSplit?.id) {
+      await database.runAsync(
+        `UPDATE workoutTemplates
+            SET splitId = ?
+          WHERE splitId IS NULL
+             OR splitId NOT IN (SELECT id FROM splits);`,
+        [homeSplit.id]
+      );
+    }
+
+    await database.execAsync(`
       CREATE TABLE IF NOT EXISTS bodyWeight (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         datetime TEXT NOT NULL UNIQUE,
@@ -1188,19 +1236,81 @@ export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex
 
 // --- Template Functions ---
 
-export const createTemplate = async (name, workoutData) => {
+export const createTemplate = async (name, workoutData, splitId = null) => {
   const database = await getDb();
   try {
     const dataString = JSON.stringify(workoutData);
+    // Unassigned templates land in the first split so they never become
+    // invisible — every template is reachable from some page of the Train tab.
+    let targetSplit = splitId;
+    if (targetSplit == null) {
+      const first = await database.getFirstAsync(
+        'SELECT id FROM splits ORDER BY position ASC, id ASC LIMIT 1;'
+      );
+      targetSplit = first?.id ?? null;
+    }
     const result = await database.runAsync(
-      `INSERT INTO workoutTemplates (name, data, createdAt) VALUES (?, ?, ?);`,
-      [name, dataString, new Date().toISOString()]
+      `INSERT INTO workoutTemplates (name, data, createdAt, splitId) VALUES (?, ?, ?, ?);`,
+      [name, dataString, new Date().toISOString(), targetSplit]
     );
     return result.lastInsertRowId;
   } catch (error) {
     console.error('Error creating template:', error);
     throw error;
   }
+};
+
+// ─── Splits ───────────────────────────────────────────────────────────────────
+// A split is a named group of templates (PPL, Upper/Lower…). Templates carry a
+// splitId rather than the split carrying a list, so deleting a template can't
+// leave a dangling reference behind.
+
+export const getSplits = async () => {
+  const database = await getDb();
+  try {
+    return await database.getAllAsync('SELECT * FROM splits ORDER BY position ASC, id ASC;');
+  } catch (error) {
+    console.error('Error fetching splits:', error);
+    return [];
+  }
+};
+
+export const createSplit = async (name) => {
+  const database = await getDb();
+  const row = await database.getFirstAsync('SELECT MAX(position) as maxPos FROM splits;');
+  const position = (row?.maxPos ?? -1) + 1;
+  const result = await database.runAsync(
+    'INSERT INTO splits (name, position, createdAt) VALUES (?, ?, ?);',
+    [name, position, new Date().toISOString()]
+  );
+  return result.lastInsertRowId;
+};
+
+export const renameSplit = async (id, name) => {
+  const database = await getDb();
+  await database.runAsync('UPDATE splits SET name = ? WHERE id = ?;', [name, id]);
+};
+
+// Templates are moved rather than deleted — losing a split should never lose
+// the work inside it. Returns the split they were moved to, or null if the
+// templates became unassigned (only possible when this was the last split).
+export const deleteSplit = async (id) => {
+  const database = await getDb();
+  const fallback = await database.getFirstAsync(
+    'SELECT id FROM splits WHERE id != ? ORDER BY position ASC, id ASC LIMIT 1;',
+    [id]
+  );
+  const target = fallback?.id ?? null;
+  await database.withTransactionAsync(async () => {
+    await database.runAsync('UPDATE workoutTemplates SET splitId = ? WHERE splitId = ?;', [target, id]);
+    await database.runAsync('DELETE FROM splits WHERE id = ?;', [id]);
+  });
+  return target;
+};
+
+export const moveTemplateToSplit = async (templateId, splitId) => {
+  const database = await getDb();
+  await database.runAsync('UPDATE workoutTemplates SET splitId = ? WHERE id = ?;', [splitId, templateId]);
 };
 
 export const getTemplates = async () => {

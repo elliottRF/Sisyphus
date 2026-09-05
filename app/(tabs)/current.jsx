@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, Dimensions, Modal } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, Dimensions, Modal, FlatList, Pressable } from 'react-native'
 import Animated, { LinearTransition, FadeIn, FadeOut, Easing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useScrollToTop } from 'expo-router';
@@ -12,7 +12,7 @@ import { AntDesign, Feather, Ionicons, MaterialIcons, MaterialCommunityIcons } f
 
 import * as NavigationBar from 'expo-navigation-bar';
 
-import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, createTemplate, fetchLastWorkoutSets, getTemplate, fetchRecentMuscleUsage } from '../../components/db';
+import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, createTemplate, fetchLastWorkoutSets, getTemplate, fetchRecentMuscleUsage, getSplits, createSplit, renameSplit, deleteSplit, moveTemplateToSplit } from '../../components/db';
 import { setPreloadedData } from '../../constants/preloader';
 import { toStorageKg, formatWeight, unitLabel } from '../../utils/units';
 import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
@@ -49,6 +49,11 @@ import ContextMenu from '../../components/ContextMenu';
 
 
 const { width } = Dimensions.get('window');
+
+// Template ordering within a split. Persisted so it survives a restart.
+const TEMPLATE_SORT_KEY = 'settings_templateSort';
+const SORT_READINESS = 'readiness';
+const SORT_CREATED = 'created';
 
 // Optional Push/Pull/Legs starter templates, offered to users with no templates
 // yet. Exercise IDs are canonical (see db setup), referenced by id.
@@ -93,6 +98,27 @@ const Current = () => {
     // back to "New Workout". Once true this stays true, so switching tabs later
     // never blanks the screen.
     const [workoutRestored, setWorkoutRestored] = useState(false);
+    const [splits, setSplits] = useState([]);
+    const [activeSplitIndex, setActiveSplitIndex] = useState(0);
+    const [templateSort, setTemplateSort] = useState(SORT_READINESS);
+    // { mode: 'create' | 'rename', split, name } — drives the split name dialog.
+    const [splitEditor, setSplitEditor] = useState(null);
+    const [splitMenu, setSplitMenu] = useState(false);
+    const splitPagerRef = useRef(null);
+
+    useEffect(() => {
+        AsyncStorage.getItem(TEMPLATE_SORT_KEY)
+            .then(saved => { if (saved === SORT_CREATED || saved === SORT_READINESS) setTemplateSort(saved); })
+            .catch(() => {});
+    }, []);
+
+    const toggleTemplateSort = () => {
+        setTemplateSort(prev => {
+            const next = prev === SORT_READINESS ? SORT_CREATED : SORT_READINESS;
+            AsyncStorage.setItem(TEMPLATE_SORT_KEY, next).catch(() => {});
+            return next;
+        });
+    };
     const [loadingTemplateId, setLoadingTemplateId] = useState(null);
     const [muscleScores, setMuscleScores] = useState(null);
     // Raw usage rows kept alongside the derived scores so the hold-menu can
@@ -101,8 +127,9 @@ const Current = () => {
 
     const loadTemplates = async () => {
         try {
-            const data = await getTemplates();
+            const [data, splitRows] = await Promise.all([getTemplates(), getSplits()]);
             setTemplates(data);
+            setSplits(splitRows);
         } catch (error) {
             console.error("Error loading templates:", error);
         } finally {
@@ -354,6 +381,73 @@ const Current = () => {
         }
     };
 
+    // ── Splits ───────────────────────────────────────────────────────────────
+    const openCreateSplit = () => setSplitEditor({ mode: 'create', split: null, name: '' });
+    const openRenameSplit = (split) => setSplitEditor({ mode: 'rename', split, name: split.name });
+
+    const submitSplitEditor = async () => {
+        if (!splitEditor) return;
+        const name = splitEditor.name.trim();
+        if (!name) return;
+        const editor = splitEditor;
+        setSplitEditor(null);
+        try {
+            if (editor.mode === 'create') {
+                await createSplit(name);
+                const refreshed = await getSplits();
+                setSplits(refreshed);
+                // Land on the split just created.
+                setActiveSplitIndex(Math.max(0, refreshed.length - 1));
+            } else {
+                await renameSplit(editor.split.id, name);
+                setSplits(await getSplits());
+            }
+        } catch (error) {
+            console.error('Failed to save split:', error);
+            loadTemplates();
+        }
+    };
+
+    const confirmDeleteSplit = (split) => {
+        const count = templates.filter(t => t.splitId === split.id).length;
+        const isLast = splits.length === 1;
+        customAlert(
+            `Delete "${split.name}"?`,
+            isLast
+                ? 'This is your only split, so it can\'t be removed. Rename it instead.'
+                : count > 0
+                    ? `Its ${count} ${count === 1 ? 'template' : 'templates'} will move to "${splits.find(s => s.id !== split.id)?.name}" — nothing is deleted.`
+                    : 'This split is empty.',
+            isLast
+                ? [{ text: 'OK', style: 'cancel' }]
+                : [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Delete', style: 'destructive', onPress: async () => {
+                            try {
+                                await deleteSplit(split.id);
+                                setActiveSplitIndex(0);
+                                await loadTemplates();
+                            } catch (error) {
+                                console.error('Failed to delete split:', error);
+                            }
+                        }
+                    },
+                ]
+        );
+    };
+
+    const handleMoveTemplate = async (template, splitId) => {
+        // Optimistic so the card leaves the current page immediately.
+        setTemplates(prev => prev.map(t => (t.id === template.id ? { ...t, splitId } : t)));
+        try {
+            await moveTemplateToSplit(template.id, splitId);
+        } catch (error) {
+            console.error('Failed to move template:', error);
+            loadTemplates();
+        }
+    };
+
     // One-tap Push/Pull/Legs starter pack (only offered when the user has no
     // templates). Inserts in order so the grid shows Push · Pull · Legs.
     const addStarterTemplates = async () => {
@@ -386,6 +480,8 @@ const Current = () => {
     const handleAddTemplate = async () => {
         setLoadingTemplateId('new');
         haptics.tap();
+        // Land the new template on the split currently being viewed.
+        const splitParam = activeSplit ? `&splitId=${activeSplit.id}` : '';
 
         try {
             const [exercisesData] = await Promise.all([
@@ -398,9 +494,9 @@ const Current = () => {
                 exercises: exercisesData
             });
 
-            router.push(`/template/new?v=${Date.now()}`);
+            router.push(`/template/new?v=${Date.now()}${splitParam}`);
         } catch (error) {
-            router.push(`/template/new?v=${Date.now()}`);
+            router.push(`/template/new?v=${Date.now()}${splitParam}`);
         }
     };
 
@@ -656,11 +752,44 @@ const Current = () => {
             return Math.round(percents.reduce((a, b) => a + b, 0) / percents.length);
         };
 
-        return [...templates]
-            .reverse()
-            .map(template => ({ template, readiness: readinessFor(template) }))
-            .sort((a, b) => (b.readiness ?? -1) - (a.readiness ?? -1));
-    }, [templates, exercises, muscleScores]);
+        const withReadiness = templates.map(template => ({ template, readiness: readinessFor(template) }));
+
+        // Newest first when sorting by creation (getTemplates returns id DESC);
+        // otherwise most-recovered first, which is the default.
+        return templateSort === SORT_CREATED
+            ? withReadiness
+            : [...withReadiness].sort((a, b) => (b.readiness ?? -1) - (a.readiness ?? -1));
+    }, [templates, exercises, muscleScores, templateSort]);
+
+    // One bucket of templates per split, in split order. Templates whose split
+    // was removed fall into the first split so nothing becomes unreachable.
+    const splitPages = useMemo(() => {
+        if (splits.length === 0) return [];
+        const byId = new Map(splits.map(s => [s.id, []]));
+        const firstId = splits[0].id;
+        templatesWithReadiness.forEach(entry => {
+            const key = byId.has(entry.template.splitId) ? entry.template.splitId : firstId;
+            byId.get(key).push(entry);
+        });
+        return splits.map(split => ({ split, entries: byId.get(split.id) || [] }));
+    }, [splits, templatesWithReadiness]);
+
+    const activeSplit = splitPages[activeSplitIndex]?.split ?? null;
+    const activeTemplateCount = splitPages[activeSplitIndex]?.entries.length ?? 0;
+
+    // A trailing "new split" page, so swiping past the last split offers to
+    // create one — the same gesture that reveals it also explains it.
+    const pagerData = useMemo(
+        () => (splitPages.length > 0 ? [...splitPages, { __newSplit: true }] : []),
+        [splitPages]
+    );
+
+    // Keep the index valid when a split is deleted while it's showing.
+    useEffect(() => {
+        if (activeSplitIndex > 0 && activeSplitIndex >= splitPages.length) {
+            setActiveSplitIndex(Math.max(0, splitPages.length - 1));
+        }
+    }, [splitPages.length, activeSplitIndex]);
 
     const readinessBadge = (readiness) => {
         if (readiness == null) return null;
@@ -943,6 +1072,163 @@ const Current = () => {
         </LinearGradient>
     );
 
+
+    // One page of the split pager: the template grid for a single split. Kept
+    // as a function rather than a component so the existing card markup, its
+    // layout animations and the hold-menu wiring stay exactly as they were.
+    const renderSplitPage = ({ item }) => {
+        if (item.__newSplit) {
+            return (
+                <View style={[styles.splitPage, styles.newSplitPage]}>
+                    <TouchableOpacity style={styles.newSplitCard} onPress={openCreateSplit} activeOpacity={0.8}>
+                        <AntDesign name="plus" size={30} color={theme.primary} style={{ marginBottom: 8 }} />
+                        <Text style={styles.newSplitTitle}>New Split</Text>
+                        <Text style={styles.newSplitSub}>Group templates into a routine like PPL or Upper/Lower</Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+
+        const { entries } = item;
+        // The starter pack is only ever offered when the user has nothing at all.
+        const showStarter = templates.length === 0;
+
+        return (
+            <View style={styles.splitPage}>
+                <ScrollView contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false}>
+                    {(templatesLoaded && exercises.length > 0) && (
+                            <Animated.View entering={FadeIn.duration(300)} style={styles.templatesGrid}>
+                                {entries.map(({ template, readiness }) => {
+                                    const exerciseNames = template.data.flatMap(group =>
+                                        group.exercises.map(ex => {
+                                            const detail = exercises.find(e => e.exerciseID === ex.exerciseID);
+                                            return detail ? detail.name : 'Unknown';
+                                        })
+                                    );
+                                    const displayNames = exerciseNames.slice(0, 4);
+                                    const moreCount = exerciseNames.length - displayNames.length;
+                                    const badge = readinessBadge(readiness);
+
+                                    return (
+                                        <Animated.View
+                                            key={template.id}
+                                            layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
+                                            entering={FadeIn.duration(250)}
+                                            exiting={FadeOut.duration(180)}
+                                            style={styles.templateCardWrap}
+                                        >
+                                        <TouchableOpacity
+                                            style={styles.templateCard}
+                                            activeOpacity={0.7}
+                                            onPress={() => loadTemplate(template)}
+                                            onLongPress={(e) => openTemplateMenu(template, e)}
+                                            delayLongPress={300}
+                                        >
+                                            <View style={{ flex: 1 }}>
+                                                <View style={styles.templateCardHeader}>
+                                                    <Text style={styles.templateName} numberOfLines={1}>{template.name}</Text>
+                                                    <TouchableOpacity
+                                                        style={styles.templateEditButton}
+                                                        onPress={(e) => {
+                                                            e.stopPropagation();
+                                                            handleLongPressTemplate(template);
+                                                        }}
+                                                        disabled={!!loadingTemplateId}
+                                                    >
+                                                        {loadingTemplateId === template.id ? (
+                                                            <ActivityIndicator size="small" color={theme.primary} />
+                                                        ) : (
+                                                            <Feather name="edit-2" size={14} color={theme.textSecondary} />
+                                                        )}
+                                                    </TouchableOpacity>
+                                                </View>
+
+                                                <View style={styles.templateOverview}>
+                                                    {displayNames.map((name, idx) => (
+                                                        <Text key={idx} style={styles.templateExerciseItem} numberOfLines={1}>
+                                                            • {name}
+                                                        </Text>
+                                                    ))}
+                                                    {moreCount > 0 ? (
+                                                        <Text style={styles.templateMoreCount}>
+                                                            + {moreCount} more
+                                                        </Text>
+                                                    ) : null}
+                                                </View>
+                                            </View>
+
+                                            <View style={styles.cardFooter}>
+                                                <Text style={styles.templateDetails}>
+                                                    {exerciseNames.length} {exerciseNames.length === 1 ? 'exercise' : 'exercises'}
+                                                </Text>
+                                                {badge ? (
+                                                    <View style={styles.readinessPill}>
+                                                        <View style={[styles.readinessPillDot, { backgroundColor: badge.color }]} />
+                                                        <Text style={[styles.readinessPillText, { color: badge.color }]}>
+                                                            {badge.label}
+                                                        </Text>
+                                                    </View>
+                                                ) : (
+                                                    <Ionicons name="chevron-forward" size={16} color={theme.primary} opacity={0.5} />
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+                                        </Animated.View>
+                                    );
+                                })}
+
+                                {/* Starter pack — only when the user has no templates yet */}
+                                {showStarter && (
+                                    <Animated.View
+                                        layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
+                                        exiting={FadeOut.duration(180)}
+                                        style={styles.templateCardWrap}
+                                    >
+                                        <TouchableOpacity
+                                            style={[styles.templateCard, styles.starterCard]}
+                                            activeOpacity={0.8}
+                                            onPress={addStarterTemplates}
+                                            disabled={!!loadingTemplateId}
+                                        >
+                                            <View style={styles.addTemplateInner}>
+                                                {loadingTemplateId === 'starter' ? (
+                                                    <ActivityIndicator color={theme.primary} />
+                                                ) : (
+                                                    <>
+                                                        <MaterialCommunityIcons name="auto-fix" size={28} color={theme.primary} style={{ marginBottom: 6 }} />
+                                                        <Text style={styles.starterTitle}>Add starter templates</Text>
+                                                        <Text style={styles.starterSub}>Push · Pull · Legs to get you going</Text>
+                                                    </>
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+                                    </Animated.View>
+                                )}
+
+                                {/* Add Template Button */}
+                                <Animated.View
+                                    layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
+                                    style={styles.templateCardWrap}
+                                >
+                                <TouchableOpacity
+                                    style={[styles.templateCard, styles.addTemplateCard]}
+                                    activeOpacity={0.7}
+                                    onPress={handleAddTemplate}
+                                    disabled={!!loadingTemplateId}
+                                >
+                                    <View style={styles.addTemplateInner}>
+                                        <AntDesign name="plus" size={28} color={theme.textSecondary} style={{ marginBottom: 4 }} />
+                                        <Text style={styles.addTemplateText}>New Template</Text>
+                                    </View>
+                                </TouchableOpacity>
+                                </Animated.View>
+                            </Animated.View>
+                    )}
+                </ScrollView>
+            </View>
+        );
+    };
+
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
@@ -952,149 +1238,71 @@ const Current = () => {
                     <>
                         {workoutRestored && !workoutStartTime && currentWorkout.length === 0 && (
                             <View style={{ flex: 1 }}>
-                                {/* Header lives OUTSIDE the scroll so it sits in the
+                                {/* Header lives OUTSIDE the pager so it sits in the
                                     exact same spot as the other tabs' headers. */}
                                 <View style={styles.emptyStateHeader}>
-                                    <Text style={styles.eyebrow}>
-                                        {templates.length > 0
-                                            ? `${templates.length} ${templates.length === 1 ? 'TEMPLATE' : 'TEMPLATES'} · READY FIRST`
-                                            : 'READY WHEN YOU ARE'}
-                                    </Text>
-                                    <Text style={styles.emptyStateTitle}>Train</Text>
-                                </View>
-                                <ScrollView ref={emptyStateScrollRef} contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false}>
-                                    {/* Render only once templates + exercises are
-                                        loaded, then fade in — avoids the cards and
-                                        their exercise names popping in on first boot. */}
-                                    {(templatesLoaded && exercises.length > 0) && (
-                                    <Animated.View entering={FadeIn.duration(300)} style={styles.templatesGrid}>
-                                        {templatesWithReadiness.map(({ template, readiness }) => {
-                                            const exerciseNames = template.data.flatMap(group =>
-                                                group.exercises.map(ex => {
-                                                    const detail = exercises.find(e => e.exerciseID === ex.exerciseID);
-                                                    return detail ? detail.name : 'Unknown';
-                                                })
-                                            );
-                                            const displayNames = exerciseNames.slice(0, 4);
-                                            const moreCount = exerciseNames.length - displayNames.length;
-                                            const badge = readinessBadge(readiness);
-
-                                            return (
-                                                <Animated.View
-                                                    key={template.id}
-                                                    layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
-                                                    entering={FadeIn.duration(250)}
-                                                    exiting={FadeOut.duration(180)}
-                                                    style={styles.templateCardWrap}
-                                                >
-                                                <TouchableOpacity
-                                                    style={styles.templateCard}
-                                                    activeOpacity={0.7}
-                                                    onPress={() => loadTemplate(template)}
-                                                    onLongPress={(e) => openTemplateMenu(template, e)}
-                                                    delayLongPress={300}
-                                                >
-                                                    <View style={{ flex: 1 }}>
-                                                        <View style={styles.templateCardHeader}>
-                                                            <Text style={styles.templateName} numberOfLines={1}>{template.name}</Text>
-                                                            <TouchableOpacity
-                                                                style={styles.templateEditButton}
-                                                                onPress={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleLongPressTemplate(template);
-                                                                }}
-                                                                disabled={!!loadingTemplateId}
-                                                            >
-                                                                {loadingTemplateId === template.id ? (
-                                                                    <ActivityIndicator size="small" color={theme.primary} />
-                                                                ) : (
-                                                                    <Feather name="edit-2" size={14} color={theme.textSecondary} />
-                                                                )}
-                                                            </TouchableOpacity>
-                                                        </View>
-
-                                                        <View style={styles.templateOverview}>
-                                                            {displayNames.map((name, idx) => (
-                                                                <Text key={idx} style={styles.templateExerciseItem} numberOfLines={1}>
-                                                                    • {name}
-                                                                </Text>
-                                                            ))}
-                                                            {moreCount > 0 ? (
-                                                                <Text style={styles.templateMoreCount}>
-                                                                    + {moreCount} more
-                                                                </Text>
-                                                            ) : null}
-                                                        </View>
-                                                    </View>
-
-                                                    <View style={styles.cardFooter}>
-                                                        <Text style={styles.templateDetails}>
-                                                            {exerciseNames.length} {exerciseNames.length === 1 ? 'exercise' : 'exercises'}
-                                                        </Text>
-                                                        {badge ? (
-                                                            <View style={styles.readinessPill}>
-                                                                <View style={[styles.readinessPillDot, { backgroundColor: badge.color }]} />
-                                                                <Text style={[styles.readinessPillText, { color: badge.color }]}>
-                                                                    {badge.label}
-                                                                </Text>
-                                                            </View>
-                                                        ) : (
-                                                            <Ionicons name="chevron-forward" size={16} color={theme.primary} opacity={0.5} />
-                                                        )}
-                                                    </View>
-                                                </TouchableOpacity>
-                                                </Animated.View>
-                                            );
-                                        })}
-
-                                        {/* Starter pack — only when the user has no templates yet */}
-                                        {templates.length === 0 && (
-                                            <Animated.View
-                                                layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
-                                                exiting={FadeOut.duration(180)}
-                                                style={styles.templateCardWrap}
-                                            >
-                                                <TouchableOpacity
-                                                    style={[styles.templateCard, styles.starterCard]}
-                                                    activeOpacity={0.8}
-                                                    onPress={addStarterTemplates}
-                                                    disabled={!!loadingTemplateId}
-                                                >
-                                                    <View style={styles.addTemplateInner}>
-                                                        {loadingTemplateId === 'starter' ? (
-                                                            <ActivityIndicator color={theme.primary} />
-                                                        ) : (
-                                                            <>
-                                                                <MaterialCommunityIcons name="auto-fix" size={28} color={theme.primary} style={{ marginBottom: 6 }} />
-                                                                <Text style={styles.starterTitle}>Add starter templates</Text>
-                                                                <Text style={styles.starterSub}>Push · Pull · Legs to get you going</Text>
-                                                            </>
-                                                        )}
-                                                    </View>
-                                                </TouchableOpacity>
-                                            </Animated.View>
-                                        )}
-
-                                        {/* Add Template Button */}
-                                        <Animated.View
-                                            layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
-                                            style={styles.templateCardWrap}
-                                        >
-                                        <TouchableOpacity
-                                            style={[styles.templateCard, styles.addTemplateCard]}
-                                            activeOpacity={0.7}
-                                            onPress={handleAddTemplate}
-                                            disabled={!!loadingTemplateId}
-                                        >
-                                            <View style={styles.addTemplateInner}>
-                                                <AntDesign name="plus" size={28} color={theme.textSecondary} style={{ marginBottom: 4 }} />
-                                                <Text style={styles.addTemplateText}>New Template</Text>
-                                            </View>
+                                    <View style={styles.emptyStateHeaderText}>
+                                        <TouchableOpacity onPress={toggleTemplateSort} activeOpacity={0.6} hitSlop={8}>
+                                            <Text style={styles.eyebrow}>
+                                                {activeTemplateCount > 0
+                                                    ? `${activeTemplateCount} ${activeTemplateCount === 1 ? 'TEMPLATE' : 'TEMPLATES'} · ${templateSort === SORT_READINESS ? 'READY FIRST' : 'NEWEST FIRST'}`
+                                                    : 'READY WHEN YOU ARE'}
+                                            </Text>
                                         </TouchableOpacity>
-                                        </Animated.View>
-                                    </Animated.View>
+                                        <Text style={styles.emptyStateTitle} numberOfLines={1}>
+                                            {activeSplit ? activeSplit.name : 'Train'}
+                                        </Text>
+                                    </View>
+                                    {activeSplit && (
+                                        <TouchableOpacity
+                                            style={styles.splitEditButton}
+                                            onPress={() => setSplitMenu(true)}
+                                            hitSlop={6}
+                                        >
+                                            <Feather name="more-horizontal" size={20} color={theme.text} />
+                                        </TouchableOpacity>
                                     )}
-                                </ScrollView>
+                                </View>
+
+                                {splitPages.length > 1 && (
+                                    <View style={styles.splitDots}>
+                                        {pagerData.map((page, i) => (
+                                            <TouchableOpacity
+                                                key={page.__newSplit ? 'new' : page.split.id}
+                                                onPress={() => {
+                                                    setActiveSplitIndex(i);
+                                                    splitPagerRef.current?.scrollToOffset({ offset: i * width, animated: true });
+                                                }}
+                                                hitSlop={8}
+                                            >
+                                                <View style={[
+                                                    styles.splitDot,
+                                                    page.__newSplit && styles.splitDotNew,
+                                                    i === activeSplitIndex && styles.splitDotActive,
+                                                ]} />
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+
+                                <FlatList
+                                    ref={splitPagerRef}
+                                    data={pagerData}
+                                    renderItem={renderSplitPage}
+                                    keyExtractor={(item) => (item.__newSplit ? 'new-split' : String(item.split.id))}
+                                    horizontal
+                                    pagingEnabled
+                                    showsHorizontalScrollIndicator={false}
+                                    // Only neighbouring splits stay mounted — each page holds a
+                                    // full card grid, and this screen has a history of retaining
+                                    // views (see project memory).
+                                    windowSize={3}
+                                    initialNumToRender={1}
+                                    onMomentumScrollEnd={(e) => {
+                                        const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+                                        if (idx !== activeSplitIndex) setActiveSplitIndex(idx);
+                                    }}
+                                />
 
                                 <View style={[styles.bottomButtonContainer, { bottom: Math.max(insets.bottom + 80, 115) }]}>
                                     <TouchableOpacity onPress={startWorkout} activeOpacity={0.8} style={styles.startWorkoutButtonContainer}>
@@ -1271,9 +1479,69 @@ const Current = () => {
                         items={[
                             { icon: 'play', label: 'Start Workout', tint: true, onPress: () => loadTemplate(templateMenu.template) },
                             { icon: 'edit-2', label: 'Edit Template', onPress: () => handleLongPressTemplate(templateMenu.template) },
+                            // One entry per other split, so moving a template is a
+                            // single tap rather than a second picker screen.
+                            ...splits
+                                .filter(s => s.id !== templateMenu.template.splitId)
+                                .map(s => ({
+                                    icon: 'corner-up-right',
+                                    label: `Move to ${s.name}`,
+                                    onPress: () => handleMoveTemplate(templateMenu.template, s.id),
+                                })),
                             { icon: 'trash-2', label: 'Delete Template', destructive: true, onPress: () => confirmDeleteTemplate(templateMenu.template) },
                         ]}
                     />
+                )}
+
+                {splitMenu && activeSplit && (
+                    <ContextMenu
+                        anchor={{ x: width - 40, y: insets.top + 60 }}
+                        onClose={() => setSplitMenu(false)}
+                        header={activeSplit.name}
+                        items={[
+                            { icon: 'edit-2', label: 'Rename Split', onPress: () => openRenameSplit(activeSplit) },
+                            { icon: 'plus', label: 'New Split', tint: true, onPress: openCreateSplit },
+                            { icon: 'trash-2', label: 'Delete Split', destructive: true, onPress: () => confirmDeleteSplit(activeSplit) },
+                        ]}
+                    />
+                )}
+
+                {splitEditor && (
+                    <Modal transparent animationType="fade" statusBarTranslucent onRequestClose={() => setSplitEditor(null)}>
+                        <Pressable style={styles.splitDialogBackdrop} onPress={() => setSplitEditor(null)}>
+                            <Pressable style={styles.splitDialog} onPress={() => {}}>
+                                <Text style={styles.splitDialogTitle}>
+                                    {splitEditor.mode === 'create' ? 'New Split' : 'Rename Split'}
+                                </Text>
+                                <TextInput
+                                    style={styles.splitDialogInput}
+                                    value={splitEditor.name}
+                                    onChangeText={(text) => setSplitEditor(prev => ({ ...prev, name: text }))}
+                                    placeholder="e.g. Push Pull Legs"
+                                    placeholderTextColor={theme.textSecondary}
+                                    autoFocus
+                                    maxLength={40}
+                                    returnKeyType="done"
+                                    onSubmitEditing={submitSplitEditor}
+                                    selectionColor={theme.primary}
+                                />
+                                <View style={styles.splitDialogActions}>
+                                    <TouchableOpacity onPress={() => setSplitEditor(null)} style={styles.splitDialogBtn}>
+                                        <Text style={styles.splitDialogCancel}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={submitSplitEditor}
+                                        style={styles.splitDialogBtn}
+                                        disabled={!splitEditor.name.trim()}
+                                    >
+                                        <Text style={[styles.splitDialogConfirm, !splitEditor.name.trim() && { opacity: 0.4 }]}>
+                                            {splitEditor.mode === 'create' ? 'Create' : 'Save'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </Pressable>
+                        </Pressable>
+                    </Modal>
                 )}
             </View>
         </GestureHandlerRootView>
@@ -1317,6 +1585,119 @@ const getStyles = (theme) => {
             paddingHorizontal: 20,
             paddingTop: 16,
             paddingBottom: 12,
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+        },
+        emptyStateHeaderText: {
+            flex: 1,
+        },
+        splitEditButton: {
+            padding: 8,
+            marginTop: 4,
+        },
+        splitDots: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingHorizontal: 20,
+            paddingBottom: 10,
+        },
+        splitDot: {
+            width: 7,
+            height: 7,
+            borderRadius: 4,
+            backgroundColor: theme.overlayBorder,
+        },
+        splitDotActive: {
+            backgroundColor: theme.primary,
+            width: 18,
+        },
+        splitDotNew: {
+            backgroundColor: 'transparent',
+            borderWidth: 1,
+            borderColor: theme.overlayBorder,
+        },
+        // Each page is exactly one screen wide so paging lands cleanly.
+        splitPage: {
+            width,
+            flex: 1,
+        },
+        newSplitPage: {
+            paddingHorizontal: 16,
+            paddingTop: 8,
+        },
+        newSplitCard: {
+            flex: 1,
+            maxHeight: 220,
+            borderRadius: RADIUS.l,
+            borderWidth: 1.5,
+            borderStyle: 'dashed',
+            borderColor: theme.overlayBorder,
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+        },
+        newSplitTitle: {
+            fontSize: 17,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+            marginBottom: 4,
+        },
+        newSplitSub: {
+            fontSize: 13,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            textAlign: 'center',
+            lineHeight: 18,
+        },
+        splitDialogBackdrop: {
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 32,
+        },
+        splitDialog: {
+            width: '100%',
+            backgroundColor: theme.surface,
+            borderRadius: RADIUS.l,
+            padding: 20,
+            ...getThemedShadow(theme, 'medium'),
+        },
+        splitDialogTitle: {
+            fontSize: 17,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+            marginBottom: 14,
+        },
+        splitDialogInput: {
+            backgroundColor: theme.overlayInput,
+            borderRadius: RADIUS.m,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            fontSize: 16,
+            fontFamily: FONTS.medium,
+            color: theme.text,
+        },
+        splitDialogActions: {
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+            gap: 8,
+            marginTop: 16,
+        },
+        splitDialogBtn: {
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+        },
+        splitDialogCancel: {
+            fontSize: 15,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
+        },
+        splitDialogConfirm: {
+            fontSize: 15,
+            fontFamily: FONTS.bold,
+            color: theme.primary,
         },
         eyebrow: {
             fontSize: 12,
