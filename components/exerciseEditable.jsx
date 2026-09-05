@@ -68,6 +68,32 @@ const lightenColor = (color, percent) => {
     }
 };
 
+// Pure, so they live at module scope: the set-field handlers below are
+// useCallbacks, and a helper redefined every render would have to be listed as
+// a dependency of each of them, rebuilding the very identities we're keeping
+// stable.
+const sanitizeDecimal = (text) => {
+    let cleaned = text.replace(/[^0-9.]/g, '');
+    if (cleaned.startsWith('.')) cleaned = '0' + cleaned;
+    const parts = cleaned.split('.');
+    if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+    return cleaned;
+};
+
+const sanitizeInteger = (text) => text.replace(/[^0-9]/g, '');
+
+// rowMeta is keyed on the set-type sequence, which encodes the set count too,
+// so it can't fall out of step with the sets it's rendered against. This is
+// belt-and-braces for the one place where being wrong would be a render crash
+// rather than a wrong number, in a path that only a real device exercises.
+const EMPTY_ROW_META = {
+    displayNumber: '',
+    columnText: '-',
+    fillData: null,
+    computedSuggestion: null,
+    isLifetimePRSuggestion: false,
+};
+
 
 // Compact Scrollable Input
 // `clock` turns the field into a digit-fill time input: digits push in from the
@@ -582,50 +608,52 @@ const ExerciseEditable = ({
         loadPRs();
     }, [exerciseID, PRMODE, isAssisted]);
 
-    const sanitizeDecimal = (text) => {
-        let cleaned = text.replace(/[^0-9.]/g, '');
-        if (cleaned.startsWith('.')) cleaned = '0' + cleaned;
-        const parts = cleaned.split('.');
-        if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
-        return cleaned;
-    };
+    // Every mutation below writes through updateCurrentWorkout's functional
+    // form, so none of them needs to close over the current sets — which is
+    // what lets them be useCallbacks keyed only on this card's identity, and
+    // therefore stay stable while the user types. The two that DO need to read
+    // the current sets (a tap has to know whether the row is already
+    // completed) read them through a ref instead: depending on exercise.sets
+    // would rebuild every handler on every keystroke, which is exactly the
+    // memo defeat this is undoing.
+    const exerciseId = exercise.id;
+    const setsRef = useRef(exercise.sets);
+    setsRef.current = exercise.sets;
 
-    const sanitizeInteger = (text) => text.replace(/[^0-9]/g, '');
-
-    const handleWeightChange = (text, setIndex) => {
+    const handleWeightChange = useCallback((text, setIndex) => {
         const sanitized = sanitizeDecimal(text);
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, weight: sanitized } : s) } : e) } : w));
-    };
-    const handleRepsChange = (text, setIndex) => {
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, weight: sanitized } : s) } : e) } : w));
+    }, [updateCurrentWorkout, workoutID, exerciseId]);
+    const handleRepsChange = useCallback((text, setIndex) => {
         const sanitized = sanitizeInteger(text);
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, reps: sanitized } : s) } : e) } : w));
-    };
-    const handleDistanceChange = (text, setIndex) => {
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, reps: sanitized } : s) } : e) } : w));
+    }, [updateCurrentWorkout, workoutID, exerciseId]);
+    const handleDistanceChange = useCallback((text, setIndex) => {
         const sanitized = sanitizeDecimal(text);
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, distance: sanitized } : s) } : e) } : w));
-    };
-    const handleMinutesChange = (text, setIndex) => {
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, distance: sanitized } : s) } : e) } : w));
+    }, [updateCurrentWorkout, workoutID, exerciseId]);
+    const handleMinutesChange = useCallback((text, setIndex) => {
         // Arrives from the clock field already parsed to (fractional) minutes —
         // may carry a decimal (12.5 === 12:30), so no integer sanitizing here.
         const value = text === '' || text == null ? null : String(text);
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: value } : s) } : e) } : w));
-    };
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: value } : s) } : e) } : w));
+    }, [updateCurrentWorkout, workoutID, exerciseId]);
 
-    const toggleSetComplete = (setIndex) => {
+    const toggleSetComplete = useCallback((setIndex) => {
         if (isTemplate) return;
-        const set = exercise.sets[setIndex];
+        const set = setsRef.current[setIndex];
         if (!set.completed) {
             Keyboard.dismiss();
             haptics.tap();
             if (onSetComplete) onSetComplete();
         }
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
-    };
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
+    }, [isTemplate, onSetComplete, updateCurrentWorkout, workoutID, exerciseId]);
 
-    const toggleSetType = (setIndex) => {
+    const toggleSetType = useCallback((setIndex) => {
         haptics.select();
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.map((s, i) => { if (i === setIndex) { const t = s.setType || 'N'; const n = t === 'N' ? 'W' : t === 'W' ? 'D' : 'N'; return { ...s, setType: n }; } return s; }) } : e) } : w));
-    };
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => { if (i === setIndex) { const t = s.setType || 'N'; const n = t === 'N' ? 'W' : t === 'W' ? 'D' : 'N'; return { ...s, setType: n }; } return s; }) } : e) } : w));
+    }, [updateCurrentWorkout, workoutID, exerciseId]);
     const handleNoteChange = (text) => {
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, notes: text } : e) } : w));
     };
@@ -657,14 +685,14 @@ const ExerciseEditable = ({
         });
     };
 
-    const fillFromPrevious = (setIndex, fillData) => {
+    const fillFromPrevious = useCallback((setIndex, fillData) => {
         if (!fillData) return;
-        const currentSet = exercise.sets[setIndex];
+        const currentSet = setsRef.current[setIndex];
         if (currentSet.completed) return;
         haptics.commit();
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? {
             ...w,
-            exercises: w.exercises.map(e => e.id === exercise.id ? {
+            exercises: w.exercises.map(e => e.id === exerciseId ? {
                 ...e,
                 sets: e.sets.map((s, i) => i === setIndex ? {
                     ...s,
@@ -683,7 +711,7 @@ const ExerciseEditable = ({
                 } : s)
             } : e)
         } : w));
-    };
+    }, [updateCurrentWorkout, workoutID, exerciseId, isCardio, useImperial]);
 
     const { prevWarmups, prevWorking } = React.useMemo(() => ({
         prevWarmups: previousSets.filter(s => s.setType === 'W'),
@@ -800,10 +828,117 @@ const ExerciseEditable = ({
     const showSetProgress = !isTemplate && !hidePrevious && exercise.sets.length > 0;
     const allSetsDone = showSetProgress && setsDone === exercise.sets.length;
 
-    let prevWarmupIndex = 0;
-    let prevWorkingIndex = 0;
-    let suggestWorkingIndex = 0;
-    let suggestWarmupIndex = 0;
+    // ── Per-row derivation ────────────────────────────────────────────────────
+    // This used to run inline in the set-rendering reduce, which meant a fresh
+    // `fillData` object per row on every render. SetRowBody is React.memo'd, so
+    // that one prop compared unequal every time and the memo never prevented a
+    // single render: one keystroke re-rendered every set row in the card.
+    //
+    // The dependency that makes this work is `setTypeKey` rather than
+    // `exercise.sets`. Everything below is positional — which previous set a
+    // row lines up with, which suggestion it consumes, what number it displays
+    // — and all of that is decided by the SEQUENCE OF SET TYPES, nothing else.
+    // Weight, reps and completed are read by the row itself, not here. So the
+    // derivation only genuinely changes when a set is added, removed, or has
+    // its type cycled, and keying on the sets array instead would recompute
+    // (and hand back new objects) on every character typed, leaving the memo
+    // just as defeated as it was.
+    //
+    // Comma-joined rather than concatenated: the app only ever writes N/W/D,
+    // but setType comes back out of a TEXT column, and a longer value would
+    // otherwise let two different sequences produce the same key.
+    const setTypeKey = exercise.sets.map(s => s.setType || 'N').join(',');
+
+    const rowMeta = useMemo(() => {
+        const sets = setsRef.current;
+        let prevWarmupIndex = 0;
+        let prevWorkingIndex = 0;
+        let suggestWorkingIndex = 0;
+        let suggestWarmupIndex = 0;
+        let normalSetCount = 0;
+
+        return sets.map((set) => {
+            let displayNumber;
+            if (set.setType === 'W') displayNumber = 'W';
+            else if (set.setType === 'D') displayNumber = 'D';
+            else {
+                // A running tally rather than the old per-row backwards scan
+                // (which made the numbering O(n²) in the set count), counting
+                // the same rows it did: only N/untyped sets, so a value that
+                // is somehow neither N, W nor D still gets a number without
+                // shifting the ones after it.
+                displayNumber = normalSetCount + 1;
+                if (!set.setType || set.setType === 'N') normalSetCount++;
+            }
+
+            const prevSet = set.setType === 'W'
+                ? prevWarmups[prevWarmupIndex++]
+                : prevWorking[prevWorkingIndex++];
+
+            let prevSetText = '-';
+            if (prevSet) {
+                prevSetText = isCardio
+                    ? `${prevSet.distance || 0}km / ${secondsToClock(prevSet.seconds || 0)}`
+                    : `${formatWeight(prevSet.weight, useImperial)} × ${prevSet.reps}`;
+            }
+
+            let suggestionText = '-';
+            let computedSuggestion = null;
+            let fillData = null;
+
+            if (showSuggestion) {
+                if (set.setType === 'W') {
+                    // Warm-up suggestion = the warm-up from the same session
+                    // the working suggestions come from, shown un-incremented.
+                    // No fallback to the previous workout's warm-ups — mixing
+                    // sessions is misleading; if the base session has none,
+                    // the row shows "-".
+                    const warm = suggestedWarmups[suggestWarmupIndex++];
+                    if (warm) {
+                        // A weight-only warm-up (reps 0) shows just the
+                        // weight and leaves the reps field alone on fill.
+                        suggestionText = warm.reps > 0
+                            ? `${formatWeight(warm.weight, useImperial)} × ${warm.reps}`
+                            : `${formatWeight(warm.weight, useImperial)}`;
+                        fillData = { weight: warm.weight || 0, reps: warm.reps || null };
+                    }
+                } else {
+                    const computed = workingSuggestions[suggestWorkingIndex++];
+                    if (computed) {
+                        // "min+" on a weight increase: do at least the min reps, push for more.
+                        const repsLabel = computed.isWeightIncrease ? `${computed.reps}+` : `${computed.reps}`;
+                        suggestionText = `${formatWeight(computed.weight, useImperial)} × ${repsLabel}`;
+                        computedSuggestion = computed;
+                        fillData = { weight: computed.weight, reps: computed.reps };
+                    }
+                }
+            } else if (prevSet) {
+                fillData = isCardio
+                    ? {
+                        distance: prevSet.distance || 0,
+                        // Exact fractional minutes so seconds survive the fill.
+                        minutes: prevSet.seconds ? prevSet.seconds / 60 : 0,
+                    }
+                    : { weight: prevSet.weight || 0, reps: prevSet.reps || 0 };
+            }
+
+            const isLifetimePRSuggestion =
+                showSuggestion &&
+                lifetimePRs !== null &&
+                getPRType(computedSuggestion, lifetimePRs, isCardio) !== null;
+
+            return {
+                displayNumber,
+                columnText: showSuggestion ? suggestionText : prevSetText,
+                fillData,
+                computedSuggestion,
+                isLifetimePRSuggestion,
+            };
+        });
+        // setTypeKey stands in for exercise.sets — see the note above.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [setTypeKey, prevWarmups, prevWorking, showSuggestion, suggestedWarmups,
+        workingSuggestions, isCardio, useImperial, lifetimePRs]);
 
     const headerLeftContent = (
         <>
@@ -915,82 +1050,9 @@ const ExerciseEditable = ({
                 style={styles.setsContainer}
                 layout={layoutAnim}
             >
-                {exercise.sets.reduce((acc, set, index) => {
-                    let displayNumber = index + 1;
-                    if (set.setType === 'W') displayNumber = 'W';
-                    else if (set.setType === 'D') displayNumber = 'D';
-                    else {
-                        const normalSetCount = exercise.sets.slice(0, index).filter(s => !s.setType || s.setType === 'N').length;
-                        displayNumber = normalSetCount + 1;
-                    }
-
-                    let prevSetText = '-';
-                    let prevSet = null;
-                    prevSet = set.setType === 'W'
-                        ? prevWarmups[prevWarmupIndex++]
-                        : prevWorking[prevWorkingIndex++];
-
-                    if (prevSet) {
-                        if (isCardio) {
-                            prevSetText = `${prevSet.distance || 0}km / ${secondsToClock(prevSet.seconds || 0)}`;
-                        } else {
-                            prevSetText = `${formatWeight(prevSet.weight, useImperial)} × ${prevSet.reps}`;
-                        }
-                    }
-
-                    let suggestionText = '-';
-                    let computedSuggestion = null;
-                    let fillData = null;
-
-                    if (showSuggestion) {
-                        const isWarmup = set.setType === 'W';
-                        if (isWarmup) {
-                            // Warm-up suggestion = the warm-up from the same session
-                            // the working suggestions come from, shown un-incremented.
-                            // No fallback to the previous workout's warm-ups — mixing
-                            // sessions is misleading; if the base session has none,
-                            // the row shows "-".
-                            const warm = suggestedWarmups[suggestWarmupIndex++];
-                            if (warm) {
-                                // A weight-only warm-up (reps 0) shows just the
-                                // weight and leaves the reps field alone on fill.
-                                suggestionText = warm.reps > 0
-                                    ? `${formatWeight(warm.weight, useImperial)} × ${warm.reps}`
-                                    : `${formatWeight(warm.weight, useImperial)}`;
-                                fillData = { weight: warm.weight || 0, reps: warm.reps || null };
-                            }
-                        } else {
-                            const suggestIndex = suggestWorkingIndex++;
-                            const computed = workingSuggestions[suggestIndex];
-                            if (computed) {
-                                // "min+" on a weight increase: do at least the min reps, push for more.
-                                const repsLabel = computed.isWeightIncrease ? `${computed.reps}+` : `${computed.reps}`;
-                                suggestionText = `${formatWeight(computed.weight, useImperial)} × ${repsLabel}`;
-                                computedSuggestion = computed;
-                                fillData = { weight: computed.weight, reps: computed.reps };
-                            }
-                        }
-                    } else if (prevSet) {
-                        if (isCardio) {
-                            fillData = {
-                                distance: prevSet.distance || 0,
-                                // Exact fractional minutes so seconds survive the fill.
-                                minutes: prevSet.seconds ? prevSet.seconds / 60 : 0,
-                            };
-                        } else {
-                            fillData = { weight: prevSet.weight || 0, reps: prevSet.reps || 0 };
-                        }
-                    }
-
-                    const columnText = showSuggestion ? suggestionText : prevSetText;
-
-                    const prType = getPRType(computedSuggestion, lifetimePRs, isCardio);
-                    const isLifetimePRSuggestion =
-                        showSuggestion &&
-                        lifetimePRs !== null &&
-                        prType !== null;
-
-                    acc.push(
+                {exercise.sets.map((set, index) => {
+                    const meta = rowMeta[index] || EMPTY_ROW_META;
+                    return (
                         <Animated.View
                             key={set.id || index}
                             entering={hasMountedRef.current ? FadeIn.duration(180) : undefined}
@@ -1014,14 +1076,14 @@ const ExerciseEditable = ({
                                 <SetRowBody
                                     set={set}
                                     index={index}
-                                    displayNumber={displayNumber}
+                                    displayNumber={meta.displayNumber}
                                     isTemplate={isTemplate}
                                     hidePrevious={hidePrevious}
-                                    columnText={columnText}
-                                    fillData={fillData}
+                                    columnText={meta.columnText}
+                                    fillData={meta.fillData}
                                     showSuggestion={showSuggestion}
-                                    computedSuggestion={computedSuggestion}
-                                    isLifetimePRSuggestion={isLifetimePRSuggestion}
+                                    computedSuggestion={meta.computedSuggestion}
+                                    isLifetimePRSuggestion={meta.isLifetimePRSuggestion}
                                     brightColor={brightColor}
                                     isCardio={isCardio}
                                     theme={theme}
@@ -1038,8 +1100,7 @@ const ExerciseEditable = ({
                             </SwipeableSetRow>
                         </Animated.View>
                     );
-                    return acc;
-                }, [])}
+                })}
             </Animated.View>
 
             {/* Footer */}
