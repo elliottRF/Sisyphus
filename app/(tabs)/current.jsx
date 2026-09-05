@@ -1125,10 +1125,17 @@ const Current = () => {
                                     const moreCount = exerciseNames.length - displayNames.length;
                                     const badge = readinessBadge(readiness);
 
+                                    // No layout animation on these cards. LinearTransition
+                                    // animates absolute positions, and this is a flexWrap grid:
+                                    // when a card leaves — deleted, or moved to another split —
+                                    // the survivors were animated toward positions computed
+                                    // against the old wrap and settled a row-gap out, leaving
+                                    // the two columns visibly misaligned. The entering and
+                                    // exiting fades stay; only the position animation goes, so
+                                    // cards reflow instantly and correctly.
                                     return (
                                         <Animated.View
                                             key={template.id}
-                                            layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
                                             entering={FadeIn.duration(250)}
                                             exiting={FadeOut.duration(180)}
                                             style={styles.templateCardWrap}
@@ -1196,7 +1203,6 @@ const Current = () => {
                                 {/* Starter pack — only when the user has no templates yet */}
                                 {showStarter && (
                                     <Animated.View
-                                        layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
                                         exiting={FadeOut.duration(180)}
                                         style={styles.templateCardWrap}
                                     >
@@ -1222,10 +1228,7 @@ const Current = () => {
                                 )}
 
                                 {/* Add Template Button */}
-                                <Animated.View
-                                    layout={LinearTransition.duration(220).easing(Easing.out(Easing.ease))}
-                                    style={styles.templateCardWrap}
-                                >
+                                <Animated.View style={styles.templateCardWrap}>
                                 <TouchableOpacity
                                     style={[styles.templateCard, styles.addTemplateCard]}
                                     activeOpacity={0.7}
