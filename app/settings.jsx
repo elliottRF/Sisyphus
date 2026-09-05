@@ -328,7 +328,7 @@ const Settings = () => {
 
             customAlert(
                 "Backup Ready",
-                "Save it to your device, or send it somewhere else.",
+                "Save it to this device, or back it up to Drive or another app.",
                 [
                     {
                         text: 'Save to Device',
@@ -346,7 +346,7 @@ const Settings = () => {
                         },
                     },
                     {
-                        text: 'Share',
+                        text: 'Back up',
                         style: 'default',
                         onPress: () => {
                             Sharing.shareAsync(destUri, { dialogTitle: 'Save Sisyphus backup' })
