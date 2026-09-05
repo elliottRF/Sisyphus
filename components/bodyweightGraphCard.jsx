@@ -1,19 +1,16 @@
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, TextInput, Keyboard, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
 import React, { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
 import { LineGraph } from 'react-native-graph';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { Feather } from '@expo/vector-icons';
-import { getBodyWeightHistory, insertBodyWeight, deleteBodyWeight } from './db';
-import ActionSheet from "react-native-actions-sheet";
+import { getBodyWeightHistory } from './db';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Calendar } from 'react-native-calendars';
-import HistoryList from './HistoryList';
 import { AppEvents, on, off } from '../utils/events';
+import { useRouter } from 'expo-router';
+import WeightEntryModal from './WeightEntryModal';
 import { useTheme } from '../context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { formatWeight, unitLabel, toStorageKg } from '../utils/units';
-import { customAlert } from '../utils/customAlert';
-import CustomAlert from './CustomAlert';   // ← Updated import (adjust path if your project structure differs)
+import { formatWeight, unitLabel } from '../utils/units';
 import Reanimated, { useAnimatedStyle, withTiming, Easing, useSharedValue } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -45,29 +42,6 @@ const downsample = (arr, maxPoints) => {
     return result;
 };
 
-// ─── Calendar days vs. instants ──────────────────────────────────────────────
-// `logDate` is a CALENDAR DAY the user is logging against, not an instant, so
-// it has to be derived from local date parts. toISOString() reports the UTC
-// day, which during BST is still yesterday between midnight and 1am — so a
-// weigh-in at 00:30 was offered, and the calendar marked, as the previous day.
-// Same helper as calendarDateString in history.jsx, which exists for this.
-const localDateKey = (d) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-// Turn a calendar day back into the instant to store: that local day, at the
-// current local time of day. It has to go through the Date constructor's
-// local-time form. Pasting the day in front of toISOString()'s time part —
-// the obvious-looking fix — concatenates a local date with a UTC clock time,
-// which at 00:30 BST stores the entry a full day in the FUTURE. Backdating
-// had the same flaw already: picking 1 Aug at 00:30 on 5 Sep stored
-// 2026-08-01T23:30Z, which the history list then renders as 2 August.
-const instantForCalendarDay = (dayKey, now) => {
-    const [y, m, d] = dayKey.split('-').map(Number);
-    return new Date(
-        y, m - 1, d,
-        now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds()
-    ).toISOString();
-};
 
 const CustomSelectionDot = ({ isActive, color, borderColor }) => (
     <View style={{
@@ -109,6 +83,7 @@ const BodyweightGraphCard = ({ theme }) => {
     const safeSurface = theme.surface;
     const graphWidth = SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING;
     const { useImperial } = useTheme();
+    const router = useRouter();
 
     const [allData, setAllData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -118,17 +93,9 @@ const BodyweightGraphCard = ({ theme }) => {
     const graphOpacity = useSharedValue(0);
 
 
-    // Modal State (now powered by CustomAlert)
+    // The entry form owns its own weight/date/calendar state now, so all this
+    // card tracks is whether the modal is open.
     const [modalVisible, setModalVisible] = useState(false);
-    const [newWeight, setNewWeight] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [logDate, setLogDate] = useState(() => localDateKey(new Date()));
-    const [showCalendar, setShowCalendar] = useState(false);
-
-    // History Sheet Ref
-    const historySheetRef = useRef(null);
-    const inputRef = useRef(null);
-    const [editingEntry, setEditingEntry] = useState(null);
 
     const loadData = async (silent = false) => {
         try {
@@ -168,74 +135,6 @@ const BodyweightGraphCard = ({ theme }) => {
             off(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler);
         };
     }, []);
-
-    // Remove auto-focus useEffect as it's now handled by CustomAlert.onShow
-
-    const handleLogWeight = async () => {
-        if (!newWeight) return;
-        setSaving(true);
-        try {
-            const weightVal = parseFloat(newWeight);
-            if (isNaN(weightVal)) {
-                setSaving(false);
-                return;
-            }
-            const weightKg = toStorageKg(weightVal, useImperial);
-            const fullIso = instantForCalendarDay(logDate, new Date());
-
-            if (editingEntry) {
-                await deleteBodyWeight(editingEntry.datetime);
-            }
-
-            await insertBodyWeight(fullIso, weightKg);
-
-            setModalVisible(false);
-            setNewWeight('');
-            setLogDate(localDateKey(new Date()));
-            setEditingEntry(null);
-            setShowCalendar(false);
-            loadData();
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleDelete = async (entry) => {
-        customAlert(
-            "Delete Entry",
-            "Are you sure you want to delete this weight log?",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            await deleteBodyWeight(entry.datetime);
-                            await loadData(true);
-                        } catch (e) {
-                            console.error(e);
-                        }
-                    }
-                }
-            ]
-        );
-    };
-
-    const handleEdit = (entry) => {
-        setNewWeight(formatWeight(entry.weight, useImperial).toString());
-        // The stored value is an instant; the list renders it with
-        // toLocaleDateString, so the calendar has to agree on the LOCAL day it
-        // falls on. Splitting the raw ISO string gave the UTC day instead, so
-        // editing a 00:30 BST entry opened the calendar on the day before the
-        // one the user had just tapped in the list.
-        setLogDate(localDateKey(new Date(entry.datetime)));
-        setEditingEntry(entry);
-        historySheetRef.current?.hide();
-        setModalVisible(true);
-    };
 
     const { points, yRange } = useMemo(() => {
         if (!allData || allData.length < 2) {
@@ -448,134 +347,18 @@ const BodyweightGraphCard = ({ theme }) => {
     const onGestureStart = useCallback(() => { isTouching.current = true; }, []);
     const onGestureEnd = useCallback(() => { isTouching.current = false; setSelectedPoint(null); }, []);
 
-    const sanitizeDecimal = (text) => {
-        let cleaned = text.replace(/[^0-9.]/g, '');
-        if (cleaned.startsWith('.')) cleaned = '0' + cleaned;
-        const parts = cleaned.split('.');
-        if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
-        return cleaned;
-    };
-
-    const sanitizeInteger = (text) => text.replace(/[^0-9]/g, '');
-
-
+    // Logging lives in the shared modal, and the history list is its own screen
+    // rather than a full-height sheet stacked over this card. Editing and
+    // deleting moved with it — they belong next to the list you act on, not
+    // behind a sheet that has to close itself to hand control back here.
     const renderModalsAndSheets = () => (
-        <>
-            <CustomAlert
-                visible={modalVisible}
-                title="Log Body Weight"
-                iconType={null}
-                onClose={() => setModalVisible(false)}
-                onShow={() => {
-                    // Double-focus "hammer" pattern ensures focus works even if interrupted by transitions
-                    const focus = () => {
-                        if (inputRef.current) {
-                            inputRef.current.focus();
-                            // Select the pre-filled value so typing replaces it
-                            // (edit OR the latest-weight prefill on a new log).
-                            if (newWeight) {
-                                inputRef.current.setNativeProps({
-                                    selection: { start: 0, end: newWeight.length }
-                                });
-                            }
-                        }
-                    };
-                    const t1 = setTimeout(focus, 200);
-                    return () => { clearTimeout(t1); };
-                }}
-                buttons={[
-                    { text: "Cancel", style: "cancel", onPress: () => { } },
-                    { text: "Save", onPress: handleLogWeight, loading: saving },
-                ]}
-            >
-                <View style={[styles.inputContainer, { borderColor: theme.border }]}>
-                    <TextInput
-                        ref={inputRef}
-                        style={[styles.input, { color: theme.text }]}
-                        keyboardType="decimal-pad"
-                        value={newWeight}
-                        onChangeText={(text) => setNewWeight(sanitizeDecimal(text))}
-                        placeholder="0.0"
-                        placeholderTextColor={theme.textSecondary + '40'}
-                        returnKeyType="done"
-                        onSubmitEditing={handleLogWeight}
-                        multiline={Platform.OS === 'android'}
-                    />
-                    <Text style={[styles.unitText, { color: theme.textSecondary }]}>{unitLabel(useImperial)}</Text>
-                </View>
-
-                <Pressable
-                    style={[styles.dateButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                    onPress={() => { Keyboard.dismiss(); setShowCalendar(!showCalendar); }}
-                >
-                    <Feather name="calendar" size={16} color={theme.text} />
-                    <Text style={[styles.dateButtonText, { color: theme.text }]}>
-                        {logDate === localDateKey(new Date()) ? 'Today' : logDate}
-                    </Text>
-                </Pressable>
-
-                {/* Smooth animated calendar */}
-                <Reanimated.View
-                    style={[
-                        { width: '100%', marginBottom: 20, overflow: 'hidden' },
-                        useAnimatedStyle(() => ({
-                            height: withTiming(showCalendar ? 340 : 0, { duration: 320, easing: Easing.out(Easing.cubic) }),
-                            opacity: withTiming(showCalendar ? 1 : 0, { duration: 250 }),
-                        }))
-                    ]}
-                >
-                    <Calendar
-                        current={logDate}
-                        onDayPress={day => {
-                            setLogDate(day.dateString);
-                            setShowCalendar(false);
-                            setTimeout(() => {
-                                inputRef.current?.focus();
-                                inputRef.current?.setNativeProps({ selection: { start: 0, end: 0 } });
-                            }, 180);
-                        }}
-                        markedDates={{ [logDate]: { selected: true, selectedColor: theme.primary } }}
-                        theme={{
-                            backgroundColor: theme.surface,
-                            calendarBackground: theme.surface,
-                            textSectionTitleColor: theme.textSecondary,
-                            selectedDayBackgroundColor: theme.primary,
-                            selectedDayTextColor: theme.surface,
-                            todayTextColor: theme.primary,
-                            dayTextColor: theme.text,
-                            arrowColor: theme.primary,
-                            monthTextColor: theme.text,
-                        }}
-                    />
-                </Reanimated.View>
-            </CustomAlert>
-
-            <ActionSheet
-                ref={historySheetRef}
-                enableGestureBack={true}
-                containerStyle={{ height: '100%', backgroundColor: safeSurface }}
-                indicatorStyle={{ backgroundColor: theme.textSecondary }}
-                snapPoints={[100]}
-            >
-                <View style={{ flex: 1, paddingHorizontal: 20 }}>
-                    <View style={[styles.historyHeader, { borderBottomColor: 'transparent', paddingHorizontal: 0 }]}>
-                        <Text style={[styles.modalTitle, { marginBottom: 0, color: theme.text }]}>History</Text>
-                        <TouchableOpacity onPress={() => historySheetRef.current?.hide()}>
-                            <View style={{ padding: 4, backgroundColor: theme.background, borderRadius: 50 }}>
-                                <Feather name="x" size={20} color={theme.textSecondary} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-                    <HistoryList
-                        data={[...allData].sort((a, b) => new Date(b.datetime) - new Date(a.datetime))}
-                        theme={theme}
-                        styles={styles}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                    />
-                </View>
-            </ActionSheet>
-        </>
+        <WeightEntryModal
+            visible={modalVisible}
+            entry={null}
+            prefillWeight={currentDisplayWeight != null ? currentDisplayWeight.toFixed(1) : null}
+            onClose={() => setModalVisible(false)}
+            onSaved={() => loadData(true)}
+        />
     );
 
     return (
@@ -619,17 +402,10 @@ const BodyweightGraphCard = ({ theme }) => {
 
                         <View style={{ gap: 8, alignItems: 'flex-end' }}>
                             <View style={{ flexDirection: 'row', gap: 8 }}>
-                                <TouchableOpacity style={styles.historyButton} onPress={() => historySheetRef.current?.show()}>
+                                <TouchableOpacity style={styles.historyButton} onPress={() => router.push('/bodyweight/history')}>
                                     <Feather name="list" size={16} color={theme.textSecondary} />
                                 </TouchableOpacity>
-                                <TouchableOpacity style={styles.logButton} onPress={() => {
-                                    setEditingEntry(null);
-                                    // Pre-fill with the latest weight so a small daily
-                                    // adjustment is a tiny edit, not a fresh entry.
-                                    setNewWeight(currentDisplayWeight != null ? currentDisplayWeight.toFixed(1) : '');
-                                    setLogDate(localDateKey(new Date()));
-                                    setModalVisible(true);
-                                }}>
+                                <TouchableOpacity style={styles.logButton} onPress={() => setModalVisible(true)}>
                                     <Feather name="plus" size={16} color={theme.textAlternate} />
                                     <Text style={styles.logButtonText}>Log</Text>
                                 </TouchableOpacity>
@@ -891,79 +667,6 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 12,
         fontFamily: FONTS.bold,
     },
-    // Modal Styles (still used by children inside CustomAlert)
-    modalTitle: {
-        fontSize: 20,
-        fontFamily: FONTS.bold,
-        marginBottom: 20,
-    },
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        width: '100%',
-        marginBottom: 24,
-        position: 'relative',
-    },
-    input: {
-        flex: 1,
-        fontSize: 24,
-        fontFamily: FONTS.bold, // Switched to bold to match exerciseEditable
-        textAlign: 'center',
-        textAlignVertical: 'center',
-        padding: 0,
-        margin: 0,
-        includeFontPadding: false,
-        height: 60, // Increased height for easier centering with multiline
-    },
-    unitText: {
-        fontSize: 16,
-        fontFamily: FONTS.medium,
-        position: 'absolute',
-        right: 16,
-    },
-    dateButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        marginBottom: 20,
-        gap: 8,
-    },
-    dateButtonText: {
-        fontFamily: FONTS.medium,
-        fontSize: 14,
-    },
-    // History Styles
-    historyHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 20,
-        borderBottomWidth: 1,
-        width: '100%',
-    },
-    historyItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-    },
-    historyDate: {
-        fontSize: 16,
-        fontFamily: FONTS.medium,
-        marginBottom: 4,
-    },
-    historyWeight: {
-        fontSize: 14,
-        fontFamily: FONTS.regular,
-    }
 });
 
 export default BodyweightGraphCard;

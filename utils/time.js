@@ -51,3 +51,26 @@ export const clockDigitsToMinutes = (text) => {
     const hrs = parseInt(digits.slice(0, -4), 10) || 0;
     return (hrs * 3600 + min * 60 + sec) / 60;
 };
+
+// ─── Calendar days vs. instants ─────────────────────────────────────────
+// A calendar day the user picked is not an instant, and the two must not be
+// mixed. toISOString() reports the UTC day, which during BST is still yesterday
+// between midnight and 1am.
+
+// A local "YYYY-MM-DD" day key, built from local date parts. Matches the key
+// format react-native-calendars uses, and calendarDateString in history.jsx.
+export const localDateKey = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// Turn a calendar day back into the instant to store: that local day, at the
+// given local time of day. It has to go through the Date constructor's
+// local-time form. Pasting the day in front of toISOString()'s time part — the
+// obvious-looking fix — concatenates a local date with a UTC clock time, which
+// at 00:30 BST stores the entry a full day in the FUTURE.
+export const instantForCalendarDay = (dayKey, now) => {
+    const [y, m, d] = dayKey.split('-').map(Number);
+    return new Date(
+        y, m - 1, d,
+        now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds()
+    ).toISOString();
+};
