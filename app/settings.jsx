@@ -289,16 +289,73 @@ const Settings = () => {
         }
     };
 
+    // Android's share sheet only ever offers apps to send the file TO — there is
+    // no "save to storage" entry in it, so the one thing most people want from a
+    // backup (a copy they can actually find later) wasn't reachable. Writing to
+    // a folder the user chooses needs the Storage Access Framework, which hands
+    // back a content:// URI that only the SAF helpers can write to.
+    const saveBackupToDevice = async (srcUri, filename) => {
+        const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (!perm.granted) return false;
+        // A .db is binary, so it has to round-trip as base64 rather than utf8.
+        const contents = await FileSystem.readAsStringAsync(srcUri, {
+            encoding: FileSystem.EncodingType.Base64,
+        });
+        const targetUri = await FileSystem.StorageAccessFramework.createFileAsync(
+            perm.directoryUri,
+            filename,
+            'application/octet-stream'
+        );
+        await FileSystem.writeAsStringAsync(targetUri, contents, {
+            encoding: FileSystem.EncodingType.Base64,
+        });
+        return true;
+    };
+
     const handleBackupDatabase = async () => {
         try {
             const dbName = await prepareDatabaseBackup();
             const srcUri = `${FileSystem.documentDirectory}SQLite/${dbName}`;
             const info = await FileSystem.getInfoAsync(srcUri);
             if (!info.exists) return customAlert("Error", "Database file not found.");
-            const date = new Date().toISOString().slice(0, 10);
-            const destUri = `${FileSystem.cacheDirectory}sisyphus_backup_${date}.db`;
+            // Local date parts, not toISOString(): a backup taken at 00:30 BST
+            // would otherwise be stamped with the previous day.
+            const now = new Date();
+            const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const filename = `sisyphus_backup_${date}.db`;
+            const destUri = `${FileSystem.cacheDirectory}${filename}`;
             await FileSystem.copyAsync({ from: srcUri, to: destUri });
-            await Sharing.shareAsync(destUri, { dialogTitle: 'Save Sisyphus backup' });
+
+            customAlert(
+                "Backup Ready",
+                "Save it to your device, or send it somewhere else.",
+                [
+                    {
+                        text: 'Save to Device',
+                        style: 'default',
+                        onPress: async () => {
+                            try {
+                                const saved = await saveBackupToDevice(destUri, filename);
+                                // Not saved and no error means the user backed out
+                                // of the folder picker — not something to alert on.
+                                if (saved) customAlert("Backup Saved", `Saved as ${filename}.`);
+                            } catch (e) {
+                                console.error("Backup save error:", e);
+                                customAlert("Error", "Could not write the backup to that folder.");
+                            }
+                        },
+                    },
+                    {
+                        text: 'Share',
+                        style: 'default',
+                        onPress: () => {
+                            Sharing.shareAsync(destUri, { dialogTitle: 'Save Sisyphus backup' })
+                                .catch(e => console.error("Backup share error:", e));
+                        },
+                    },
+                    { text: 'Cancel', style: 'cancel' },
+                ]
+            );
         } catch (e) {
             console.error("Backup error:", e);
             customAlert("Error", "Backup failed.");
