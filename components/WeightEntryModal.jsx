@@ -9,6 +9,7 @@ import { FONTS, TYPE, SPACING, RADIUS } from '../constants/theme';
 import { formatWeight, unitLabel, toStorageKg } from '../utils/units';
 import { localDateKey, instantForCalendarDay } from '../utils/time';
 import { insertBodyWeight, deleteBodyWeight } from './db';
+import { emit, AppEvents } from '../utils/events';
 
 // Logging and editing a weigh-in, owned in one place.
 //
@@ -67,8 +68,19 @@ const WeightEntryModal = ({ visible, entry, prefillWeight, onClose, onSaved }) =
             const instant = instantForCalendarDay(logDate, new Date());
             if (entry) await deleteBodyWeight(entry.datetime);
             await insertBodyWeight(instant, toStorageKg(value, useImperial));
+
+            // Refresh the caller first, then close. Closing first meant the
+            // screen underneath re-rendered once on the old data before the
+            // reload landed.
+            await onSaved?.();
+            // And tell everything else. The graph card already listens for this
+            // — it only stayed in sync before because the form lived inside it
+            // and called its loadData() directly. Pulling the form out took that
+            // call with it, so a log from anywhere but the card went unnoticed.
+            // Screens should learn about a mutation from the event, not from
+            // whoever happened to host the form.
+            emit(AppEvents.BODYWEIGHT_DATA_IMPORTED);
             onClose?.();
-            onSaved?.();
         } catch (e) {
             console.error('Weight save failed:', e);
         } finally {

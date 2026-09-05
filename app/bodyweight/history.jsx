@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, SectionList, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { getBodyWeightHistory, deleteBodyWeight } from '../../components/db';
 import { formatWeight, unitLabel } from '../../utils/units';
 import { customAlert } from '../../utils/customAlert';
 import * as haptics from '../../utils/haptics';
+import { AppEvents, on, off } from '../../utils/events';
 import ContextMenu from '../../components/ContextMenu';
 import WeightEntryModal from '../../components/WeightEntryModal';
 
@@ -36,6 +37,15 @@ const BodyWeightHistory = () => {
     }, []);
 
     useFocusEffect(useCallback(() => { load(); }, [load]));
+
+    // Also refresh on the mutation event, not just on focus: an entry logged or
+    // edited from this screen never blurs it, so focus alone would leave the
+    // list showing the state from before the save.
+    useEffect(() => {
+        const handler = () => load();
+        on(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler, 'bodyweight-history');
+        return () => off(AppEvents.BODYWEIGHT_DATA_IMPORTED, handler);
+    }, [load]);
 
     // One pass, newest first: the delta compares against the next-older entry,
     // which has to be computed across the whole list before it is split into
