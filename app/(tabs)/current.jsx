@@ -57,6 +57,7 @@ import ContextMenu from '../../components/ContextMenu';
 
 // Template ordering within a split. Persisted so it survives a restart.
 const TEMPLATE_SORT_KEY = 'settings_templateSort';
+const LAST_SPLIT_KEY = 'settings_lastSplitId';
 const SORT_READINESS = 'readiness';
 const SORT_CREATED = 'created';
 
@@ -112,6 +113,9 @@ const Current = () => {
     const [splitEditor, setSplitEditor] = useState(null);
     const [splitMenu, setSplitMenu] = useState(false);
     const splitPagerRef = useRef(null);
+    // Gates the "remember my split" write until the read has happened, so the
+    // first render (index 0) can't overwrite the saved value before we've used it.
+    const [splitRestored, setSplitRestored] = useState(false);
 
     useEffect(() => {
         AsyncStorage.getItem(TEMPLATE_SORT_KEY)
@@ -807,6 +811,42 @@ const Current = () => {
         }
     }, [splitPages.length, activeSplitIndex]);
 
+    // Reopen on whichever split was last being viewed — with several splits, the
+    // one you were last looking at is a far better guess than the first.
+    //
+    // Stored as the split's id, not its index. Splits get added, renamed,
+    // deleted and reordered, and an index would quietly come back pointing at a
+    // different split, or past the end of the list.
+    useEffect(() => {
+        if (splitRestored || splitPages.length === 0) return;
+        let cancelled = false;
+        AsyncStorage.getItem(LAST_SPLIT_KEY)
+            .then(saved => {
+                if (cancelled || !saved) return;
+                const idx = splitPages.findIndex(page => String(page.split.id) === saved);
+                // -1 means that split is gone; 0 is where the pager already sits.
+                if (idx <= 0) return;
+                // Only the index is set here. Scrolling the pager afterwards was
+                // the obvious approach and it does not work: the list has not
+                // laid out yet, scrollToOffset is a no-op, and the scroll event
+                // that follows runs onMomentumScrollEnd, which reads offset 0 and
+                // sets the index straight back to the first split. The pager is
+                // instead mounted already on this page, via initialScrollIndex.
+                setActiveSplitIndex(idx);
+            })
+            .catch(() => {})
+            .finally(() => { if (!cancelled) setSplitRestored(true); });
+        return () => { cancelled = true; };
+    }, [splitPages, windowWidth, splitRestored]);
+
+    useEffect(() => {
+        if (!splitRestored) return;
+        const page = splitPages[activeSplitIndex];
+        // The New Split page has no split of its own and isn't worth reopening on.
+        if (!page?.split) return;
+        AsyncStorage.setItem(LAST_SPLIT_KEY, String(page.split.id)).catch(() => {});
+    }, [activeSplitIndex, splitPages, splitRestored]);
+
     const readinessBadge = (readiness) => {
         if (readiness == null) return null;
         if (readiness >= 80) return { color: theme.success, label: readiness >= 95 ? 'Ready' : `${readiness}%` };
@@ -1313,9 +1353,14 @@ const Current = () => {
                                     </View>
                                 )}
 
+                                {/* Held back until the saved split has been read, so the
+                                    pager can mount directly on the right page rather than
+                                    starting at the first and being scrolled after. */}
+                                {splitRestored && (
                                 <FlatList
                                     ref={splitPagerRef}
                                     data={pagerData}
+                                    initialScrollIndex={activeSplitIndex}
                                     renderItem={renderSplitPage}
                                     keyExtractor={(item) => (item.__newSplit ? 'new-split' : String(item.split.id))}
                                     horizontal
@@ -1326,11 +1371,22 @@ const Current = () => {
                                     // views (see project memory).
                                     windowSize={3}
                                     initialNumToRender={1}
+                                    // Every page is exactly one screen wide, so the
+                                    // list doesn't need to measure to know where a
+                                    // page starts. Without this, restoring the last
+                                    // split could scroll before the target page had
+                                    // been laid out and land nowhere.
+                                    getItemLayout={(_, index) => ({
+                                        length: windowWidth,
+                                        offset: windowWidth * index,
+                                        index,
+                                    })}
                                     onMomentumScrollEnd={(e) => {
                                         const idx = Math.round(e.nativeEvent.contentOffset.x / windowWidth);
                                         if (idx !== activeSplitIndex) setActiveSplitIndex(idx);
                                     }}
                                 />
+                                )}
 
                                 <View style={[styles.bottomButtonContainer, { bottom: Math.max(insets.bottom + 80, 115) }]}>
                                     <TouchableOpacity onPress={startWorkout} activeOpacity={0.8} style={styles.startWorkoutButtonContainer}>
