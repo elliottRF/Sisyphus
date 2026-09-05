@@ -24,11 +24,20 @@ import ActionSheet from "react-native-actions-sheet";
 import FilteredExerciseList from '../../components/FilteredExerciseList';
 import { useOverlayReorder } from '../../utils/useOverlayReorder';
 import ReorderOverlay from '../../components/ReorderOverlay';
-import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
+import { FONTS, TYPE, SPACING, RADIUS, getThemedShadow } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { customAlert } from '../../utils/customAlert';
 import { formatWeight, toStorageKg } from '../../utils/units';
+
+// Module scope on purpose. Declared inside the render body it was a new
+// component type on every render, so React unmounted and remounted the gradient
+// subtree each time instead of updating it.
+const ButtonBackground = ({ colors, children, style }) => (
+    <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={style}>
+        {children}
+    </LinearGradient>
+);
 
 const EditTemplate = () => {
     const insets = useSafeAreaInsets();
@@ -36,7 +45,7 @@ const EditTemplate = () => {
     const TEMPLATE_ID = params.id; // 'new' or a numeric ID
 
     const { theme, useImperial } = useTheme();
-    const styles = getStyles(theme);
+    const styles = useMemo(() => getStyles(theme), [theme]);
 
     const [prevVersion, setPrevVersion] = useState(params.v);
 
@@ -94,6 +103,13 @@ const EditTemplate = () => {
         setExercises(initialState.exercises);
         setIsLoading(initialState.loading);
     }
+
+    // Drives the header eyebrow. The house header pattern wants a data point
+    // there rather than a label restating the screen's name.
+    const exerciseCount = useMemo(
+        () => currentWorkout.reduce((n, g) => n + (g.exercises?.length || 0), 0),
+        [currentWorkout]
+    );
 
     const actionSheetRef = useRef(null);
     const nameInputRef = useRef(null);
@@ -327,17 +343,6 @@ const EditTemplate = () => {
         load();
     }, [TEMPLATE_ID, params.v]);
 
-    const ButtonBackground = ({ children, style }) => (
-        <LinearGradient
-            colors={[theme.primary, theme.secondary]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={style}
-        >
-            {children}
-        </LinearGradient>
-    );
-
     if (isLoading) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }]}>
@@ -352,16 +357,20 @@ const EditTemplate = () => {
                 <Stack.Screen options={{ title: TEMPLATE_ID === 'new' ? 'New Template' : 'Edit Template' }} />
 
                 <View style={styles.headerContainer}>
+                    <Text style={styles.eyebrow}>
+                        {exerciseCount > 0
+                            ? `${exerciseCount} ${exerciseCount === 1 ? 'EXERCISE' : 'EXERCISES'}`
+                            : TEMPLATE_ID === 'new' ? 'NEW TEMPLATE' : 'EDIT TEMPLATE'}
+                    </Text>
                     <TextInput
                         ref={nameInputRef}
                         style={styles.templateNameInput}
                         onChangeText={setTemplateName}
                         value={templateName}
-                        placeholder="Template Name (e.g. Chest Day)"
+                        placeholder="Untitled Template"
                         placeholderTextColor={theme.textSecondary}
                         autoFocus={TEMPLATE_ID === 'new'}
                     />
-                    <View style={styles.headerDivider} />
                 </View>
 
                 <View ref={listWrapperRef} style={{ flex: 1 }} collapsable={false}>
@@ -398,7 +407,7 @@ const EditTemplate = () => {
                                 activeOpacity={0.8}
                                 style={styles.finishButtonContainer}
                             >
-                                <ButtonBackground style={styles.finishButton}>
+                                <ButtonBackground colors={[theme.primary, theme.secondary]} style={styles.finishButton}>
                                     <Text style={styles.finishButtonText}>Save Template</Text>
                                 </ButtonBackground>
                             </TouchableOpacity>
@@ -448,11 +457,6 @@ const EditTemplate = () => {
 };
 
 const getStyles = (theme) => {
-    const lightTheme = isLightTheme(theme);
-    const safePrimary = theme.primary;
-    const safeText = theme.text;
-    const safeBorder = theme.border;
-
     return StyleSheet.create({
         container: {
             flex: 1,
@@ -462,58 +466,67 @@ const getStyles = (theme) => {
             flex: 1,
         },
         headerContainer: {
-            paddingHorizontal: 16,
-            paddingTop: 16,
-            paddingBottom: 8,
+            paddingHorizontal: SPACING.l,
+            paddingTop: SPACING.l,
+            paddingBottom: SPACING.m,
             backgroundColor: theme.background,
         },
-        templateNameInput: {
-            fontSize: 22,
-            fontFamily: FONTS.bold,
-            color: safeText,
-            marginBottom: 8,
+        // The house header: an eyebrow carrying a data point, then the large
+        // title. The title here is the name field itself — the thing being
+        // named is the heading, so it shouldn't be a labelled form input under
+        // one. Previously a 22pt input over a divider rule.
+        eyebrow: {
+            fontSize: TYPE.caption,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
+            letterSpacing: 1.2,
+            marginBottom: SPACING.xs,
         },
-        headerDivider: {
-            height: 1,
-            backgroundColor: safeBorder,
-            opacity: 0.5,
+        templateNameInput: {
+            fontSize: TYPE.largeTitle,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+            letterSpacing: -0.6,
+            // Zeroed so the field sits on the text baseline like a title rather
+            // than in an input's default vertical padding.
+            paddingVertical: 0,
         },
         exerciseWrapper: {
-            paddingHorizontal: 12,
-            marginTop: 12,
+            paddingHorizontal: SPACING.m,
+            marginTop: SPACING.m,
         },
         footer: {
-            padding: 16,
+            padding: SPACING.l,
         },
+        // Borderless, filled with the same input-well token the rest of the app
+        // uses for quiet controls. It was a dashed outline, which the design
+        // rules rule out everywhere.
         addExerciseButton: {
-            backgroundColor: lightTheme ? theme.overlaySubtle : 'rgba(255,255,255,0.05)',
-            paddingVertical: 16,
-            borderRadius: 12,
+            backgroundColor: theme.overlayInput,
+            paddingVertical: SPACING.l,
+            borderRadius: RADIUS.m,
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: 24,
-            borderWidth: 1,
-            borderColor: safeBorder,
-            borderStyle: 'dashed',
+            marginBottom: SPACING.xl,
         },
         addExerciseText: {
-            color: safePrimary,
-            fontSize: 16,
+            color: theme.text,
+            fontSize: TYPE.headline,
             fontFamily: FONTS.semiBold,
         },
         finishButtonContainer: {
-            marginBottom: 16,
-            borderRadius: 12,
+            marginBottom: SPACING.s,
+            borderRadius: RADIUS.m,
             ...getThemedShadow(theme, 'medium'),
         },
         finishButton: {
-            paddingVertical: 16,
-            borderRadius: 12,
+            paddingVertical: SPACING.l,
+            borderRadius: RADIUS.m,
             alignItems: 'center',
             justifyContent: 'center',
         },
         finishButtonText: {
-            fontSize: 18,
+            fontSize: TYPE.headline,
             fontFamily: FONTS.bold,
             // Sits on the primary-filled gradient, so it needs textAlternate
             // (black or white by the accent's brightness) — theme.text is the
@@ -521,27 +534,26 @@ const getStyles = (theme) => {
             // where those two differ. Matches Finish Workout / Save Changes.
             color: theme.textAlternate,
         },
+        // Destructive, so it is deliberately the quietest thing here: a plain
+        // text button rather than the tinted, bordered block it was. Status
+        // colours are for accents, and Delete should not carry the same visual
+        // weight as Save.
         deleteButton: {
-            paddingVertical: 14,
-            borderRadius: 12,
+            paddingVertical: SPACING.m,
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: 16,
-            backgroundColor: withAlpha(theme.danger || '#FF4D4D', lightTheme ? 0.1 : 0.08),
-            borderWidth: 1,
-            borderColor: withAlpha(theme.danger || '#FF4D4D', lightTheme ? 0.25 : 0.4),
         },
         deleteButtonText: {
-            fontSize: 16,
+            fontSize: TYPE.body,
             fontFamily: FONTS.semiBold,
-            color: theme.danger || '#FF4D4D',
+            color: theme.danger,
         },
         clearButton: {
-            paddingVertical: 12,
+            paddingVertical: SPACING.m,
             alignItems: 'center',
         },
         clearButtonText: {
-            fontSize: 15,
+            fontSize: TYPE.body,
             fontFamily: FONTS.medium,
             color: theme.textSecondary,
         },
