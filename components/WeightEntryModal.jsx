@@ -72,7 +72,11 @@ const WeightEntryModal = ({ visible, entry, prefillWeight, onClose, onSaved }) =
             // Refresh the caller first, then close. Closing first meant the
             // screen underneath re-rendered once on the old data before the
             // reload landed.
-            await onSaved?.();
+            // Hand back the instant that was written so the caller can show
+            // WHERE it landed. A backdated weigh-in sorts into its own month
+            // partway down the list, so without this a successful save looks
+            // identical to nothing happening.
+            await onSaved?.(instant);
             // And tell everything else. The graph card already listens for this
             // — it only stayed in sync before because the form lived inside it
             // and called its loadData() directly. Pulling the form out took that
@@ -89,7 +93,11 @@ const WeightEntryModal = ({ visible, entry, prefillWeight, onClose, onSaved }) =
     };
 
     const calendarStyle = useAnimatedStyle(() => ({
-        height: withTiming(showCalendar ? 340 : 0, { duration: 320, easing: Easing.out(Easing.cubic) }),
+        // 400, not 340. A month can span six week-rows (August 2026 does), and
+        // at ~52dp a row that needs 312dp of grid plus ~80dp of month header and
+        // weekday labels. At 340 the sixth row was clipped behind the buttons,
+        // so the last days of those months could not be tapped at all.
+        height: withTiming(showCalendar ? 400 : 0, { duration: 320, easing: Easing.out(Easing.cubic) }),
         opacity: withTiming(showCalendar ? 1 : 0, { duration: 250 }),
     }));
 

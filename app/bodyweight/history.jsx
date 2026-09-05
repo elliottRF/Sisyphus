@@ -1,15 +1,15 @@
 import { View, Text, StyleSheet, SectionList, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
-import { FONTS, TYPE, SPACING, RADIUS } from '../../constants/theme';
+import { FONTS, TYPE, SPACING, RADIUS, withAlpha } from '../../constants/theme';
 import { getBodyWeightHistory, deleteBodyWeight } from '../../components/db';
 import { formatWeight, unitLabel } from '../../utils/units';
 import { customAlert } from '../../utils/customAlert';
 import * as haptics from '../../utils/haptics';
-import { AppEvents, on, off } from '../../utils/events';
+import { AppEvents, on, off, emit } from '../../utils/events';
 import ContextMenu from '../../components/ContextMenu';
 import WeightEntryModal from '../../components/WeightEntryModal';
 
@@ -26,6 +26,8 @@ const BodyWeightHistory = () => {
     const [menu, setMenu] = useState(null);       // { anchor, entry }
     const [editing, setEditing] = useState(null); // entry being edited
     const [modalOpen, setModalOpen] = useState(false);
+    const [highlight, setHighlight] = useState(null); // datetime of a just-saved entry
+    const listRef = useRef(null);
 
     const load = useCallback(async () => {
         try {
@@ -91,6 +93,34 @@ const BodyWeightHistory = () => {
         };
     }, [entries, useImperial]);
 
+    // Saving is not self-evident on this screen: a backdated entry lands in an
+    // older month, out of view, so the list can refresh correctly and still look
+    // like nothing happened. Reload, then scroll the new row into view and flash
+    // it, so the outcome is visible wherever it landed.
+    const handleSaved = useCallback(async (savedDatetime) => {
+        await load();
+        setHighlight(savedDatetime ?? null);
+    }, [load]);
+
+    useEffect(() => {
+        if (!highlight || !sections.length) return;
+        for (let s = 0; s < sections.length; s++) {
+            const i = sections[s].data.findIndex(e => e.datetime === highlight);
+            if (i >= 0) {
+                // Guarded: on a long list the target may not be realised yet, and
+                // scrollToLocation throws rather than no-ops in that case.
+                try {
+                    listRef.current?.scrollToLocation({
+                        sectionIndex: s, itemIndex: i, viewPosition: 0.35, animated: true,
+                    });
+                } catch { /* the flash still identifies the row once scrolled to */ }
+                break;
+            }
+        }
+        const t = setTimeout(() => setHighlight(null), 2000);
+        return () => clearTimeout(t);
+    }, [highlight, sections]);
+
     const openMenu = (e, entry) => {
         haptics.select();
         setMenu({ anchor: { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY }, entry });
@@ -108,7 +138,11 @@ const BodyWeightHistory = () => {
                     onPress: async () => {
                         try {
                             await deleteBodyWeight(entry.datetime);
-                            load();
+                            await load();
+                            // Same reason the save path emits: deleting here has
+                            // to reach the graph card too, which is showing the
+                            // point that just went away.
+                            emit(AppEvents.BODYWEIGHT_DATA_IMPORTED);
                         } catch (err) {
                             console.error('Delete failed:', err);
                         }
@@ -122,7 +156,11 @@ const BodyWeightHistory = () => {
         <Pressable
             onLongPress={(e) => openMenu(e, item)}
             delayLongPress={300}
-            style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.overlaySubtle }]}
+            style={({ pressed }) => [
+                styles.row,
+                item.datetime === highlight && styles.rowHighlighted,
+                pressed && { backgroundColor: theme.overlaySubtle },
+            ]}
         >
             <View style={styles.rowMain}>
                 <Text style={styles.weight}>
@@ -162,6 +200,18 @@ const BodyWeightHistory = () => {
                     </Text>
                     <Text style={styles.title}>Body Weight</Text>
                 </View>
+                {/* Logging lives in the header rather than in a floating button.
+                    A FAB sat on top of whichever row happened to be under it,
+                    and a solid accent pill hovering over the content is not the
+                    house style — quiet circular header buttons are. */}
+                <TouchableOpacity
+                    style={styles.logButton}
+                    activeOpacity={0.85}
+                    onPress={() => { haptics.tap(); setEditing(null); setModalOpen(true); }}
+                >
+                    <Feather name="plus" size={15} color={theme.textAlternate} />
+                    <Text style={styles.logButtonText}>Log</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.iconButton} onPress={() => router.back()} activeOpacity={0.7}>
                     <Feather name="x" size={18} color={theme.text} />
                 </TouchableOpacity>
@@ -202,6 +252,8 @@ const BodyWeightHistory = () => {
                 </View>
             ) : (
                 <SectionList
+                    ref={listRef}
+                    onScrollToIndexFailed={() => { /* row not realised yet; the flash still marks it */ }}
                     sections={sections}
                     keyExtractor={(item) => item.datetime}
                     renderItem={renderRow}
@@ -215,20 +267,12 @@ const BodyWeightHistory = () => {
                     )}
                     stickySectionHeadersEnabled
                     showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+                    contentContainerStyle={{ paddingBottom: insets.bottom + SPACING.xl }}
                     initialNumToRender={14}
                     windowSize={7}
                 />
             )}
 
-            <TouchableOpacity
-                style={[styles.fab, { bottom: insets.bottom + SPACING.xl }]}
-                activeOpacity={0.85}
-                onPress={() => { haptics.tap(); setEditing(null); setModalOpen(true); }}
-            >
-                <Feather name="plus" size={20} color={theme.textAlternate} />
-                <Text style={styles.fabText}>Log Weight</Text>
-            </TouchableOpacity>
 
             {menu && (
                 <ContextMenu
@@ -255,7 +299,7 @@ const BodyWeightHistory = () => {
                 entry={editing}
                 prefillWeight={stats ? formatWeight(stats.current, useImperial) : null}
                 onClose={() => { setModalOpen(false); setEditing(null); }}
-                onSaved={load}
+                onSaved={handleSaved}
             />
         </View>
     );
@@ -283,6 +327,22 @@ const getStyles = (theme) => StyleSheet.create({
         fontFamily: FONTS.bold,
         color: theme.text,
         letterSpacing: -0.6,
+    },
+    logButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: SPACING.xs,
+        backgroundColor: theme.primary,
+        borderRadius: RADIUS.pill,
+        paddingHorizontal: SPACING.m,
+        paddingVertical: SPACING.s,
+        marginRight: SPACING.s,
+        marginTop: SPACING.xs,
+    },
+    logButtonText: {
+        fontSize: TYPE.subhead,
+        fontFamily: FONTS.bold,
+        color: theme.textAlternate,
     },
     iconButton: {
         width: 34,
@@ -351,6 +411,9 @@ const getStyles = (theme) => StyleSheet.create({
         backgroundColor: theme.surface,
         borderRadius: RADIUS.l,
     },
+    rowHighlighted: {
+        backgroundColor: withAlpha(theme.primary, 0.16),
+    },
     rowMain: { flex: 1 },
     weight: {
         fontSize: TYPE.title2,
@@ -396,22 +459,6 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.textSecondary,
         textAlign: 'center',
         paddingHorizontal: SPACING.xxl,
-    },
-    fab: {
-        position: 'absolute',
-        alignSelf: 'center',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: SPACING.s,
-        backgroundColor: theme.primary,
-        borderRadius: RADIUS.pill,
-        paddingHorizontal: SPACING.xl,
-        paddingVertical: SPACING.m,
-    },
-    fabText: {
-        fontSize: TYPE.body,
-        fontFamily: FONTS.bold,
-        color: theme.textAlternate,
     },
 });
 
