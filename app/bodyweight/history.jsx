@@ -220,23 +220,35 @@ const BodyWeightHistory = () => {
             {stats && (
                 <View style={styles.statsRow}>
                     <View style={styles.stat}>
-                        <Text style={styles.statValue}>{formatWeight(stats.current, useImperial)}</Text>
+                        <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                            {formatWeight(stats.current, useImperial)}
+                            <Text style={styles.statUnit}> {unitLabel(useImperial)}</Text>
+                        </Text>
                         <Text style={styles.statLabel}>Current</Text>
                     </View>
                     <View style={styles.stat}>
-                        <Text style={styles.statValue}>
-                            {stats.change == null
-                                ? '—'
-                                : `${stats.change > 0 ? '+' : '−'}${formatWeight(Math.abs(stats.change), useImperial)}`}
+                        <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                            {stats.change == null ? '—' : (
+                                <>
+                                    {`${stats.change > 0 ? '+' : '−'}${formatWeight(Math.abs(stats.change), useImperial)}`}
+                                    <Text style={styles.statUnit}> {unitLabel(useImperial)}</Text>
+                                </>
+                            )}
                         </Text>
                         <Text style={styles.statLabel}>All time</Text>
                     </View>
                     <View style={styles.stat}>
-                        <Text style={styles.statValue}>{formatWeight(stats.low, useImperial)}</Text>
+                        <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                            {formatWeight(stats.low, useImperial)}
+                            <Text style={styles.statUnit}> {unitLabel(useImperial)}</Text>
+                        </Text>
                         <Text style={styles.statLabel}>Lowest</Text>
                     </View>
                     <View style={styles.stat}>
-                        <Text style={styles.statValue}>{formatWeight(stats.high, useImperial)}</Text>
+                        <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                            {formatWeight(stats.high, useImperial)}
+                            <Text style={styles.statUnit}> {unitLabel(useImperial)}</Text>
+                        </Text>
                         <Text style={styles.statLabel}>Highest</Text>
                     </View>
                 </View>
@@ -372,6 +384,14 @@ const getStyles = (theme) => StyleSheet.create({
         fontFamily: FONTS.bold,
         color: theme.text,
         letterSpacing: -0.3,
+    },
+    // Smaller and quieter than the number, the same relationship the rows use.
+    // Four tiles across is tight, so the values shrink a little rather than
+    // truncate if a unit pushes them over.
+    statUnit: {
+        fontSize: TYPE.caption,
+        fontFamily: FONTS.medium,
+        color: theme.textSecondary,
     },
     statLabel: {
         fontSize: TYPE.caption2,
