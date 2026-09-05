@@ -259,7 +259,7 @@ export const setupDatabase = async () => {
     if ((splitCount?.count || 0) === 0) {
       await database.runAsync(
         'INSERT INTO splits (name, position, createdAt) VALUES (?, ?, ?);',
-        ['My Templates', 0, new Date().toISOString()]
+        [DEFAULT_SPLIT_NAME, 0, new Date().toISOString()]
       );
     }
 
@@ -490,6 +490,10 @@ export const updateExercise = async (exerciseID, exerciseName, targetMuscles, ac
     throw error;
   }
 };
+
+// The name the first split is created with. Exported so the Train tab can tell
+// an untouched default apart from a split the user has actually named.
+export const DEFAULT_SPLIT_NAME = 'My Templates';
 
 // Fetch all workouts from the database
 // In-memory cache of the full workout-history rows. The History tab can be

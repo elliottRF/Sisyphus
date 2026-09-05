@@ -12,7 +12,7 @@ import { AntDesign, Feather, Ionicons, MaterialIcons, MaterialCommunityIcons } f
 
 import * as NavigationBar from 'expo-navigation-bar';
 
-import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, createTemplate, fetchLastWorkoutSets, getTemplate, fetchRecentMuscleUsage, getSplits, createSplit, renameSplit, deleteSplit, moveTemplateToSplit } from '../../components/db';
+import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, createTemplate, fetchLastWorkoutSets, getTemplate, fetchRecentMuscleUsage, getSplits, createSplit, renameSplit, deleteSplit, moveTemplateToSplit, DEFAULT_SPLIT_NAME } from '../../components/db';
 import { setPreloadedData } from '../../constants/preloader';
 import { toStorageKg, formatWeight, unitLabel } from '../../utils/units';
 import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
@@ -477,7 +477,15 @@ const Current = () => {
                     id: genId(),
                     exercises: [{ id: genId(), exerciseID, notes: '', sets: starterSets() }],
                 }));
-                await createTemplate(tpl.name, data);
+                await createTemplate(tpl.name, data, activeSplit?.id ?? null);
+            }
+            // The default split is named for holding nothing in particular. Once
+            // it holds Push, Pull and Legs, say so. Only when the name is still
+            // the untouched default — a split the user has named themselves is
+            // theirs, and renaming it out from under them would be worse than
+            // leaving it.
+            if (activeSplit && activeSplit.name === DEFAULT_SPLIT_NAME) {
+                await renameSplit(activeSplit.id, 'Push Pull Legs');
             }
             await loadTemplates();
             haptics.success();
@@ -1332,7 +1340,11 @@ const Current = () => {
                                     )}
                                 </View>
 
-                                {splitPages.length > 1 && (
+                                {/* Keyed off pagerData, not the split count. With one
+                                    split there is still a New Split page to swipe to, and
+                                    hiding the dots there left a fresh install with no hint
+                                    that the page scrolls at all. */}
+                                {pagerData.length > 1 && (
                                     <View style={styles.splitDots}>
                                         {pagerData.map((page, i) => (
                                             <TouchableOpacity
@@ -1710,13 +1722,14 @@ const getStyles = (theme, width) => {
             paddingHorizontal: 16,
             paddingTop: 8,
         },
+        // Filled rather than dash-outlined, for the same reason as the starter
+        // card: no dashed borders anywhere. The quiet input well reads as an
+        // empty slot without drawing a box around it.
         newSplitCard: {
             flex: 1,
             maxHeight: 220,
             borderRadius: RADIUS.l,
-            borderWidth: 1.5,
-            borderStyle: 'dashed',
-            borderColor: theme.overlayBorder,
+            backgroundColor: theme.overlaySubtle,
             alignItems: 'center',
             justifyContent: 'center',
             padding: 20,
@@ -1887,13 +1900,14 @@ const getStyles = (theme, width) => {
             shadowRadius: 0,
             elevation: 0,
         },
+        // Borderless, like every other card. It used a dashed outline, which the
+        // design rules rule out everywhere — and this is the first card a new
+        // user ever sees. The primary-tinted fill is enough to mark it out as
+        // the suggested action without an outline.
         starterCard: {
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: withAlpha(theme.primary, isLightTheme(theme) ? 0.08 : 0.14),
-            borderWidth: 1,
-            borderColor: withAlpha(theme.primary, isLightTheme(theme) ? 0.25 : 0.35),
-            borderStyle: 'dashed',
+            backgroundColor: withAlpha(theme.primary, isLightTheme(theme) ? 0.10 : 0.16),
             shadowColor: 'transparent',
             shadowOpacity: 0,
             shadowRadius: 0,
