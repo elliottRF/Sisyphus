@@ -4,7 +4,8 @@ import Papa from 'papaparse';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { emit, AppEvents } from '../utils/events';
 import {
-  invalidateExerciseSnapshot
+  invalidateExerciseSnapshot,
+  clearAllExerciseSnapshots
 } from '../utils/exerciseSnapshots';
 import { estimateOneRMForStorage } from '../utils/oneRM';
 let dbPromise = null;
@@ -1809,6 +1810,26 @@ export const reopenDatabaseAfterRestore = async () => {
   dbPromise = null;
   lastLivenessProbe = 0;
   await setupDatabase();
+
+  // A restore replaces every row in the database, so every cache derived from
+  // the old rows is now describing data that no longer exists. Drop them here,
+  // at the source, and BEFORE the events fire — the listeners below refetch,
+  // and a listener that repopulates a cache must not race one that clears it.
+  //
+  // The module-scope seeds in suggestions.jsx and exerciseEditable.jsx already
+  // clear themselves off WORKOUT_DATA_IMPORTED. These three don't, and they
+  // can't be fixed the same way:
+  //   - the two caches here are only refilled by a mounted screen refetching,
+  //     so a tab not yet visited this launch would seed its first paint from
+  //     pre-restore rows (History seeds synchronously and skips its spinner
+  //     precisely because the cache is warm, so it renders the old list rather
+  //     than a loading state)
+  //   - the exercise snapshots live in AsyncStorage, so unlike the in-memory
+  //     seeds they survive a restart and would stay stale indefinitely
+  _exercisesCache = null;
+  _workoutHistoryCache = null;
+  await clearAllExerciseSnapshots();
+
   emit(AppEvents.WORKOUT_DATA_IMPORTED);
   emit(AppEvents.BODYWEIGHT_DATA_IMPORTED);
 };

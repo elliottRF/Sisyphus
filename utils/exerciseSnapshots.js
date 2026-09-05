@@ -62,6 +62,27 @@ export async function invalidateExerciseSnapshot(exerciseID) {
 }
 
 /**
+ * Drops every snapshot, in memory and on disk.
+ *
+ * Snapshots are derived from workoutHistory, so a "Restore From Backup" —
+ * which swaps the whole .db file underneath them — leaves every one of them
+ * describing data that no longer exists. Unlike the in-memory seeds, these
+ * live in AsyncStorage and so survive app restarts: without this the exercise
+ * page header and PR graph keep first-painting the pre-restore PRs on every
+ * launch until each exercise happens to be opened and recomputed.
+ */
+export async function clearAllExerciseSnapshots() {
+    MEMORY_CACHE.clear();
+    try {
+        const keys = await AsyncStorage.getAllKeys();
+        const snapshotKeys = keys.filter(k => k.startsWith(SNAPSHOT_KEY_PREFIX));
+        if (snapshotKeys.length) await AsyncStorage.multiRemove(snapshotKeys);
+    } catch (e) {
+        console.error('[Snapshots] Error clearing snapshots:', e);
+    }
+}
+
+/**
  * Helper to calculate stats and muscle targets from a history array.
  * This can be used to generate a snapshot from raw DB data.
  */
