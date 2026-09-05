@@ -785,9 +785,16 @@ const Current = () => {
     );
 
     // Keep the index valid when a split is deleted while it's showing.
+    //
+    // Valid indices run 0..splitPages.length inclusive: the pager carries one
+    // page per split PLUS the trailing New Split page. Clamping at
+    // splitPages.length - 1 also clamped away that last page, so swiping onto
+    // New Split snapped the title and dots back to the previous split while the
+    // pager itself stayed put — leaving the header naming one split and the
+    // page showing another.
     useEffect(() => {
-        if (activeSplitIndex > 0 && activeSplitIndex >= splitPages.length) {
-            setActiveSplitIndex(Math.max(0, splitPages.length - 1));
+        if (activeSplitIndex > splitPages.length) {
+            setActiveSplitIndex(Math.max(0, splitPages.length));
         }
     }, [splitPages.length, activeSplitIndex]);
 
