@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { useScrollToTop } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession, createTemplate, getCachedWorkoutHistory, getCachedExercises } from '../../components/db';
+import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession, createTemplate, getSplits, getCachedWorkoutHistory, getCachedExercises } from '../../components/db';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as haptics from '../../utils/haptics';
 import { FONTS, RADIUS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
@@ -830,13 +830,41 @@ const History = () => {
         const menu = contextMenu;
         closeMenu();
         if (!menu) return;
+
+        const name = sessionDisplayName(menu);
+        const save = async (splitId) => {
+            try {
+                await createTemplate(name, buildWorkoutDataFromSession(menu.exercises), splitId);
+                haptics.success();
+                customAlert("Template Saved", `"${name}" was added to your templates.`, [{ text: "OK" }]);
+            } catch (e) {
+                console.error("Error saving template from session:", e);
+                customAlert("Error", "Could not save this workout as a template.", [{ text: "OK" }]);
+            }
+        };
+
+        // Ask which split to file it under, the same choice the template editor
+        // offers. Skipped when there is only one split, since there is nothing
+        // to decide and an extra tap would just be in the way.
         try {
-            await createTemplate(sessionDisplayName(menu), buildWorkoutDataFromSession(menu.exercises));
-            haptics.success();
-            customAlert("Template Saved", `"${sessionDisplayName(menu)}" was added to your templates.`, [{ text: "OK" }]);
+            const splits = await getSplits();
+            if (splits.length > 1) {
+                customAlert(
+                    "Save to which split?",
+                    name,
+                    [
+                        ...splits.map(split => ({ text: split.name, style: 'plain', onPress: () => save(split.id) })),
+                        { text: "Cancel", style: "cancel" },
+                    ]
+                );
+                return;
+            }
+            await save(splits[0]?.id ?? null);
         } catch (e) {
-            console.error("Error saving template from session:", e);
-            customAlert("Error", "Could not save this workout as a template.", [{ text: "OK" }]);
+            // Reading splits is not worth failing the save over — createTemplate
+            // files an unassigned template into the first split anyway.
+            console.error("Error reading splits:", e);
+            await save(null);
         }
     };
 

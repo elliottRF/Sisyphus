@@ -144,10 +144,18 @@ const CustomAlert = ({
                         {buttons.map((button, index) => {
                             const isDestructive = button.style === 'destructive';
                             const isCancel = button.style === 'cancel';
+                            // 'plain' is for alerts that are really a list of
+                            // equal choices (pick a split, pick a target). A
+                            // column of identical accent-filled buttons reads as
+                            // several primary actions competing; these are one
+                            // choice, so they sit on the quiet input well.
+                            const isPlain = button.style === 'plain';
 
                             const baseButtonStyle = isCancel
                                 ? [styles.ghostButton, { borderColor: theme.border }]
-                                : [styles.filledButton, { backgroundColor: isDestructive ? theme.danger : theme.primary }];
+                                : isPlain
+                                    ? [styles.filledButton, { backgroundColor: theme.overlayInput }]
+                                    : [styles.filledButton, { backgroundColor: isDestructive ? theme.danger : theme.primary }];
 
                             const rowStyle = isRow ? { flex: 1 } : { width: '100%' };
 
@@ -162,7 +170,11 @@ const CustomAlert = ({
                                     ) : (
                                         <Text style={[
                                             isCancel ? styles.ghostButtonText : styles.filledButtonText,
-                                            isCancel ? { color: theme.textSecondary } : (!isDestructive && { color: theme.textAlternate })
+                                            isCancel
+                                                ? { color: theme.textSecondary }
+                                                : isPlain
+                                                    ? { color: theme.text }
+                                                    : (!isDestructive && { color: theme.textAlternate })
                                         ]}>
                                             {button.text}
                                         </Text>

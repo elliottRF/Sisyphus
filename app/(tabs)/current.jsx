@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, Dimensions, Modal, FlatList, Pressable } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, Modal, FlatList, Pressable } from 'react-native'
 import Animated, { LinearTransition, FadeIn, FadeOut, Easing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useScrollToTop } from 'expo-router';
@@ -38,7 +38,7 @@ import { createAudioPlayer } from 'expo-audio';
 import LottieView from 'lottie-react-native';
 
 import { useTheme } from '../../context/ThemeContext';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator , useWindowDimensions } from 'react-native';
 import { AppEvents, on, off } from '../../utils/events';
 import { useLocalSearchParams } from 'expo-router';
 
@@ -48,7 +48,12 @@ import ContextMenu from '../../components/ContextMenu';
 
 
 
-const { width } = Dimensions.get('window');
+// NOTE: window width is deliberately NOT captured at module scope any more.
+// It was, and on a foldable it is read once at import and never updated, so
+// folding left the grid sized for the old screen and — worse — left the split
+// pager measuring pages at the wrong width, which breaks both scrollToOffset
+// and the index derived from contentOffset. Components read it from
+// useWindowDimensions() instead, which re-renders on resize.
 
 // Template ordering within a split. Persisted so it survives a restart.
 const TEMPLATE_SORT_KEY = 'settings_templateSort';
@@ -65,8 +70,9 @@ const DEFAULT_TEMPLATES = [
 
 const Current = () => {
     const insets = useSafeAreaInsets();
+    const { width: windowWidth } = useWindowDimensions();
     const { theme, setWorkoutInProgress, useImperial, workoutStartTime, updateWorkoutStartTime, accessoryWeight, recoveryRate } = useTheme();
-    const styles = useMemo(() => getStyles(theme), [theme]);
+    const styles = useMemo(() => getStyles(theme, windowWidth), [theme, windowWidth]);
 
     const [exercises, setExercises] = useState([]);
     const [isReady, setIsReady] = useState(false);
@@ -1288,7 +1294,7 @@ const Current = () => {
                                                 key={page.__newSplit ? 'new' : page.split.id}
                                                 onPress={() => {
                                                     setActiveSplitIndex(i);
-                                                    splitPagerRef.current?.scrollToOffset({ offset: i * width, animated: true });
+                                                    splitPagerRef.current?.scrollToOffset({ offset: i * windowWidth, animated: true });
                                                 }}
                                                 hitSlop={8}
                                             >
@@ -1316,7 +1322,7 @@ const Current = () => {
                                     windowSize={3}
                                     initialNumToRender={1}
                                     onMomentumScrollEnd={(e) => {
-                                        const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+                                        const idx = Math.round(e.nativeEvent.contentOffset.x / windowWidth);
                                         if (idx !== activeSplitIndex) setActiveSplitIndex(idx);
                                     }}
                                 />
@@ -1512,7 +1518,7 @@ const Current = () => {
 
                 {splitMenu && activeSplit && (
                     <ContextMenu
-                        anchor={{ x: width - 40, y: insets.top + 60 }}
+                        anchor={{ x: windowWidth - 40, y: insets.top + 60 }}
                         onClose={() => setSplitMenu(false)}
                         header={{ icon: 'layers', title: activeSplit.name }}
                         items={[
@@ -1567,7 +1573,7 @@ const Current = () => {
 
 
 
-const getStyles = (theme) => {
+const getStyles = (theme, width) => {
     const safePrimary = theme.primary;
     const safeText = theme.text;
     const safeBorder = theme.border;
