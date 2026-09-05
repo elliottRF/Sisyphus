@@ -286,7 +286,14 @@ const EditTemplate = () => {
             console.error("Error saving template:", error);
             customAlert("Error", "Could not save template.");
         }
-    }, [currentWorkout, templateName, TEMPLATE_ID]);
+        // selectedSplitId and useImperial are both read in the body above, so
+        // both belong here. Without selectedSplitId the callback kept whichever
+        // split was selected when it was last built — the default first one —
+        // so picking a split in the chip row changed the highlight and nothing
+        // else, and every template saved into the first split. useImperial has
+        // the same shape of bug: toggling units with the editor open would have
+        // converted the weights against the old setting.
+    }, [currentWorkout, templateName, TEMPLATE_ID, selectedSplitId, useImperial]);
 
     const handleDeleteTemplate = useCallback(() => {
         if (TEMPLATE_ID === 'new') {
