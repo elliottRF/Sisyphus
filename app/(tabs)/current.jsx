@@ -1604,6 +1604,16 @@ const Current = () => {
 
                 {splitEditor && (
                     <Modal transparent animationType="fade" statusBarTranslucent onRequestClose={() => setSplitEditor(null)}>
+                        {/* The field autofocuses, so the keyboard is up the moment this
+                            opens. Without this the card stays dead centre and the
+                            keyboard covers its lower half, including the buttons — a
+                            Modal doesn't inherit the activity's adjustResize. Same
+                            treatment CustomAlert already uses. */}
+                        <KeyboardAvoidingView
+                            style={{ flex: 1 }}
+                            behavior="padding"
+                            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+                        >
                         <Pressable style={styles.splitDialogBackdrop} onPress={() => setSplitEditor(null)}>
                             <Pressable style={styles.splitDialog} onPress={() => {}}>
                                 <Text style={styles.splitDialogTitle}>
@@ -1637,6 +1647,7 @@ const Current = () => {
                                 </View>
                             </Pressable>
                         </Pressable>
+                        </KeyboardAvoidingView>
                     </Modal>
                 )}
             </View>
