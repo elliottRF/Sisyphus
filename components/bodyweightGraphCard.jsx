@@ -99,7 +99,12 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 };
 
 const BodyweightGraphCard = ({ theme }) => {
-    const styles = getStyles(theme);
+    // Scrubbing the graph calls setSelectedPoint on every touch sample, so this
+    // card re-renders at finger rate — and rebuilt a 39-rule stylesheet each
+    // time. Nothing here is React.memo'd, so this isn't about unblocking a
+    // memo; it's the per-frame allocation on the one path in this card that
+    // renders at 60Hz.
+    const styles = useMemo(() => getStyles(theme), [theme]);
     const accentColor = theme.primary;
     const safeSurface = theme.surface;
     const graphWidth = SCREEN_WIDTH - CARD_MARGIN - CARD_PADDING - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING;

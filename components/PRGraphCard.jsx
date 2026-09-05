@@ -124,7 +124,11 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, onReady }) => {
     const { theme, useImperial } = useTheme();
     const router = useRouter();
-    const styles = getStyles(theme, isCompact);
+    // Same reason as the bodyweight card: scrubbing the graph sets
+    // selectedPoint on every touch sample, so this card renders at finger rate
+    // and rebuilt a 45-rule stylesheet on each one. Also the card the profile
+    // screen mounts many of at once.
+    const styles = useMemo(() => getStyles(theme, isCompact), [theme, isCompact]);
 
     const graphWidth = isCompact
         ? SCREEN_WIDTH - 24 - 24 - Y_AXIS_WIDTH - GRAPH_RIGHT_PADDING
