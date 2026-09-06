@@ -74,7 +74,18 @@
       "expo-tracking-transparency",
       "expo-sharing",
       "expo-sqlite",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "packagingOptions": {
+              "pickFirst": ["**/libworklets.so"]
+            }
+          }
+        }
+      ],
+      "./plugins/withReleaseSigning"
     ],
     "experiments": {
       "typedRoutes": true
