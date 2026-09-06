@@ -452,6 +452,8 @@ export const insertExercise = async (exerciseName, targetMuscles, accessoryMuscl
       [exerciseName, targetMuscles, accessoryMuscles, isCardio, isAssisted]
     );
     await invalidateExerciseSnapshot(result.lastInsertRowId);
+    // Refresh the seed cache so first paints see the new exercise by name.
+    await fetchExercises().catch(() => {});
     return result.lastInsertRowId;
   } catch (error) {
     if (error.message && error.message.includes("UNIQUE constraint failed")) {
@@ -482,6 +484,7 @@ export const updateExercise = async (exerciseID, exerciseName, targetMuscles, ac
     }
 
     await invalidateExerciseSnapshot(exerciseID);
+    await fetchExercises().catch(() => {});
     return "Exercise updated successfully!";
   } catch (error) {
     if (error.message && error.message.includes("UNIQUE constraint failed")) {
@@ -672,6 +675,12 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
       await recalculateExercisePRs(exerciseID);
     }
 
+    // Keep the History seed cache in step, exactly as insertWorkoutHistory
+    // does. Without this the cache still held the session's OLD rows, so
+    // History's first paint after an edit showed the pre-edit sets until its
+    // own refetch landed. The merge replaces the session wholesale, so removed
+    // or reordered sets come out right too.
+    try { await mergeSessionsIntoHistoryCache(database, [sessionNumber]); } catch (e) { /* best-effort */ }
     emit(AppEvents.WORKOUT_COMPLETED, { showCelebration: false });
     return setsOverwritten;
   } catch (error) {
@@ -711,6 +720,11 @@ export const deleteWorkoutSession = async (sessionNumber) => {
   for (const exerciseID of affectedExerciseIDs) {
     await recalculateExercisePRs(exerciseID);
   }
+  // Drop the session from the History seed cache. Reading a deleted session
+  // back yields no rows, so the merge's replace-then-append is a removal.
+  // Without it the cache kept the deleted session and History's first paint
+  // resurrected it for a frame before its own refetch caught up.
+  try { await mergeSessionsIntoHistoryCache(database, [sessionNumber]); } catch (e) { /* best-effort */ }
   emit(AppEvents.WORKOUT_COMPLETED, { showCelebration: false });
 };
 

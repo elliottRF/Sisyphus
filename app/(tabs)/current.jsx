@@ -646,7 +646,7 @@ const Current = () => {
         }
         // exercises drives the isAssisted lookups (PR flags) and useImperial the
         // kg conversion — both must be current when the workout is saved.
-    }, [currentWorkout, workoutStartTime, workoutTitle, exercises, useImperial]);
+    }, [currentWorkout, workoutStartTime, workoutTitle, exercises, useImperial, updateWorkoutStartTime]);
 
     const plusButtonShowExerciseList = () => {
         fetchExercises()
