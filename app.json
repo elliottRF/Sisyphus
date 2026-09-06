@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sisyphus",
     "slug": "sisyphus",
-    "version": "1.5.0",
+    "version": "1.5.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "myapp",
@@ -19,10 +19,10 @@
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive.png",
-        "backgroundColor": "#0c0c0c"
+        "backgroundColor": "#000000"
       },
       "package": "com.elliottr.sisyphus",
-      "versionCode": 50,
+      "versionCode": 54,
       "permissions": [
         "FOREGROUND_SERVICE",
         "WAKE_LOCK",
@@ -45,7 +45,7 @@
         {
           "image": "./assets/icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#0c0c0c"
+          "backgroundColor": "#000000"
         }
       ],
       [

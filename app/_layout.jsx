@@ -86,7 +86,10 @@ const _layout = () => {
 
     if (!fontsLoaded || !dbReady) {
         return (
-            <View style={{ flex: 1, backgroundColor: '#151517' }} />
+            // Matches the native splash background exactly. This view covers the
+            // gap between the native splash handing off and fonts/DB being ready,
+            // so any difference reads as a flash of a lighter panel mid-launch.
+            <View style={{ flex: 1, backgroundColor: '#000000' }} />
         );
     }
 

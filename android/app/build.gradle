@@ -2,6 +2,13 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// Release signing. Re-added after `expo prebuild`, which clears the android
+// directory and regenerates this file from Expo's template -- that template has
+// no keystore loading and points the release buildType at the DEBUG signing
+// config. Losing this silently produces a debug-signed release APK that the
+// Play Store rejects and that cannot upgrade an installed copy.
+// Values live in android/keystore.properties (gitignored); the keystore itself
+// is android/app/release.keystore (also gitignored).
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('keystore.properties')
 keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
@@ -96,8 +103,8 @@ android {
         applicationId 'com.elliottr.sisyphus'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 50
-        versionName "1.5.0"
+        versionCode 54
+        versionName "1.5.4"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -120,8 +127,6 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.release
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
@@ -135,6 +140,18 @@ android {
         jniLibs {
             def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
             useLegacyPackaging enableLegacyPackaging.toBoolean()
+            // Both expo-modules-core and react-native-worklets emit
+            // libworklets.so, and mergeReleaseNativeLibs refuses to pick.
+            //
+            // It is the same library twice, not two competing ones:
+            // expo-modules-core declares react-native-worklets as a peer
+            // dependency (^0.10.0, satisfied by the installed 0.10.2) and its
+            // build.gradle links that project's native libs into its own build
+            // rather than compiling its own. So either copy is correct.
+            //
+            // NOTE: like the signing config above, `expo prebuild` clears this
+            // file and this has to be re-applied afterwards.
+            pickFirsts += ['**/libworklets.so']
         }
     }
     androidResources {
