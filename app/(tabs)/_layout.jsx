@@ -9,7 +9,13 @@ const TabsLayout = () => {
             tabBar={props => <TabBar {...props} />}
             screenOptions={{
                 headerShown: false,
-                lazy: false,
+                // Tabs mount on first visit (the default). lazy:false mounted all
+                // four before first paint: Home's two body SVGs and three Skia
+                // canvases, History's SectionList over every session, Current
+                // and Exercises -- all before the user saw anything. Each tab
+                // seeds its first paint from an in-memory cache, so the first
+                // visit still lands instantly; the boot just no longer pays for
+                // tabs that may never be opened.
                 tabBarStyle: {
                     position: 'absolute',
                     backgroundColor: 'transparent',

@@ -1,44 +1,54 @@
-import { View, Platform, ActivityIndicator, Text, Animated, StyleSheet, Modal } from 'react-native'
+import { View, Platform, ActivityIndicator, Text, Animated, StyleSheet } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Redirect, Stack, usePathname, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupDatabase, fetchWorkoutHistory, fetchExercises } from '../components/db';
-import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { SETTINGS_KEYS } from '../constants/preferences';
 import { AppEvents, on, off } from '../utils/events';
 import { primeExerciseSnapshots } from '../utils/exerciseSnapshots';
-import LottieView from 'lottie-react-native';
 import CustomAlert from '../components/CustomAlert';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { Settings } from 'react-native-fbsdk-next';
 import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 
+// Loaded on first use rather than at boot. Expo's Metro config does not inline
+// requires, so a plain top-level import would evaluate lottie-react-native and
+// parse its 115KB animation on every cold start, for an overlay that every
+// current emitter suppresses with showCelebration:false. React.lazy defers the
+// module's evaluation until it first renders; the code is still in the bundle.
+const WinOverlay = React.lazy(() => import('../components/WinOverlay'));
+
 SplashScreen.preventAutoHideAsync();
+// Boot timing marker, read from logcat with `adb logcat -v epoch | grep '\[boot\]'`.
+console.log('[boot] js-start', Date.now());
 
 const _layout = () => {
     const [dbReady, setDbReady] = useState(false);
-    const [fontsLoaded] = useFonts({
-        Inter_400Regular,
-        Inter_500Medium,
-        Inter_600SemiBold,
-        Inter_700Bold,
-    });
+    // The four Inter weights are embedded natively through the expo-font config
+    // plugin (see app.json), under the same family names the app already uses,
+    // so they are available the instant the process starts. This used to be a
+    // useFonts() runtime load, which read four files off disk before the splash
+    // was allowed to hide -- one of four gates on first paint.
+    const fontsLoaded = true;
 
     useEffect(() => {
         const initDb = async () => {
             try {
                 await setupDatabase();
+                console.log('[boot] db-setup', Date.now());
                 await primeExerciseSnapshots();
+                console.log('[boot] snapshots', Date.now());
                 // fetchExercises stays on the blocking path: it's a small table
                 // and it's read synchronously (getCachedExercises) during the
                 // first paint of several screens.
                 await fetchExercises().catch(() => {});
+                console.log('[boot] exercises', Date.now());
                 // The history warm is deliberately NOT awaited. It reads every
                 // row of workoutHistory — ~12k for a long-running user, measured
                 // at ~220ms of SQL before the bridge marshals the rows into JS —
@@ -84,15 +94,11 @@ const _layout = () => {
     }, []);
 
 
-    if (!fontsLoaded || !dbReady) {
-        return (
-            // Matches the native splash background exactly. This view covers the
-            // gap between the native splash handing off and fonts/DB being ready,
-            // so any difference reads as a flash of a lighter panel mid-launch.
-            <View style={{ flex: 1, backgroundColor: '#000000' }} />
-        );
-    }
-
+    // The provider tree mounts immediately rather than behind dbReady: the
+    // theme/settings read and the onboarding-flag read are AsyncStorage work
+    // that has nothing to do with the database, and gating them behind it
+    // serialised the two. The native splash stays up until ThemeConsumer has
+    // everything (dbReady included), so nothing below is visible early.
     return (
         <ErrorBoundary>
             <SafeAreaProvider>
@@ -119,14 +125,19 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
 
     useEffect(() => {
         if (settingsLoaded && fontsLoaded && dbReady && shouldShowOnboarding !== null && !isSettingUp) {
-            // Initial boot fade out
+            // Initial boot fade out. Home is already painted underneath this
+            // overlay by the time the splash hides, so every millisecond here
+            // is perceived boot time: measured on a release build, content was
+            // landing ~400ms after the splash hid, entirely because of this
+            // fade. 200ms still reads as a cross-fade rather than a cut.
             Animated.timing(overlayOpacity, {
                 toValue: 0,
-                duration: 400,
+                duration: 200,
                 useNativeDriver: true
             }).start(() => setIsOverlayVisible(false));
 
             SplashScreen.hideAsync();
+            console.log('[boot] splash-hidden', Date.now());
         }
     }, [settingsLoaded, fontsLoaded, dbReady, shouldShowOnboarding, isSettingUp]);
 
@@ -244,8 +255,8 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
                 translucent={true}
             />
 
-            {/* Main Content - only render Stack when we know the onboarding state */}
-            {shouldShowOnboarding !== null && (
+            {/* Main Content - only once the DB is open and the onboarding state is known */}
+            {dbReady && shouldShowOnboarding !== null && (
                 <Stack screenOptions={{
                     headerShown: false,
                     animation: 'flip',
@@ -288,43 +299,11 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
                 </Animated.View>
             )}
 
-            <Modal transparent visible={isWorkoutFinishing} animationType="fade">
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }]}>
-                    <LottieView
-                        source={require('../assets/notifications/win.json')}
-                        autoPlay
-                        loop={false}
-                        style={{ width: 350, height: 350 }}
-                        colorFilters={[
-                            // Main Cup and Stem (identifying 'Stand' as the stem/neck)
-                            ...['Cup', 'Stand', 'Trophy', 'Group 1', 'Pre-comp 3'].map(keypath => ({
-                                keypath,
-                                color: theme.primary
-                            })),
-                            // Handles and Depth (Making them noticeably darker for premium definition)
-                            ...['Cup 2', 'Cup 3', 'Shape Layer 1', 'Shape Layer 2', 'Shape Layer 3', 'Shape Layer 4', 'Shape Layer 5', 'Shape Layer 6', 'Shape Layer 7'].map(keypath => ({
-                                keypath,
-                                color: theme.primaryDark || theme.primary
-                            })),
-                            // Stars (Bright White for premium shine)
-                            ...['Star', 'Star 2', 'Star 3', 'Star 4', 'Star 4 :M'].map(keypath => ({
-                                keypath,
-                                color: '#FFFFFF'
-                            })),
-                            // The Base (Surface/Grounded)
-                            ...['Black Stand', 'Black Stand 2', 'White Stand', 'White Stand 2', 'White Stand 3', 'White Stand 4', 'White Stand 4 :M'].map(keypath => ({
-                                keypath,
-                                color: theme.surface
-                            })),
-                            // Accents / Secondary parts (Sparkles/Highlights)
-                            ...['Shape Layer 9', 'Shape Layer 10', 'Shape Layer 11', 'Shape Layer 12', 'Shape Layer 13', 'Shape Layer 14'].map(keypath => ({
-                                keypath,
-                                color: theme.secondary
-                            })),
-                        ]}
-                    />
-                </View>
-            </Modal>
+            {isWorkoutFinishing && (
+                <Suspense fallback={null}>
+                    <WinOverlay theme={theme} />
+                </Suspense>
+            )}
 
             <CustomAlert
                 visible={alertConfig.visible}

@@ -16,7 +16,12 @@ let lastLivenessProbe = 0;
 // to re-run. It's stored in the DB file via PRAGMA user_version, so the heavy
 // reconciliation runs only on fresh install / app update / restore of an older
 // backup — not on every launch.
-const DB_SETUP_VERSION = 1;
+// Stamped into PRAGMA user_version once setupDatabase has run to completion.
+// A database whose stamp equals this skips the whole setup on launch (see the
+// fast path in setupDatabase), so BUMP THIS on any schema change -- a new
+// column, table or index -- or existing installs will never receive it.
+// History: 1 = exercise catalogue reconciled; 2 = full schema verified.
+const DB_SETUP_VERSION = 2;
 
 const getDb = async () => {
   // Cache the PROMISE, not the instance: concurrent first callers previously
@@ -160,10 +165,68 @@ const migrateExerciseIDs = async (database) => {
 };
 
 // Create and populate the exercises table
+// Runs on EVERY launch, including the fast path below: it is a data repair,
+// not a schema step, and two cheap reads. See the comments inside for why it
+// must not be gated on a migration flag.
+const ensureSplitsIntegrity = async (database) => {
+  // Always leave at least one split behind, even on a fresh install — the
+  // Train tab pages over splits, so with none it would have nothing to show
+  // and no way to add a template.
+  const splitCount = await database.getFirstAsync('SELECT COUNT(*) as count FROM splits;');
+  if ((splitCount?.count || 0) === 0) {
+    await database.runAsync(
+      'INSERT INTO splits (name, position, createdAt) VALUES (?, ?, ?);',
+      [DEFAULT_SPLIT_NAME, 0, new Date().toISOString()]
+    );
+  }
+
+  // Adopt every template that isn't in a live split. This deliberately does
+  // NOT run only when there are no splits, which is what it used to do and
+  // which silently loses templates: a database can hold splits AND unassigned
+  // templates at the same time. Both of the owner's real backups are in that
+  // state — splits created by one build, then templates created by a build
+  // that had been rolled back and no longer set splitId. The guard saw splits
+  // present, skipped, and left every template unreachable, because the Train
+  // tab only renders templates grouped under a split.
+  //
+  // Keying on the templates themselves rather than on a global "have we
+  // migrated" flag also covers a template whose split was deleted, and makes
+  // the whole thing idempotent: a template already in a live split is never
+  // touched, so deliberate organisation survives.
+  const homeSplit = await database.getFirstAsync(
+    'SELECT id FROM splits ORDER BY position ASC, id ASC LIMIT 1;'
+  );
+  if (homeSplit?.id) {
+    await database.runAsync(
+      `UPDATE workoutTemplates
+          SET splitId = ?
+        WHERE splitId IS NULL
+           OR splitId NOT IN (SELECT id FROM splits);`,
+      [homeSplit.id]
+    );
+  }
+};
+
 export const setupDatabase = async () => {
   try {
     const database = await getDb();
     await database.execAsync('PRAGMA foreign_keys = ON;');
+
+    // ── Fast path ─────────────────────────────────────────────────────────
+    // Everything below this block is idempotent schema work, and it used to
+    // run on every cold start: ~26 sequential round trips (a PRAGMA
+    // table_info per column check, CREATE IF NOT EXISTS per table and index),
+    // measured at 80-125ms on a release build before the splash could hide.
+    // A database stamped with the current version has already been through
+    // all of it, so only the cheap split repair runs. Anything unstamped --
+    // a fresh install, an update from an older build, a restored backup --
+    // takes the full path once and is stamped at the end.
+    const versionRow = await database.getFirstAsync('PRAGMA user_version;');
+    const dbVersion = versionRow?.user_version ?? 0;
+    if (dbVersion === DB_SETUP_VERSION) {
+      await ensureSplitsIntegrity(database);
+      return;
+    }
 
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS exercises (
@@ -252,42 +315,7 @@ export const setupDatabase = async () => {
 
     await ensureColumnExists('workoutTemplates', 'splitId', 'INTEGER');
 
-    // Always leave at least one split behind, even on a fresh install — the
-    // Train tab pages over splits, so with none it would have nothing to show
-    // and no way to add a template.
-    const splitCount = await database.getFirstAsync('SELECT COUNT(*) as count FROM splits;');
-    if ((splitCount?.count || 0) === 0) {
-      await database.runAsync(
-        'INSERT INTO splits (name, position, createdAt) VALUES (?, ?, ?);',
-        [DEFAULT_SPLIT_NAME, 0, new Date().toISOString()]
-      );
-    }
-
-    // Adopt every template that isn't in a live split. This deliberately does
-    // NOT run only when there are no splits, which is what it used to do and
-    // which silently loses templates: a database can hold splits AND unassigned
-    // templates at the same time. Both of the owner's real backups are in that
-    // state — splits created by one build, then templates created by a build
-    // that had been rolled back and no longer set splitId. The guard saw splits
-    // present, skipped, and left every template unreachable, because the Train
-    // tab only renders templates grouped under a split.
-    //
-    // Keying on the templates themselves rather than on a global "have we
-    // migrated" flag also covers a template whose split was deleted, and makes
-    // the whole thing idempotent: a template already in a live split is never
-    // touched, so deliberate organisation survives.
-    const homeSplit = await database.getFirstAsync(
-      'SELECT id FROM splits ORDER BY position ASC, id ASC LIMIT 1;'
-    );
-    if (homeSplit?.id) {
-      await database.runAsync(
-        `UPDATE workoutTemplates
-            SET splitId = ?
-          WHERE splitId IS NULL
-             OR splitId NOT IN (SELECT id FROM splits);`,
-        [homeSplit.id]
-      );
-    }
+    await ensureSplitsIntegrity(database);
 
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS bodyWeight (
@@ -324,12 +352,6 @@ export const setupDatabase = async () => {
     // only runs on a fresh install or after an update/restore, not every launch.
     // (The canonical sync loop and the assisted-PR recalc below otherwise do
     // hundreds of sequential DB round-trips on every cold start.)
-    const versionRow = await database.getFirstAsync('PRAGMA user_version;');
-    const dbVersion = versionRow?.user_version ?? 0;
-    if (dbVersion === DB_SETUP_VERSION) {
-      return; // already reconciled for this build — skip the expensive work
-    }
-
     // 1. Migrate exercise IDs to be canonical before anything else
     await migrateExerciseIDs(database);
 

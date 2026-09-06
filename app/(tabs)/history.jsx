@@ -792,8 +792,8 @@ const History = () => {
 
         const start = () => {
             // navigate, NOT push: pushing a tab route mounts a duplicate (tabs)
-            // navigator (all four tabs, lazy:false) that piles up until the app
-            // crashes — navigate reuses the existing tabs and switches to it.
+            // navigator, tab bar and all, that piles up until the app crashes —
+            // navigate reuses the existing tabs and switches to it.
             router.navigate({
                 pathname: '/current',
                 params: {

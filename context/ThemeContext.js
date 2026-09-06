@@ -42,6 +42,7 @@ export const ThemeProvider = ({ children }) => {
                 storedRepRangeMax,
                 storedWorkoutStartTime,
                 storedCustomThemes,
+                storedCurrentWorkout,
             ] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
@@ -53,6 +54,7 @@ export const ThemeProvider = ({ children }) => {
                 AsyncStorage.getItem(SETTINGS_KEYS.repRangeMax),
                 AsyncStorage.getItem('@workoutStartTime'),
                 AsyncStorage.getItem('user_custom_themes'),
+                AsyncStorage.getItem('@currentWorkout'),
             ]);
 
             // Custom themes are stored as full theme objects (each with an id).
@@ -99,10 +101,23 @@ export const ThemeProvider = ({ children }) => {
             if (storedWorkoutStartTime) {
                 setWorkoutStartTime(storedWorkoutStartTime);
             }
+            // The Train tab owns this flag while it is mounted (same rule:
+            // exercises present OR a start time), but tabs now mount lazily,
+            // so after a cold start it isn't mounted until visited. Without
+            // this the tab bar showed "Train" with no timer on Home while a
+            // workout was in fact running. Seeded here from the same stored
+            // state the tab restores from, so the bar is right from first paint.
+            let storedHasExercises = false;
+            if (storedCurrentWorkout) {
+                try { storedHasExercises = JSON.parse(storedCurrentWorkout).length > 0; } catch (_) {}
+            }
+            if (storedHasExercises || storedWorkoutStartTime) {
+                setWorkoutInProgress(true);
+            }
         } catch (error) {
             console.error("Failed to load settings:", error);
         } finally {
-            setSettingsLoaded(true);
+            setSettingsLoaded(true); console.log('[boot] settings-loaded', Date.now());
         }
     };
 

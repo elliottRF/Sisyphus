@@ -134,6 +134,16 @@ Each of these cost a real bug. Don't undo them.
   list in `onExitDone`.
 - **Never key features off workout-name matching.** Session names are
   unreliable.
+- **Tabs mount lazily.** Anything Home or the tab bar needs at first paint
+  (the in-progress workout flag, the timer) must be seeded in `ThemeContext`
+  from stored state, never left for the Train tab to set on mount -- it isn't
+  mounted until visited.
+- **Bump `DB_SETUP_VERSION` on any schema change.** A database stamped with
+  the current version skips every column/table/index check at launch. Add a
+  column without bumping it and existing installs never get the column.
+- **Measure cold start on a release build**, with `[boot]` markers in logcat
+  (`adb logcat -v epoch | grep '\[boot\]'`). Baseline on a 640-session DB:
+  splash hides ~1.0s on the emulator, ~75% of it native before JS runs.
 - **Pass a stable `styles` object to any `React.memo`'d child.** An unmemoised
   `getStyles(theme)` gives it a new identity every render and the memo never
   holds. Memoise wherever the object crosses a memo boundary.
