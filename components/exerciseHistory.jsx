@@ -284,7 +284,7 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                                             {!isAssisted && (
                                                 <Text style={styles.setOneRM}>
                                                     {isCardio ? (
-                                                        set.distance > 0 ? `${((set.seconds / 60) / set.distance).toFixed(1)} min/km` : '-'
+                                                        (set.distance > 0 && set.seconds > 0) ? `${((set.seconds / 60) / set.distance).toFixed(1)} min/km` : '-'
                                                     ) : (
                                                         set.oneRM ? `${Math.round(formatWeight(set.oneRM, useImperial, 0))}` : '-'
                                                     )}

@@ -29,7 +29,7 @@ import { FONTS, TYPE, SPACING, RADIUS, getThemedShadow } from '../../constants/t
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { customAlert } from '../../utils/customAlert';
-import { formatWeight, toStorageKg } from '../../utils/units';
+import { formatWeight, formatWeightOrBlank, toStorageKg } from '../../utils/units';
 
 // Module scope on purpose. Declared inside the render body it was a new
 // component type on every render, so React unmounted and remounted the gradient
@@ -61,7 +61,7 @@ const EditTemplate = () => {
                     ...ex,
                     sets: ex.sets.map(set => ({
                         ...set,
-                        weight: formatWeight(set.weight, useImperial)
+                        weight: formatWeightOrBlank(set.weight, useImperial)
                     }))
                 }))
             }));
@@ -352,7 +352,7 @@ const EditTemplate = () => {
                                 ...ex,
                                 sets: ex.sets.map(set => ({
                                     ...set,
-                                    weight: formatWeight(set.weight, useImperial)
+                                    weight: formatWeightOrBlank(set.weight, useImperial)
                                 }))
                             }))
                         }));

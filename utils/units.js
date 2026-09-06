@@ -22,6 +22,24 @@ export const formatWeight = (kg, useImperial, decimals = 1) => {
 };
 
 /**
+ * formatWeight for a field the user may have left empty.
+ *
+ * formatWeight(null) is NaN, and NaN.toFixed() is the string "NaN", so a blank
+ * template set rendered through it shows "NaN" in the weight box — and on save,
+ * toStorageKg("NaN") is 0, quietly turning "blank" into "zero kilos". The same
+ * save path stores every blank as 0, so a template that has been saved once
+ * holds 0 where the user typed nothing. Both are treated as blank here (null),
+ * which is what current.jsx already does when loading a template into a
+ * workout, so the two screens agree. A 0 round-trips back to 0 on save, so
+ * nothing is lost for bodyweight exercises.
+ */
+export const formatWeightOrBlank = (kg, useImperial, decimals = 1) => {
+    const n = parseFloat(kg);
+    if (isNaN(n) || n === 0) return null;
+    return formatWeight(n, useImperial, decimals);
+};
+
+/**
  * Return a formatted string with unit label, e.g. "82.5 kg" or "181.9 lbs".
  */
 export const formatWeightLabel = (kg, useImperial, decimals = 1) => {
