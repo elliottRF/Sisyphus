@@ -152,6 +152,11 @@ Each of these cost a real bug. Don't undo them.
 - **Measure cold start on a release build**, with `[boot]` markers in logcat
   (`adb logcat -v epoch | grep '\[boot\]'`). Baseline on a 640-session DB:
   splash hides ~1.0s on the emulator, ~75% of it native before JS runs.
+- **Backgrounding the app drops any Reanimated animation that is pending or
+  in flight**, and the view comes back at whatever value it had. Anything
+  that animates opacity from 0 must snap to its resting value on an AppState
+  change (see `components/Reveal.jsx`); otherwise "tap a tab, switch to the
+  music app, come back" leaves a blank screen until the next tab switch.
 - **Pass a stable `styles` object to any `React.memo`'d child.** An unmemoised
   `getStyles(theme)` gives it a new identity every render and the memo never
   holds. Memoise wherever the object crosses a memo boundary.

@@ -1,4 +1,5 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -43,9 +44,25 @@ const MAX_STEP = 4;
 const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
     const progress = useSharedValue(TAB_REVEAL ? 0 : 1);
     const rootNavigation = useNavigationContainerRef();
+    const focusedRef = useRef(false);
+
+    // Reanimated drops an animation that is pending or in flight when the app
+    // goes to background, and the view comes back at whatever opacity it had.
+    // For a block still waiting out its stagger that is 0: a blank tab until
+    // the next switch. Reproduced by tapping a tab and pressing home within
+    // ~100ms, which is what "open Train, switch to the music app" is. Any
+    // app-state change snaps a focused block to fully visible; a blurred one
+    // is left alone so the tab-switch bookkeeping still holds.
+    useEffect(() => {
+        const sub = AppState.addEventListener('change', () => {
+            if (focusedRef.current) progress.value = 1;
+        });
+        return () => sub.remove();
+    }, [progress]);
 
     useFocusEffect(
         useCallback(() => {
+            focusedRef.current = true;
             if (!TAB_REVEAL) return undefined;
             // A block still visible (back from a pushed screen) is a no-op
             // here; one that dropped out fades in after its stagger.
@@ -55,6 +72,7 @@ const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
                 withTiming(1, { duration: DURATION * SPEED, easing: Easing.out(Easing.cubic) })
             );
             return () => {
+                focusedRef.current = false;
                 // Another tab took over: this one is hidden instantly, so drop
                 // out now and the next visit restarts the fade. Otherwise a
                 // stack screen was pushed on top: stay visible beneath its
