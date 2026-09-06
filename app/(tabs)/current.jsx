@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView, ScrollView, Modal, FlatList, Pressable } from 'react-native'
-import Animated, { LinearTransition, FadeIn, FadeOut, Easing } from 'react-native-reanimated';
+import Animated, { LinearTransition, FadeIn, FadeInDown, FadeOut, Easing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useScrollToTop } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -83,6 +83,12 @@ const Current = () => {
     // True while the current title came from a template (redo/repeat/start) —
     // see the guard in checkActiveWorkout.
     const templateAppliedRef = useRef(false);
+    // Set when a whole batch of exercise cards is about to land at once (a
+    // template starting, a saved workout restoring). Cards that mount within
+    // the window after it enter with a staggered fade-and-rise; any card that
+    // mounts outside it (Add Exercise, a cell scrolling into view) just fades,
+    // so nothing ever waits on a stagger delay it wasn't part of.
+    const cardRevealRef = useRef(0);
     const listRef = useRef(null);
     const emptyStateScrollRef = useRef(null);
     const isFirstLaunch = useRef(true);
@@ -282,6 +288,7 @@ const Current = () => {
             };
         }));
 
+        cardRevealRef.current = Date.now();
         setCurrentWorkout(workoutWithDynamicData);
         haptics.success();
     };
@@ -716,6 +723,7 @@ const Current = () => {
                         // Saved as { workout, workoutTitle } — must read the same key
                         // (was reading `title`, so the name reset to "New Workout").
                         const { workout, workoutTitle: savedTitle } = JSON.parse(storedWorkout);
+                        if (workout && workout.length > 0) cardRevealRef.current = Date.now();
                         setCurrentWorkout(current => {
                             if (current.length === 0 && workout && workout.length > 0) {
                                 if (savedTitle) setWorkoutTitle(savedTitle);
@@ -1089,10 +1097,22 @@ const Current = () => {
     );
 
     const renderItem = useCallback(({ item, index }) => {
+        // Batch reveal: each card rises 14px into place, 45ms behind the one
+        // above it (capped so a long template doesn't take a second to settle).
+        // Otherwise a plain fade, so a card added mid-workout still arrives
+        // softly rather than popping.
+        const revealing = Date.now() - cardRevealRef.current < 800;
+        const entering = revealing
+            ? FadeInDown.duration(280)
+                .delay(Math.min(index, 6) * 45)
+                .easing(Easing.out(Easing.cubic))
+                .withInitialValues({ opacity: 0, transform: [{ translateY: 14 }] })
+            : FadeIn.duration(220);
         return (
             <Animated.View
                 collapsable={false}
                 style={styles.exerciseWrapper}
+                entering={entering}
                 layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
             >
                 {item.exercises.map((exercise, exerciseIndex) => {
@@ -1411,7 +1431,10 @@ const Current = () => {
                         )}
 
                         {workoutRestored && (workoutStartTime || currentWorkout.length > 0) && (
-                            <View style={{ flex: 1 }}>
+                            // Opacity only -- never a layout animation here (see the
+                            // footer note below): the header simply fades in with
+                            // the cards instead of cutting in a frame before them.
+                            <Animated.View entering={FadeIn.duration(180)} style={{ flex: 1 }}>
                                 {/* Header */}
                                 <View style={styles.headerContainer}>
                                     <View style={styles.headerTopRow}>
@@ -1555,7 +1578,7 @@ const Current = () => {
                                     />
                                 )}
                                 </View>
-                            </View>
+                            </Animated.View>
                         )}
                         <FilteredExerciseList
                             exercises={exercises}
