@@ -5,6 +5,7 @@ import { TouchableOpacity } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { markTabSwitch } from './Reveal';
 
 const TabTimer = ({ startTime, color }) => {
     const [elapsed, setElapsed] = React.useState(0);
@@ -102,6 +103,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
                         });
 
                         if (!isFocused && !event.defaultPrevented) {
+                            markTabSwitch();
                             navigation.navigate(route.name, route.params);
                         }
                     };

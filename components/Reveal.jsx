@@ -13,12 +13,11 @@ import { useFocusEffect } from 'expo-router';
 // Give each top-level block an `index` in reading order; block N starts N
 // steps after block 0, capped so a whole screen settles in about 300ms.
 //
-// Deliberately low-key: opacity only by default (pass `rise` for a lift), and
-// a block never restarts from invisible. On focus it continues from wherever
-// it already is, so switching tabs quickly -- before the previous tab has had
-// time to drop out -- shows the tab exactly as it was, with no re-animation.
-// The earlier version reset to zero and rose 14px on every focus, which read
-// as jitter under fast switching.
+// Deliberately low-key: opacity only by default (pass `rise` for a lift).
+// Every tab switch restarts the fade from invisible. A blur caused by a stack
+// screen being pushed on top is different: the tab stays visible underneath
+// the push transition and comes back exactly as it was when that screen pops,
+// because returning to a page you never left is not a page change.
 //
 // Driven by a shared value on the UI thread, not by remounting: the wrapped
 // content keeps its state, its Skia canvases and its list positions. Mount
@@ -27,6 +26,15 @@ import { useFocusEffect } from 'expo-router';
 // Experiment (2026-09-06). One switch to turn the whole thing off.
 export const TAB_REVEAL = true;
 
+// The tab bar stamps this just before it navigates, so a blur that follows
+// within the window is known to be a tab switch. Reading navigator state on
+// blur was tried first and could not tell the two apart: the state visible
+// from inside a tab screen is the stack's, which changes on a push, not on a
+// tab change.
+let lastTabSwitchAt = 0;
+const TAB_SWITCH_WINDOW = 500;
+export const markTabSwitch = () => { lastTabSwitchAt = Date.now(); };
+
 // >1 slows everything down by that factor for inspection. Ship at 1.
 const SPEED = 1;
 
@@ -34,11 +42,6 @@ const STEP = 30;
 const DURATION = 200;
 const RISE = 0;
 const MAX_STEP = 4;
-// A tab switch hides the outgoing screen instantly, but a stack push keeps it
-// on screen for the transition. The drop to invisible waits that out, so the
-// screen underneath doesn't blank mid-flip. A refocus inside the window just
-// replaces the pending drop.
-const HOLD_BEFORE_HIDE = 450;
 
 const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
     const progress = useSharedValue(TAB_REVEAL ? 0 : 1);
@@ -46,16 +49,19 @@ const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
     useFocusEffect(
         useCallback(() => {
             if (!TAB_REVEAL) return undefined;
-            // Already (partly) visible: finish the fade with no stagger delay,
-            // so an interrupted block doesn't pause mid-way. Only a block that
-            // has actually dropped out waits its turn.
+            // A block still visible (back from a pushed screen) is a no-op
+            // here; one that dropped out fades in after its stagger.
             const stagger = progress.value === 0 ? Math.min(index, MAX_STEP) * STEP * SPEED : 0;
             progress.value = withDelay(
                 stagger,
                 withTiming(1, { duration: DURATION * SPEED, easing: Easing.out(Easing.cubic) })
             );
             return () => {
-                progress.value = withDelay(HOLD_BEFORE_HIDE, withTiming(0, { duration: 0 }));
+                // Another tab took over: this one is hidden instantly, so drop
+                // out now and the next visit restarts the fade. Otherwise a
+                // stack screen was pushed on top: stay visible beneath its
+                // transition, and resume at full opacity when it pops.
+                if (Date.now() - lastTabSwitchAt < TAB_SWITCH_WINDOW) progress.value = 0;
             };
         }, [index, progress])
     );
