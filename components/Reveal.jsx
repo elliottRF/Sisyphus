@@ -6,7 +6,7 @@ import Animated, {
     withDelay,
     Easing,
 } from 'react-native-reanimated';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useNavigationContainerRef } from 'expo-router';
 
 // Replays a soft fade on every focus of the screen it sits in, so a tab switch
 // reveals the new tab's content section by section instead of cutting to it.
@@ -26,14 +26,11 @@ import { useFocusEffect } from 'expo-router';
 // Experiment (2026-09-06). One switch to turn the whole thing off.
 export const TAB_REVEAL = true;
 
-// The tab bar stamps this just before it navigates, so a blur that follows
-// within the window is known to be a tab switch. Reading navigator state on
-// blur was tried first and could not tell the two apart: the state visible
-// from inside a tab screen is the stack's, which changes on a push, not on a
-// tab change.
-let lastTabSwitchAt = 0;
-const TAB_SWITCH_WINDOW = 500;
-export const markTabSwitch = () => { lastTabSwitchAt = Date.now(); };
+// The tab screens, by route name (their file names under app/(tabs)). If the
+// deepest focused route at blur time is one of these, another tab took over;
+// anything else means a screen was pushed over the tabs. Add here when a tab
+// is added.
+const TAB_ROUTES = new Set(['index', 'current', 'history', 'profile']);
 
 // >1 slows everything down by that factor for inspection. Ship at 1.
 const SPEED = 1;
@@ -45,6 +42,7 @@ const MAX_STEP = 4;
 
 const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
     const progress = useSharedValue(TAB_REVEAL ? 0 : 1);
+    const rootNavigation = useNavigationContainerRef();
 
     useFocusEffect(
         useCallback(() => {
@@ -61,9 +59,19 @@ const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
                 // out now and the next visit restarts the fade. Otherwise a
                 // stack screen was pushed on top: stay visible beneath its
                 // transition, and resume at full opacity when it pops.
-                if (Date.now() - lastTabSwitchAt < TAB_SWITCH_WINDOW) progress.value = 0;
+                //
+                // Asked of the navigation container rather than inferred from
+                // the tab bar: a template's Start, the post-workout summary
+                // and the Android back key all switch tabs without touching
+                // the bar, and a stamp from the bar left those tabs at full
+                // opacity with nothing to fade on their next visit. Note it is
+                // getCurrentRoute(), the deepest focused route: expo-router's
+                // root state is a single '__root' route whatever is on screen,
+                // so the root stack's top is no use here.
+                const now = rootNavigation?.getCurrentRoute?.()?.name;
+                if (now === undefined || TAB_ROUTES.has(now)) progress.value = 0;
             };
-        }, [index, progress])
+        }, [index, progress, rootNavigation])
     );
 
     const animatedStyle = useAnimatedStyle(() => (
