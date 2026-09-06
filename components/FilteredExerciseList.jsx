@@ -332,6 +332,7 @@ const FilteredExerciseList = ({ exercises, actionSheetRef, setCurrentWorkout, on
             <ActionSheet
                 ref={createExerciseActionSheetRef}
                 containerStyle={[styles.subActionSheetContainer, { backgroundColor: safeBackground }]}
+                indicatorStyle={styles.indicator}
             >
                 <View style={styles.closeIconContainerUpperPosition}>
                     <TouchableOpacity onPress={handleCloseCreateExerciseSheet} style={styles.closeIcon}>
@@ -388,7 +389,8 @@ const getStyles = (theme) => {
             borderTopRightRadius: 24,
         },
         indicator: {
-            backgroundColor: safeTextSecondary,
+            backgroundColor: theme.overlayInputFocused,
+            width: 36,
         },
         contentContainer: {
             height: '100%',
@@ -401,20 +403,17 @@ const getStyles = (theme) => {
             flexDirection: 'row',
             alignItems: 'center',
             padding: 16,
+            paddingBottom: 4,
             backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: safeBorder,
         },
         searchBar: {
             flex: 1,
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: safeBackground,
+            backgroundColor: theme.overlayInput,
             borderRadius: 12,
             paddingHorizontal: 12,
             height: 44,
-            borderWidth: 1,
-            borderColor: safeBorder,
             marginRight: 12,
         },
         searchIcon: {
@@ -457,8 +456,6 @@ const getStyles = (theme) => {
         chipsScroll: {
             flexGrow: 0,
             backgroundColor: theme.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: safeBorder,
         },
         chipsRow: {
             paddingHorizontal: 16,
@@ -469,13 +466,10 @@ const getStyles = (theme) => {
             paddingHorizontal: 14,
             paddingVertical: 7,
             borderRadius: 100,
-            backgroundColor: safeBackground,
-            borderWidth: 1,
-            borderColor: safeBorder,
+            backgroundColor: theme.overlayInput,
         },
         chipActive: {
             backgroundColor: theme.primary,
-            borderColor: theme.primary,
         },
         chipText: {
             fontSize: 13,
@@ -494,18 +488,15 @@ const getStyles = (theme) => {
             paddingBottom: 40,
         },
         exerciseCard: {
-            backgroundColor: theme.surface,
+            backgroundColor: theme.overlayInput,
             borderRadius: 16,
             marginBottom: 12,
             padding: 20,
-            borderWidth: 1,
-            borderColor: safeBorder,
-            // No shadow: the border separates the cards, and the elevation drew a
-            // hard dark edge (especially over the tinted selected state).
+            // Borderless: the tile fill separates it from the surface-coloured
+            // sheet. No shadow either -- elevation drew a hard dark edge here.
         },
         exerciseCardSelected: {
-            borderColor: theme.primary,
-            backgroundColor: withAlpha(theme.primary, lightTheme ? 0.08 : 0.14),
+            backgroundColor: withAlpha(theme.primary, lightTheme ? 0.10 : 0.16),
         },
         exerciseContent: {
             flexDirection: 'row',
@@ -555,8 +546,6 @@ const getStyles = (theme) => {
             paddingHorizontal: 20,
             paddingTop: 12,
             paddingBottom: 16,
-            borderTopWidth: 1,
-            borderTopColor: safeBorder,
             backgroundColor: theme.surface,
         },
         footerAboveKeyboard: {

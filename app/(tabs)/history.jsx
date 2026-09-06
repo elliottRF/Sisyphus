@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicator, Modal, Pressable, Dimensions, Animated as RNAnimated } from 'react-native'
 import ActionSheet from 'react-native-actions-sheet';
-import { Calendar } from 'react-native-calendars';
+import AppCalendar from '../../components/AppCalendar';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { useScrollToTop } from 'expo-router';
@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession, createTemplate, getSplits, getCachedWorkoutHistory, getCachedExercises } from '../../components/db';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as haptics from '../../utils/haptics';
-import { FONTS, RADIUS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
+import { FONTS, RADIUS, getThemedShadow, isLightTheme, withAlpha, SPACING } from '../../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { customAlert } from '../../utils/customAlert';
@@ -627,20 +627,25 @@ const History = () => {
     // Marks every trained day. Keys are built from local date parts (not
     // toISOString, which is UTC and can shift a late-evening session onto the
     // wrong day) so the calendar agrees with the heatmap above it.
-    const markedDates = useMemo(() => {
+    const { markedDates, workoutsByMonth } = useMemo(() => {
         const marked = {};
+        const byMonth = {};
         workoutHistory.forEach(([, exercises]) => {
             const d = new Date(exercises[0]?.time);
             if (isNaN(d.getTime())) return;
-            marked[calendarDateString(d)] = {
-                customStyles: {
-                    container: { backgroundColor: withAlpha(theme.primary, 0.14), borderRadius: 8 },
-                    text: { color: theme.primary, fontFamily: FONTS.bold },
-                },
-            };
+            marked[calendarDateString(d)] = { trained: true };
+            const key = `${d.getFullYear()}-${d.getMonth()}`;
+            byMonth[key] = (byMonth[key] || 0) + 1;
         });
-        return marked;
-    }, [workoutHistory, theme]);
+        return { markedDates: marked, workoutsByMonth: byMonth };
+    }, [workoutHistory]);
+
+    // Eyebrow over the calendar's month title: the month's own data point.
+    const monthEyebrow = React.useCallback((year, monthIndex) => {
+        const n = workoutsByMonth[`${year}-${monthIndex}`] || 0;
+        if (n === 0) return 'NO WORKOUTS';
+        return `${n} WORKOUT${n === 1 ? '' : 'S'}`;
+    }, [workoutsByMonth]);
 
     const handleDatePress = (day) => {
         const match = workoutHistory.find(([, exercises]) => {
@@ -985,32 +990,11 @@ const History = () => {
                 gestureEnabled={true}
             >
                 <View style={styles.calendarContainer}>
-                    <Calendar
-                        theme={{
-                            backgroundColor: theme.surface,
-                            calendarBackground: theme.surface,
-                            textSectionTitleColor: theme.textSecondary,
-                            selectedDayBackgroundColor: theme.primary,
-                            selectedDayTextColor: theme.surface,
-                            todayTextColor: theme.primary,
-                            dayTextColor: theme.text,
-                            textDisabledColor: withAlpha(theme.text, 0.25),
-                            dotColor: theme.primary,
-                            selectedDotColor: theme.surface,
-                            arrowColor: theme.primary,
-                            disabledArrowColor: withAlpha(theme.text, 0.15),
-                            monthTextColor: theme.text,
-                            indicatorColor: theme.primary,
-                            textDayFontFamily: FONTS.medium,
-                            textMonthFontFamily: FONTS.bold,
-                            textDayHeaderFontFamily: FONTS.semiBold,
-                            textDayFontSize: 14,
-                            textMonthFontSize: 18,
-                            textDayHeaderFontSize: 12,
-                        }}
+                    <AppCalendar
+                        theme={theme}
                         markedDates={markedDates}
                         onDayPress={handleDatePress}
-                        markingType={'custom'}
+                        eyebrow={monthEyebrow}
                     />
                 </View>
             </ActionSheet>
@@ -1107,16 +1091,17 @@ const getStyles = (theme) => {
     },
     actionSheetContainer: {
         backgroundColor: theme.surface,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
     },
     indicator: {
-        backgroundColor: theme.textSecondary,
-        width: 40,
+        backgroundColor: theme.overlayInputFocused,
+        width: 36,
     },
     calendarContainer: {
-        padding: 10,
-        paddingBottom: 24,
+        paddingHorizontal: SPACING.l,
+        paddingTop: SPACING.s,
+        paddingBottom: SPACING.l,
         backgroundColor: theme.surface,
     },
     list: {

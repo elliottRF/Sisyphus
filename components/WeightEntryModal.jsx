@@ -1,6 +1,6 @@
 import { View, Text, TextInput, Pressable, Keyboard, Platform, StyleSheet } from 'react-native';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Calendar } from 'react-native-calendars';
+import AppCalendar, { CALENDAR_HEIGHT } from './AppCalendar';
 import { Feather } from '@expo/vector-icons';
 import Reanimated, { useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import CustomAlert from './CustomAlert';
@@ -97,7 +97,7 @@ const WeightEntryModal = ({ visible, entry, prefillWeight, onClose, onSaved }) =
         // at ~52dp a row that needs 312dp of grid plus ~80dp of month header and
         // weekday labels. At 340 the sixth row was clipped behind the buttons,
         // so the last days of those months could not be tapped at all.
-        height: withTiming(showCalendar ? 400 : 0, { duration: 320, easing: Easing.out(Easing.cubic) }),
+        height: withTiming(showCalendar ? CALENDAR_HEIGHT : 0, { duration: 320, easing: Easing.out(Easing.cubic) }),
         opacity: withTiming(showCalendar ? 1 : 0, { duration: 250 }),
     }));
 
@@ -155,7 +155,8 @@ const WeightEntryModal = ({ visible, entry, prefillWeight, onClose, onSaved }) =
             </Pressable>
 
             <Reanimated.View style={[styles.calendarWrap, calendarStyle]}>
-                <Calendar
+                <AppCalendar
+                    theme={theme}
                     current={logDate}
                     onDayPress={(day) => {
                         setLogDate(day.dateString);
@@ -165,18 +166,7 @@ const WeightEntryModal = ({ visible, entry, prefillWeight, onClose, onSaved }) =
                             inputRef.current?.setNativeProps({ selection: { start: 0, end: 0 } });
                         }, 180);
                     }}
-                    markedDates={{ [logDate]: { selected: true, selectedColor: theme.primary } }}
-                    theme={{
-                        backgroundColor: theme.surface,
-                        calendarBackground: theme.surface,
-                        textSectionTitleColor: theme.textSecondary,
-                        selectedDayBackgroundColor: theme.primary,
-                        selectedDayTextColor: theme.textAlternate,
-                        todayTextColor: theme.primary,
-                        dayTextColor: theme.text,
-                        arrowColor: theme.primary,
-                        monthTextColor: theme.text,
-                    }}
+                    markedDates={{ [logDate]: { selected: true } }}
                 />
             </Reanimated.View>
         </CustomAlert>

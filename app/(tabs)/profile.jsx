@@ -512,6 +512,7 @@ const Profile = () => {
             <ActionSheet
                 ref={createExerciseActionSheetRef}
                 containerStyle={[styles.actionSheetContainer, { backgroundColor: safeBackground }]}
+                indicatorStyle={styles.indicator}
             >
                 <View style={styles.closeIconContainerUpperPosition}>
                     <TouchableOpacity onPress={handleCloseCreateExerciseSheet} style={styles.closeIcon}>
@@ -714,6 +715,14 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.textSecondary,
         fontFamily: FONTS.medium,
         fontSize: 14,
+    },
+
+    indicator: {
+
+        backgroundColor: theme.overlayInputFocused,
+
+        width: 36,
+
     },
 
     actionSheetContainer: {

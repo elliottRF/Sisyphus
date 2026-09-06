@@ -72,6 +72,8 @@ In-card section labels: 12pt semibold uppercase, `theme.textSecondary`.
 - **No icons inside section titles.**
 - **Whitespace instead of divider lines.** Where a separator is unavoidable use
   `StyleSheet.hairlineWidth` with `theme.border`.
+- **Inside a surface-coloured sheet, cards are `theme.overlayInput` tiles**, not
+  surface-on-surface with a border to make them visible.
 
 ## Colour
 
@@ -167,10 +169,13 @@ Each of these cost a real bug. Don't undo them.
 
 **Conformed:** Home, ReadinessCard, PRGraphCard, MuscleRadarChart,
 BodyweightGraphCard, TabBar, History, Exercises, Current (chrome), Settings,
-exerciseEditable, exercise detail page, workout summary, muscle detail sheet.
+exerciseEditable, exercise detail page, workout summary, muscle detail sheet,
+template editor, FilteredExerciseList, the calendar (`components/AppCalendar.jsx`
+-- use it for every month view), bottom sheets (24 top radius, handle
+`theme.overlayInputFocused` 36 wide), EditWorkout (shares Current's chrome).
 
-**Still to sweep:** EditWorkout, template editor (`app/template/[id].jsx`),
-onboarding, RestTimer, CustomAlert, FilteredExerciseList, action sheets.
+**Audited 2026-09-06 on the owner's data, no change needed:** onboarding,
+RestTimer (header pill), CustomAlert.
 
 ---
 

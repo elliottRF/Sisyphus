@@ -377,7 +377,7 @@ const EditWorkout = () => {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             {originalStartTime && (
                                 <Text style={styles.headerStatusText}>
-                                    {new Date(originalStartTime).toLocaleDateString()}
+                                    {new Date(originalStartTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                                 </Text>
                             )}
                             <Text style={styles.headerStatusText}>
