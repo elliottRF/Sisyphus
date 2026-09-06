@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { Feather } from '@expo/vector-icons';
@@ -43,6 +43,18 @@ const AppCalendar = ({
     testID,
 }) => {
     const styles = useMemo(() => getStyles(theme), [theme]);
+
+    // Which month the grid is showing, as "YYYY-M". The library reports a day's
+    // own month in DateData, but tells a cell only its state -- and it reports
+    // state 'today' for today even when today is a trailing day of the NEXT
+    // month being shown to fill the last row. Without this, August's grid put a
+    // bright today ring on a faded September date.
+    const initialMonth = useMemo(() => {
+        const d = current ? new Date(current) : new Date();
+        const safe = isNaN(d.getTime()) ? new Date() : d;
+        return `${safe.getFullYear()}-${safe.getMonth() + 1}`;
+    }, [current]);
+    const [visibleMonth, setVisibleMonth] = useState(initialMonth);
 
     const weekdayLabels = useMemo(
         () => Array.from({ length: 7 }, (_, i) => WEEKDAYS[(firstDay + i) % 7]),
@@ -91,8 +103,8 @@ const AppCalendar = ({
     }, [styles, theme, eyebrow, weekdayLabels]);
 
     const Day = useCallback(({ date, state, marking, onPress }) => {
-        const outside = state === 'disabled';
-        const today = state === 'today';
+        const outside = state === 'disabled' || (!!date && `${date.year}-${date.month}` !== visibleMonth);
+        const today = state === 'today' && !outside;
         const trained = !outside && !!marking?.trained;
         const selected = !outside && !!marking?.selected;
         const interactive = !outside && (trained || selected || !!onDayPress);
@@ -104,7 +116,14 @@ const AppCalendar = ({
                 activeOpacity={0.6}
                 accessibilityLabel={date?.dateString}
             >
+                {/* Keyed by date so a month change gets fresh native views. The
+                    library keys cells by position, and Android's recycled view
+                    lost its corner radius / kept a stale ring when the border
+                    toggled between set and unset across months. The base pill
+                    also always carries a border (transparent) so only colours
+                    ever change on a view, never the presence of a border. */}
                 <View
+                    key={date?.dateString}
                     style={[
                         styles.pill,
                         trained && styles.pillTrained,
@@ -126,7 +145,7 @@ const AppCalendar = ({
                 </View>
             </TouchableOpacity>
         );
-    }, [styles, onDayPress]);
+    }, [styles, onDayPress, visibleMonth]);
 
     return (
         <View style={styles.container} testID={testID}>
@@ -139,6 +158,7 @@ const AppCalendar = ({
                 enableSwipeMonths
                 markedDates={markedDates}
                 onDayPress={onDayPress}
+                onMonthChange={(m) => setVisibleMonth(`${m.year}-${m.month}`)}
                 customHeader={Header}
                 dayComponent={Day}
                 style={styles.calendar}
@@ -241,6 +261,9 @@ const getStyles = (theme) => StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: RADIUS.m - 2,
+        borderWidth: 1.5,
+        borderColor: 'transparent',
+        backgroundColor: 'transparent',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -251,7 +274,6 @@ const getStyles = (theme) => StyleSheet.create({
         backgroundColor: theme.primary,
     },
     pillToday: {
-        borderWidth: 1.5,
         borderColor: withAlpha(theme.primary, 0.6),
     },
     dayText: {

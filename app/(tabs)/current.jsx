@@ -1114,7 +1114,6 @@ const Current = () => {
                 collapsable={false}
                 style={styles.exerciseWrapper}
                 entering={entering}
-                layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
             >
                 {item.exercises.map((exercise, exerciseIndex) => {
                     const exerciseDetails = exercises.find(
@@ -1501,7 +1500,13 @@ const Current = () => {
                                     onScrollToIndexFailed={handleScrollToIndexFailed}
                                     keyExtractor={(item) => String(item.id)}
                                     renderItem={renderItem}
-                                    itemLayoutAnimation={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+                                    // No itemLayoutAnimation: a card being
+                                    // removed now shrinks its own height, and a
+                                    // cell-level layout transition on top of
+                                    // that re-targets every frame, so the cell
+                                    // trailed the card it contains. Drag
+                                    // reordering has its own animation inside
+                                    // the library and is unaffected.
                                     style={styles.list}
                                     contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                                     keyboardShouldPersistTaps="handled"

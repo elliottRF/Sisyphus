@@ -114,6 +114,13 @@ app feeling premium and feeling cheap.
    `WORKOUT_DATA_IMPORTED` and refresh ahead of focus, rather than refreshing
    on focus and flashing stale data.
 
+**When something is added to or removed from a list, animate its real layout
+height** (`components/Expandable.jsx`), never a layout transition on its
+neighbours. Height carries everything below it -- the rest of the card, the
+cards under it, the page footer -- in lockstep. A `LinearTransition` animates a
+frame after the change has already landed, so the Current page's Add Exercise /
+Finish Workout buttons either jumped or trailed a frame behind.
+
 A static correct value beats an animated one. Don't animate a number that was
 never stale.
 
@@ -159,6 +166,14 @@ Each of these cost a real bug. Don't undo them.
   that animates opacity from 0 must snap to its resting value on an AppState
   change (see `components/Reveal.jsx`); otherwise "tap a tab, switch to the
   music app, come back" leaves a blank screen until the next tab switch.
+- **`useAnimatedStyle` must return the same set of keys every time.** Dropping
+  a key does not hand the property back to layout; Reanimated restores the
+  value it had before the animation. A wrapper that animated `height` and then
+  stopped returning it snapped back to 0 and hid its content.
+- **A view capped to zero height also caps the space its content is measured
+  in.** Anything that consults available height (a multiline `TextInput`)
+  measures 0 in there and can never report the height it needs to grow to.
+  Measure such content out of flow -- see `Expandable`'s grow mode.
 - **Pass a stable `styles` object to any `React.memo`'d child.** An unmemoised
   `getStyles(theme)` gives it a new identity every render and the memo never
   holds. Memoise wherever the object crosses a memo boundary.

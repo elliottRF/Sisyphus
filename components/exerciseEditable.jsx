@@ -7,7 +7,6 @@ import Animated, {
     withSpring,
     withSequence,
     runOnJS,
-    LinearTransition,
     FadeIn,
     ZoomIn,
     Easing,
@@ -28,17 +27,16 @@ import {
 } from './suggestions';
 import { on, AppEvents } from '../utils/events';
 import CustomAlert from './CustomAlert';
+import Expandable from './Expandable';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
 
-// Kill-switch for the LinearTransition layout animations, kept from the leak
-// investigation (project memory: perf-slowdown-investigation). The proven
-// leaks were scrolled-Animated.View retention and interrupted `exiting`
-// animations — layout transitions were likely convicted by confounded tests,
-// so they're back ON. If a Views-drill ever implicates them again, flip this.
-const DISABLE_LAYOUT_ANIMS = false;
-const layoutAnim = DISABLE_LAYOUT_ANIMS ? undefined : LinearTransition.duration(200).easing(Easing.out(Easing.ease));
+// This card no longer uses LinearTransition anywhere. Adding or removing a set
+// animates real layout height (components/Expandable.jsx), which carries the
+// rest of the card, the cards below and the page footer along with it. A
+// layout transition animates a frame after the change has landed, so mixing
+// the two left the footer a frame behind; without one it simply jumped.
 
 // Session caches: the reorderable list force-remounts cells after a drag,
 // which resets component state. These warm-start remounted cards so the
@@ -654,14 +652,44 @@ const ExerciseEditable = ({
         haptics.select();
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => { if (i === setIndex) { const t = s.setType || 'N'; const n = t === 'N' ? 'W' : t === 'W' ? 'D' : 'N'; return { ...s, setType: n }; } return s; }) } : e) } : w));
     }, [updateCurrentWorkout, workoutID, exerciseId]);
+    // Grows in on open and shrinks away on close, so the rest of the card
+    // doesn't jump by the note's height.
+    const noteRef = useRef(null);
+    const toggleNote = () => {
+        if (isNoteVisible && noteRef.current?.collapse) noteRef.current.collapse(() => setIsNoteVisible(false));
+        else setIsNoteVisible(v => !v);
+    };
     const handleNoteChange = (text) => {
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, notes: text } : e) } : w));
     };
     const addNewSet = () => {
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: [...e.sets, { id: Date.now().toString() + Math.random().toString(36).substr(2, 9), weight: null, reps: null, distance: null, minutes: null, completed: false, setType: 'N' }] } : e) } : w));
     };
-    const deleteSet = (setIndex) => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: e.sets.filter((_, i) => i !== setIndex) } : e) } : w));
+    const deleteSet = (setId, fallbackIndex) => {
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? {
+            ...e,
+            // By id where there is one: a collapse callback fires ~200ms after
+            // the swipe, by which time a second deletion may have shifted the
+            // indices. Older sets without an id fall back to position.
+            sets: setId != null ? e.sets.filter(sset => sset.id !== setId) : e.sets.filter((_, i) => i !== fallbackIndex),
+        } : e) } : w));
+    };
+
+    // Each row owns a height animation (see components/Expandable.jsx). Shrink
+    // the row to nothing first, then drop it from state: the card, the cards
+    // below it and the page footer all move up with the real layout instead of
+    // jumping the moment the row disappears.
+    const rowRefs = useRef({});
+    const requestDeleteSet = (setIndex, setId) => {
+        const row = setId != null ? rowRefs.current[setId] : null;
+        if (row?.collapse) {
+            row.collapse(() => {
+                delete rowRefs.current[setId];
+                deleteSet(setId, setIndex);
+            });
+        } else {
+            deleteSet(setId, setIndex);
+        }
     };
     const deleteExercise = () => {
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.filter(ex => ex.id !== exercise.id) } : w).filter(w => w.exercises.length > 0));
@@ -679,10 +707,15 @@ const ExerciseEditable = ({
             transform: [{ scale: 0.94 + 0.06 * f }],
         };
     });
+    // Fade and shrink the card while its real height collapses, then remove it.
+    // The height is what matters: it carries the cards below and the page's
+    // Add Exercise / Finish Workout footer up with it, rather than letting them
+    // snap into the gap once the card is gone.
+    const cardRef = useRef(null);
     const handleConfirmDelete = () => {
-        deleteAnim.value = withTiming(1, { duration: 200 }, (finished) => {
-            if (finished) runOnJS(deleteExercise)();
-        });
+        deleteAnim.value = withTiming(1, { duration: 200 });
+        if (cardRef.current?.collapse) cardRef.current.collapse(deleteExercise);
+        else deleteExercise();
     };
 
     const fillFromPrevious = useCallback((setIndex, fillData) => {
@@ -955,10 +988,12 @@ const ExerciseEditable = ({
     );
 
     return (
-        <Animated.View
-            style={[styles.container, animatedDeleteStyle]}
-            layout={layoutAnim}
-        >
+        // No `layout` transitions inside this card any more. They animated a
+        // view's frame AFTER a layout change landed, which is a frame behind
+        // when the height itself is being animated -- and left the page footer
+        // either lagging or jumping. Heights animate directly instead.
+        <Expandable ref={cardRef}>
+        <Animated.View style={[styles.container, animatedDeleteStyle]}>
             {/* Header */}
             <View style={styles.header}>
                 {reorderPan ? (
@@ -986,7 +1021,7 @@ const ExerciseEditable = ({
                         )
                     )}
                     <TouchableOpacity
-                        onPress={() => setIsNoteVisible(!isNoteVisible)}
+                        onPress={toggleNote}
                         style={styles.iconButton}
                     >
                         <MaterialIcons
@@ -1003,6 +1038,7 @@ const ExerciseEditable = ({
 
             {/* Note Input */}
             {isNoteVisible && (
+                <Expandable ref={noteRef} animateOnMount>
                 <View style={styles.noteContainer}>
                     <TextInput
                         style={styles.noteInput}
@@ -1013,6 +1049,7 @@ const ExerciseEditable = ({
                         multiline
                     />
                 </View>
+                </Expandable>
             )}
 
             {/* Table Header */}
@@ -1046,16 +1083,16 @@ const ExerciseEditable = ({
             </View>
 
             {/* Sets */}
-            <Animated.View
-                style={styles.setsContainer}
-                layout={layoutAnim}
-            >
+            <View style={styles.setsContainer}>
                 {exercise.sets.map((set, index) => {
                     const meta = rowMeta[index] || EMPTY_ROW_META;
                     return (
-                        <Animated.View
+                        <Expandable
                             key={set.id || index}
-                            entering={hasMountedRef.current ? FadeIn.duration(180) : undefined}
+                            ref={(r) => { if (set.id == null) return; if (r) rowRefs.current[set.id] = r; else delete rowRefs.current[set.id]; }}
+                            // Grows in when a set is added mid-workout; on the
+                            // card's own mount the rows are simply there.
+                            animateOnMount={hasMountedRef.current}
                             // No `exiting` here: rapid removals interrupt exit
                             // animations mid-flight and Reanimated permanently
                             // retains the detached views (measured: Views count
@@ -1064,10 +1101,10 @@ const ExerciseEditable = ({
                             // removed with a whole card are covered by the
                             // card's own fade. The layout transition below
                             // still slides the remaining rows up.
-                            layout={layoutAnim}
                         >
+                            <Animated.View entering={hasMountedRef.current ? FadeIn.duration(180) : undefined}>
                             <SwipeableSetRow
-                                onDelete={() => deleteSet(index)}
+                                onDelete={() => requestDeleteSet(index, set.id)}
                                 index={index}
                                 simultaneousHandlers={simultaneousHandlers}
                                 isExerciseDragging={false}
@@ -1098,17 +1135,18 @@ const ExerciseEditable = ({
                                     fillAllToken={fillAllToken}
                                 />
                             </SwipeableSetRow>
-                        </Animated.View>
+                            </Animated.View>
+                        </Expandable>
                     );
                 })}
-            </Animated.View>
+            </View>
 
             {/* Footer */}
-            <Animated.View layout={layoutAnim}>
+            <View>
                 <TouchableOpacity style={styles.addSetButton} onPress={addNewSet} activeOpacity={0.6}>
                     <Text style={styles.addSetText}>+ ADD SET</Text>
                 </TouchableOpacity>
-            </Animated.View>
+            </View>
 
             <CustomAlert
                 visible={showDeleteAlert}
@@ -1129,6 +1167,7 @@ const ExerciseEditable = ({
                 ]}
             />
         </Animated.View>
+        </Expandable>
     );
 };
 
