@@ -45,6 +45,7 @@ import { useLocalSearchParams } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { customAlert } from '../../utils/customAlert';
 import ContextMenu from '../../components/ContextMenu';
+import Reveal from '../../components/Reveal';
 
 
 
@@ -1324,7 +1325,7 @@ const Current = () => {
                 ) : (
                     <>
                         {workoutRestored && !workoutStartTime && currentWorkout.length === 0 && (
-                            <View style={{ flex: 1 }}>
+                            <Reveal index={0} style={{ flex: 1 }}>
                                 {/* Header lives OUTSIDE the pager so it sits in the
                                     exact same spot as the other tabs' headers. */}
                                 <View style={styles.emptyStateHeader}>
@@ -1427,14 +1428,13 @@ const Current = () => {
                                         </ButtonBackground>
                                     </TouchableOpacity>
                                 </View>
-                            </View>
+                            </Reveal>
                         )}
 
                         {workoutRestored && (workoutStartTime || currentWorkout.length > 0) && (
-                            // Opacity only -- never a layout animation here (see the
-                            // footer note below): the header simply fades in with
-                            // the cards instead of cutting in a frame before them.
-                            <Animated.View entering={FadeIn.duration(180)} style={{ flex: 1 }}>
+                            // Opacity/translate only -- never a layout animation
+                            // here (see the footer note below).
+                            <Reveal index={0} style={{ flex: 1 }}>
                                 {/* Header */}
                                 <View style={styles.headerContainer}>
                                     <View style={styles.headerTopRow}>
@@ -1578,7 +1578,7 @@ const Current = () => {
                                     />
                                 )}
                                 </View>
-                            </Animated.View>
+                            </Reveal>
                         )}
                         <FilteredExerciseList
                             exercises={exercises}

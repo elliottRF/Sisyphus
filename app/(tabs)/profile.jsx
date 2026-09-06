@@ -21,6 +21,7 @@ import { muscleMapping } from '../../constants/muscles';
 import { formatWeight, unitLabel } from '../../utils/units';
 import { AppEvents, on, off } from '../../utils/events';
 import Fuse from 'fuse.js';
+import Reveal from '../../components/Reveal';
 
 // ─── Muscle group filter chips ────────────────────────────────────────────────
 const MUSCLE_GROUPS = [
@@ -375,16 +376,16 @@ const Profile = () => {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-            <View style={styles.header}>
+            <Reveal index={0} style={styles.header}>
                 <View>
                     <Text style={styles.eyebrow}>
                         {exercises.length > 0 ? `${exercises.length} IN YOUR LIBRARY` : 'EXERCISE LIBRARY'}
                     </Text>
                     <Text style={styles.title}>Exercises</Text>
                 </View>
-            </View>
+            </Reveal>
 
-            <View style={styles.searchContainer}>
+            <Reveal index={1} style={styles.searchContainer}>
                 <View style={styles.searchBar}>
                     <Feather name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
                     <TextInput
@@ -415,10 +416,10 @@ const Profile = () => {
                         <Feather name="plus" size={24} color={theme.textAlternate} />
                     </ButtonBackground>
                 </TouchableOpacity>
-            </View>
+            </Reveal>
 
             {/* Muscle group chips */}
-            <View>
+            <Reveal index={2}>
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -444,8 +445,9 @@ const Profile = () => {
                         );
                     })}
                 </ScrollView>
-            </View>
+            </Reveal>
 
+            <Reveal index={3} style={{ flex: 1 }}>
             <FlatList
                 ref={scrollRef}
                 data={sortedAndFilteredExercises}
@@ -496,6 +498,7 @@ const Profile = () => {
                     </View>
                 }
             />
+            </Reveal>
 
             {contextMenu && (
                 <ContextMenu

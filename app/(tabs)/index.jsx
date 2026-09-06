@@ -22,6 +22,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { AppEvents, on, off } from '../../utils/events';
 import { muscleMapping, majorMuscles } from '../../constants/muscles';
 import Fuse from 'fuse.js';
+import Reveal from '../../components/Reveal';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -442,7 +443,7 @@ const Home = () => {
                 contentContainerStyle={styles.scrollViewContent}
                 keyboardShouldPersistTaps="handled"
             >
-                <Animated.View entering={FadeInDown.duration(400).delay(0).springify()} style={styles.header}>
+                <Reveal index={0} style={styles.header}>
                     <View>
                         <Text style={styles.eyebrow}>
                             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}
@@ -454,11 +455,11 @@ const Home = () => {
                             <Feather name="settings" size={17} color={theme.textSecondary} />
                         </TouchableOpacity>
                     </View>
-                </Animated.View>
+                </Reveal>
 
                 {/* ── Live workout banner ───────────────────────────────────── */}
                 {workoutInProgress && workoutStartTime && (
-                    <Animated.View entering={FadeInDown.duration(400).delay(40).springify()}>
+                    <Reveal index={1}>
                         <TouchableOpacity
                             style={styles.liveCard}
                             onPress={() => router.navigate('/current')}
@@ -481,13 +482,13 @@ const Home = () => {
                                 <Feather name="chevron-right" size={18} color={theme.textSecondary} />
                             </View>
                         </TouchableOpacity>
-                    </Animated.View>
+                    </Reveal>
                 )}
 
                 {/* ── Review prompt (same slot as the live banner; mutually
                     exclusive — never shown during an active workout) ────────── */}
                 {showReview && !workoutInProgress && (
-                    <Animated.View entering={FadeInDown.duration(400).delay(40).springify()}>
+                    <Reveal index={1}>
                         <TouchableOpacity style={styles.liveCard} onPress={handleRateApp} activeOpacity={0.85}>
                             <Feather name="star" size={20} color={theme.warning} />
                             <View style={{ flex: 1 }}>
@@ -505,14 +506,14 @@ const Home = () => {
                                 <Feather name="chevron-right" size={18} color={theme.textSecondary} />
                             </View>
                         </TouchableOpacity>
-                    </Animated.View>
+                    </Reveal>
                 )}
 
                 {/* ── Dual Body ──────────────────────────────────────────────── */}
                 {/* 4px below the header (→16 total, matching History/Current) when
                     it's the first card; a normal gap when a banner (live workout
                     or review prompt) sits above it. */}
-                <Animated.View entering={FadeInDown.duration(450).delay(80).springify()} style={{ marginTop: ((workoutInProgress && workoutStartTime) || showReview) ? 12 : 4 }}>
+                <Reveal index={2} style={{ marginTop: ((workoutInProgress && workoutStartTime) || showReview) ? 12 : 4 }}>
                         <View style={styles.altBodyCard}>
                             <View style={styles.altLegendContainer}>
                                 <Text style={styles.altCardTitle}>Fatigue Status</Text>
@@ -600,27 +601,27 @@ const Home = () => {
                             usageData={usageData}
                             horizontal
                         />
-                    </Animated.View>
+                    </Reveal>
 
-                <Animated.View entering={FadeInDown.duration(400).delay(240).springify()} style={styles.sectionHeader}>
+                <Reveal index={3} style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Progress Tracker</Text>
-                </Animated.View>
+                </Reveal>
 
                 {showMuscleRadar && (
-                    <Animated.View layout={LinearTransition} entering={FadeInDown.duration(400).delay(300).springify()}>
+                    <Reveal index={4} layout={LinearTransition}>
                         <MuscleRadarChart />
-                    </Animated.View>
+                    </Reveal>
                 )}
                 {showBodyWeight && (
-                    <Animated.View layout={LinearTransition} entering={FadeInDown.duration(400).delay(320).springify()}>
+                    <Reveal index={4} layout={LinearTransition}>
                         <BodyweightGraphCard theme={theme} />
-                    </Animated.View>
+                    </Reveal>
                 )}
 
                 {pinnedExercises.map((exercise, index) => (
-                    <Animated.View
+                    <Reveal
                         key={exercise.exerciseID}
-                        entering={FadeInDown.duration(400).delay(340 + index * 60).springify()}
+                        index={5 + index}
                         exiting={FadeOutDown.duration(300)}
                         layout={LinearTransition}
                     >
@@ -629,15 +630,15 @@ const Home = () => {
                             exerciseName={exercise.name}
                             onRemove={loadPinnedExercises}
                         />
-                    </Animated.View>
+                    </Reveal>
                 ))}
 
-                <Animated.View layout={LinearTransition} entering={FadeInDown.duration(400).delay(400).springify()}>
+                <Reveal index={6} layout={LinearTransition}>
                     <TouchableOpacity onPress={handleAddGraph} style={styles.addGraphButton} activeOpacity={0.6}>
                         <Feather name="plus" size={18} color={theme.primary} />
                         <Text style={styles.addGraphText}>Add Tracker</Text>
                     </TouchableOpacity>
-                </Animated.View>
+                </Reveal>
             </ScrollView>
 
             <ActionSheet ref={actionSheetRef} gestureEnabled={true} containerStyle={styles.actionSheetContainer} indicatorStyle={styles.indicator} onClose={() => setSearchQuery('')}>
