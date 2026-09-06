@@ -115,6 +115,13 @@ app feeling premium and feeling cheap.
 A static correct value beats an animated one. Don't animate a number that was
 never stale.
 
+**Tab switches** reveal the new tab's top-level blocks with a soft fade in
+reading order (`components/Reveal.jsx`, 200ms, 30ms stagger, opacity only).
+A block continues from wherever it already is and a tab left less than
+450ms ago simply stays put -- never restart from invisible, and never move
+the page on a switch; both read as jitter under fast switching. The 14px
+rise is reserved for content that is genuinely new (exercise cards landing).
+
 ---
 
 ## Hard-won rules
