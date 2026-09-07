@@ -491,11 +491,14 @@ const Profile = () => {
                     ) : null
                 }
                 ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyStateText}>
-                            {exercises.length === 0 ? 'Loading exercises...' : 'No exercises match'}
-                        </Text>
-                    </View>
+                    // Nothing at all while the catalogue is still loading. It
+                    // arrives within a few frames, and a "Loading exercises..."
+                    // line behind the recents was noise for a wait nobody sees.
+                    exercises.length === 0 ? null : (
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyStateText}>No exercises match</Text>
+                        </View>
+                    )
                 }
             />
             </Reveal>

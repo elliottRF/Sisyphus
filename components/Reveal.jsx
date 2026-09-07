@@ -41,19 +41,21 @@ export const armTabReveal = () => {
 // >1 slows everything down by that factor for inspection. Ship at 1.
 const SPEED = 1;
 
-const STEP = 30;
+// Matched to the entrance a card plays when a template is started
+// (app/(tabs)/current.jsx renderItem), so opening the live workout from Home's
+// banner replays exactly that, rather than a second, slightly different motion.
+const STEP = 45;
 const DURATION = 280;
 const RISE = 0;
-const MAX_STEP = 4;
-// A revealed block starts dimmed, NOT invisible. Fading a whole screen up from
-// zero left a frame of empty background before anything appeared, and on a page
-// that is mostly one big block -- the live workout's sets -- that empty moment
-// read as a flash, and the content arriving after it read as a pop rather than
-// as a fade. Starting part-lit keeps the page legible the entire time, so what
-// you see is the page brightening into place.
+const MAX_STEP = 6;
+// Default starting opacity: dimmed, not invisible. Fading a WHOLE SCREEN up
+// from zero left a frame of empty background before anything appeared, which
+// read as a flash. Blocks revealed one after another pass from={0} instead --
+// each is a small part of the screen and the chrome around them never moves,
+// so they can travel the full distance and read as arriving.
 const FROM = 0.4;
 
-const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
+const Reveal = ({ index = 0, rise = RISE, from = FROM, style, children, ...rest }) => {
     // Visible unless something deliberately animates it in.
     const progress = useSharedValue(1);
     const focusedRef = useRef(false);
@@ -81,7 +83,7 @@ const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
                 && Date.now() - revealArmedAt < ARM_WINDOW;
             consumedToken.current = revealToken;
             if (TAB_REVEAL && armed) {
-                progress.value = FROM;
+                progress.value = from;
                 progress.value = withDelay(
                     Math.min(index, MAX_STEP) * STEP * SPEED,
                     withTiming(1, { duration: DURATION * SPEED, easing: Easing.out(Easing.cubic) })
@@ -89,7 +91,7 @@ const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
             }
             // Nothing here hides anything: a blurred block stays visible.
             return () => { focusedRef.current = false; };
-        }, [index, progress])
+        }, [index, from, progress])
     );
 
     const animatedStyle = useAnimatedStyle(() => (

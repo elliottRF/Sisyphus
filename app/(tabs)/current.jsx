@@ -1110,6 +1110,11 @@ const Current = () => {
                 .withInitialValues({ opacity: 0, transform: [{ translateY: 14 }] })
             : FadeIn.duration(220);
         return (
+            // Reveal replays the same rise-and-fade when the live workout is
+            // opened from Home's banner, without remounting the card. The
+            // page's chrome stays put, so nothing flashes: only the cards
+            // travel, one after another, exactly as when a template starts.
+            <Reveal index={index} rise={14} from={0}>
             <Animated.View
                 collapsable={false}
                 style={styles.exerciseWrapper}
@@ -1142,6 +1147,7 @@ const Current = () => {
                     );
                 })}
             </Animated.View>
+            </Reveal>
         );
     }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap, PRMODE, startReorder, endReorder, fingerY, styles, showExerciseInfo]);
 
@@ -1324,7 +1330,7 @@ const Current = () => {
                 ) : (
                     <>
                         {workoutRestored && !workoutStartTime && currentWorkout.length === 0 && (
-                            <Reveal index={0} style={{ flex: 1 }}>
+                            <View style={{ flex: 1 }}>
                                 {/* Header lives OUTSIDE the pager so it sits in the
                                     exact same spot as the other tabs' headers. */}
                                 <View style={styles.emptyStateHeader}>
@@ -1427,13 +1433,11 @@ const Current = () => {
                                         </ButtonBackground>
                                     </TouchableOpacity>
                                 </View>
-                            </Reveal>
+                            </View>
                         )}
 
                         {workoutRestored && (workoutStartTime || currentWorkout.length > 0) && (
-                            // Opacity/translate only -- never a layout animation
-                            // here (see the footer note below).
-                            <Reveal index={0} style={{ flex: 1 }}>
+                            <View style={{ flex: 1 }}>
                                 {/* Header */}
                                 <View style={styles.headerContainer}>
                                     <View style={styles.headerTopRow}>
@@ -1583,7 +1587,7 @@ const Current = () => {
                                     />
                                 )}
                                 </View>
-                            </Reveal>
+                            </View>
                         )}
                         <FilteredExerciseList
                             exercises={exercises}

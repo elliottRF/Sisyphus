@@ -129,13 +129,20 @@ reverted: hiding a tab's blocks on blur so the next visit could fade them in
 meant any interruption -- most reliably backgrounding the app and returning --
 left a tab showing nothing but its chrome until it was switched away from and
 back. **Never leave a screen's content at zero opacity waiting on an event to
-bring it back.** `components/Reveal.jsx` blocks start visible and only fade
+bring it back.** `components/Reveal.jsx` blocks start visible and only animate
 when `armTabReveal()` is called immediately before navigating; the one caller
-is Home's workout-in-progress banner, where arriving at the live workout should
-feel like opening it rather than like changing tabs. **A revealed block starts
-part-lit (0.4), never at zero** -- fading a whole screen up from nothing left a
-frame of empty background, and on a page that is mostly one big block the empty
-moment read as a flash and the content arriving after it as a pop. The 14px rise is reserved
+is Home's workout-in-progress banner, and what it replays is the per-card
+rise-and-fade a template start plays -- the chrome stays put and only the
+exercise cards travel, one after another. **Never fade a whole screen up from
+zero.** Doing that left a frame of empty background, and on a page that is
+mostly one big block the empty moment read as a flash and the content arriving
+after it as a pop; a whole block that must fade starts part-lit (0.4) instead.
+
+**Give a list its entrance on first mount, time-boxed, not index-boxed.**
+History's cards rise in for the first 900ms after the tab mounts. The list is
+virtualised and RN mounts the remaining cells at idle and again while
+scrolling; animating by index alone had rows springing in under the thumb long
+after the screen had settled. The 14px rise is reserved
 for content that is genuinely new (exercise cards landing).
 
 ---
