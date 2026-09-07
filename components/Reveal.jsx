@@ -42,9 +42,16 @@ export const armTabReveal = () => {
 const SPEED = 1;
 
 const STEP = 30;
-const DURATION = 200;
+const DURATION = 280;
 const RISE = 0;
 const MAX_STEP = 4;
+// A revealed block starts dimmed, NOT invisible. Fading a whole screen up from
+// zero left a frame of empty background before anything appeared, and on a page
+// that is mostly one big block -- the live workout's sets -- that empty moment
+// read as a flash, and the content arriving after it read as a pop rather than
+// as a fade. Starting part-lit keeps the page legible the entire time, so what
+// you see is the page brightening into place.
+const FROM = 0.4;
 
 const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
     // Visible unless something deliberately animates it in.
@@ -74,7 +81,7 @@ const Reveal = ({ index = 0, rise = RISE, style, children, ...rest }) => {
                 && Date.now() - revealArmedAt < ARM_WINDOW;
             consumedToken.current = revealToken;
             if (TAB_REVEAL && armed) {
-                progress.value = 0;
+                progress.value = FROM;
                 progress.value = withDelay(
                     Math.min(index, MAX_STEP) * STEP * SPEED,
                     withTiming(1, { duration: DURATION * SPEED, easing: Easing.out(Easing.cubic) })

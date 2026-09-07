@@ -132,7 +132,10 @@ back. **Never leave a screen's content at zero opacity waiting on an event to
 bring it back.** `components/Reveal.jsx` blocks start visible and only fade
 when `armTabReveal()` is called immediately before navigating; the one caller
 is Home's workout-in-progress banner, where arriving at the live workout should
-feel like opening it rather than like changing tabs. The 14px rise is reserved
+feel like opening it rather than like changing tabs. **A revealed block starts
+part-lit (0.4), never at zero** -- fading a whole screen up from nothing left a
+frame of empty background, and on a page that is mostly one big block the empty
+moment read as a flash and the content arriving after it as a pop. The 14px rise is reserved
 for content that is genuinely new (exercise cards landing).
 
 ---
