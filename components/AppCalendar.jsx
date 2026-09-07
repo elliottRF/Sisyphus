@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { Calendar } from 'react-native-calendars';
 import { Feather } from '@expo/vector-icons';
 import { FONTS, TYPE, SPACING, RADIUS, withAlpha } from '../constants/theme';
@@ -55,6 +56,19 @@ const AppCalendar = ({
         return `${safe.getFullYear()}-${safe.getMonth() + 1}`;
     }, [current]);
     const [visibleMonth, setVisibleMonth] = useState(initialMonth);
+
+    // Changing month swaps 42 day cells and the title in a single frame, which
+    // reads as a hard cut when flicking through. Dipping the whole calendar and
+    // bringing it back turns that into a soft change. It never goes near zero:
+    // the grid stays legible the whole time, so this reads as the numbers
+    // changing rather than the calendar disappearing and coming back.
+    const monthFade = useSharedValue(1);
+    const monthStyle = useAnimatedStyle(() => ({ opacity: monthFade.value }));
+    const onMonthChange = useCallback((m) => {
+        setVisibleMonth(`${m.year}-${m.month}`);
+        monthFade.value = 0.55;
+        monthFade.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
+    }, [monthFade]);
 
     const weekdayLabels = useMemo(
         () => Array.from({ length: 7 }, (_, i) => WEEKDAYS[(firstDay + i) % 7]),
@@ -148,7 +162,7 @@ const AppCalendar = ({
     }, [styles, onDayPress, visibleMonth]);
 
     return (
-        <View style={styles.container} testID={testID}>
+        <Animated.View style={[styles.container, monthStyle]} testID={testID}>
             <Calendar
                 current={current}
                 firstDay={firstDay}
@@ -158,13 +172,13 @@ const AppCalendar = ({
                 enableSwipeMonths
                 markedDates={markedDates}
                 onDayPress={onDayPress}
-                onMonthChange={(m) => setVisibleMonth(`${m.year}-${m.month}`)}
+                onMonthChange={onMonthChange}
                 customHeader={Header}
                 dayComponent={Day}
                 style={styles.calendar}
                 theme={calendarTheme}
             />
-        </View>
+        </Animated.View>
     );
 };
 

@@ -10,11 +10,36 @@ import { formatWeight, unitLabel } from '../../utils/units';
 import { customAlert } from '../../utils/customAlert';
 import * as haptics from '../../utils/haptics';
 import { AppEvents, on, off, emit } from '../../utils/events';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import ContextMenu from '../../components/ContextMenu';
 import WeightEntryModal from '../../components/WeightEntryModal';
 
 const monthLabel = (d) =>
     d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+// Pressable's `pressed` style switches the tint on and off between frames, so
+// holding a row made a grey block appear and vanish. The tint is its own
+// overlay here, faded in and out on the UI thread: quick to arrive so the press
+// still feels immediate, slower to leave so releasing does not snap.
+const WeightRow = ({ styles, highlighted, onLongPress, children }) => {
+    const press = useSharedValue(0);
+    const tint = useAnimatedStyle(() => ({ opacity: press.value }));
+    return (
+        <Pressable
+            onLongPress={onLongPress}
+            delayLongPress={300}
+            onPressIn={() => { press.value = withTiming(1, { duration: 140, easing: Easing.out(Easing.quad) }); }}
+            onPressOut={() => { press.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.quad) }); }}
+            style={[styles.row, highlighted && styles.rowHighlighted]}
+        >
+            <Animated.View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, styles.pressTint, tint]}
+            />
+            {children}
+        </Pressable>
+    );
+};
 
 const BodyWeightHistory = () => {
     const insets = useSafeAreaInsets();
@@ -153,14 +178,10 @@ const BodyWeightHistory = () => {
     };
 
     const renderRow = ({ item }) => (
-        <Pressable
+        <WeightRow
+            styles={styles}
+            highlighted={item.datetime === highlight}
             onLongPress={(e) => openMenu(e, item)}
-            delayLongPress={300}
-            style={({ pressed }) => [
-                styles.row,
-                item.datetime === highlight && styles.rowHighlighted,
-                pressed && { backgroundColor: theme.overlaySubtle },
-            ]}
         >
             <View style={styles.rowMain}>
                 <Text style={styles.weight}>
@@ -185,7 +206,7 @@ const BodyWeightHistory = () => {
                     <Text style={styles.deltaText}>{item.delta.value}</Text>
                 </View>
             )}
-        </Pressable>
+        </WeightRow>
     );
 
     const loading = entries === null;
@@ -433,6 +454,10 @@ const getStyles = (theme) => StyleSheet.create({
     },
     rowHighlighted: {
         backgroundColor: withAlpha(theme.primary, 0.16),
+    },
+    pressTint: {
+        backgroundColor: theme.overlaySubtle,
+        borderRadius: RADIUS.l,
     },
     rowMain: { flex: 1 },
     weight: {
