@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, PanResponder } from 'react-native';
-import Svg, { Path, Circle, Defs, RadialGradient, LinearGradient, Stop, Rect } from 'react-native-svg';
+import Svg, { G, Path, Circle, Defs, RadialGradient, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { FONTS, RADIUS, SPACING, TYPE } from '../constants/theme';
 
 // An HSV colour wheel: hue around, saturation from the centre out, with a
@@ -17,6 +17,12 @@ import { FONTS, RADIUS, SPACING, TYPE } from '../constants/theme';
 const WEDGES = 72;
 const BAR_HEIGHT = 28;
 const THUMB = 22;
+const MARKER_R = 11;
+const MARKER_STROKE = 3;
+// Room around the wheel for the selector, which sits ON the rim at full
+// saturation. Without it the canvas cuts the marker in half at the edges,
+// and clips the four points where the wheel touches the canvas flat.
+const PAD = MARKER_R + MARKER_STROKE + 2;
 
 // ── Colour conversion ──────────────────────────────────────────────────────
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -75,6 +81,9 @@ const wedgePath = (cx, cy, r, startDeg, endDeg) => {
 const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
     const styles = useMemo(() => getStyles(theme), [theme]);
     const R = size / 2;
+    // Canvas is bigger than the wheel; the wheel's centre sits PAD in.
+    const CANVAS = size + PAD * 2;
+    const C = R + PAD;
 
     const [hsv, setHsv] = useState(() => hexToHsv(color) || { h: 210, s: 1, v: 1 });
 
@@ -109,8 +118,8 @@ const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
     const startRef = useRef({ x: 0, y: 0 });
 
     const applyWheel = (x, y) => {
-        const dx = x - R;
-        const dy = y - R;
+        const dx = x - C;
+        const dy = y - C;
         const dist = Math.sqrt(dx * dx + dy * dy);
         let deg = (Math.atan2(dy, dx) * 180) / Math.PI;
         if (deg < 0) deg += 360;
@@ -154,39 +163,43 @@ const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
     const wedges = useMemo(() => {
         const step = 360 / WEDGES;
         return Array.from({ length: WEDGES }, (_, i) => ({
-            d: wedgePath(R, R, R, i * step - 0.5, (i + 1) * step + 0.5),
+            d: wedgePath(C, C, R, i * step - 0.5, (i + 1) * step + 0.5),
             fill: hsvToHex(i * step, 1, 1),
         }));
-    }, [R]);
+    }, [C, R]);
 
-    const markerX = R + Math.cos((hsv.h * Math.PI) / 180) * hsv.s * R;
-    const markerY = R + Math.sin((hsv.h * Math.PI) / 180) * hsv.s * R;
+    const markerX = C + Math.cos((hsv.h * Math.PI) / 180) * hsv.s * R;
+    const markerY = C + Math.sin((hsv.h * Math.PI) / 180) * hsv.s * R;
     const current = hsvToHex(hsv.h, hsv.s, hsv.v);
     const fullValue = hsvToHex(hsv.h, hsv.s, 1);
 
     return (
         <View style={styles.wrap}>
-            <View style={{ width: size, height: size }} {...wheelPan.panHandlers}>
-                <Svg width={size} height={size}>
+            <View style={{ width: CANVAS, height: CANVAS }} {...wheelPan.panHandlers}>
+                <Svg width={CANVAS} height={CANVAS}>
                     <Defs>
                         <RadialGradient id="sat" cx="50%" cy="50%" r="50%">
                             <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
                             <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
                         </RadialGradient>
                     </Defs>
-                    {wedges.map((w, i) => (
-                        <Path key={i} d={w.d} fill={w.fill} />
-                    ))}
-                    <Circle cx={R} cy={R} r={R} fill="url(#sat)" />
-                    {/* Brightness, so the wheel shows the colour being picked
-                        rather than a permanently bright one. A hair wider than
-                        the wheel: at the same radius its anti-aliased edge does
-                        not quite cover the wedges' own, which left a thread of
-                        colour around the outside at full black. The overshoot
-                        is clipped by the canvas. */}
-                    <Circle cx={R} cy={R} r={R + 1} fill="#000000" opacity={1 - hsv.v} />
-                    <Circle cx={markerX} cy={markerY} r={11} fill={current} stroke="#FFFFFF" strokeWidth={3} />
-                    <Circle cx={markerX} cy={markerY} r={13.5} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth={1} />
+                    {/* Brightness is applied by fading the whole wheel over a
+                        black disc of the same size, rather than laying black on
+                        top of it. Compositing colour at opacity v over black IS
+                        the HSV value, and because the two shapes share an edge
+                        their anti-aliasing adds up instead of fighting: no ring
+                        of colour left showing at v=0, and no dark outline
+                        spilling past the rim in between, which is what an
+                        overlay drawn a shade wider produced. */}
+                    <Circle cx={C} cy={C} r={R} fill="#000000" />
+                    <G opacity={hsv.v}>
+                        {wedges.map((w, i) => (
+                            <Path key={i} d={w.d} fill={w.fill} />
+                        ))}
+                        <Circle cx={C} cy={C} r={R} fill="url(#sat)" />
+                    </G>
+                    <Circle cx={markerX} cy={markerY} r={MARKER_R} fill={current} stroke="#FFFFFF" strokeWidth={MARKER_STROKE} />
+                    <Circle cx={markerX} cy={markerY} r={MARKER_R + 2.5} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth={1} />
                 </Svg>
             </View>
 
