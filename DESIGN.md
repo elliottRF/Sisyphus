@@ -218,6 +218,12 @@ Each of these cost a real bug. Don't undo them.
   in.** Anything that consults available height (a multiline `TextInput`)
   measures 0 in there and can never report the height it needs to grow to.
   Measure such content out of flow -- see `Expandable`'s grow mode.
+- **Track a drag by where it started plus the gesture's dx/dy, never by
+  reading `locationX`/`locationY` on every move.** Those are only meaningful
+  while the touch is inside the view; once a finger leaves it -- past the end
+  of a slider, or a few pixels below it -- Android reports them against
+  whatever view is under the finger, and the control jumps around. Start-plus-
+  delta clamps cleanly at the ends and ignores drift on the other axis.
 - **Pass a stable `styles` object to any `React.memo`'d child.** An unmemoised
   `getStyles(theme)` gives it a new identity every render and the memo never
   holds. Memoise wherever the object crosses a memo boundary.

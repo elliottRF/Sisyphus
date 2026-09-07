@@ -16,6 +16,7 @@ import { FONTS, RADIUS, SPACING, TYPE } from '../constants/theme';
 
 const WEDGES = 72;
 const BAR_HEIGHT = 28;
+const THUMB = 22;
 
 // ── Colour conversion ──────────────────────────────────────────────────────
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -98,7 +99,16 @@ const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
     const hsvRef = useRef(hsv);
     hsvRef.current = hsv;
 
-    const handleWheel = (x, y) => {
+    // Both gestures track from where the finger LANDED plus the accumulated
+    // dx/dy, rather than reading locationX/locationY on every move. Those are
+    // only meaningful while the touch is inside the view: once a finger leaves
+    // it -- past the end of the bar, or a few pixels below it -- Android
+    // reports them against whatever view is under the finger, which made the
+    // slider thumb jump around. Start-plus-delta is unaffected by any of that,
+    // so overshooting simply clamps and vertical drift is ignored outright.
+    const startRef = useRef({ x: 0, y: 0 });
+
+    const applyWheel = (x, y) => {
         const dx = x - R;
         const dy = y - R;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -114,12 +124,17 @@ const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
             // The wheel sits in a ScrollView; claiming the gesture stops the
             // sheet scrolling out from under a drag.
             onPanResponderTerminationRequest: () => false,
-            onPanResponderGrant: (e) => handleWheel(e.nativeEvent.locationX, e.nativeEvent.locationY),
-            onPanResponderMove: (e) => handleWheel(e.nativeEvent.locationX, e.nativeEvent.locationY),
+            onPanResponderGrant: (e) => {
+                startRef.current = { x: e.nativeEvent.locationX, y: e.nativeEvent.locationY };
+                applyWheel(startRef.current.x, startRef.current.y);
+            },
+            onPanResponderMove: (e, g) => {
+                applyWheel(startRef.current.x + g.dx, startRef.current.y + g.dy);
+            },
         })
     ).current;
 
-    const handleBar = (x) => {
+    const applyBar = (x) => {
         emit({ ...hsvRef.current, v: clamp(x / size, 0, 1) });
     };
     const barPan = useRef(
@@ -127,8 +142,12 @@ const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
             onStartShouldSetPanResponder: () => true,
             onMoveShouldSetPanResponder: () => true,
             onPanResponderTerminationRequest: () => false,
-            onPanResponderGrant: (e) => handleBar(e.nativeEvent.locationX),
-            onPanResponderMove: (e) => handleBar(e.nativeEvent.locationX),
+            onPanResponderGrant: (e) => {
+                startRef.current = { x: e.nativeEvent.locationX, y: 0 };
+                applyBar(startRef.current.x);
+            },
+            // Only dx: sliding a finger off the bar vertically must not move it.
+            onPanResponderMove: (e, g) => applyBar(startRef.current.x + g.dx),
         })
     ).current;
 
@@ -183,7 +202,10 @@ const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
                     </Defs>
                     <Rect x={0} y={0} width={size} height={BAR_HEIGHT} rx={BAR_HEIGHT / 2} fill="url(#val)" />
                 </Svg>
-                <View pointerEvents="none" style={[styles.barThumb, { left: hsv.v * size }]} />
+                <View
+                    pointerEvents="none"
+                    style={[styles.barThumb, { left: clamp(hsv.v * size, THUMB / 2, size - THUMB / 2) }]}
+                />
             </View>
 
             <View style={styles.readout}>
@@ -202,10 +224,10 @@ const getStyles = (theme) => StyleSheet.create({
     },
     barThumb: {
         position: 'absolute',
-        width: 22,
-        height: 22,
-        marginLeft: -11,
-        borderRadius: 11,
+        width: THUMB,
+        height: THUMB,
+        marginLeft: -THUMB / 2,
+        borderRadius: THUMB / 2,
         borderWidth: 3,
         borderColor: '#FFFFFF',
     },
