@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, SectionList, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -10,34 +10,42 @@ import { formatWeight, unitLabel } from '../../utils/units';
 import { customAlert } from '../../utils/customAlert';
 import * as haptics from '../../utils/haptics';
 import { AppEvents, on, off, emit } from '../../utils/events';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import ContextMenu from '../../components/ContextMenu';
 import WeightEntryModal from '../../components/WeightEntryModal';
 
 const monthLabel = (d) =>
     d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
-// Pressable's `pressed` style switches the tint on and off between frames, so
-// holding a row made a grey block appear and vanish. The tint is its own
-// overlay here, faded in and out on the UI thread: quick to arrive so the press
-// still feels immediate, slower to leave so releasing does not snap.
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
+// The same press feedback as a session card in the exercise history list
+// (components/exerciseHistory.jsx): a small spring scale plus the touchable's
+// own opacity dim. It replaced a grey tint that Pressable's `pressed` style
+// switched on and off between frames, which appeared and vanished as a block.
+// Values are copied deliberately rather than approximated -- two press
+// animations that are nearly the same reads worse than one that is.
+const PRESS_SPRING = { useNativeDriver: true, speed: 20, bounciness: 4 };
+
 const WeightRow = ({ styles, highlighted, onLongPress, children }) => {
-    const press = useSharedValue(0);
-    const tint = useAnimatedStyle(() => ({ opacity: press.value }));
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+    const springTo = (toValue) => Animated.spring(scaleAnim, { toValue, ...PRESS_SPRING }).start();
     return (
-        <Pressable
-            onLongPress={onLongPress}
-            delayLongPress={300}
-            onPressIn={() => { press.value = withTiming(1, { duration: 140, easing: Easing.out(Easing.quad) }); }}
-            onPressOut={() => { press.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.quad) }); }}
-            style={[styles.row, highlighted && styles.rowHighlighted]}
+        <AnimatedTouchableOpacity
+            activeOpacity={0.8}
+            onLongPress={(e) => {
+                onLongPress(e);
+                // Release the scale as the menu opens: the finger is still
+                // down, so onPressOut has not fired and the row would stay
+                // shrunk underneath the menu.
+                springTo(1);
+            }}
+            delayLongPress={350}
+            onPressIn={() => springTo(0.98)}
+            onPressOut={() => springTo(1)}
+            style={[styles.row, highlighted && styles.rowHighlighted, { transform: [{ scale: scaleAnim }] }]}
         >
-            <Animated.View
-                pointerEvents="none"
-                style={[StyleSheet.absoluteFill, styles.pressTint, tint]}
-            />
             {children}
-        </Pressable>
+        </AnimatedTouchableOpacity>
     );
 };
 
@@ -454,10 +462,6 @@ const getStyles = (theme) => StyleSheet.create({
     },
     rowHighlighted: {
         backgroundColor: withAlpha(theme.primary, 0.16),
-    },
-    pressTint: {
-        backgroundColor: theme.overlaySubtle,
-        borderRadius: RADIUS.l,
     },
     rowMain: { flex: 1 },
     weight: {

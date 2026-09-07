@@ -74,6 +74,12 @@ In-card section labels: 12pt semibold uppercase, `theme.textSecondary`.
   `StyleSheet.hairlineWidth` with `theme.border`.
 - **Inside a surface-coloured sheet, cards are `theme.overlayInput` tiles**, not
   surface-on-surface with a border to make them visible.
+- **Press feedback on a card is a spring to `scale: 0.98` plus the touchable's
+  own opacity dim** (`speed: 20, bounciness: 4`, `activeOpacity: 0.8`) -- never
+  a tint. `Pressable`'s `pressed` style cannot animate: it switches between
+  frames, so a tint appears and vanishes as a block. Copy the values from
+  `components/exerciseHistory.jsx` rather than approximating them; two press
+  animations that are nearly the same read worse than one that is.
 
 ## Colour
 
