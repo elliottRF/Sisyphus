@@ -124,19 +124,30 @@ Finish Workout buttons either jumped or trailed a frame behind.
 A static correct value beats an animated one. Don't animate a number that was
 never stale.
 
-**Tab switches are instant.** A staggered fade on every switch was tried and
-reverted: hiding a tab's blocks on blur so the next visit could fade them in
-meant any interruption -- most reliably backgrounding the app and returning --
-left a tab showing nothing but its chrome until it was switched away from and
-back. **Never leave a screen's content at zero opacity waiting on an event to
-bring it back.** `components/Reveal.jsx` blocks start visible and only animate
-when `armTabReveal()` is called immediately before navigating; the one caller
-is Home's workout-in-progress banner, and what it replays is the per-card
-rise-and-fade a template start plays -- the chrome stays put and only the
-exercise cards travel, one after another. **Never fade a whole screen up from
-zero.** Doing that left a frame of empty background, and on a page that is
-mostly one big block the empty moment read as a flash and the content arriving
-after it as a pop; a whole block that must fade starts part-lit (0.4) instead.
+**Tab switches are instant, and navigating between tabs animates nothing.**
+A `Reveal` component that animated a screen's blocks on arrival was built and
+then removed entirely; the record is worth keeping, because each step failed
+for a different reason:
+
+1. Replaying it on every switch meant hiding a tab's blocks on blur so the
+   next visit could fade them in. Any interruption -- most reliably
+   backgrounding the app and returning -- left a tab showing nothing but its
+   chrome until it was switched away from and back. **Never leave a screen's
+   content at zero opacity waiting on an event to bring it back.**
+2. Narrowed to one deliberate trigger, fading the whole Current page up from
+   zero showed a frame of empty background, which read as a flash; and the
+   thin, light elements in it (the SET/PREVIOUS/KG/REPS header, + ADD SET)
+   flickered rather than glided, because they cross the visibility threshold
+   at a different point from the solid fills around them. **Never fade a
+   whole screen up from zero, and never cross-fade a large area containing
+   fine light text.**
+3. Replaced by a per-card rise, which looked right -- but the trigger was a
+   global one-shot token with a time window, not scoped to a destination, so
+   returning to Home quickly after it fired made Home animate too. A
+   navigation-triggered animation must be owned by the screen that plays it.
+
+What remains is simpler and has no failure mode: each screen animates its own
+content on ITS OWN first mount and never in response to navigation.
 
 **A lazily mounted tab paints nothing for a frame or two after it is switched
 to** -- an empty content area above the tab bar, which reads as a black flash

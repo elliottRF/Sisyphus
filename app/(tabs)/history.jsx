@@ -15,7 +15,6 @@ import { customAlert } from '../../utils/customAlert';
 import { kgToLbs, unitLabel } from '../../utils/units';
 import { buildWorkoutDataFromSession } from '../../utils/workoutBuilders';
 import { AppEvents, on, off } from '../../utils/events';
-import Reveal from '../../components/Reveal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -896,7 +895,7 @@ const History = () => {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-            <Reveal index={0} style={styles.header}>
+            <View style={styles.header}>
                 <View>
                     <Text style={styles.eyebrow}>
                         {workoutHistory.length > 0
@@ -912,8 +911,8 @@ const History = () => {
                 >
                     <Feather name="calendar" size={22} color={theme.text} />
                 </TouchableOpacity>
-            </Reveal>
-            <Reveal index={1} style={{ flex: 1 }}>
+            </View>
+            <View style={{ flex: 1 }}>
             <SectionList
                 ref={scrollRef}
                 sections={sections}
@@ -999,7 +998,7 @@ const History = () => {
                 // fight over child view indices on Android (addViewAt crash).
                 removeClippedSubviews={false}
             />
-            </Reveal>
+            </View>
 
             <ActionSheet
                 ref={calendarActionSheetRef}

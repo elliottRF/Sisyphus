@@ -45,7 +45,6 @@ import { useLocalSearchParams } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { customAlert } from '../../utils/customAlert';
 import ContextMenu from '../../components/ContextMenu';
-import Reveal from '../../components/Reveal';
 
 
 
@@ -1110,11 +1109,6 @@ const Current = () => {
                 .withInitialValues({ opacity: 0, transform: [{ translateY: 14 }] })
             : FadeIn.duration(220);
         return (
-            // Reveal replays the same rise-and-fade when the live workout is
-            // opened from Home's banner, without remounting the card. The
-            // page's chrome stays put, so nothing flashes: only the cards
-            // travel, one after another, exactly as when a template starts.
-            <Reveal index={index} rise={14} from={0}>
             <Animated.View
                 collapsable={false}
                 style={styles.exerciseWrapper}
@@ -1147,7 +1141,6 @@ const Current = () => {
                     );
                 })}
             </Animated.View>
-            </Reveal>
         );
     }, [setCurrentWorkout, exercises, handleSetComplete, occurrenceMap, PRMODE, startReorder, endReorder, fingerY, styles, showExerciseInfo]);
 
