@@ -75,6 +75,11 @@ const Profile = () => {
     const styles = getStyles(theme);
 
     const scrollRef = useRef(null);
+    // See the note in app/(tabs)/history.jsx: a lazily mounted tab paints
+    // nothing for a frame or two after being switched to, and the rows arriving
+    // afterwards popped. They fade in instead, matching the templates page and
+    // the recents list below. Time-boxed so scrolling never animates a row.
+    const mountedAtRef = useRef(Date.now());
     useScrollToTop(scrollRef);
     const [searchQuery, setSearchQuery] = useState('');
     const [exercises, setExercises] = useState([]);
@@ -452,7 +457,13 @@ const Profile = () => {
                 ref={scrollRef}
                 data={sortedAndFilteredExercises}
                 keyExtractor={(item) => item.exerciseID.toString()}
-                renderItem={({ item }) => renderExerciseRow(item)}
+                renderItem={({ item }) => (
+                    <Animated.View
+                        entering={Date.now() - mountedAtRef.current < 900 ? FadeIn.duration(280) : undefined}
+                    >
+                        {renderExerciseRow(item)}
+                    </Animated.View>
+                )}
                 keyboardShouldPersistTaps="always"
                 contentContainerStyle={styles.list}
                 showsVerticalScrollIndicator={false}

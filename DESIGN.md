@@ -138,11 +138,15 @@ zero.** Doing that left a frame of empty background, and on a page that is
 mostly one big block the empty moment read as a flash and the content arriving
 after it as a pop; a whole block that must fade starts part-lit (0.4) instead.
 
-**Give a list its entrance on first mount, time-boxed, not index-boxed.**
-History's cards rise in for the first 900ms after the tab mounts. The list is
-virtualised and RN mounts the remaining cells at idle and again while
-scrolling; animating by index alone had rows springing in under the thumb long
-after the screen had settled. The 14px rise is reserved
+**A lazily mounted tab paints nothing for a frame or two after it is switched
+to** -- an empty content area above the tab bar, which reads as a black flash
+before the content pops in. The gap is native layout and draw and cannot be
+animated away; what fixes the impression is the content fading in as it
+arrives, the way the templates grid does. History's cards and the Exercises
+rows do this. **Time-box such an entrance (900ms from mount), never gate it on
+index alone**: these lists are virtualised and RN mounts the remaining cells at
+idle and again while scrolling, so an index gate has rows animating under the
+user's thumb long after the screen has settled. The 14px rise is reserved
 for content that is genuinely new (exercise cards landing).
 
 ---

@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicato
 import ActionSheet from 'react-native-actions-sheet';
 import AppCalendar from '../../components/AppCalendar';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import Animated, { ZoomIn, ZoomOut, FadeInDown, Easing } from 'react-native-reanimated';
+import Animated, { ZoomIn, ZoomOut, FadeIn } from 'react-native-reanimated';
 import { useScrollToTop } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession, createTemplate, getSplits, getCachedWorkoutHistory, getCachedExercises } from '../../components/db';
@@ -583,11 +583,16 @@ const History = () => {
     // that arrive while covered commit directly (frozen trees can't animate).
     const isFocusedRef = useRef(false);
 
-    // Session cards rise into place the first time this tab is opened, the way
-    // Home's cards do. Time-boxed rather than index-boxed on purpose: this
-    // list is virtualised and RN mounts the remaining cells at idle and again
-    // while scrolling, and animating those would have rows springing in under
-    // the user's thumb long after the screen had settled.
+    // A tab mounts lazily, so there is a frame or two where this screen has
+    // been switched to but has painted nothing -- an empty content area above
+    // the tab bar, which reads as a black flash before the list pops in. The
+    // gap itself is native layout and draw and cannot be animated away, so the
+    // cards fade in as they arrive instead, the way the templates page does.
+    //
+    // Time-boxed rather than index-boxed: this list is virtualised and RN
+    // mounts the remaining cells at idle and again while scrolling, and
+    // animating those would have rows fading in under the user's thumb long
+    // after the screen had settled.
     const mountedAtRef = useRef(Date.now());
 
     // Removal animation: sessions mid-exit, and the post-exit list to commit.
@@ -934,13 +939,10 @@ const History = () => {
                         </Text>
                     </View>
                 )}
-                renderItem={({ item: [session, exercises], index }) => (
+                renderItem={({ item: [session, exercises] }) => (
                     <Animated.View
                         entering={Date.now() - mountedAtRef.current < 900
-                            ? FadeInDown.duration(280)
-                                .delay(Math.min(index, 6) * 45)
-                                .easing(Easing.out(Easing.cubic))
-                                .withInitialValues({ opacity: 0, transform: [{ translateY: 14 }] })
+                            ? FadeIn.duration(280)
                             : undefined}
                     >
                     <HistoryCard
