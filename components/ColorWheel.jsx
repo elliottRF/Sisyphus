@@ -179,8 +179,12 @@ const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
                     ))}
                     <Circle cx={R} cy={R} r={R} fill="url(#sat)" />
                     {/* Brightness, so the wheel shows the colour being picked
-                        rather than a permanently bright one. */}
-                    <Circle cx={R} cy={R} r={R} fill="#000000" opacity={1 - hsv.v} />
+                        rather than a permanently bright one. A hair wider than
+                        the wheel: at the same radius its anti-aliased edge does
+                        not quite cover the wedges' own, which left a thread of
+                        colour around the outside at full black. The overshoot
+                        is clipped by the canvas. */}
+                    <Circle cx={R} cy={R} r={R + 1} fill="#000000" opacity={1 - hsv.v} />
                     <Circle cx={markerX} cy={markerY} r={11} fill={current} stroke="#FFFFFF" strokeWidth={3} />
                     <Circle cx={markerX} cy={markerY} r={13.5} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth={1} />
                 </Svg>
