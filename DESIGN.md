@@ -124,13 +124,16 @@ Finish Workout buttons either jumped or trailed a frame behind.
 A static correct value beats an animated one. Don't animate a number that was
 never stale.
 
-**Tab switches** reveal the new tab's top-level blocks with a soft fade in
-reading order (`components/Reveal.jsx`, 200ms, 30ms stagger, opacity only),
-restarting on every switch. Returning from a pushed screen is not a page
-change: the tab stays visible under the push transition and comes back as it
-was. Never move the page on a switch -- a rise under fast switching reads as
-jitter; the 14px rise is reserved for content that is genuinely new (exercise
-cards landing).
+**Tab switches are instant.** A staggered fade on every switch was tried and
+reverted: hiding a tab's blocks on blur so the next visit could fade them in
+meant any interruption -- most reliably backgrounding the app and returning --
+left a tab showing nothing but its chrome until it was switched away from and
+back. **Never leave a screen's content at zero opacity waiting on an event to
+bring it back.** `components/Reveal.jsx` blocks start visible and only fade
+when `armTabReveal()` is called immediately before navigating; the one caller
+is Home's workout-in-progress banner, where arriving at the live workout should
+feel like opening it rather than like changing tabs. The 14px rise is reserved
+for content that is genuinely new (exercise cards landing).
 
 ---
 

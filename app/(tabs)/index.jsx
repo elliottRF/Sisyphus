@@ -22,7 +22,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { AppEvents, on, off } from '../../utils/events';
 import { muscleMapping, majorMuscles } from '../../constants/muscles';
 import Fuse from 'fuse.js';
-import Reveal from '../../components/Reveal';
+import Reveal, { armTabReveal } from '../../components/Reveal';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -462,7 +462,10 @@ const Home = () => {
                     <Reveal index={1}>
                         <TouchableOpacity
                             style={styles.liveCard}
-                            onPress={() => router.navigate('/current')}
+                            // The one place the tab reveal is wanted: arriving
+                            // at the live workout from here should feel like
+                            // opening it, not like a tab switch.
+                            onPress={() => { armTabReveal(); router.navigate('/current'); }}
                             activeOpacity={0.85}
                         >
                             <View style={styles.liveDot} />
