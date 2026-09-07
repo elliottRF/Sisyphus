@@ -1,11 +1,17 @@
 import React, { useMemo, useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { FONTS, RADIUS, buildCustomTheme, randomThemeInput, isValidHex, DEFAULT_CUSTOM_INPUT } from '../constants/theme';
+import { FONTS, RADIUS, SPACING, buildCustomTheme, randomThemeInput, isValidHex, DEFAULT_CUSTOM_INPUT } from '../constants/theme';
+import ColorWheel from './ColorWheel';
 
-// Simple custom-theme creator: pick four colours (or randomise), see a live
-// preview, save. Everything else (borders, muted text, the readable text on
-// primary buttons, etc.) is derived by buildCustomTheme.
+// Custom-theme editor: pick four colours -- by wheel, by hex, or at random --
+// see a live preview, save. Everything else (borders, muted text, the readable
+// text on primary buttons, etc.) is derived by buildCustomTheme.
+//
+// It also edits an existing theme: pass `initial` (the four colours),
+// `initialName` and `editing`. A saved theme is the FULL built object, but it
+// keeps the four inputs it was built from under the same keys, so it can seed
+// this directly with no separate record of what was originally typed.
 
 const FIELDS = [
     { key: 'primary', label: 'Accent' },
@@ -20,9 +26,11 @@ const normalizeHex = (raw) => {
     return h;
 };
 
-const CustomThemeCreator = ({ theme, onCreate, onClose }) => {
-    const [input, setInput] = useState(DEFAULT_CUSTOM_INPUT);
-    const [name, setName] = useState('');
+const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, editing = false }) => {
+    const [input, setInput] = useState(() => ({ ...DEFAULT_CUSTOM_INPUT, ...(initial || {}) }));
+    const [name, setName] = useState(initialName || '');
+    // Which colour the wheel is open on, if any.
+    const [wheelField, setWheelField] = useState(null);
     const styles = getStyles(theme);
 
     // Scroll the focused colour field into view so it isn't hidden behind the
@@ -57,13 +65,15 @@ const CustomThemeCreator = ({ theme, onCreate, onClose }) => {
         onClose();
     };
 
+    const setField = (key, value) => setInput((prev) => ({ ...prev, [key]: value }));
+
     return (
         <Modal transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
             <View style={styles.scrim}>
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.center}>
                     <View style={styles.sheet}>
                         <View style={styles.header}>
-                            <Text style={styles.title}>New Theme</Text>
+                            <Text style={styles.title}>{editing ? 'Edit Theme' : 'New Theme'}</Text>
                             <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={10}>
                                 <Feather name="x" size={18} color={theme.textSecondary} />
                             </TouchableOpacity>
@@ -93,16 +103,24 @@ const CustomThemeCreator = ({ theme, onCreate, onClose }) => {
                             {FIELDS.map((field) => {
                                 const value = input[field.key];
                                 const valid = isValidHex(value);
+                                const isOpen = wheelField === field.key;
                                 return (
-                                    <View
-                                        key={field.key}
-                                        style={styles.row}
-                                        onLayout={(e) => { rowYRef.current[field.key] = e.nativeEvent.layout.y; }}
-                                    >
-                                        <View style={[styles.swatch, { backgroundColor: valid ? value : 'transparent', borderColor: theme.border }]}>
+                                    <View key={field.key} onLayout={(e) => { rowYRef.current[field.key] = e.nativeEvent.layout.y; }}>
+                                    <View style={styles.row}>
+                                        <TouchableOpacity
+                                            onPress={() => setWheelField(isOpen ? null : field.key)}
+                                            activeOpacity={0.7}
+                                            style={[
+                                                styles.swatch,
+                                                { backgroundColor: valid ? value : 'transparent', borderColor: isOpen ? theme.primary : theme.border },
+                                                isOpen && styles.swatchOpen,
+                                            ]}
+                                        >
                                             {!valid && <Feather name="alert-circle" size={14} color={theme.danger} />}
-                                        </View>
-                                        <Text style={styles.rowLabel}>{field.label}</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.rowLabelWrap} onPress={() => setWheelField(isOpen ? null : field.key)} activeOpacity={0.7}>
+                                            <Text style={styles.rowLabel}>{field.label}</Text>
+                                        </TouchableOpacity>
                                         <TextInput
                                             style={[styles.hexInput, !valid && { color: theme.danger }]}
                                             value={value}
@@ -114,6 +132,21 @@ const CustomThemeCreator = ({ theme, onCreate, onClose }) => {
                                             autoCorrect={false}
                                             maxLength={7}
                                         />
+                                    </View>
+                                    {/* The wheel opens under the colour it edits, so there
+                                        is never a question of which one is changing. */}
+                                    {isOpen && (
+                                        <View style={styles.wheelWrap}>
+                                            <ColorWheel
+                                                theme={theme}
+                                                color={valid ? value : DEFAULT_CUSTOM_INPUT[field.key]}
+                                                onChange={(hex) => setField(field.key, hex)}
+                                            />
+                                            <TouchableOpacity style={styles.wheelDone} onPress={() => setWheelField(null)} activeOpacity={0.7}>
+                                                <Text style={styles.wheelDoneText}>Done</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
                                     </View>
                                 );
                             })}
@@ -129,7 +162,7 @@ const CustomThemeCreator = ({ theme, onCreate, onClose }) => {
                                 disabled={!allValid}
                                 activeOpacity={0.85}
                             >
-                                <Text style={styles.saveText}>Save Theme</Text>
+                                <Text style={styles.saveText}>{editing ? 'Save Changes' : 'Save Theme'}</Text>
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
@@ -167,7 +200,25 @@ const getStyles = (theme) => StyleSheet.create({
     },
     row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
     swatch: { width: 34, height: 34, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    rowLabel: { flex: 1, fontSize: 15, fontFamily: FONTS.medium, color: theme.text },
+    rowLabelWrap: { flex: 1 },
+    rowLabel: { fontSize: 15, fontFamily: FONTS.medium, color: theme.text },
+    swatchOpen: { borderWidth: 2 },
+    wheelWrap: {
+        backgroundColor: theme.overlaySubtle,
+        borderRadius: RADIUS.m,
+        padding: SPACING.l,
+        marginBottom: SPACING.m,
+        alignItems: 'center',
+        gap: SPACING.m,
+    },
+    wheelDone: {
+        alignSelf: 'stretch',
+        alignItems: 'center',
+        paddingVertical: 10,
+        borderRadius: RADIUS.m,
+        backgroundColor: theme.overlayInput,
+    },
+    wheelDoneText: { fontSize: 15, fontFamily: FONTS.semiBold, color: theme.primary },
     hexInput: {
         width: 110, height: 40, borderRadius: RADIUS.s,
         backgroundColor: theme.overlayInput, paddingHorizontal: 12,

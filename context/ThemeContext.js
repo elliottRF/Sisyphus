@@ -153,6 +153,24 @@ export const ThemeProvider = ({ children }) => {
         return id;
     };
 
+    // Replace a custom theme's colours and name, keeping its id so it stays
+    // selected and keeps its place in the list. If it is the active theme the
+    // app has to be repainted with the new object -- `theme` is resolved once
+    // at selection time, not derived from customThemes on every render.
+    const updateCustomTheme = async (id, themeObj, name) => {
+        const existing = customThemes.find((t) => t.id === id);
+        if (!existing) return;
+        const full = { ...themeObj, id, name: name?.trim() || existing.name };
+        const next = customThemes.map((t) => (t.id === id ? full : t));
+        setCustomThemes(next);
+        if (themeID === id) setTheme(full);
+        try {
+            await AsyncStorage.setItem('user_custom_themes', JSON.stringify(next));
+        } catch (error) {
+            console.error("Failed to update custom theme:", error);
+        }
+    };
+
     const deleteCustomTheme = async (id) => {
         const next = customThemes.filter((t) => t.id !== id);
         setCustomThemes(next);
@@ -251,6 +269,7 @@ export const ThemeProvider = ({ children }) => {
             updateTheme,
             customThemes,
             addCustomTheme,
+            updateCustomTheme,
             deleteCustomTheme,
             gender,
             updateGender,

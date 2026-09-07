@@ -483,8 +483,11 @@ export const UnitSegment = ({ theme, value, onChange }) => {
 
 export const AppThemeSelector = ({ theme, themeID, onChange, compact = false, horizontal = false }) => {
   const styles = getStyles(theme);
-  const { customThemes = [], addCustomTheme, deleteCustomTheme } = useTheme();
+  const { customThemes = [], addCustomTheme, updateCustomTheme, deleteCustomTheme } = useTheme();
   const [creating, setCreating] = useState(false);
+  // The custom theme being edited, or null. A saved theme carries the four
+  // colours it was built from, so it seeds the editor directly.
+  const [editingTheme, setEditingTheme] = useState(null);
   const visibleThemes = Object.keys(THEMES);
 
   const prettyName = (key) =>
@@ -498,6 +501,22 @@ export const AppThemeSelector = ({ theme, themeID, onChange, compact = false, ho
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => deleteCustomTheme?.(item.id) },
       ]
+    );
+  };
+
+  const openThemeMenu = (item) => {
+    customAlert(
+      item.name,
+      'Edit this theme or remove it.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => confirmDelete(item) },
+        { text: 'Edit', onPress: () => setEditingTheme(item) },
+      ],
+      // Neutral icon: customAlert infers a destructive one from the presence of
+      // a destructive button, but this is a menu, not a warning. The warning
+      // belongs on the delete confirmation that follows.
+      { iconType: 'default' }
     );
   };
 
@@ -531,7 +550,7 @@ export const AppThemeSelector = ({ theme, themeID, onChange, compact = false, ho
       {visibleThemes.map((key) => renderTile(key, THEMES[key], prettyName(key)))}
 
       {customThemes.map((item) =>
-        renderTile(item.id, item, item.name, { onLongPress: () => confirmDelete(item) })
+        renderTile(item.id, item, item.name, { onLongPress: () => openThemeMenu(item) })
       )}
 
       {/* Create-theme tile */}
@@ -564,7 +583,7 @@ export const AppThemeSelector = ({ theme, themeID, onChange, compact = false, ho
       )}
 
       {customThemes.length > 0 && (
-        <Text style={styles.themeHint}>Long-press a custom theme to delete it.</Text>
+        <Text style={styles.themeHint}>Long-press a custom theme to edit or delete it.</Text>
       )}
 
       {creating && (
@@ -572,6 +591,22 @@ export const AppThemeSelector = ({ theme, themeID, onChange, compact = false, ho
           theme={theme}
           onCreate={(themeObj, name) => addCustomTheme?.(themeObj, name)}
           onClose={() => setCreating(false)}
+        />
+      )}
+
+      {editingTheme && (
+        <CustomThemeCreator
+          theme={theme}
+          editing
+          initial={{
+            primary: editingTheme.primary,
+            background: editingTheme.background,
+            surface: editingTheme.surface,
+            text: editingTheme.text,
+          }}
+          initialName={editingTheme.name}
+          onCreate={(themeObj, name) => updateCustomTheme?.(editingTheme.id, themeObj, name)}
+          onClose={() => setEditingTheme(null)}
         />
       )}
     </>
