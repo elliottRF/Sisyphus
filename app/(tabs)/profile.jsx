@@ -74,11 +74,6 @@ const Profile = () => {
     const styles = getStyles(theme);
 
     const scrollRef = useRef(null);
-    // See the note in app/(tabs)/history.jsx: a lazily mounted tab paints
-    // nothing for a frame or two after being switched to, and the rows arriving
-    // afterwards popped. They fade in instead, matching the templates page and
-    // the recents list below. Time-boxed so scrolling never animates a row.
-    const mountedAtRef = useRef(Date.now());
     useScrollToTop(scrollRef);
     const [searchQuery, setSearchQuery] = useState('');
     const [exercises, setExercises] = useState([]);
@@ -378,8 +373,15 @@ const Profile = () => {
         </LinearGradient>
     );
 
+    // One entrance for the whole screen. A tab mounts lazily, so it is switched
+    // to and then paints nothing for a frame or two; whatever appears next must
+    // arrive together. Animating only part of a screen (the list but not the
+    // header, the cards but not the activity card) makes the rest pop into an
+    // empty page, which is what this fixes. Mount-only, so returning to an
+    // already-mounted tab stays instant.
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+            <Animated.View entering={FadeIn.duration(280)} style={{ flex: 1 }}>
             <View style={styles.header}>
                 <View>
                     <Text style={styles.eyebrow}>
@@ -456,13 +458,7 @@ const Profile = () => {
                 ref={scrollRef}
                 data={sortedAndFilteredExercises}
                 keyExtractor={(item) => item.exerciseID.toString()}
-                renderItem={({ item }) => (
-                    <Animated.View
-                        entering={Date.now() - mountedAtRef.current < 900 ? FadeIn.duration(280) : undefined}
-                    >
-                        {renderExerciseRow(item)}
-                    </Animated.View>
-                )}
+                renderItem={({ item }) => renderExerciseRow(item)}
                 keyboardShouldPersistTaps="always"
                 contentContainerStyle={styles.list}
                 showsVerticalScrollIndicator={false}
@@ -535,6 +531,7 @@ const Profile = () => {
 
                 <NewExercise close={handleCloseCreateExerciseSheet} />
             </ActionSheet>
+            </Animated.View>
         </View>
     )
 }

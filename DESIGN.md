@@ -152,12 +152,22 @@ content on ITS OWN first mount and never in response to navigation.
 **A lazily mounted tab paints nothing for a frame or two after it is switched
 to** -- an empty content area above the tab bar, which reads as a black flash
 before the content pops in. The gap is native layout and draw and cannot be
-animated away; what fixes the impression is the content fading in as it
-arrives, the way the templates grid does. History's cards and the Exercises
-rows do this. **Time-box such an entrance (900ms from mount), never gate it on
-index alone**: these lists are virtualised and RN mounts the remaining cells at
-idle and again while scrolling, so an index gate has rows animating under the
-user's thumb long after the screen has settled. The 14px rise is reserved
+animated away; what fixes the impression is everything arriving together, so
+**every tab fades its WHOLE content in once on mount** (280ms), and no tab
+animates only part of itself. Animating a list but not its header, or cards but
+not the card above them, is worse than animating nothing: the un-animated parts
+snap into an empty page while the rest fades.
+
+Two things that cost real time here:
+
+- **`entering` does not run on a screen's outermost view.** react-native-screens
+  adds that view natively and Reanimated never sees it mount. Put the animation
+  on an inner wrapper inside the root container, not on the root itself. The
+  symptom is a mount animation that silently does nothing, at any duration.
+- Anything that animates per row must be **time-boxed from mount**, never gated
+  on index alone: these lists are virtualised and RN mounts the remaining cells
+  at idle and again while scrolling, so an index gate has rows animating under
+  the user's thumb long after the screen has settled. The 14px rise is reserved
 for content that is genuinely new (exercise cards landing).
 
 ---

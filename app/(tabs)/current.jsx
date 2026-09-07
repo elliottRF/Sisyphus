@@ -1315,9 +1315,13 @@ const Current = () => {
         );
     };
 
+    // One entrance for the whole screen -- see the note in history.jsx. The
+    // templates grid and the live workout's cards keep their own animations for
+    // the changes they make later; this only covers the first paint.
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+                <Animated.View entering={FadeIn.duration(280)} style={{ flex: 1 }}>
                 {!isReady ? (
                     <View style={styles.loadingContainer} />
                 ) : (
@@ -1675,6 +1679,7 @@ const Current = () => {
                         </KeyboardAvoidingView>
                     </Modal>
                 )}
+                </Animated.View>
             </View>
         </GestureHandlerRootView>
     );

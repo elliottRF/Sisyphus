@@ -434,15 +434,20 @@ const Home = () => {
         return <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]} />;
     }
 
+    // One entrance for the whole screen -- see the note in history.jsx. Home's
+    // blocks used to stagger themselves in on mount, which was the odd one out
+    // once every other tab faded as a whole. The pinned tracker cards keep
+    // their own entering/exiting for adding and removing a tracker later.
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+            <Animated.View entering={FadeIn.duration(280)} style={{ flex: 1 }}>
             <ScrollView
                 ref={scrollRef}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollViewContent}
                 keyboardShouldPersistTaps="handled"
             >
-                <Animated.View entering={FadeInDown.duration(400).delay(0).springify()} style={styles.header}>
+                <Animated.View style={styles.header}>
                     <View>
                         <Text style={styles.eyebrow}>
                             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}
@@ -458,7 +463,7 @@ const Home = () => {
 
                 {/* ── Live workout banner ───────────────────────────────────── */}
                 {workoutInProgress && workoutStartTime && (
-                    <Animated.View entering={FadeInDown.duration(400).delay(40).springify()}>
+                    <Animated.View>
                         <TouchableOpacity
                             style={styles.liveCard}
                             onPress={() => router.navigate('/current')}
@@ -487,7 +492,7 @@ const Home = () => {
                 {/* ── Review prompt (same slot as the live banner; mutually
                     exclusive — never shown during an active workout) ────────── */}
                 {showReview && !workoutInProgress && (
-                    <Animated.View entering={FadeInDown.duration(400).delay(40).springify()}>
+                    <Animated.View>
                         <TouchableOpacity style={styles.liveCard} onPress={handleRateApp} activeOpacity={0.85}>
                             <Feather name="star" size={20} color={theme.warning} />
                             <View style={{ flex: 1 }}>
@@ -512,7 +517,7 @@ const Home = () => {
                 {/* 4px below the header (→16 total, matching History/Current) when
                     it's the first card; a normal gap when a banner (live workout
                     or review prompt) sits above it. */}
-                <Animated.View entering={FadeInDown.duration(450).delay(80).springify()} style={{ marginTop: ((workoutInProgress && workoutStartTime) || showReview) ? 12 : 4 }}>
+                <Animated.View style={{ marginTop: ((workoutInProgress && workoutStartTime) || showReview) ? 12 : 4 }}>
                         <View style={styles.altBodyCard}>
                             <View style={styles.altLegendContainer}>
                                 <Text style={styles.altCardTitle}>Fatigue Status</Text>
@@ -602,17 +607,17 @@ const Home = () => {
                         />
                     </Animated.View>
 
-                <Animated.View entering={FadeInDown.duration(400).delay(240).springify()} style={styles.sectionHeader}>
+                <Animated.View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Progress Tracker</Text>
                 </Animated.View>
 
                 {showMuscleRadar && (
-                    <Animated.View layout={LinearTransition} entering={FadeInDown.duration(400).delay(300).springify()}>
+                    <Animated.View layout={LinearTransition}>
                         <MuscleRadarChart />
                     </Animated.View>
                 )}
                 {showBodyWeight && (
-                    <Animated.View layout={LinearTransition} entering={FadeInDown.duration(400).delay(320).springify()}>
+                    <Animated.View layout={LinearTransition}>
                         <BodyweightGraphCard theme={theme} />
                     </Animated.View>
                 )}
@@ -620,7 +625,7 @@ const Home = () => {
                 {pinnedExercises.map((exercise, index) => (
                     <Animated.View
                         key={exercise.exerciseID}
-                        entering={FadeInDown.duration(400).delay(340 + index * 60).springify()}
+                        entering={FadeInDown.duration(400).springify()}
                         exiting={FadeOutDown.duration(300)}
                         layout={LinearTransition}
                     >
@@ -632,7 +637,7 @@ const Home = () => {
                     </Animated.View>
                 ))}
 
-                <Animated.View layout={LinearTransition} entering={FadeInDown.duration(400).delay(400).springify()}>
+                <Animated.View layout={LinearTransition}>
                     <TouchableOpacity onPress={handleAddGraph} style={styles.addGraphButton} activeOpacity={0.6}>
                         <Feather name="plus" size={18} color={theme.primary} />
                         <Text style={styles.addGraphText}>Add Tracker</Text>
@@ -738,6 +743,7 @@ const Home = () => {
                     />
                 </View>
             </ActionSheet>
+            </Animated.View>
         </View>
     );
 };

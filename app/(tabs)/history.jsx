@@ -582,18 +582,6 @@ const History = () => {
     // that arrive while covered commit directly (frozen trees can't animate).
     const isFocusedRef = useRef(false);
 
-    // A tab mounts lazily, so there is a frame or two where this screen has
-    // been switched to but has painted nothing -- an empty content area above
-    // the tab bar, which reads as a black flash before the list pops in. The
-    // gap itself is native layout and draw and cannot be animated away, so the
-    // cards fade in as they arrive instead, the way the templates page does.
-    //
-    // Time-boxed rather than index-boxed: this list is virtualised and RN
-    // mounts the remaining cells at idle and again while scrolling, and
-    // animating those would have rows fading in under the user's thumb long
-    // after the screen had settled.
-    const mountedAtRef = useRef(Date.now());
-
     // Removal animation: sessions mid-exit, and the post-exit list to commit.
     const [exitingSessions, setExitingSessions] = useState(() => new Set());
     const pendingDataRef = useRef(null);
@@ -893,8 +881,15 @@ const History = () => {
         top: Math.min(Math.max(insets.top + 16, contextMenu.y - 20), SCREEN_HEIGHT - MENU_HEIGHT - 60),
     } : null;
 
+    // One entrance for the whole screen. A tab mounts lazily, so it is switched
+    // to and then paints nothing for a frame or two; whatever appears next must
+    // arrive together. Animating only part of a screen (the list but not the
+    // header, the cards but not the activity card) makes the rest pop into an
+    // empty page, which is what this fixes. Mount-only, so returning to an
+    // already-mounted tab stays instant.
     return (
         <View style={[styles.container, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+            <Animated.View entering={FadeIn.duration(280)} style={{ flex: 1 }}>
             <View style={styles.header}>
                 <View>
                     <Text style={styles.eyebrow}>
@@ -939,11 +934,6 @@ const History = () => {
                     </View>
                 )}
                 renderItem={({ item: [session, exercises] }) => (
-                    <Animated.View
-                        entering={Date.now() - mountedAtRef.current < 900
-                            ? FadeIn.duration(280)
-                            : undefined}
-                    >
                     <HistoryCard
                         session={session}
                         exercises={exercises}
@@ -956,7 +946,6 @@ const History = () => {
                         exiting={exitingSessions.has(session)}
                         onExitDone={handleExitDone}
                     />
-                    </Animated.View>
                 )}
                 ListEmptyComponent={
                     loading ? (
@@ -1045,6 +1034,7 @@ const History = () => {
                     </Pressable>
                 </Modal>
             )}
+            </Animated.View>
         </View>
     );
 };
