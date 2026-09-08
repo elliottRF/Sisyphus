@@ -456,6 +456,30 @@ const SetRowBody = React.memo(({
                 <View style={{ flex: 1 }} />
             )}
 
+            {/* RPE column. A tap target rather than an input: the range is ten
+                values, and a numeric keyboard between sets is slower than a
+                picker and needs validating against a range nobody can see.
+
+                Sits LEFT of the weight and reps boxes, not beside the tick.
+                On the right it was the neighbour of the one control reached
+                for after every set, and opening a modal by accident mid-
+                workout is a worse failure than any saving in travel. */}
+            {showRpe && (
+                <View style={styles.colRpe}>
+                    <TouchableOpacity
+                        style={[styles.rpeCell, set.rpe != null && styles.rpeCellSet]}
+                        onPress={() => onRpePress(index)}
+                        hitSlop={{ top: 12, bottom: 12, left: 11, right: 11 }}
+                        activeOpacity={0.6}
+                        accessibilityLabel={set.rpe != null ? `Effort ${set.rpe} of 10` : 'Record effort'}
+                    >
+                        <Text style={[styles.rpeText, set.rpe != null && styles.rpeTextSet]}>
+                            {set.rpe != null ? String(set.rpe) : '–'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* WEIGHT / DIST column */}
             <View style={styles.colKg}>
                 <ScrollableInput
@@ -488,25 +512,6 @@ const SetRowBody = React.memo(({
                     styles={styles}
                 />
             </View>
-
-            {/* RPE column. A tap target rather than an input: the range is ten
-                values, and a numeric keyboard between sets is slower than a
-                picker and needs validating against a range nobody can see. */}
-            {showRpe && (
-                <View style={styles.colRpe}>
-                    <TouchableOpacity
-                        style={[styles.rpeCell, set.rpe != null && styles.rpeCellSet]}
-                        onPress={() => onRpePress(index)}
-                        hitSlop={{ top: 12, bottom: 12, left: 4, right: 4 }}
-                        activeOpacity={0.6}
-                        accessibilityLabel={set.rpe != null ? `Effort ${set.rpe} of 10` : 'Record effort'}
-                    >
-                        <Text style={[styles.rpeText, set.rpe != null && styles.rpeTextSet]}>
-                            {set.rpe != null ? String(set.rpe) : '–'}
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-            )}
 
             {/* CHECK column */}
             {!isTemplate && (
@@ -1109,9 +1114,9 @@ const ExerciseEditable = ({
                 ) : (
                     <View style={{ flex: 1 }} />
                 )}
+                {showRpe && <Text style={[styles.columnHeader, styles.colRpe]}>RPE</Text>}
                 <Text style={[styles.columnHeader, styles.colKg]}>{isCardio ? "DIST (km)" : (isAssisted ? `ASSIST (${unitLabel(useImperial)})` : unitLabel(useImperial).toUpperCase())}</Text>
                 <Text style={[styles.columnHeader, styles.colReps]}>{isCardio ? "TIME" : "REPS"}</Text>
-                {showRpe && <Text style={[styles.columnHeader, styles.colRpe]}>RPE</Text>}
                 {!isTemplate && <View style={styles.colCheck}><Feather name="check" size={12} color={theme.textSecondary} /></View>}
             </View>
 
@@ -1303,12 +1308,18 @@ const getStyles = (theme) => {
         },
         colSet: { width: 30, alignItems: 'center', justifyContent: 'center' },
         colPrev: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-        colKg: { width: 76, marginHorizontal: 2 },
-        colReps: { width: 76, marginHorizontal: 2 },
-        colRpe: { width: 42, alignItems: 'center', justifyContent: 'center' },
+        // 64 rather than 76: the RPE column has to come out of the row's
+        // fixed width, and the alternative was taking it from the PREVIOUS
+        // column, which in PR mode holds a suggestion pill that then
+        // truncated ("82.5 x ...", and "95 x ... PR" on a PR row, which is the
+        // widest thing that column ever holds). These still hold a
+        // five-character weight such as 100.5.
+        colKg: { width: 64, marginHorizontal: 2 },
+        colReps: { width: 64, marginHorizontal: 2 },
+        colRpe: { width: 30, alignItems: 'center', justifyContent: 'center' },
         colCheck: { width: 30, alignItems: 'center' },
         rpeCell: {
-            width: 36,
+            width: 26,
             height: 32,
             borderRadius: RADIUS.s,
             alignItems: 'center',
