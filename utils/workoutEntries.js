@@ -173,7 +173,9 @@ export const buildWorkoutEntries = async ({
                     isVolumePR: isVolumePR,
                     isWeightPR: isWeightPR,
                     distance: set.distance || null,
-                    seconds: set.minutes ? Math.round(parseFloat(set.minutes) * 60) : null
+                    seconds: set.minutes ? Math.round(parseFloat(set.minutes) * 60) : null,
+                    // Optional: null whenever the lifter did not record one.
+                    rpe: Number.isFinite(set.rpe) ? set.rpe : null
                 });
 
                 setNum++;

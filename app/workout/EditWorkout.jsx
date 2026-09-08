@@ -80,6 +80,7 @@ const EditWorkout = () => {
                                 minutes: null,
                                 distance: null,
                                 setType: 'N',
+                                rpe: null,
                                 completed: false,
                             }
                         ],
@@ -319,6 +320,9 @@ const EditWorkout = () => {
                             distance: row.distance || null,
                             minutes: row.seconds ? (row.seconds / 60).toString() : null,
                             setType: row.setType || 'N',
+                            // Rows written before RPE existed have none; the
+                            // column reads null and the cell shows a dash.
+                            rpe: row.rpe ?? null,
                             completed: true,
                         });
                     });

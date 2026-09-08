@@ -20,8 +20,9 @@ let lastLivenessProbe = 0;
 // A database whose stamp equals this skips the whole setup on launch (see the
 // fast path in setupDatabase), so BUMP THIS on any schema change -- a new
 // column, table or index -- or existing installs will never receive it.
-// History: 1 = exercise catalogue reconciled; 2 = full schema verified.
-const DB_SETUP_VERSION = 2;
+// History: 1 = exercise catalogue reconciled; 2 = full schema verified;
+// 3 = per-set RPE.
+const DB_SETUP_VERSION = 3;
 
 const getDb = async () => {
   // Cache the PROMISE, not the instance: concurrent first callers previously
@@ -259,6 +260,7 @@ export const setupDatabase = async () => {
         isWeightPR INTEGER DEFAULT 0,
         distance FLOAT,
         seconds INTEGER,
+        rpe REAL,
         FOREIGN KEY (exerciseID) REFERENCES exercises(exerciseID)
       );
     `);
@@ -285,6 +287,7 @@ export const setupDatabase = async () => {
     await ensureColumnExists('exercises', 'isAssisted', 'INTEGER DEFAULT 0');
     await ensureColumnExists('workoutHistory', 'distance', 'FLOAT');
     await ensureColumnExists('workoutHistory', 'seconds', 'INTEGER');
+    await ensureColumnExists('workoutHistory', 'rpe', 'REAL');
     await ensureColumnExists('exercises', 'strengthRatios', 'TEXT');
     await ensureColumnExists('exercises', 'userCustomised', 'INTEGER DEFAULT 0');
 
@@ -582,8 +585,8 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
     for (const entry of workoutEntries) {
       await database.runAsync(
         `INSERT INTO workoutHistory 
-        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR, distance, seconds) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR, distance, seconds, rpe) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           entry.workoutSession,
           entry.exerciseNum,
@@ -602,7 +605,8 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
           entry.isVolumePR || 0,
           entry.isWeightPR || 0,
           entry.distance || null,
-          entry.seconds || null
+          entry.seconds || null,
+          entry.rpe ?? null
         ]
       );
     }
@@ -663,8 +667,8 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
       for (const entry of workoutEntries) {
         await database.runAsync(
           `INSERT INTO workoutHistory 
-           (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR, distance, seconds) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+           (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR, distance, seconds, rpe) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
           [
             sessionNumber,
             entry.exerciseNum,
@@ -683,7 +687,8 @@ export const overwriteWorkoutSession = async (sessionNumber, workoutEntries, wor
             entry.isVolumePR || 0,
             entry.isWeightPR || 0,
             entry.distance || null,
-            entry.seconds || null
+            entry.seconds || null,
+            entry.rpe ?? null
           ]
         );
         setsOverwritten++;
@@ -1518,6 +1523,13 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               workoutTitle,
               durationMinutes,
               setType,
+              // Strong's CSVs carry this column too, and our own export writes
+              // it, so a round trip keeps what was recorded. Anything outside
+              // 1-10 (or a blank cell) is treated as not recorded.
+              rpe: (() => {
+                const raw = parseFloat(row['RPE']);
+                return Number.isFinite(raw) && raw >= 1 && raw <= 10 ? raw : null;
+              })(),
               distance: distanceKm > 0 ? distanceKm : null,
               seconds: cardiosSeconds > 0 ? cardiosSeconds : null,
               isCardio: isCardioSet,
@@ -1694,8 +1706,8 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
                   await database.runAsync(
                     `INSERT INTO workoutHistory 
-                    (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR, distance, seconds) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                    (workoutSession, exerciseNum, setNum, exerciseID, weight, reps, oneRM, time, name, pr, duration, setType, notes, is1rmPR, isVolumePR, isWeightPR, distance, seconds, rpe) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
                     [
                       workoutSession,
                       exerciseNumInSession,
@@ -1714,7 +1726,8 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                       isThisSetVolumePR,
                       isThisSetWeightPR,
                       set.distance,
-                      set.seconds
+                      set.seconds,
+                      set.rpe ?? null
                     ]
                   );
 
@@ -1767,7 +1780,8 @@ export const exportWorkoutData = async () => {
         wh.seconds as Seconds,
         wh.duration as Duration,
         wh.notes as Notes,
-        wh.setType as SetType
+        wh.setType as SetType,
+        wh.rpe as RPE
       FROM workoutHistory wh
       JOIN exercises e ON wh.exerciseID = e.exerciseID
       ORDER BY wh.time ASC, wh.exerciseNum ASC, wh.setNum ASC;
@@ -1788,7 +1802,8 @@ export const exportWorkoutData = async () => {
         'Distance (km)': row.Distance,
         'Duration (sec)': (row.Duration || 0) * 60,
         'Seconds': row.Seconds,
-        'Notes': row.Notes
+        'Notes': row.Notes,
+        'RPE': row.RPE ?? ''
       };
     });
 

@@ -153,6 +153,7 @@ const Settings = () => {
         recoveryRate, updateRecoveryRate,
         repRangePreset, repRangeMin, repRangeMax, updateRepRange,
         useImperial, updateUnitPref,
+        trackRPE, updateTrackRPE,
     } = useTheme();
 
     const styles = useMemo(() => getStyles(theme), [theme]);
@@ -458,6 +459,13 @@ const Settings = () => {
                 <View style={styles.cardGroup}>
                     <SettingsRow theme={theme} styles={styles} title="Use Pounds (lbs)" iconNode={<MaterialCommunityIcons name="weight" size={20} color={theme.primary} />}>
                         {isReady ? <AnimatedSwitch value={useImperial} onValueChange={updateUnitPref} activeColor={theme.primary} inactiveColor={theme.overlayInputFocused} thumbColor={theme.surface} /> : <ActivityIndicator size="small" color={theme.primary} />}
+                    </SettingsRow>
+                    <SettingsRow
+                        theme={theme} styles={styles} title="Track RPE"
+                        description="A 1-10 effort column on every set"
+                        iconNode={<MaterialCommunityIcons name="speedometer" size={20} color={theme.primary} />}
+                    >
+                        {isReady ? <AnimatedSwitch value={trackRPE} onValueChange={updateTrackRPE} activeColor={theme.primary} inactiveColor={theme.overlayInputFocused} thumbColor={theme.surface} /> : <ActivityIndicator size="small" color={theme.primary} />}
                     </SettingsRow>
                     <ExpandableRow
                         theme={theme} styles={styles} title="Target Rep Range" value={localRepMin + '-' + localRepMax + ' reps'}

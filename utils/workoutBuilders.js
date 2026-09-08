@@ -28,6 +28,10 @@ export const buildWorkoutDataFromSession = (rows) => {
                 distance: set.distance != null ? String(set.distance) : null,
                 minutes: set.seconds ? String(Math.round(set.seconds / 60)) : null,
                 setType: set.setType || 'N',
+                // rpe is deliberately not carried. This rebuilds a session
+                // as a NEW workout (Repeat) or as a template, and how hard a
+                // set felt last time is not part of the plan.
+                rpe: null,
                 completed: false,
             })),
         }],

@@ -281,6 +281,15 @@ const HistorySessionCard = React.memo(({ session, exercises, theme, styles, form
                                                 )}
                                             </Text>
 
+                                            {/* Only when it was recorded, so sets from
+                                                before RPE existed look exactly as they
+                                                did. */}
+                                            {set.rpe != null && (
+                                                <View style={styles.rpePill}>
+                                                    <Text style={styles.rpePillText}>RPE {set.rpe}</Text>
+                                                </View>
+                                            )}
+
                                             {!isAssisted && (
                                                 <Text style={styles.setOneRM}>
                                                     {isCardio ? (
@@ -1314,6 +1323,19 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 13,
         fontFamily: FONTS.semiBold,
         color: theme.textSecondary,
+    },
+    rpePill: {
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 100,
+        backgroundColor: theme.overlayInput,
+        marginRight: 4,
+    },
+    rpePillText: {
+        fontSize: 11,
+        fontFamily: FONTS.semiBold,
+        color: theme.textSecondary,
+        letterSpacing: 0.3,
     },
     emptyContainer: {
         padding: 40,

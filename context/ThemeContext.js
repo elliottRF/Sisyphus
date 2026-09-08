@@ -13,6 +13,10 @@ export const ThemeProvider = ({ children }) => {
     const [themeID, setThemeID] = useState('DEFAULT');
     const [theme, setTheme] = useState(THEMES.DEFAULT);
     const [customThemes, setCustomThemes] = useState([]);
+    // Whether the RPE column shows in a live workout. The data is always
+    // stored when present; this only governs whether the column is offered,
+    // because it is a sixth column on a row used one-handed between sets.
+    const [trackRPE, setTrackRPE] = useState(true);
 
     const [gender, setGender] = useState('male');
     const [accessoryWeight, setAccessoryWeight] = useState(0.5);
@@ -43,6 +47,7 @@ export const ThemeProvider = ({ children }) => {
                 storedWorkoutStartTime,
                 storedCustomThemes,
                 storedCurrentWorkout,
+                storedTrackRPE,
             ] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
@@ -55,6 +60,7 @@ export const ThemeProvider = ({ children }) => {
                 AsyncStorage.getItem('@workoutStartTime'),
                 AsyncStorage.getItem('user_custom_themes'),
                 AsyncStorage.getItem('@currentWorkout'),
+                AsyncStorage.getItem(SETTINGS_KEYS.trackRPE),
             ]);
 
             // Custom themes are stored as full theme objects (each with an id).
@@ -100,6 +106,11 @@ export const ThemeProvider = ({ children }) => {
             }
             if (storedWorkoutStartTime) {
                 setWorkoutStartTime(storedWorkoutStartTime);
+            }
+            // Absent means never set, which is on: the feature is new and
+            // meant to be visible. Only an explicit 'false' hides it.
+            if (storedTrackRPE !== null) {
+                setTrackRPE(storedTrackRPE === 'true');
             }
             // The Train tab owns this flag while it is mounted (same rule:
             // exercises present OR a start time), but tabs now mount lazily,
@@ -249,6 +260,15 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updateTrackRPE = async (enabled) => {
+        setTrackRPE(enabled);
+        try {
+            await AsyncStorage.setItem(SETTINGS_KEYS.trackRPE, enabled.toString());
+        } catch (error) {
+            console.error("Failed to save RPE preference:", error);
+        }
+    };
+
     const updateWorkoutStartTime = async (time) => {
         setWorkoutStartTime(time);
         try {
@@ -267,6 +287,8 @@ export const ThemeProvider = ({ children }) => {
             theme,
             themeID,
             updateTheme,
+            trackRPE,
+            updateTrackRPE,
             customThemes,
             addCustomTheme,
             updateCustomTheme,

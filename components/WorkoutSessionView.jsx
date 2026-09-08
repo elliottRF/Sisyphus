@@ -444,6 +444,14 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                                                 `${isAssisted && set.weight > 0 ? '-' : ''}${formatWeight(set.weight, useImperial)} ${unitLabel(useImperial)} × ${set.reps}`
                                                             )}
                                                         </Text>
+                                                        {/* Only when it was recorded. Sets logged before
+                                                            RPE existed, and any left blank, simply have no
+                                                            pill -- nothing shifts for them. */}
+                                                        {set.rpe != null && (
+                                                            <View style={styles.rpePill}>
+                                                                <Text style={styles.rpePillText}>RPE {set.rpe}</Text>
+                                                            </View>
+                                                        )}
                                                         {!isAssisted && (
                                                             <Text style={styles.setOneRM}>
                                                                 {exerciseDetails?.isCardio ? (
@@ -679,6 +687,20 @@ const getStyles = (theme) => {
             fontFamily: FONTS.medium,
             color: theme.textSecondary,
         },
+        rpePill: {
+            paddingHorizontal: 7,
+            paddingVertical: 2,
+            borderRadius: 100,
+            backgroundColor: theme.overlayInput,
+            marginRight: 4,
+        },
+        rpePillText: {
+            fontSize: 11,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
+            letterSpacing: 0.3,
+        },
+
     });
 };
 

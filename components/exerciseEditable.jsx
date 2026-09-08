@@ -14,7 +14,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { FONTS, getThemedShadow, isLightTheme, isLightColor, withAlpha } from '../constants/theme'
+import { FONTS, RADIUS, getThemedShadow, isLightTheme, isLightColor, withAlpha } from '../constants/theme'
 import { Feather, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchLastWorkoutSets, fetchLifetimePRs } from './db';
 import { useTheme } from '../context/ThemeContext';
@@ -27,6 +27,7 @@ import {
 } from './suggestions';
 import { on, AppEvents } from '../utils/events';
 import CustomAlert from './CustomAlert';
+import RpePicker from './RpePicker';
 import Expandable from './Expandable';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -281,6 +282,7 @@ const SetRowBody = React.memo(({
     onToggleSetType, onToggleSetComplete,
     onWeightChange, onRepsChange,
     onDistanceChange, onMinutesChange,
+    showRpe, onRpePress,
     fillAllToken,
 }) => {
     const fillFlash = useSharedValue(0);
@@ -487,6 +489,25 @@ const SetRowBody = React.memo(({
                 />
             </View>
 
+            {/* RPE column. A tap target rather than an input: the range is ten
+                values, and a numeric keyboard between sets is slower than a
+                picker and needs validating against a range nobody can see. */}
+            {showRpe && (
+                <View style={styles.colRpe}>
+                    <TouchableOpacity
+                        style={[styles.rpeCell, set.rpe != null && styles.rpeCellSet]}
+                        onPress={() => onRpePress(index)}
+                        hitSlop={{ top: 12, bottom: 12, left: 4, right: 4 }}
+                        activeOpacity={0.6}
+                        accessibilityLabel={set.rpe != null ? `Effort ${set.rpe} of 10` : 'Record effort'}
+                    >
+                        <Text style={[styles.rpeText, set.rpe != null && styles.rpeTextSet]}>
+                            {set.rpe != null ? String(set.rpe) : '–'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* CHECK column */}
             {!isTemplate && (
                 <View style={styles.colCheck}>
@@ -527,7 +548,7 @@ const ExerciseEditable = ({
     onReorderEnd,
     reorderFingerY
 }) => {
-    const { theme, useImperial, repRangeMin, repRangeMax } = useTheme();
+    const { theme, useImperial, repRangeMin, repRangeMax, trackRPE } = useTheme();
     const styles = useMemo(() => getStyles(theme), [theme]);
     // The parent's callback is keyed by id/name rather than closing over this
     // card, so wrap it here instead of passing an inline arrow to Pressable.
@@ -626,6 +647,17 @@ const ExerciseEditable = ({
         const sanitized = sanitizeInteger(text);
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, reps: sanitized } : s) } : e) } : w));
     }, [updateCurrentWorkout, workoutID, exerciseId]);
+    // The RPE column is off in a template (effort is a record, not a plan) and
+    // can be hidden entirely in settings -- it is a sixth column on a row used
+    // one-handed between sets, and not everyone tracks it.
+    const showRpe = trackRPE && !isTemplate;
+
+    // Which set's picker is open, by index; null when none is.
+    const [rpeFor, setRpeFor] = useState(null);
+    const setRpe = useCallback((setIndex, value) => {
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, rpe: value } : s) } : e) } : w));
+    }, [updateCurrentWorkout, workoutID, exerciseId]);
+
     const handleDistanceChange = useCallback((text, setIndex) => {
         const sanitized = sanitizeDecimal(text);
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, distance: sanitized } : s) } : e) } : w));
@@ -663,7 +695,7 @@ const ExerciseEditable = ({
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, notes: text } : e) } : w));
     };
     const addNewSet = () => {
-        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: [...e.sets, { id: Date.now().toString() + Math.random().toString(36).substr(2, 9), weight: null, reps: null, distance: null, minutes: null, completed: false, setType: 'N' }] } : e) } : w));
+        updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? { ...e, sets: [...e.sets, { id: Date.now().toString() + Math.random().toString(36).substr(2, 9), weight: null, reps: null, distance: null, minutes: null, completed: false, setType: 'N', rpe: null }] } : e) } : w));
     };
     const deleteSet = (setId, fallbackIndex) => {
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exercise.id ? {
@@ -1079,6 +1111,7 @@ const ExerciseEditable = ({
                 )}
                 <Text style={[styles.columnHeader, styles.colKg]}>{isCardio ? "DIST (km)" : (isAssisted ? `ASSIST (${unitLabel(useImperial)})` : unitLabel(useImperial).toUpperCase())}</Text>
                 <Text style={[styles.columnHeader, styles.colReps]}>{isCardio ? "TIME" : "REPS"}</Text>
+                {showRpe && <Text style={[styles.columnHeader, styles.colRpe]}>RPE</Text>}
                 {!isTemplate && <View style={styles.colCheck}><Feather name="check" size={12} color={theme.textSecondary} /></View>}
             </View>
 
@@ -1132,6 +1165,8 @@ const ExerciseEditable = ({
                                     onRepsChange={handleRepsChange}
                                     onDistanceChange={handleDistanceChange}
                                     onMinutesChange={handleMinutesChange}
+                                    showRpe={showRpe}
+                                    onRpePress={setRpeFor}
                                     fillAllToken={fillAllToken}
                                 />
                             </SwipeableSetRow>
@@ -1147,6 +1182,16 @@ const ExerciseEditable = ({
                     <Text style={styles.addSetText}>+ ADD SET</Text>
                 </TouchableOpacity>
             </View>
+
+            <RpePicker
+                theme={theme}
+                visible={rpeFor !== null}
+                value={rpeFor !== null ? exercise.sets[rpeFor]?.rpe ?? null : null}
+                setLabel={rpeFor !== null ? rowMeta[rpeFor]?.displayNumber : null}
+                onSelect={(n) => { setRpe(rpeFor, n); setRpeFor(null); }}
+                onClear={() => { setRpe(rpeFor, null); setRpeFor(null); }}
+                onClose={() => setRpeFor(null)}
+            />
 
             <CustomAlert
                 visible={showDeleteAlert}
@@ -1260,7 +1305,19 @@ const getStyles = (theme) => {
         colPrev: { flex: 1, alignItems: 'center', justifyContent: 'center' },
         colKg: { width: 76, marginHorizontal: 2 },
         colReps: { width: 76, marginHorizontal: 2 },
+        colRpe: { width: 42, alignItems: 'center', justifyContent: 'center' },
         colCheck: { width: 30, alignItems: 'center' },
+        rpeCell: {
+            width: 36,
+            height: 32,
+            borderRadius: RADIUS.s,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.overlayInput,
+        },
+        rpeCellSet: { backgroundColor: withAlpha(safePrimary, lightTheme ? 0.14 : 0.20) },
+        rpeText: { fontSize: 14, fontFamily: FONTS.semiBold, color: theme.textSecondary },
+        rpeTextSet: { color: safePrimary, fontFamily: FONTS.bold },
 
         setsContainer: {
             backgroundColor: theme.surface,
