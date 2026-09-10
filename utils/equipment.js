@@ -53,6 +53,37 @@ export const defaultGym = (useImperial = false) => (useImperial
         ladder: { min: 2.5, max: 40, step: 2.5 },
     });
 
+/**
+ * Whether a gym profile is still exactly the default for a given unit --
+ * i.e. nobody has touched it.
+ *
+ * Used when the user switches between kilos and pounds. The profile is
+ * seeded at first launch from whatever unit is set then, which for a new
+ * install is kilos before they have said otherwise; converting those
+ * defaults gives a pound user a plate rack reading 55.12, 44.09, 33.07 --
+ * arithmetically right and nobody's actual gym.
+ */
+export const isDefaultGym = (gym, useImperial) => {
+    if (!gym) return false;
+    const d = defaultGym(useImperial);
+    const near = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 1e-4;
+
+    if (!near(num(gym.bar), d.bar)) return false;
+
+    const plates = plateList(gym.plates) || [];
+    if (plates.length !== d.plates.length) return false;
+    for (let i = 0; i < plates.length; i++) {
+        if (!near(plates[i].w, d.plates[i].w)) return false;
+        if (plates[i].count !== d.plates[i].count) return false;
+    }
+
+    const l = gym.ladder;
+    if (!l) return false;
+    return near(num(l.min), d.ladder.min)
+        && near(num(l.max), d.ladder.max)
+        && near(num(l.step), d.ladder.step);
+};
+
 // ── Parsing ─────────────────────────────────────────────────────────────────
 
 const num = (v) => {

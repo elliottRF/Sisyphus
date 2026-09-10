@@ -6,7 +6,7 @@ import {
     DEFAULT_REP_RANGE_PRESET,
     SETTINGS_KEYS
 } from '../constants/preferences';
-import { defaultGym } from '../utils/equipment';
+import { defaultGym, isDefaultGym } from '../utils/equipment';
 
 const ThemeContext = createContext();
 
@@ -271,6 +271,19 @@ export const ThemeProvider = ({ children }) => {
 
     const updateUnitPref = async (imperial) => {
         setUseImperial(imperial);
+
+        // A gym profile still identical to the default for the OLD unit was
+        // never a choice -- it was seeded at first launch, before the user
+        // had said which unit they think in. Re-seed it, or switching to
+        // pounds leaves them with a rack of 55.12 / 44.09 / 33.07 lb plates:
+        // correct conversions of kilo plates, and nobody's actual gym.
+        //
+        // A profile they have edited is theirs and is left exactly alone.
+        // Kilo plates stay kilo plates however the app chooses to show them.
+        if (isDefaultGym(gymEquipment, !imperial)) {
+            await updateGymEquipment(defaultGym(imperial));
+        }
+
         try {
             await AsyncStorage.setItem('user_unit_imperial', imperial.toString());
         } catch (error) {
