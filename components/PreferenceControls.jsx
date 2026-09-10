@@ -101,9 +101,87 @@ export const RepRangeSelector = ({
   const rangeSize = REP_RANGE_MAX - REP_RANGE_MIN;
   const valueToPercent = (repValue) => ((repValue - REP_RANGE_MIN) / rangeSize) * 100;
 
+  const choosePreset = (preset) => {
+    const bounds = REP_PRESET_BOUNDS[preset.key];
+    onPresetChange?.(preset.key);
+    onRangeChange({ min: bounds.min, max: bounds.max, preset: preset.key });
+    onRangeChangeComplete?.();
+  };
+
+  // Compact lays the three presets across one row and strips the custom card
+  // down to its label, badge and track. Settings reveals this inside a row
+  // that pushes the whole page down, so the full-size version -- three stacked
+  // cards over a titled panel -- took most of the screen to say very little.
+  if (compact) {
+    return (
+      <View style={styles.repRangeShellCompact}>
+        <View style={styles.repRowCompact}>
+          {REP_RANGE_PRESETS.map((preset) => {
+            const active = value === preset.key;
+            return (
+              <TouchableOpacity
+                key={preset.key}
+                activeOpacity={0.85}
+                style={[
+                  styles.repChip,
+                  active && { backgroundColor: theme.primary, borderColor: theme.primary },
+                ]}
+                onPress={() => choosePreset(preset)}
+                accessibilityLabel={`${preset.title}, ${preset.range}`}
+              >
+                <Text style={[styles.repChipTitle, active && { color: theme.textAlternate }]}>
+                  {preset.title}
+                </Text>
+                <Text style={[styles.repChipRange, active && { color: theme.textAlternate }]}>
+                  {REP_PRESET_BOUNDS[preset.key].min}–{REP_PRESET_BOUNDS[preset.key].max}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={styles.customRowCompact}>
+          <Text style={[styles.customLabelCompact, value === 'custom' && { color: theme.primary }]}>
+            Custom
+          </Text>
+          <View
+            style={styles.rangeTrackCompact}
+            onLayout={(e) => { trackWidthRef.current = e.nativeEvent.layout.width; }}
+            {...rangePanResponder.panHandlers}
+          >
+            <View style={styles.rangeTrackBase} />
+            <View
+              style={[
+                styles.rangeTrackFill,
+                {
+                  left: `${valueToPercent(min)}%`,
+                  width: `${valueToPercent(max) - valueToPercent(min)}%`,
+                  backgroundColor: theme.primary,
+                },
+              ]}
+            />
+            <View
+              style={[
+                styles.rangeThumb,
+                { left: `${valueToPercent(min)}%`, borderColor: theme.primary, backgroundColor: theme.surface },
+              ]}
+            />
+            <View
+              style={[
+                styles.rangeThumb,
+                { left: `${valueToPercent(max)}%`, borderColor: theme.primary, backgroundColor: theme.surface },
+              ]}
+            />
+          </View>
+          <Text style={styles.customValueCompact}>{min}–{max}</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.repRangeShell}>
-      <View style={[styles.repRangeGrid, compact && styles.repRangeGridCompact]}>
+      <View style={styles.repRangeGrid}>
         {REP_RANGE_PRESETS.map((preset) => {
           const active = value === preset.key;
           return (
@@ -112,24 +190,21 @@ export const RepRangeSelector = ({
               activeOpacity={0.85}
               style={[
                 styles.repCard,
-                compact && styles.repCardCompact,
                 active && { backgroundColor: theme.primary, borderColor: theme.primary },
               ]}
-              onPress={() => {
-                const bounds = REP_PRESET_BOUNDS[preset.key];
-                onPresetChange?.(preset.key);
-                onRangeChange({ min: bounds.min, max: bounds.max, preset: preset.key });
-                onRangeChangeComplete?.();
-              }}
+              onPress={() => choosePreset(preset)}
             >
               <View style={styles.repHeader}>
-                <Text style={[styles.repTitle, active && { color: theme.surface }]}>
+                <Text style={[styles.repTitle, active && { color: theme.textAlternate }]}>
                   {preset.title}
                 </Text>
-                {active && <Feather name="check" size={16} color={theme.surface} />}
+                {active && <Feather name="check" size={16} color={theme.textAlternate} />}
               </View>
-              <Text style={[styles.repRange, active && { color: theme.surface }]}>
+              <Text style={[styles.repRange, active && { color: theme.textAlternate }]}>
                 {preset.range}
+              </Text>
+              <Text style={[styles.repDescription, active && { color: theme.textAlternate }]}>
+                {preset.description}
               </Text>
             </TouchableOpacity>
           );
@@ -155,7 +230,7 @@ export const RepRangeSelector = ({
             <Text
               style={[
                 styles.customBadgeText,
-                value === 'custom' ? { color: theme.surface } : null,
+                value === 'custom' ? { color: theme.textAlternate } : null,
               ]}
             >
               {min}–{max}
@@ -297,7 +372,7 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange, onSlidingComplet
                 onSlidingComplete?.(preset);
               }}
             >
-              <Text style={[styles.weightOptionText, active && { color: theme.surface }]}>
+              <Text style={[styles.weightOptionText, active && { color: theme.textAlternate }]}>
                 {preset}
               </Text>
             </TouchableOpacity>
@@ -402,7 +477,7 @@ export const RecoveryRateSlider = ({ theme, value, onChange, onSlidingComplete }
                 onSlidingComplete?.(preset);
               }}
             >
-              <Text style={[styles.weightOptionText, active && { color: theme.surface }]}>
+              <Text style={[styles.weightOptionText, active && { color: theme.textAlternate }]}>
                 {preset}×
               </Text>
             </TouchableOpacity>
@@ -461,8 +536,8 @@ export const GenderSegment = ({ theme, value, onChange }) => {
             onPress={() => onChange(gender)}
             activeOpacity={0.85}
           >
-            <Feather name="user" size={18} color={active ? theme.surface : theme.text} />
-            <Text style={[styles.genderText, active && { color: theme.surface }]}>
+            <Feather name="user" size={18} color={active ? theme.textAlternate : theme.text} />
+            <Text style={[styles.genderText, active && { color: theme.textAlternate }]}>
               {gender.charAt(0).toUpperCase() + gender.slice(1)}
             </Text>
           </TouchableOpacity>
@@ -496,7 +571,7 @@ export const UnitSegment = ({ theme, value, onChange }) => {
             onPress={() => onChange(opt.imperial)}
             activeOpacity={0.85}
           >
-            <Text style={[styles.genderText, active && { color: theme.surface }]}>
+            <Text style={[styles.genderText, active && { color: theme.textAlternate }]}>
               {opt.label} ({opt.short})
             </Text>
           </TouchableOpacity>
@@ -650,7 +725,6 @@ const getStyles = (theme) =>
   StyleSheet.create({
     repRangeShell: { gap: 14 },
     repRangeGrid: { gap: 12 },
-    repRangeGridCompact: { gap: 10 },
     repCard: {
       borderRadius: 18,
       borderWidth: 1,
@@ -659,7 +733,38 @@ const getStyles = (theme) =>
       padding: 16,
       gap: 6,
     },
-    repCardCompact: { padding: 14 },
+
+    // Compact: one row of three, then a single slider line.
+    repRangeShellCompact: { gap: 10 },
+    repRowCompact: { flexDirection: 'row', gap: 8 },
+    repChip: {
+      flex: 1,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.background,
+      paddingVertical: 8,
+      alignItems: 'center',
+      gap: 1,
+    },
+    repChipTitle: { fontSize: 13, fontFamily: FONTS.semiBold, color: theme.text },
+    repChipRange: { fontSize: 12, fontFamily: FONTS.bold, color: theme.primary },
+    customRowCompact: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    customLabelCompact: {
+      fontSize: 12,
+      fontFamily: FONTS.semiBold,
+      color: theme.textSecondary,
+    },
+    // Same 36pt touch height as the full-size track, so dragging is no fiddlier
+    // for being in a smaller control.
+    rangeTrackCompact: { flex: 1, height: 36, justifyContent: 'center', position: 'relative' },
+    customValueCompact: {
+      fontSize: 13,
+      fontFamily: FONTS.bold,
+      color: theme.text,
+      minWidth: 38,
+      textAlign: 'right',
+    },
     repHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     repTitle: { fontSize: 16, fontFamily: FONTS.semiBold, color: theme.text },
     repRange: { fontSize: 14, fontFamily: FONTS.bold, color: theme.primary },

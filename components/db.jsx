@@ -556,6 +556,93 @@ export const updateExerciseEquipment = async (exerciseID, json) => {
   await fetchExercises().catch(() => {});
 };
 
+// ─── Deleting an exercise ────────────────────────────────────────────────────
+//
+// Two rules, both enforced here rather than only in the UI.
+//
+// 1. Built-ins (exerciseID < 1000) are ours and are re-seeded from the
+//    catalogue on every launch, so deleting one would only bring it back next
+//    time -- with its PRs and pins gone.
+//
+// 2. An exercise that has been trained, or that a template still names, stays.
+//    workoutHistory.exerciseID is a foreign key into this table and templates
+//    hold exerciseIDs inside their JSON, so removing the row would orphan
+//    logged sets and leave a template pointing at nothing. Losing a set the
+//    user actually did is worse than keeping an exercise they no longer want.
+//
+// The UI asks for the usage first and says WHY the option is off, rather than
+// offering a delete that then refuses.
+export const EXERCISE_ID_USER_MIN = 1000;
+
+export const getExerciseUsage = async (exerciseID) => {
+  const database = await getDb();
+  const id = parseInt(exerciseID, 10);
+  const isBuiltIn = !Number.isFinite(id) || id < EXERCISE_ID_USER_MIN;
+
+  const counts = await database.getFirstAsync(
+    `SELECT COUNT(*) AS sets, COUNT(DISTINCT workoutSession) AS sessions
+       FROM workoutHistory WHERE exerciseID = ?;`,
+    [id]
+  );
+
+  // Templates keep exercises inside a JSON blob, so this is a scan rather than
+  // a join. There are only ever a handful of them.
+  const rows = await database.getAllAsync('SELECT name, data FROM workoutTemplates;');
+  const templates = [];
+  for (const row of rows) {
+    let used = false;
+    try {
+      const groups = JSON.parse(row.data);
+      if (Array.isArray(groups)) {
+        used = groups.some((g) =>
+          (g?.exercises ?? []).some((ex) => parseInt(ex?.exerciseID, 10) === id)
+        );
+      }
+    } catch (e) {
+      // A template we cannot read is one we cannot rule out, and quietly
+      // ignoring it would let a delete strand it. Count it as a blocker and
+      // let the user see which one.
+      console.warn(`[delete] template "${row.name}" is unreadable:`, e);
+      used = true;
+    }
+    if (used) templates.push(row.name);
+  }
+
+  const sets = counts?.sets ?? 0;
+  const sessions = counts?.sessions ?? 0;
+  return {
+    isBuiltIn,
+    sets,
+    sessions,
+    templates,
+    canDelete: !isBuiltIn && sets === 0 && templates.length === 0,
+  };
+};
+
+export const deleteExercise = async (exerciseID) => {
+  const usage = await getExerciseUsage(exerciseID);
+  if (!usage.canDelete) {
+    // Belt and braces: the screen disables the control, but nothing else may
+    // reach this and drop a row that history points at.
+    throw new Error(
+      usage.isBuiltIn
+        ? 'Built-in exercises cannot be deleted.'
+        : 'This exercise is still in use.'
+    );
+  }
+
+  const database = await getDb();
+  const id = parseInt(exerciseID, 10);
+  await database.runAsync('DELETE FROM pinnedExercises WHERE exerciseID = ?;', [id]);
+  await database.runAsync('DELETE FROM exercises WHERE exerciseID = ?;', [id]);
+
+  await invalidateExerciseSnapshot(id);
+  // Screens seed their first paint from this cache, so a stale copy would keep
+  // the exercise on the shelf until the next cold start.
+  await fetchExercises().catch(() => {});
+  return true;
+};
+
 // The name the first split is created with. Exported so the Train tab can tell
 // an untouched default apart from a split the user has actually named.
 export const DEFAULT_SPLIT_NAME = 'My Templates';

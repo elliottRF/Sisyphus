@@ -11,7 +11,7 @@ import * as haptics from '../../utils/haptics';
 import NewExercise from "../../components/NewExercise"
 
 import Feather from '@expo/vector-icons/Feather';
-import { FONTS, RADIUS } from '../../constants/theme';
+import { FONTS, RADIUS, withAlpha } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
@@ -23,6 +23,16 @@ import { AppEvents, on, off } from '../../utils/events';
 import Fuse from 'fuse.js';
 
 // ─── Muscle group filter chips ────────────────────────────────────────────────
+// An import creates an exercise for every name it does not recognise, and it
+// has no muscles to give them. Those exercises then count towards nothing --
+// no readiness, no muscle balance, no volume -- and they match no filter, so
+// there was no way to find them. This chip appears only while some exist.
+export const NEEDS_MUSCLES = 'Needs Muscles';
+const NEEDS_MUSCLES_GROUP = { label: NEEDS_MUSCLES, needsMuscles: true };
+
+const needsMuscles = (exercise) =>
+    !exercise.isCardio && !(exercise.targetMuscle || '').trim();
+
 const MUSCLE_GROUPS = [
     { label: 'All' },
     { label: 'Chest', slugs: ['chest'] },
@@ -43,6 +53,7 @@ const exerciseSlugs = (exercise) =>
 
 const matchesGroup = (exercise, group) => {
     if (!group || group.label === 'All') return true;
+    if (group.needsMuscles) return needsMuscles(exercise);
     if (group.cardio) return !!exercise.isCardio;
     const slugs = exerciseSlugs(exercise);
     return slugs.some(s => group.slugs.includes(s));
@@ -195,8 +206,27 @@ const Profile = () => {
         });
     }, [exercises]);
 
+    const needsMusclesCount = useMemo(
+        () => exercises.reduce((n, ex) => n + (needsMuscles(ex) ? 1 : 0), 0),
+        [exercises],
+    );
+
+    // Second in the row: after All, ahead of the muscle groups, because it is
+    // a job to finish rather than another way to browse.
+    const chipGroups = useMemo(() => (
+        needsMusclesCount > 0
+            ? [MUSCLE_GROUPS[0], NEEDS_MUSCLES_GROUP, ...MUSCLE_GROUPS.slice(1)]
+            : MUSCLE_GROUPS
+    ), [needsMusclesCount]);
+
+    // Fixing the last one takes the chip away underneath the user, which would
+    // otherwise leave them on a filter that no longer exists showing nothing.
+    useEffect(() => {
+        if (activeGroup === NEEDS_MUSCLES && needsMusclesCount === 0) setActiveGroup('All');
+    }, [activeGroup, needsMusclesCount]);
+
     const sortedAndFilteredExercises = useMemo(() => {
-        const group = MUSCLE_GROUPS.find(g => g.label === activeGroup);
+        const group = chipGroups.find(g => g.label === activeGroup);
         const inGroup = (ex) => matchesGroup(ex, group);
 
         if (!searchQuery.trim()) {
@@ -221,7 +251,7 @@ const Profile = () => {
                 return countB - countA;
             })
             .map(r => r.item);
-    }, [searchQuery, exercises, workoutCounts, fuse, activeGroup]);
+    }, [searchQuery, exercises, workoutCounts, fuse, activeGroup, chipGroups]);
 
     // Recents: the last session's exercises (in session order) first, then
     // everything else by most recently trained.
@@ -247,6 +277,13 @@ const Profile = () => {
     // cache and revalidates itself in the background.
     const showExerciseInfo = (item) => {
         isNavigatingForward.current = true;
+        // In this list the job is to set the muscles, and the detail page has
+        // nothing to show for an exercise that has never been trained. Go
+        // straight to the editor.
+        if (activeGroup === NEEDS_MUSCLES) {
+            router.push(`/exercise/new?id=${item.exerciseID}`);
+            return;
+        }
         router.push(`/exercise/${item.exerciseID}?name=${encodeURIComponent(item.name)}`);
     };
 
@@ -432,26 +469,55 @@ const Profile = () => {
                     contentContainerStyle={styles.chipRow}
                     keyboardShouldPersistTaps="always"
                 >
-                    {MUSCLE_GROUPS.map(group => {
+                    {chipGroups.map(group => {
                         const isActive = activeGroup === group.label;
+                        const todo = !!group.needsMuscles;
                         return (
                             <TouchableOpacity
                                 key={group.label}
-                                style={[styles.chip, isActive && styles.chipActive]}
+                                style={[
+                                    styles.chip,
+                                    todo && styles.chipTodo,
+                                    isActive && (todo ? styles.chipTodoActive : styles.chipActive),
+                                ]}
                                 onPress={() => {
                                     haptics.select();
                                     setActiveGroup(group.label);
                                 }}
                                 activeOpacity={0.7}
                             >
-                                <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-                                    {group.label}
+                                {todo && (
+                                    <Feather
+                                        name="alert-circle"
+                                        size={12}
+                                        color={isActive ? theme.textAlternate : theme.warning}
+                                        style={{ marginRight: 5 }}
+                                    />
+                                )}
+                                <Text
+                                    style={[
+                                        styles.chipText,
+                                        todo && { color: theme.warning },
+                                        isActive && styles.chipTextActive,
+                                    ]}
+                                >
+                                    {todo ? `${group.label} ${needsMusclesCount}` : group.label}
                                 </Text>
                             </TouchableOpacity>
                         );
                     })}
                 </ScrollView>
             </View>
+
+            {activeGroup === NEEDS_MUSCLES && (
+                <View style={styles.todoBanner}>
+                    <Text style={styles.todoBannerText}>
+                        These came in from an import without muscle groups, so they count
+                        towards nothing — no readiness, no muscle balance, no volume. Tap one
+                        to set its muscles.
+                    </Text>
+                </View>
+            )}
 
             <View style={{ flex: 1 }}>
             <FlatList
@@ -490,9 +556,14 @@ const Profile = () => {
                                     )}
                                 </>
                             )}
-                            <Text style={[styles.listSectionLabel, showRecents && { marginTop: 18 }]}>
-                                Most Used
-                            </Text>
+                            {/* The banner above already says what this list is,
+                                and "Most Used" over a list of things to fix
+                                reads as a ranking rather than a job. */}
+                            {activeGroup !== NEEDS_MUSCLES && (
+                                <Text style={[styles.listSectionLabel, showRecents && { marginTop: 18 }]}>
+                                    Most Used
+                                </Text>
+                            )}
                         </View>
                     ) : null
                 }
@@ -612,12 +683,32 @@ const getStyles = (theme) => StyleSheet.create({
         gap: 7,
     },
     chip: {
+        flexDirection: 'row',
         paddingHorizontal: 13,
         height: 31,
         borderRadius: RADIUS.pill,
         backgroundColor: theme.overlayInput,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    chipTodo: {
+        backgroundColor: withAlpha(theme.warning, 0.14),
+    },
+    chipTodoActive: {
+        backgroundColor: theme.warning,
+    },
+    todoBanner: {
+        marginHorizontal: 16,
+        marginBottom: 12,
+        padding: 12,
+        borderRadius: RADIUS.m,
+        backgroundColor: withAlpha(theme.warning, 0.10),
+    },
+    todoBannerText: {
+        fontSize: 13,
+        lineHeight: 18,
+        fontFamily: FONTS.regular,
+        color: theme.textSecondary,
     },
     chipActive: {
         backgroundColor: theme.primary,

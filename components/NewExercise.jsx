@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity,
-    ScrollView as RNScrollView, Animated
+    ScrollView as RNScrollView, Animated, ActivityIndicator
 } from 'react-native';
 import Body from 'react-native-body-highlighter';
-import { insertExercise, updateExercise, fetchExercises, getCachedExercises, recalculateExercisePRs, updateExerciseEquipment } from '../components/db';
+import { insertExercise, updateExercise, fetchExercises, getCachedExercises, recalculateExercisePRs, updateExerciseEquipment, getExerciseUsage, deleteExercise } from '../components/db';
 import { EquipmentEditor } from './EquipmentEditor';
 import Collapsible from './Collapsible';
 import { EQUIPMENT, EQUIPMENT_LABELS, parseEquipment, serialiseEquipment, guessEquipmentType } from '../utils/equipment';
-import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
+import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useScrollHandlers } from 'react-native-actions-sheet';
@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- Added this import
 import * as haptics from '../utils/haptics';
 import { emit, AppEvents } from '../utils/events';
+import { customAlert } from '../utils/customAlert';
 import { updateExerciseSnapshot, getExerciseSnapshotSync } from '../utils/exerciseSnapshots';
 
 const MUSCLE_OPTIONS = [
@@ -177,6 +178,10 @@ const NewExercise = (props) => {
     // False only when the cache was cold, which is the one case that has to
     // wait for the read below rather than draw a guess it cannot make yet.
     const [equipmentLoaded, setEquipmentLoaded] = useState(seededEquipment.known);
+    // What is standing in the way of deleting this exercise, or null while
+    // we do not know yet. Only ever asked for in edit mode.
+    const [usage, setUsage] = useState(null);
+    const [deleting, setDeleting] = useState(false);
     // What the exercise looked like when it was loaded. Equipment lives on
     // this screen but is not part of the exercise definition, so opening it
     // to set a bar weight and saving must not run the definition update --
@@ -217,6 +222,13 @@ const NewExercise = (props) => {
                     setAccessorySelected(accessories);
                 }
                 setEquipmentLoaded(true);
+                try {
+                    setUsage(await getExerciseUsage(props.exerciseID));
+                } catch (e) {
+                    // Without an answer the control stays hidden, which fails
+                    // towards keeping the exercise.
+                    console.error('Failed to read exercise usage:', e);
+                }
             }
         };
         loadExercise();
@@ -296,6 +308,53 @@ const NewExercise = (props) => {
     const formatListToString = (list) => {
         if (!Array.isArray(list)) throw new Error('Input must be an array');
         return list.map((item) => String(item).trim()).filter((item) => item.length > 0).join(',');
+    };
+
+    // Deleting is deliberately narrow: built-ins come back on the next launch
+    // because they are re-seeded from the catalogue, and an exercise with
+    // history behind it cannot go without taking logged sets with it. Both are
+    // enforced in db.jsx too -- this only decides what to show.
+    const deleteBlockedReason = () => {
+        if (!usage || usage.canDelete) return null;
+        if (usage.isBuiltIn) return 'Built-in exercises are part of the app and cannot be deleted.';
+        const bits = [];
+        if (usage.sets > 0) {
+            bits.push(
+                `${usage.sets} logged ${usage.sets === 1 ? 'set' : 'sets'} across ` +
+                `${usage.sessions} ${usage.sessions === 1 ? 'workout' : 'workouts'}`
+            );
+        }
+        if (usage.templates.length > 0) {
+            bits.push(`the ${usage.templates.map((t) => `"${t}"`).join(', ')} ${usage.templates.length === 1 ? 'template' : 'templates'}`);
+        }
+        return `Kept because your training refers to it — ${bits.join(' and ')}.`;
+    };
+
+    const handleDelete = () => {
+        if (!usage?.canDelete || deleting) return;
+        customAlert(
+            'Delete Exercise',
+            `Delete "${exerciseName}"? It has never been logged, so nothing else changes. This cannot be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setDeleting(true);
+                        try {
+                            await deleteExercise(props.exerciseID);
+                            emit(AppEvents.WORKOUT_DATA_IMPORTED);
+                            props.close?.({ deleted: true });
+                        } catch (e) {
+                            console.error('Failed to delete exercise:', e);
+                            customAlert('Could Not Delete', e?.message || 'Something went wrong.');
+                            setDeleting(false);
+                        }
+                    },
+                },
+            ]
+        );
     };
 
     const handleSave = async () => {
@@ -672,6 +731,31 @@ const NewExercise = (props) => {
                             </>
                         )}
 
+                        {/* Delete lives at the bottom, after everything that
+                            edits the exercise, and only once we know whether it
+                            can go. A control that looks available and then
+                            refuses is worse than one that explains itself. */}
+                        {isEditMode && usage && !usage.isBuiltIn && (
+                            <View style={styles.dangerZone}>
+                                <TouchableOpacity
+                                    style={[styles.deleteButton, !usage.canDelete && styles.deleteButtonDisabled]}
+                                    onPress={handleDelete}
+                                    disabled={!usage.canDelete || deleting}
+                                    activeOpacity={0.7}
+                                >
+                                    {deleting
+                                        ? <ActivityIndicator size="small" color={theme.error} />
+                                        : <Feather name="trash-2" size={16} color={usage.canDelete ? theme.error : theme.textSecondary} />}
+                                    <Text style={[styles.deleteText, !usage.canDelete && { color: theme.textSecondary }]}>
+                                        Delete Exercise
+                                    </Text>
+                                </TouchableOpacity>
+                                {!usage.canDelete && (
+                                    <Text style={styles.deleteHint}>{deleteBlockedReason()}</Text>
+                                )}
+                            </View>
+                        )}
+
                     </Animated.View>
                 </RNScrollView>
             </NativeViewGestureHandler>
@@ -693,6 +777,35 @@ const getStyles = (theme) => {
             paddingHorizontal: 20,
             paddingTop: 8,
             paddingBottom: 12,
+        },
+        dangerZone: { marginTop: 28, gap: 8 },
+        deleteButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            paddingVertical: 13,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: withAlpha(theme.error, 0.35),
+            backgroundColor: withAlpha(theme.error, 0.08),
+        },
+        deleteButtonDisabled: {
+            borderColor: theme.border,
+            backgroundColor: 'transparent',
+        },
+        deleteText: {
+            fontFamily: FONTS.semiBold,
+            fontSize: 15,
+            color: theme.error,
+        },
+        deleteHint: {
+            fontFamily: FONTS.regular,
+            fontSize: 13,
+            lineHeight: 18,
+            color: theme.textSecondary,
+            textAlign: 'center',
+            paddingHorizontal: 8,
         },
         headerTitle: {
             color: theme.text,

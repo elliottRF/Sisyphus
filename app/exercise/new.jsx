@@ -19,7 +19,19 @@ export default function NewExerciseScreen() {
             <NewExercise
                 isScreen
                 exerciseID={id ? Number(id) : undefined}
-                close={() => router.back()}
+                close={(result) => {
+                    // Popping one level after a delete lands on the exercise's
+                    // own detail screen, which is now about a row that no longer
+                    // exists. Unwind to the library instead -- dismissAll first,
+                    // because navigating to a tab route from a stacked screen
+                    // pushes a duplicate (tabs) navigator otherwise.
+                    if (result?.deleted) {
+                        if (router.canDismiss()) router.dismissAll();
+                        router.navigate('/profile');
+                        return;
+                    }
+                    router.back();
+                }}
             />
         </View>
     );
