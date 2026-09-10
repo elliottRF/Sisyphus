@@ -367,8 +367,20 @@ export const platesForWeight = (target, resolved) => {
  */
 export const guessEquipmentType = (name) => {
     const n = String(name || '').toLowerCase();
+
+    // A kettlebell is none of these, and it has to come first or "Goblet Squat
+    // (Kettlebell)" reads as a barbell squat.
+    if (/kettlebell|\bkb\b/.test(n)) return EQUIPMENT.NONE;
+
     if (/dumbbell|\bdb\b/.test(n)) return EQUIPMENT.DUMBBELL;
+
+    // Before the machine rule, not after. A Smith machine and a plate-loaded
+    // machine take plates, not a pin -- and checked the other way round,
+    // "Bench Press (Smith Machine)" guessed a stack while "Smith Shoulder
+    // Press" guessed a bar, which is the same station answered two ways.
+    if (/smith|plate.?loaded|hex bar|trap bar/.test(n)) return EQUIPMENT.BARBELL;
+
     if (/machine|cable|pulldown|pull-down|pushdown|press-?down|pec deck|stack/.test(n)) return EQUIPMENT.STACK;
-    if (/barbell|smith|deadlift|bench press|squat|\bez\b|hex bar|trap bar/.test(n)) return EQUIPMENT.BARBELL;
+    if (/barbell|deadlift|bench press|squat|\bez\b/.test(n)) return EQUIPMENT.BARBELL;
     return EQUIPMENT.NONE;
 };

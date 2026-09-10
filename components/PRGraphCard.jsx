@@ -10,6 +10,7 @@ import { useTheme } from '../context/ThemeContext';
 import { AppEvents, on, off } from '../utils/events';
 import { formatWeight, unitLabel } from '../utils/units';
 import { getExerciseSnapshotSync, updateExerciseSnapshot } from '../utils/exerciseSnapshots';
+import { localDateKey } from '../utils/time';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DEFAULT_GRAPH_HEIGHT = 130;
@@ -43,7 +44,13 @@ export const computeGraphPoints = (history, isAssisted = false) => {
         const reps = Number(entry.reps) || 0;
         if (reps <= 0) return;
 
-        const dateKey = date.toISOString().split('T')[0];
+        // The LOCAL calendar day, not the UTC one -- the same rule the rest of
+        // the app follows (history.jsx, ReadinessCard, AppCalendar). A session
+        // at 00:30 during BST is still yesterday in UTC, and for a user west of
+        // Greenwich every evening session is already tomorrow, which split one
+        // day's training across two points -- both of which then rendered the
+        // same date label, because the label comes from the local instant.
+        const dateKey = localDateKey(date);
         const oneRM = Number(entry.oneRM) || 0;
         const weight = Number(entry.weight) || 0;
 
