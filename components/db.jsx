@@ -1445,6 +1445,7 @@ export const updateTemplate = async (id, name, workoutData, splitId = undefined)
 
 export const importStrongData = async (csvContent, progressCallback = null) => {
   const database = await getDb();
+  console.log('[import] start', Date.now());
 
   const cleanFloat = (val) => {
     if (!val) return 0;
@@ -1568,6 +1569,8 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
             exerciseMap.get(exerciseName).push(setData);
           }
+
+          console.log('[import] parsed', Date.now(), totalRows, 'rows');
 
           const sortedDateKeys = Array.from(workoutMap.keys()).sort((a, b) => a - b);
 
@@ -1768,6 +1771,8 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               }
             }
           });
+
+          console.log('[import] written', Date.now(), importedCount, 'sets in', sortedDateKeys.length, 'sessions');
 
           if (progressCallback) {
             progressCallback({ stage: 'complete', current: importedCount, total: importedCount });
