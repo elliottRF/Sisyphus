@@ -199,9 +199,39 @@ Each of these cost a real bug. Don't undo them.
   (the in-progress workout flag, the timer) must be seeded in `ThemeContext`
   from stored state, never left for the Train tab to set on mount -- it isn't
   mounted until visited.
+- **A suggestion must be a weight the user's gym can actually make.**
+  Rounding to 2.5 kg is right for an Olympic bar and wrong for a 7 kg pin
+  stack, a 9 kg EZ bar or a rack that changes step halfway up. Exercises
+  carry an equipment profile (`utils/equipment.js`) and suggestions snap to
+  it. Two rules hold there and are easy to lose:
+  - **An unconfigured exercise behaves exactly as it did before.** Every
+    existing install has no profiles; any drift moves real users' numbers
+    with no action from them.
+  - **A profile that does not describe the lift is ignored, not obeyed.**
+    120 kg on a stack profile that stops at 70 is a mis-tagged exercise, and
+    letting it govern the suggestion turns one wrong tap into stuck numbers.
+  When the equipment has nothing further in the direction wanted -- the last
+  pin, the heaviest dumbbell -- the suggestion adds a rep rather than
+  printing a weight that does not exist.
+- **Plate breakdowns pick the fewest plates, then the heaviest.** 80 kg on a
+  20 kg bar is 25 + 5 a side, not 15 + 15. Both are two plates; only one is
+  how anybody loads a bar.
+- **Equipment is editable on built-in exercises**, whose name and type are
+  locked. It describes the machine in front of the user, not the exercise.
+  For the same reason saving it must not run the exercise-definition update:
+  that sets `userCustomised`, which freezes the exercise's muscle groups
+  against every future catalogue correction.
 - **Bump `DB_SETUP_VERSION` on any schema change.** A database stamped with
   the current version skips every column/table/index check at launch. Add a
   column without bumping it and existing installs never get the column.
+- **Metro's blockList must be anchored to the project root.** It is matched
+  against absolute paths, so the unanchored `.claude/worktrees` rule also
+  matched every file of a worktree that was itself the project root: Metro
+  blocked the whole app and died on `Unable to resolve module
+  ./node_modules/expo-router/entry`, which reads like a broken install.
+  Native builds from a worktree are still a fight -- ninja reports
+  `manifest 'build.ninja' still dirty after 100 tries` on the longer paths --
+  so build and test from the main checkout.
 - **Measure cold start on a release build**, with `[boot]` markers in logcat
   (`adb logcat -v epoch | grep '\[boot\]'`). Baseline on a 640-session DB:
   splash hides ~1.0s on the emulator, ~75% of it native before JS runs.

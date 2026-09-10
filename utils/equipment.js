@@ -358,28 +358,6 @@ export const platesForWeight = (target, resolved) => {
 
 // ── Descriptions ────────────────────────────────────────────────────────────
 
-const trim = (n) => String(Math.round(n * 100) / 100);
-
-/** One line for a settings row: enough to recognise, short enough to fit. */
-export const describeEquipment = (cfg, gym, useImperial = false, toDisplay = (v) => v) => {
-    const parsed = parseEquipment(cfg);
-    if (!parsed) return 'Not set';
-    const unit = useImperial ? 'lb' : 'kg';
-
-    if (parsed.type === EQUIPMENT.BARBELL) {
-        const gymBar = num(gym && gym.bar);
-        const bar = parsed.bar != null ? parsed.bar : (gymBar == null ? 20 : gymBar);
-        return `${trim(toDisplay(bar))} ${unit} bar`;
-    }
-    if (parsed.type === EQUIPMENT.DUMBBELL) {
-        const ladder = parsed.ladder || (gym && gym.ladder);
-        if (!ladder) return 'Dumbbells';
-        return `${trim(toDisplay(ladder.min))}-${trim(toDisplay(ladder.max))} in ${trim(toDisplay(ladder.step))}s`;
-    }
-    const n = (parsed.stack && parsed.stack.length) || 0;
-    return n ? `${n} pins` : 'Weight stack';
-};
-
 /**
  * Guess a type from an exercise's name.
  *
