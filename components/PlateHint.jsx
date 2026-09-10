@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { FONTS, RADIUS, isLightTheme, withAlpha } from '../constants/theme';
 import { formatWeight, toStorageKg, unitLabel } from '../utils/units';
@@ -33,6 +33,27 @@ const PlateRow = ({ plates, styles, useImperial, dim }) => (
 const PlateHint = ({ resolved, sets, theme, useImperial }) => {
     const styles = useMemo(() => getStyles(theme), [theme]);
     const [expanded, setExpanded] = useState(false);
+
+    // Closing goes through Expandable's collapse, the same way the note on the
+    // exercise card does. Unmounting the list on the state change instead let
+    // it grow open and then vanish, which is the one direction people notice.
+    const listRef = useRef(null);
+    const closingRef = useRef(false);
+    const toggleExpanded = () => {
+        // A second tap mid-close would leave the list mounted at zero height:
+        // Expandable ignores a collapse that is already running, so the
+        // callback that unmounts it would never fire.
+        if (closingRef.current) return;
+        if (expanded && listRef.current?.collapse) {
+            closingRef.current = true;
+            listRef.current.collapse(() => {
+                closingRef.current = false;
+                setExpanded(false);
+            });
+        } else {
+            setExpanded((v) => !v);
+        }
+    };
 
     // The set being loaded for is the first one not yet ticked; once the whole
     // exercise is done, the last weight that was actually used.
@@ -98,7 +119,7 @@ const PlateHint = ({ resolved, sets, theme, useImperial }) => {
             <TouchableOpacity
                 style={styles.row}
                 activeOpacity={0.6}
-                onPress={() => setExpanded((v) => !v)}
+                onPress={toggleExpanded}
                 disabled={allWeights.length < 2}
                 accessibilityLabel="Plate breakdown"
             >
@@ -124,8 +145,8 @@ const PlateHint = ({ resolved, sets, theme, useImperial }) => {
                 </Text>
             </TouchableOpacity>
 
-            {expanded && allWeights.length > 1 && (
-                <Expandable animateOnMount>
+            {expanded && (
+                <Expandable ref={listRef} animateOnMount>
                     <View style={styles.allList}>
                         {allWeights.map((w) => {
                             const p = platesForWeight(w, resolved);
