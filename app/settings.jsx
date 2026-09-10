@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Animated, TextInput } from 'react-native';
-import Reanimated, { FadeIn, LinearTransition, Easing as REasing } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, Easing as REasing } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -15,6 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import { AppEvents, emit } from '../utils/events';
 import { getHapticsEnabled, setHapticsEnabled } from '../utils/haptics';
 import { customAlert } from '../utils/customAlert';
+import Expandable from '../components/Expandable';
 import {
     AppThemeSelector,
     recoveryRateLabel,
@@ -92,33 +93,88 @@ const SettingsRow = ({ iconNode, title, description, children, isLast, theme, st
 // A settings row that shows its current value and reveals the real control
 // only when tapped. The heavy controls (rep range, sliders, theme picker) were
 // all rendered expanded at all times, which is what made this page endless.
-const ExpandableRow = ({ iconNode, title, value, expanded, onToggle, children, isLast, theme, styles }) => (
-    <Reanimated.View
-        layout={LinearTransition.duration(200).easing(REasing.out(REasing.ease))}
-        style={!isLast && !expanded ? { borderBottomWidth: 1, borderBottomColor: theme.border } : null}
-    >
-        <TouchableOpacity style={styles.rowContainer} onPress={onToggle} activeOpacity={0.6}>
-            <View style={styles.rowLeft}>
-                {iconNode}
-                <View style={styles.rowTextContainer}>
-                    <Text style={[styles.rowTitle, { color: theme.text }]}>{title}</Text>
+//
+// The control animates its REAL layout height, so the rows beneath it and the
+// cards beneath those move with it through ordinary layout. A layout
+// transition here could only animate this row's own frame, and only after the
+// change had already landed: the card snapped to its new size while everything
+// under it lurched separately. Closing had no animation at all, because the
+// content was simply unmounted.
+const CHEVRON_SPIN = { duration: 220, easing: REasing.out(REasing.cubic) };
+
+const ExpandableRow = ({ iconNode, title, value, expanded, onToggle, children, isLast, theme, styles }) => {
+    // Mounted outlives `expanded` by the length of the closing animation.
+    const [mounted, setMounted] = useState(expanded);
+    // Expandable's grow mode runs once per instance, and ignores a second
+    // collapse. Reopening mid-close therefore needs a fresh instance, or the
+    // in-flight collapse would finish and unmount the row we just reopened.
+    const [instance, setInstance] = useState(0);
+    const instanceRef = useRef(0);
+    const contentRef = useRef(null);
+    const closingRef = useRef(false);
+
+    const spin = useSharedValue(expanded ? 1 : 0);
+    useEffect(() => {
+        spin.value = withTiming(expanded ? 1 : 0, CHEVRON_SPIN);
+    }, [expanded, spin]);
+    const chevronStyle = useAnimatedStyle(() => ({
+        transform: [{ rotate: `${spin.value * 180}deg` }],
+    }));
+
+    useEffect(() => {
+        if (expanded) {
+            if (closingRef.current) {
+                closingRef.current = false;
+                instanceRef.current += 1;
+                setInstance(instanceRef.current);
+            }
+            setMounted(true);
+            return;
+        }
+        if (!mounted || closingRef.current) return;
+        const collapse = contentRef.current?.collapse;
+        if (!collapse) {
+            setMounted(false);
+            return;
+        }
+        const token = instanceRef.current;
+        closingRef.current = true;
+        collapse(() => {
+            // Reopened while this was closing; that open owns the row now.
+            if (instanceRef.current !== token) return;
+            closingRef.current = false;
+            setMounted(false);
+        });
+    }, [expanded, mounted]);
+
+    return (
+        // The separator lives on the open content while the row is open, so it
+        // rides up with it instead of blinking back into place halfway through.
+        <View style={!isLast && !mounted ? { borderBottomWidth: 1, borderBottomColor: theme.border } : null}>
+            <TouchableOpacity style={styles.rowContainer} onPress={onToggle} activeOpacity={0.6}>
+                <View style={styles.rowLeft}>
+                    {iconNode}
+                    <View style={styles.rowTextContainer}>
+                        <Text style={[styles.rowTitle, { color: theme.text }]}>{title}</Text>
+                    </View>
                 </View>
-            </View>
-            <View style={styles.rowValueGroup}>
-                {value != null && <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>}
-                <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={theme.textSecondary} />
-            </View>
-        </TouchableOpacity>
-        {expanded && (
-            <Reanimated.View
-                entering={FadeIn.duration(160)}
-                style={[styles.expandedContent, !isLast && { borderBottomWidth: 1, borderBottomColor: theme.border }]}
-            >
-                {children}
-            </Reanimated.View>
-        )}
-    </Reanimated.View>
-);
+                <View style={styles.rowValueGroup}>
+                    {value != null && <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>}
+                    <Reanimated.View style={chevronStyle}>
+                        <Feather name="chevron-down" size={18} color={theme.textSecondary} />
+                    </Reanimated.View>
+                </View>
+            </TouchableOpacity>
+            {mounted && (
+                <Expandable key={instance} ref={contentRef} animateOnMount>
+                    <View style={[styles.expandedContent, !isLast && { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                        {children}
+                    </View>
+                </Expandable>
+            )}
+        </View>
+    );
+};
 
 // A plain tappable row for one-shot actions (backup, import, export). Full
 // labels rather than an icon grid — these are destructive-adjacent and need to
