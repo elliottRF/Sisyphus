@@ -134,12 +134,22 @@ export const RepRangeSelector = ({
     // Which handle the drag owns is decided once, where it started, and then
     // stays: re-deciding on every move would hand the gesture to the other
     // thumb the moment the two crossed.
+    //
+    // Outside the band the answer is not "whichever is nearer" but "the one on
+    // that side" -- otherwise, with the two thumbs close together, a tap well
+    // to the right of both could still grab the left one.
     onGrant: (ratio) => {
       const touched = repAt(ratio);
-      activeThumbRef.current =
-        Math.abs(touched - minRef.current) <= Math.abs(touched - maxRef.current)
-          ? 'min'
-          : 'max';
+      if (touched >= maxRef.current) {
+        activeThumbRef.current = 'max';
+      } else if (touched <= minRef.current) {
+        activeThumbRef.current = 'min';
+      } else {
+        activeThumbRef.current =
+          Math.abs(touched - minRef.current) <= Math.abs(touched - maxRef.current)
+            ? 'min'
+            : 'max';
+      }
     },
     onMove: (ratio) => {
       const rawValue = repAt(ratio);
@@ -203,7 +213,6 @@ export const RepRangeSelector = ({
           <View
             style={styles.rangeTrackCompact}
             onLayout={drag.onLayout}
-            {...drag.panHandlers}
           >
             <View style={styles.rangeTrackBase} />
             <View
@@ -228,6 +237,12 @@ export const RepRangeSelector = ({
                 { left: `${valueToPercent(max)}%`, borderColor: theme.primary, backgroundColor: theme.surface },
               ]}
             />
+            {/* LAST, and covering the whole track. locationX is measured
+                against whichever view the touch reaches, so without this the
+                thumbs themselves are hit and report 0..28 -- the far left of
+                the track -- and grabbing the right-hand thumb always picked
+                the left one. */}
+            <View style={styles.rangeTouchOverlay} {...drag.panHandlers} />
           </View>
           <Text style={styles.customValueCompact}>{min}–{max}</Text>
         </View>
