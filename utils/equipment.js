@@ -156,8 +156,19 @@ export const serialiseEquipment = (cfg) => {
 
 // ── The set of weights a piece of equipment can actually make ───────────────
 
-const EPS = 1e-6;
-const key = (v) => Math.round(v * 1000);
+// Everything here is in kilograms, but a pounds user's numbers have been
+// through utils/units.js (which divides by 2.20462) and the pound defaults
+// above are themselves rounded to four places. Two values that mean the same
+// plate can therefore differ by ~5e-5 kg.
+//
+// So comparisons and map keys are quantised to 10 grams: far finer than any
+// plate anyone owns -- the smallest is 1.25 kg, and pair sums step by at
+// least 2.27 kg -- and far coarser than that conversion noise. At the old
+// 1e-6 tolerance, typing the bar's own weight in pounds came out 4e-5 kg
+// BELOW the bar and the card said "under the 45 lb bar".
+const GRAIN = 0.01;
+const EPS = GRAIN / 2;
+const key = (v) => Math.round(v / GRAIN);
 
 // Every load a plate inventory can build, with the cheapest way to build each.
 // "Cheapest" is fewest plates, which is also the fastest to load and the

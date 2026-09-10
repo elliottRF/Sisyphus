@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { FONTS, RADIUS, isLightTheme, withAlpha } from '../constants/theme';
-import { formatWeight, unitLabel } from '../utils/units';
+import { formatWeight, toStorageKg, unitLabel } from '../utils/units';
 import { platesForWeight, flattenCombo } from '../utils/equipment';
 import Expandable from './Expandable';
 
@@ -36,31 +36,42 @@ const PlateHint = ({ resolved, sets, theme, useImperial }) => {
 
     // The set being loaded for is the first one not yet ticked; once the whole
     // exercise is done, the last weight that was actually used.
+    //
+    // set.weight is in the user's DISPLAY unit -- what they typed -- while
+    // everything in utils/equipment.js is kilograms. Converting here is not
+    // optional: without it a pounds user's 110.2 lb set was read as 110.2 kg,
+    // and the card answered a question nobody asked with 45 + 45 + 10 a side
+    // and a total of 245.
     const primaryWeight = useMemo(() => {
         if (!sets || sets.length === 0) return null;
-        const parse = (s) => {
-            const n = parseFloat(s && s.weight);
-            return Number.isFinite(n) && n > 0 ? n : null;
-        };
-        for (const s of sets) if (!s.completed && parse(s) != null) return parse(s);
-        for (let i = sets.length - 1; i >= 0; i--) if (parse(sets[i]) != null) return parse(sets[i]);
+        const kg = sets.map((s) => {
+            const typed = parseFloat(s && s.weight);
+            return Number.isFinite(typed) && typed > 0 ? toStorageKg(typed, useImperial) : null;
+        });
+        for (let i = 0; i < sets.length; i++) {
+            if (kg[i] != null && !sets[i].completed) return kg[i];
+        }
+        for (let i = sets.length - 1; i >= 0; i--) {
+            if (kg[i] != null) return kg[i];
+        }
         return null;
-    }, [sets]);
+    }, [sets, useImperial]);
 
     // Every distinct weight on the card, in the order the sets run.
     const allWeights = useMemo(() => {
         const seen = new Set();
         const out = [];
         for (const s of sets || []) {
-            const n = parseFloat(s && s.weight);
-            if (!Number.isFinite(n) || n <= 0) continue;
+            const typed = parseFloat(s && s.weight);
+            if (!Number.isFinite(typed) || typed <= 0) continue;
+            const n = toStorageKg(typed, useImperial);   // display unit -> kg
             const k = Math.round(n * 1000);
             if (seen.has(k)) continue;
             seen.add(k);
             out.push(n);
         }
         return out;
-    }, [sets]);
+    }, [sets, useImperial]);
 
     // Always rendered once the exercise is configured, showing the empty bar
     // before anything is typed. The card must not change height when a weight

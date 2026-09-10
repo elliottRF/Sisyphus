@@ -368,8 +368,9 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
                         </View>
                     </View>
                     <Text style={styles.hint}>
-                        The empty bar. An EZ or preacher bar is often 7-10 {unitLabel(useImperial)},
-                        not the 20 an Olympic bar weighs.
+                        {useImperial
+                            ? 'The empty bar. A curl or preacher bar is often 15-25 lbs, not the 45 an Olympic bar weighs.'
+                            : 'The empty bar. An EZ or preacher bar is often 7-10 kg, not the 20 an Olympic bar weighs.'}
                     </Text>
 
                     <InheritToggle
