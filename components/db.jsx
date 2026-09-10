@@ -22,8 +22,9 @@ let lastLivenessProbe = 0;
 // fast path in setupDatabase), so BUMP THIS on any schema change -- a new
 // column, table or index -- or existing installs will never receive it.
 // History: 1 = exercise catalogue reconciled; 2 = full schema verified;
-// 3 = per-set RPE; 4 = per-exercise equipment profiles.
-const DB_SETUP_VERSION = 4;
+// 3 = per-set RPE; 4 = per-exercise equipment profiles; 5 = PR flags
+// cleared off warm-up sets.
+const DB_SETUP_VERSION = 5;
 
 const getDb = async () => {
   // Cache the PROMISE, not the instance: concurrent first callers previously
@@ -437,6 +438,20 @@ export const setupDatabase = async () => {
       'SELECT exerciseID FROM exercises WHERE isAssisted = 1;'
     );
     for (const { exerciseID } of assistedExercises) {
+      await recalculateExercisePRs(exerciseID);
+      await invalidateExerciseSnapshot(exerciseID);
+    }
+
+    // 5b. Repair databases written before warm-ups were excluded from PRs.
+    // Only the exercises that actually have a warm-up holding a flag are
+    // recalculated: the query is a single indexed scan, and on the owner's
+    // 642-session database it selects five exercises rather than all 158,
+    // which matters because this runs behind the splash.
+    const warmupPRs = await database.getAllAsync(
+      `SELECT DISTINCT exerciseID FROM workoutHistory
+       WHERE setType = 'W' AND (is1rmPR = 1 OR isVolumePR = 1 OR isWeightPR = 1 OR pr = 1);`
+    );
+    for (const { exerciseID } of warmupPRs) {
       await recalculateExercisePRs(exerciseID);
       await invalidateExerciseSnapshot(exerciseID);
     }
@@ -970,6 +985,13 @@ export const recalculateExercisePRs = async (exerciseID) => {
     let bestSetIndexWeight = -1;
 
     sessionSets.forEach((set, idx) => {
+      // A warm-up never earns a PR. Every read in this file has always
+      // filtered setType 'W' out of the stats, but the places that WRITE
+      // the flags did not, so a trophy could land on a set the user
+      // deliberately marked as a warm-up -- a row the stats page then
+      // pretends does not exist. Worse, the running historical best took
+      // the warm-up's value with it, blocking later genuine PRs.
+      if (set.setType === 'W') return;
       const oneRM = set.oneRM || 0;
       const weight = set.weight || 0;
       const reps = set.reps || 0;
@@ -1669,6 +1691,8 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
                 let bestSetIndexWeight = -1;
 
                 sets.forEach((set, idx) => {
+                  // Warm-ups are excluded from PRs -- see recalculateExercisePRs.
+                  if (set.setType === 'W') return;
                   if (set.oneRM > maxOneRMInWorkout && !isAssistedEx) {
                     maxOneRMInWorkout = set.oneRM;
                     bestSetIndexOneRM = idx;

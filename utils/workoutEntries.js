@@ -66,6 +66,9 @@ export const buildWorkoutEntries = async ({
             const isAssisted = !!exerciseDetails?.isAssisted;
 
             for (const set of exercise.sets) {
+                // Warm-ups are excluded from PRs, the same rule the stats
+                // queries and recalculateExercisePRs follow.
+                if (set.setType === 'W') continue;
                 const weightKg = toStorageKg(set.weight, useImperial);
                 const calculatedOneRM = estimateOneRMForStorage(
                     weightKg,
@@ -138,20 +141,26 @@ export const buildWorkoutEntries = async ({
                 const weight = weightKg;
                 const reps = parseInt(set.reps) || 0;
 
+                // A warm-up can coincidentally equal the session's best --
+                // same weight and reps as a working set -- so it has to be
+                // barred from being ASSIGNED the flag too, not just from
+                // setting the maximum above.
+                const isWarmup = set.setType === 'W';
+
                 let is1rmPR = 0;
-                if (!pr1rmAssigned && !isAssisted && calculatedOneRM === maxOneRMForExercise && isOverall1rmPR) {
+                if (!isWarmup && !pr1rmAssigned && !isAssisted && calculatedOneRM === maxOneRMForExercise && isOverall1rmPR) {
                     is1rmPR = 1;
                     pr1rmAssigned = true;
                 }
 
                 let isVolumePR = 0;
-                if (!prVolumeAssigned && !isAssisted && volume === maxVolumeForExercise && isOverallVolumePR) {
+                if (!isWarmup && !prVolumeAssigned && !isAssisted && volume === maxVolumeForExercise && isOverallVolumePR) {
                     isVolumePR = 1;
                     prVolumeAssigned = true;
                 }
 
                 let isWeightPR = 0;
-                if (!prWeightAssigned && reps > 0 && weight === maxWeightInfo.weight && reps === maxWeightInfo.reps && isOverallWeightPR) {
+                if (!isWarmup && !prWeightAssigned && reps > 0 && weight === maxWeightInfo.weight && reps === maxWeightInfo.reps && isOverallWeightPR) {
                     isWeightPR = 1;
                     prWeightAssigned = true;
                 }

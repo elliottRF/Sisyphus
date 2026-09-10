@@ -221,6 +221,13 @@ Each of these cost a real bug. Don't undo them.
   For the same reason saving it must not run the exercise-definition update:
   that sets `userCustomised`, which freezes the exercise's muscle groups
   against every future catalogue correction.
+- **Warm-ups (`setType = 'W'`) are excluded from PRs on the WRITE side too.**
+  Every stat query already filtered them; the three places that set the flags
+  did not, so a trophy could land on a set the user marked as a warm-up -- a row
+  the stats page then ignores -- and the running historical best took the
+  warm-up's value with it, blocking later genuine PRs. In the live finish path
+  the guard has to cover assignment as well as the maximum: a warm-up can
+  coincidentally equal the session's best weight and reps.
 - **Bump `DB_SETUP_VERSION` on any schema change.** A database stamped with
   the current version skips every column/table/index check at launch. Add a
   column without bumping it and existing installs never get the column.
