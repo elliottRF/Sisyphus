@@ -21,7 +21,6 @@ import {
   AppThemeSelector,
   GenderSegment,
   RepRangeSelector,
-  SecondaryVolumeSlider,
   UnitSegment,
 } from '../components/PreferenceControls';
 import {
@@ -68,6 +67,17 @@ const StepHeader = ({ styles, title, subtitle }) => (
   </View>
 );
 
+// What the user has just chosen, read back on the last step. Setup that ends
+// without showing its result asks people to take it on trust that anything
+// happened.
+const SummaryRow = ({ theme, styles, icon, IconSet = Feather, label, value }) => (
+  <View style={styles.summaryRow}>
+    <IconSet name={icon} size={16} color={theme.primary} />
+    <Text style={styles.summaryLabel}>{label}</Text>
+    <Text style={styles.summaryValue}>{value}</Text>
+  </View>
+);
+
 const Onboarding = () => {
   const insets = useSafeAreaInsets();
   const {
@@ -78,8 +88,6 @@ const Onboarding = () => {
     repRangeMin,
     repRangeMax,
     updateRepRange,
-    accessoryWeight,
-    updateAccessoryWeight,
     gender,
     updateGender,
     useImperial,
@@ -282,6 +290,10 @@ const Onboarding = () => {
   const isLast = step === STEP_COUNT - 1;
   const primaryLabel = step === 0 ? 'Get Started' : isLast ? 'Start Training' : 'Continue';
   const onPrimary = isLast ? finishOnboarding : goNext;
+  // Everything on the way is optional and already has a sane default, so let
+  // someone who wants to be in the app now be in the app now. Setup nobody can
+  // get out of is setup people abandon.
+  const canSkip = step > 0 && !isLast && !importing;
 
   const renderStep = () => {
     switch (step) {
@@ -313,17 +325,17 @@ const Onboarding = () => {
         return (
           <View style={{ gap: 18 }}>
             <StepHeader styles={styles} title="Make it yours"
-              subtitle="Set your units and look. You can change any of this later in Settings." />
+              subtitle="Two quick answers and the look you want to open into. All of it is in Settings later." />
             <Section theme={theme} styles={styles} IconSet={MaterialCommunityIcons} icon="scale-balance"
-              title="Units" desc="How weights are shown everywhere in the app.">
+              title="Units" desc="How every weight in the app is shown and entered.">
               <UnitSegment theme={theme} value={useImperial} onChange={updateUnitPref} />
             </Section>
             <Section theme={theme} styles={styles} IconSet={MaterialCommunityIcons} icon="human-male-female"
-              title="Muscle model" desc="Gender of the muscle-highlighter figure.">
+              title="Muscle model" desc="Which figure the muscle highlighter draws.">
               <GenderSegment theme={theme} value={gender} onChange={updateGender} />
             </Section>
             <Section theme={theme} styles={styles} icon="droplet"
-              title="Theme" desc="Choose the look you want to launch into.">
+              title="Theme" desc="Every screen follows this. Change it any time.">
               <AppThemeSelector theme={theme} themeID={themeID} onChange={updateTheme} />
             </Section>
           </View>
@@ -331,11 +343,17 @@ const Onboarding = () => {
       case 2:
         return (
           <View style={{ gap: 18 }}>
-            <StepHeader styles={styles} title="Dial in your training"
-              subtitle="These power your overload suggestions and weekly volume tracking." />
-            <Section theme={theme} styles={styles} icon="sliders"
+            {/* One question, and one a beginner can actually answer. The old
+                step also asked how much supporting muscles should count towards
+                volume on a 0-1 slider -- a real setting, but nobody can answer
+                it before their first workout, and being asked something you
+                cannot answer is a reason to put the app down. It lives in
+                Settings, where someone who wants it will find it. */}
+            <StepHeader styles={styles} title="What are you training for?"
+              subtitle="This sets the rep range your weight suggestions aim for. Pick the one that sounds like you." />
+            <Section theme={theme} styles={styles} icon="target"
               title="Target rep range"
-              desc="When you hit the top of the range, suggestions bump the weight.">
+              desc="Hit the top of the range on every set and the next suggestion adds weight.">
               <RepRangeSelector
                 theme={theme}
                 value={repRangePreset}
@@ -344,67 +362,77 @@ const Onboarding = () => {
                 onRangeChange={updateRepRange}
               />
             </Section>
-            <Section theme={theme} styles={styles} IconSet={MaterialCommunityIcons} icon="chart-bell-curve-cumulative"
-              title="Secondary volume"
-              desc="How much supporting muscles count — e.g. triceps on a bench day.">
-              <SecondaryVolumeSlider
-                theme={theme}
-                value={accessoryWeight}
-                onChange={updateAccessoryWeight}
-              />
-            </Section>
           </View>
         );
       case 3:
       default:
-        return hasWorkoutHistory ? (
-          <View style={{ gap: 22 }}>
-            <View style={styles.heroIconCircle}>
-              <Feather name="check" size={38} color={theme.primary} />
-            </View>
-            <StepHeader styles={styles} title="You're all set"
-              subtitle="Your history is loaded and your preferences are saved. Time to train." />
-          </View>
-        ) : (
+        return (
           <View style={{ gap: 18 }}>
-            <StepHeader styles={styles} title="Bring your history"
-              subtitle="Already track elsewhere? Import now so your charts and PRs are ready from day one." />
-            <Section theme={theme} styles={styles} icon="download-cloud"
-              title="Import past training"
-              desc="Bring your data over so your charts and PRs are ready from day one.">
-              <TouchableOpacity
-                style={styles.importButton}
-                onPress={() => handleImportData('Sisyphus/Strong')}
-                activeOpacity={0.85}
-                disabled={importing}
-              >
-                {importing ? (
-                  <ActivityIndicator color={theme.surface} />
-                ) : (
-                  <>
-                    <Feather name="upload" size={18} color={theme.surface} />
-                    <Text style={styles.importButtonText}>Import workouts (CSV)</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+            {hasWorkoutHistory ? (
+              <>
+                <View style={styles.heroIconCircle}>
+                  <Feather name="check" size={38} color={theme.primary} />
+                </View>
+                <StepHeader styles={styles} title="Your history is in"
+                  subtitle="Charts, records and suggestions are already working from it. Here is how you are set up." />
+              </>
+            ) : (
+              <StepHeader styles={styles} title="Bring your history"
+                subtitle="Training elsewhere already? Import it and your charts and PRs are there from the first session. Skip this if you are starting fresh." />
+            )}
 
-              <TouchableOpacity
-                style={styles.restoreButton}
-                onPress={handleFullRestore}
-                activeOpacity={0.85}
-                disabled={importing}
-              >
-                <MaterialCommunityIcons name="database-import" size={18} color={theme.primary} />
-                <Text style={styles.restoreButtonText}>Restore full backup (.db)</Text>
-              </TouchableOpacity>
+            {!hasWorkoutHistory && (
+              <Section theme={theme} styles={styles} icon="download-cloud"
+                title="Import past training"
+                desc="Two ways in, depending on what you have.">
+                <TouchableOpacity
+                  style={styles.importButton}
+                  onPress={() => handleImportData('Sisyphus/Strong')}
+                  activeOpacity={0.85}
+                  disabled={importing}
+                >
+                  {importing ? (
+                    <ActivityIndicator color={theme.textAlternate} />
+                  ) : (
+                    <>
+                      <Feather name="upload" size={18} color={theme.textAlternate} />
+                      <Text style={styles.importButtonText}>Import workouts (CSV)</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-              <Text style={styles.importHelp}>
-                CSV imports workout history from Strong or Sisyphus. A .db backup restores
-                everything — history, templates and body weight.
-              </Text>
-              {!!importProgress && <Text style={styles.progressText}>{importProgress}</Text>}
-            </Section>
-            <Text style={styles.skipHint}>No data to import? Just tap “Start Training”.</Text>
+                <TouchableOpacity
+                  style={styles.restoreButton}
+                  onPress={handleFullRestore}
+                  activeOpacity={0.85}
+                  disabled={importing}
+                >
+                  <MaterialCommunityIcons name="database-import" size={18} color={theme.primary} />
+                  <Text style={styles.restoreButtonText}>Restore full backup (.db)</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.importHelp}>
+                  A CSV export from Strong or Sisyphus brings your workout history. A .db
+                  backup is a whole Sisyphus install — history, templates and body weight.
+                </Text>
+                {!!importProgress && <Text style={styles.progressText}>{importProgress}</Text>}
+              </Section>
+            )}
+
+            <View style={styles.summaryPanel}>
+              <Text style={styles.summaryTitle}>YOUR SETUP</Text>
+              <SummaryRow theme={theme} styles={styles} IconSet={MaterialCommunityIcons}
+                icon="scale-balance" label="Units" value={useImperial ? 'Pounds (lb)' : 'Kilograms (kg)'} />
+              <SummaryRow theme={theme} styles={styles} icon="target"
+                label="Rep range" value={`${repRangeMin}–${repRangeMax} reps`} />
+              <SummaryRow theme={theme} styles={styles} IconSet={MaterialCommunityIcons}
+                icon="human-male-female" label="Muscle model" value={gender === 'female' ? 'Female' : 'Male'} />
+            </View>
+
+            <Text style={styles.skipHint}>
+              Everything here lives in Settings, and your gym’s bars, plates and dumbbells
+              can go in there too so suggestions land on weights you can actually load.
+            </Text>
           </View>
         );
     }
@@ -464,6 +492,18 @@ const Onboarding = () => {
           </LinearGradient>
         )}
       </Animated.View>
+
+      <View style={styles.skipRow} pointerEvents={canSkip ? 'auto' : 'none'}>
+        {canSkip && (
+          <TouchableOpacity
+            onPress={() => animateToStep(STEP_COUNT - 1, 1)}
+            hitSlop={{ top: 10, bottom: 10, left: 16, right: 16 }}
+            activeOpacity={0.6}
+          >
+            <Text style={styles.skipText}>Skip setup</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}>
         <Animated.View
@@ -710,10 +750,54 @@ const getStyles = (theme) =>
       borderRadius: 18,
     },
     continueText: {
-      color: theme.surface,
+      // Drawn on a primary gradient, so it follows the accent's luminance.
+      // theme.surface only contrasts on the stock themes.
+      color: theme.textAlternate,
       fontSize: 16,
       fontFamily: FONTS.bold,
       letterSpacing: 0.3,
+    },
+    skipRow: {
+      height: 30,
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+    },
+    skipText: {
+      fontSize: 14,
+      fontFamily: FONTS.medium,
+      color: theme.textSecondary,
+    },
+    summaryPanel: {
+      backgroundColor: theme.surface,
+      borderRadius: 20,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      gap: 12,
+    },
+    summaryTitle: {
+      fontSize: 12,
+      letterSpacing: 1.2,
+      fontFamily: FONTS.semiBold,
+      color: theme.textSecondary,
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    summaryLabel: {
+      flex: 1,
+      fontSize: 14.5,
+      fontFamily: FONTS.regular,
+      color: theme.textSecondary,
+    },
+    summaryValue: {
+      fontSize: 14.5,
+      fontFamily: FONTS.semiBold,
+      color: theme.text,
     },
   });
 
