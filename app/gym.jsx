@@ -136,6 +136,7 @@ export default function GymScreen() {
                     styles={styles}
                 >
                     <PlateInventoryEditor
+                        hint={false}
                         plates={gym.plates || []}
                         onChange={(plates) => patch({ plates })}
                         theme={theme}
@@ -150,6 +151,7 @@ export default function GymScreen() {
                     styles={styles}
                 >
                     <LadderEditor
+                        hint="The rack, end to end. A dumbbell that sits outside it goes on the exercise that uses it."
                         ladder={gym.ladder}
                         onChange={(ladder) => patch({ ladder })}
                         theme={theme}

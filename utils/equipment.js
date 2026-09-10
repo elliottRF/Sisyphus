@@ -135,6 +135,33 @@ const key = (v) => Math.round(v * 1000);
 // Bounded by arithmetic rather than combinatorics: distinct sums can only land
 // on multiples of the finest plate, so a rack of 25 kg down to 1.25 kg with
 // four pairs of each produces a couple of hundred sums, not 5^7 of them.
+/**
+ * The plate breakdown as a flat list of individual plate weights, heaviest
+ * first -- the order they go on the sleeve.
+ */
+export const flattenCombo = (combo) => {
+    const out = [];
+    for (const c of combo || []) for (let i = 0; i < c.n; i++) out.push(c.w);
+    return out.sort((a, b) => b - a);
+};
+
+// Which of two ways to build the same load is the better one to be told.
+// Fewest plates first -- fastest to load, shortest to read -- and then the
+// heaviest plates, because 80 kg on a 20 kg bar is 25 + 5 a side, not
+// 15 + 15. Both are two plates; only one is how anybody loads a bar.
+//
+// Combos are built heaviest plate first, so comparing them position by
+// position is the same as comparing the plates you would pick up in order.
+const isBetterCombo = (cand, existing) => {
+    if (cand.plates !== existing.plates) return cand.plates < existing.plates;
+    const a = flattenCombo(cand.combo);
+    const b = flattenCombo(existing.combo);
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+        if (Math.abs(a[i] - b[i]) > EPS) return a[i] > b[i];
+    }
+    return false;
+};
+
 const buildLoadMap = (plates, perSide) => {
     const mult = perSide ? 2 : 1;
     let map = new Map([[0, { load: 0, combo: [], plates: 0 }]]);
@@ -151,7 +178,7 @@ const buildLoadMap = (plates, perSide) => {
                     plates: entry.plates + n,
                 };
                 const existing = next.get(k);
-                if (!existing || cand.plates < existing.plates) next.set(k, cand);
+                if (!existing || isBetterCombo(cand, existing)) next.set(k, cand);
             }
         }
         map = next;
@@ -314,7 +341,7 @@ export const platesForWeight = (target, resolved) => {
     let bestGap = Infinity;
     for (const entry of resolved.loads.values()) {
         const gap = Math.abs(entry.load - load);
-        if (gap < bestGap - EPS || (best && Math.abs(gap - bestGap) < EPS && entry.plates < best.plates)) {
+        if (gap < bestGap - EPS || (best && Math.abs(gap - bestGap) < EPS && isBetterCombo(entry, best))) {
             best = entry;
             bestGap = gap;
         }
@@ -327,16 +354,6 @@ export const platesForWeight = (target, resolved) => {
         exact: false,
         perSide: resolved.perSide,
     };
-};
-
-/**
- * The plate breakdown as a flat list of individual plate weights, heaviest
- * first -- the order they go on the sleeve.
- */
-export const flattenCombo = (combo) => {
-    const out = [];
-    for (const c of combo || []) for (let i = 0; i < c.n; i++) out.push(c.w);
-    return out.sort((a, b) => b - a);
 };
 
 // ── Descriptions ────────────────────────────────────────────────────────────

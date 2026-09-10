@@ -64,7 +64,7 @@ const NumberField = ({ label, valueKg, onCommit, useImperial, styles, theme, wid
 };
 
 // ── Plate rack ──────────────────────────────────────────────────────────────
-export const PlateInventoryEditor = ({ plates, onChange, theme, useImperial, styles: outer }) => {
+export const PlateInventoryEditor = ({ plates, onChange, theme, useImperial, styles: outer, hint }) => {
     const own = useStyles(theme);
     const styles = outer || own;
     const [draft, setDraft] = useState('');
@@ -88,10 +88,11 @@ export const PlateInventoryEditor = ({ plates, onChange, theme, useImperial, sty
 
     return (
         <View>
-            <Text style={styles.hint}>
-                How many PAIRS of each you can get to. Suggestions never ask for
-                plates you do not have.
-            </Text>
+            {hint !== false && (
+                <Text style={styles.hint}>
+                    {hint || 'How many PAIRS of each you can get to. Suggestions never ask for plates you do not have.'}
+                </Text>
+            )}
 
             {plates.map((p, i) => (
                 <View key={`${p.w}-${i}`} style={styles.plateRow}>
@@ -134,7 +135,7 @@ export const PlateInventoryEditor = ({ plates, onChange, theme, useImperial, sty
 };
 
 // ── Dumbbell ladder ─────────────────────────────────────────────────────────
-export const LadderEditor = ({ ladder, onChange, theme, useImperial, styles: outer }) => {
+export const LadderEditor = ({ ladder, onChange, theme, useImperial, styles: outer, hint }) => {
     const own = useStyles(theme);
     const styles = outer || own;
     const l = ladder || { min: 2.5, max: 40, step: 2.5 };
@@ -146,10 +147,11 @@ export const LadderEditor = ({ ladder, onChange, theme, useImperial, styles: out
 
     return (
         <View>
-            <Text style={styles.hint}>
-                The rack, end to end. Gaps at the top (a jump from 30 to 35) go in
-                the extras below.
-            </Text>
+            {hint !== false && (
+                <Text style={styles.hint}>
+                    {hint || 'The rack, end to end. Gaps at the top (a jump from 30 to 35) go in the extras below.'}
+                </Text>
+            )}
             <View style={styles.fieldRow}>
                 <NumberField label="LIGHTEST" valueKg={l.min} onCommit={patch('min')} useImperial={useImperial} styles={styles} theme={theme} />
                 <NumberField label="HEAVIEST" valueKg={l.max} onCommit={patch('max')} useImperial={useImperial} styles={styles} theme={theme} />
@@ -319,12 +321,13 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
         const resolved = resolveEquipment(cfg, gym);
         if (!resolved || resolved.values.length === 0) return null;
         const v = resolved.values;
-        const sample = v.length <= 8 ? v : [v[0], v[1], v[2], v[3], v[Math.floor(v.length / 2)], v[v.length - 2], v[v.length - 1]];
-        // A sample rather than the whole set: seeing the first few, the middle
-        // and the top is enough to spot a wrong bar or a missed plate, and a
-        // 253-value list is not readable anyway.
+        // The lightest few, in order. That shows the starting point and the
+        // step, which is what tells you whether the bar and plates are right.
+        // Sampling the extremes instead reads as nonsense: four pairs of every
+        // plate tops out over 600 kg, which is true and no use to anyone.
+        const sample = v.slice(0, 7);
         const text = sample.map((x) => show(x, useImperial)).join('  ·  ');
-        return { count: v.length, text: v.length > 8 ? `${text}` : text, sampled: v.length > 8 };
+        return { count: v.length, text: v.length > sample.length ? `${text}  ·  …` : text };
     }, [cfg, gym, useImperial]);
 
     return (
@@ -476,7 +479,7 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
             {preview && (
                 <View style={styles.preview}>
                     <Text style={styles.previewLabel}>
-                        {preview.count} WEIGHTS AVAILABLE{preview.sampled ? ', INCLUDING' : ''}
+                        {preview.count} WEIGHTS AVAILABLE, FROM
                     </Text>
                     <Text style={styles.previewText} numberOfLines={2}>
                         {preview.text}

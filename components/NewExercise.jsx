@@ -156,6 +156,14 @@ const NewExercise = (props) => {
     // What this exercise's weight is made of. Held as a config object (or
     // null for "not set") and serialised on save.
     const [equipment, setEquipment] = useState(null);
+    // What the exercise looked like when it was loaded. Equipment lives on
+    // this screen but is not part of the exercise definition, so opening it
+    // to set a bar weight and saving must not run the definition update --
+    // that sets userCustomised, which freezes the exercise's muscle groups
+    // against every future catalogue correction. Before equipment existed
+    // nobody opened this screen without meaning to edit the exercise; now
+    // they will, constantly.
+    const originalDefinitionRef = useRef(null);
     const isCanonical = props.exerciseID && props.exerciseID < 1000;
     const equipmentGuess = useMemo(() => guessEquipmentType(exerciseName), [exerciseName]);
 
@@ -173,6 +181,13 @@ const NewExercise = (props) => {
                     setIsAssisted(!!exercise.isAssisted);
                     setOriginalIsAssisted(!!exercise.isAssisted);
                     setEquipment(parseEquipment(exercise.equipment));
+                    originalDefinitionRef.current = {
+                        name: exercise.name,
+                        targetMuscle: exercise.targetMuscle || '',
+                        accessoryMuscles: exercise.accessoryMuscles || '',
+                        isCardio: exercise.isCardio ? 1 : 0,
+                        isAssisted: exercise.isAssisted ? 1 : 0,
+                    };
 
                     const targets = exercise.targetMuscle ? exercise.targetMuscle.split(',').map((m) => m.trim()) : [];
                     const accessories = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',').map((m) => m.trim()) : [];
@@ -273,16 +288,26 @@ const NewExercise = (props) => {
         };
 
         if (isEditMode && props.exerciseID) {
-            await updateExercise(
-                props.exerciseID,
-                newExerciseObj.name,
-                newExerciseObj.targetMuscle,
-                newExerciseObj.accessoryMuscles,
-                newExerciseObj.isCardio,
-                newExerciseObj.isAssisted
-            );
-            if (originalIsAssisted !== isAssisted) {
-                await recalculateExercisePRs(props.exerciseID);
+            const before = originalDefinitionRef.current;
+            const definitionChanged = !before
+                || before.name !== newExerciseObj.name
+                || before.targetMuscle !== newExerciseObj.targetMuscle
+                || before.accessoryMuscles !== newExerciseObj.accessoryMuscles
+                || before.isCardio !== newExerciseObj.isCardio
+                || before.isAssisted !== newExerciseObj.isAssisted;
+
+            if (definitionChanged) {
+                await updateExercise(
+                    props.exerciseID,
+                    newExerciseObj.name,
+                    newExerciseObj.targetMuscle,
+                    newExerciseObj.accessoryMuscles,
+                    newExerciseObj.isCardio,
+                    newExerciseObj.isAssisted
+                );
+                if (originalIsAssisted !== isAssisted) {
+                    await recalculateExercisePRs(props.exerciseID);
+                }
             }
             newExerciseObj.exerciseID = props.exerciseID;
         } else {
