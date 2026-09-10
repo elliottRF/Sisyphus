@@ -232,6 +232,12 @@ Each of these cost a real bug. Don't undo them.
   Native builds from a worktree are still a fight -- ninja reports
   `manifest 'build.ninja' still dirty after 100 tries` on the longer paths --
   so build and test from the main checkout.
+- **PapaParse is not used to READ a CSV any more** (). Strong
+  quotes every field, which turns off Papa's fast path; on a release build its
+  quote loop took **184 seconds** on a 1.06 MB export against 21 seconds for
+  every database write in the same import. The replacement parses the same file
+  in 77ms and is checked field-for-field against Papa's output on the real
+  export plus the edges it does not contain.  still writes.
 - **Measure cold start on a release build**, with `[boot]` markers in logcat
   (`adb logcat -v epoch | grep '\[boot\]'`). Baseline on a 640-session DB:
   splash hides ~1.0s on the emulator, ~75% of it native before JS runs.

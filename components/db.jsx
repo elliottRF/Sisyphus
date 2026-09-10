@@ -1,6 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import exerciseData from '../assets/exercises.json';
 import Papa from 'papaparse';
+import { parseCsv } from '../utils/csv';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { emit, AppEvents } from '../utils/events';
 import {
@@ -1455,10 +1456,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
   };
 
   return new Promise((resolve, reject) => {
-    Papa.parse(csvContent, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
+    const runImport = async (results) => {
         try {
           const rows = results.data;
           const totalRows = rows.length;
@@ -1569,8 +1567,6 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
 
             exerciseMap.get(exerciseName).push(setData);
           }
-
-          console.log('[import] parsed', Date.now(), totalRows, 'rows');
 
           const sortedDateKeys = Array.from(workoutMap.keys()).sort((a, b) => a - b);
 
@@ -1783,11 +1779,19 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
         } catch (error) {
           reject(error);
         }
-      },
-      error: (error) => {
-        reject(error);
-      }
-    });
+    };
+
+    // Parsed by utils/csv.js rather than PapaParse. Strong quotes every
+    // field, which turns off Papa's fast path: the same file measured
+    // 184 seconds in Papa against 21 seconds for all the database writes
+    // put together.
+    try {
+      const parsed = parseCsv(csvContent);
+      console.log('[import] parsed', Date.now(), parsed.data.length, 'rows,', JSON.stringify(parsed.delimiter), 'delimited');
+      runImport({ data: parsed.data });
+    } catch (error) {
+      reject(error);
+    }
   });
 };
 
@@ -1881,11 +1885,7 @@ export const importBodyWeightData = async (csvContent) => {
   const database = await getDb();
 
   return new Promise((resolve, reject) => {
-    Papa.parse(csvContent, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (h) => h.trim().replace(/^"|"$/g, ''),
-      complete: async (results) => {
+    const runImport = async (results) => {
         try {
           const rows = results.data;
           let importedCount = 0;
@@ -1926,12 +1926,15 @@ export const importBodyWeightData = async (csvContent) => {
           console.error("Error importing body weight data:", error);
           reject(error);
         }
-      },
-      error: (error) => {
-        console.error("Papa Parse Error:", error);
-        reject(error);
-      }
-    });
+    };
+
+    try {
+      const parsed = parseCsv(csvContent, null, (h) => h.trim().replace(/^"|"$/g, ''));
+      runImport({ data: parsed.data });
+    } catch (error) {
+      console.error('CSV parse error:', error);
+      reject(error);
+    }
   });
 };
 
