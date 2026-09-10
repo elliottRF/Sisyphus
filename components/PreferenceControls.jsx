@@ -22,6 +22,81 @@ const REP_PRESET_BOUNDS = {
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 // ---------------------------------------------------------------------------
+// useTrackDrag
+// ---------------------------------------------------------------------------
+//
+// One drag gesture, shared by every slider on this screen. Two things it gets
+// right that reading locationX on each move does not:
+//
+//  - `locationX` is measured against whatever view is under the finger. Slide
+//    off the track -- above it, below it, past either end -- and the readings
+//    stop describing the track at all, so the value flickers around instead of
+//    pinning to the end you dragged past. The position where the drag STARTED
+//    plus the gesture's accumulated dx is the same number wherever the finger
+//    goes, and the clamp then does what it looks like it does.
+//
+//  - These sliders sit in a ScrollView. Without refusing termination, a drag
+//    that wanders vertically is handed to the scroll mid-gesture and the thumb
+//    is left wherever it happened to be.
+//
+// This is the fix already proven on the colour wheel in components/ColorWheel;
+// the sliders here predate it.
+//
+// Callbacks receive a 0-1 ratio along the track. `onMove` returns the value it
+// settled on, which is what `onRelease` is handed.
+const useTrackDrag = ({ onGrant, onMove, onRelease }) => {
+  const widthRef = useRef(220);
+  const startRef = useRef(0);
+  const lastRef = useRef(null);
+
+  // Re-pointed every render so the responder, which is built once, always
+  // calls the current closures.
+  const grantRef = useRef(onGrant);
+  grantRef.current = onGrant;
+  const moveRef = useRef(onMove);
+  moveRef.current = onMove;
+  const releaseRef = useRef(onRelease);
+  releaseRef.current = onRelease;
+
+  const applyRef = useRef(null);
+  applyRef.current = (x) => {
+    const ratio = clamp(x / Math.max(widthRef.current, 1), 0, 1);
+    lastRef.current = moveRef.current(ratio);
+    return lastRef.current;
+  };
+
+  const responder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => {
+        startRef.current = e.nativeEvent.locationX;
+        const ratio = clamp(startRef.current / Math.max(widthRef.current, 1), 0, 1);
+        grantRef.current?.(ratio);
+        applyRef.current(startRef.current);
+      },
+      onPanResponderMove: (e, g) => applyRef.current(startRef.current + g.dx),
+      onPanResponderRelease: (e, g) => {
+        releaseRef.current?.(applyRef.current(startRef.current + g.dx));
+      },
+      // A gesture taken away by the system still has to commit what the user
+      // chose, or the change is on screen but never saved.
+      onPanResponderTerminate: () => {
+        if (lastRef.current != null) releaseRef.current?.(lastRef.current);
+      },
+    }),
+  ).current;
+
+  return {
+    panHandlers: responder.panHandlers,
+    onLayout: (e) => { widthRef.current = e.nativeEvent.layout.width; },
+  };
+};
+
+// ---------------------------------------------------------------------------
 // RepRangeSelector
 // ---------------------------------------------------------------------------
 
@@ -37,7 +112,6 @@ export const RepRangeSelector = ({
 }) => {
   const styles = getStyles(theme);
 
-  const trackWidthRef = useRef(280);
   const activeThumbRef = useRef('min');
 
   const minRef = useRef(min);
@@ -49,56 +123,38 @@ export const RepRangeSelector = ({
   const onRangeChangeCompleteRef = useRef(onRangeChangeComplete);
   onRangeChangeCompleteRef.current = onRangeChangeComplete;
 
-  const handleMoveRef = useRef(null);
-  handleMoveRef.current = (locationX) => {
-    const rangeSize = REP_RANGE_MAX - REP_RANGE_MIN;
-    const width = Math.max(trackWidthRef.current, 1);
-    const ratio = clamp(locationX / width, 0, 1);
-    const rawValue = clamp(
-      Math.round(REP_RANGE_MIN + ratio * rangeSize),
-      REP_RANGE_MIN,
-      REP_RANGE_MAX,
-    );
+  const rangeSize = REP_RANGE_MAX - REP_RANGE_MIN;
+  const repAt = (ratio) => clamp(
+    Math.round(REP_RANGE_MIN + ratio * rangeSize),
+    REP_RANGE_MIN,
+    REP_RANGE_MAX,
+  );
 
-    if (activeThumbRef.current === 'min') {
-      const nextMin = clamp(rawValue, REP_RANGE_MIN, maxRef.current - 1);
-      onRangeChangeRef.current({ min: nextMin, max: maxRef.current, preset: 'custom' });
-    } else {
+  const drag = useTrackDrag({
+    // Which handle the drag owns is decided once, where it started, and then
+    // stays: re-deciding on every move would hand the gesture to the other
+    // thumb the moment the two crossed.
+    onGrant: (ratio) => {
+      const touched = repAt(ratio);
+      activeThumbRef.current =
+        Math.abs(touched - minRef.current) <= Math.abs(touched - maxRef.current)
+          ? 'min'
+          : 'max';
+    },
+    onMove: (ratio) => {
+      const rawValue = repAt(ratio);
+      if (activeThumbRef.current === 'min') {
+        const nextMin = clamp(rawValue, REP_RANGE_MIN, maxRef.current - 1);
+        onRangeChangeRef.current({ min: nextMin, max: maxRef.current, preset: 'custom' });
+        return nextMin;
+      }
       const nextMax = clamp(rawValue, minRef.current + 1, REP_RANGE_MAX);
       onRangeChangeRef.current({ min: minRef.current, max: nextMax, preset: 'custom' });
-    }
-  };
+      return nextMax;
+    },
+    onRelease: () => onRangeChangeCompleteRef.current?.(),
+  });
 
-  const rangePanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
-      onPanResponderGrant: (evt) => {
-        const rangeSize = REP_RANGE_MAX - REP_RANGE_MIN;
-        const width = Math.max(trackWidthRef.current, 1);
-        const ratio = clamp(evt.nativeEvent.locationX / width, 0, 1);
-        const touchValue = clamp(
-          Math.round(REP_RANGE_MIN + ratio * rangeSize),
-          REP_RANGE_MIN,
-          REP_RANGE_MAX,
-        );
-        activeThumbRef.current =
-          Math.abs(touchValue - minRef.current) <= Math.abs(touchValue - maxRef.current)
-            ? 'min'
-            : 'max';
-        handleMoveRef.current(evt.nativeEvent.locationX);
-      },
-      onPanResponderMove: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
-      onPanResponderRelease: (evt) => {
-        handleMoveRef.current(evt.nativeEvent.locationX);
-        onRangeChangeCompleteRef.current?.();
-      },
-    }),
-  ).current;
-
-  const rangeSize = REP_RANGE_MAX - REP_RANGE_MIN;
   const valueToPercent = (repValue) => ((repValue - REP_RANGE_MIN) / rangeSize) * 100;
 
   const choosePreset = (preset) => {
@@ -146,8 +202,8 @@ export const RepRangeSelector = ({
           </Text>
           <View
             style={styles.rangeTrackCompact}
-            onLayout={(e) => { trackWidthRef.current = e.nativeEvent.layout.width; }}
-            {...rangePanResponder.panHandlers}
+            onLayout={drag.onLayout}
+            {...drag.panHandlers}
           >
             <View style={styles.rangeTrackBase} />
             <View
@@ -240,7 +296,7 @@ export const RepRangeSelector = ({
 
         <View
           style={styles.rangeTrack}
-          onLayout={(e) => { trackWidthRef.current = e.nativeEvent.layout.width; }}
+          onLayout={drag.onLayout}
         >
           <View style={styles.rangeTrackBase} />
           <View
@@ -265,7 +321,7 @@ export const RepRangeSelector = ({
               { left: `${valueToPercent(max)}%`, borderColor: theme.primary, backgroundColor: theme.surface },
             ]}
           />
-          <View style={styles.rangeTouchOverlay} {...rangePanResponder.panHandlers} />
+          <View style={styles.rangeTouchOverlay} {...drag.panHandlers} />
         </View>
 
         <View style={styles.rangeScale}>
@@ -298,41 +354,25 @@ export const RepRangeSelector = ({
 export const SecondaryVolumeSlider = ({ theme, value, onChange, onSlidingComplete }) => {
   const styles = getStyles(theme);
 
-  const sliderWidthRef = useRef(220);
-
-  const handleMoveRef = useRef(null);
-  handleMoveRef.current = (locationX) => {
-    const width = Math.max(sliderWidthRef.current, 1);
-    const raw = clamp(locationX / width, 0, 1);
-    const stepped = Math.round(raw / 0.05) * 0.05;
-    const val = parseFloat(stepped.toFixed(2));
-    onChange(val);
-    return val;
-  };
-
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   const onSlidingCompleteRef = useRef(onSlidingComplete);
   onSlidingCompleteRef.current = onSlidingComplete;
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
-      onPanResponderGrant: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
-      onPanResponderMove: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
-      onPanResponderRelease: (evt) => {
-        const val = handleMoveRef.current(evt.nativeEvent.locationX);
-        onSlidingCompleteRef.current?.(val);
-      },
-    }),
-  ).current;
+  const drag = useTrackDrag({
+    onMove: (ratio) => {
+      const val = parseFloat((Math.round(ratio / 0.05) * 0.05).toFixed(2));
+      onChangeRef.current(val);
+      return val;
+    },
+    onRelease: (val) => onSlidingCompleteRef.current?.(val),
+  });
 
   return (
     <View style={styles.sliderContainer}>
       <View
         style={styles.sliderTrack}
-        onLayout={(e) => { sliderWidthRef.current = e.nativeEvent.layout.width; }}
+        onLayout={drag.onLayout}
       >
         <View
           style={[styles.sliderFill, { width: `${value * 100}%`, backgroundColor: theme.primary }]}
@@ -344,7 +384,7 @@ export const SecondaryVolumeSlider = ({ theme, value, onChange, onSlidingComplet
           ]}
         />
         <View
-          {...panResponder.panHandlers}
+          {...drag.panHandlers}
           style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
         />
       </View>
@@ -400,36 +440,22 @@ export const RecoveryRateSlider = ({ theme, value, onChange, onSlidingComplete }
   const styles = getStyles(theme);
   const span = RECOVERY_RATE_MAX - RECOVERY_RATE_MIN;
 
-  const sliderWidthRef = useRef(220);
-
-  const handleMoveRef = useRef(null);
-  handleMoveRef.current = (locationX) => {
-    const width = Math.max(sliderWidthRef.current, 1);
-    const raw = clamp(locationX / width, 0, 1);
-    const rate = RECOVERY_RATE_MIN + raw * span;
-    const stepped = Math.round(rate / 0.05) * 0.05;
-    const val = parseFloat(stepped.toFixed(2));
-    onChange(val);
-    return val;
-  };
-
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   const onSlidingCompleteRef = useRef(onSlidingComplete);
   onSlidingCompleteRef.current = onSlidingComplete;
+  const spanRef = useRef(span);
+  spanRef.current = span;
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
-      onPanResponderGrant: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
-      onPanResponderMove: (evt) => handleMoveRef.current(evt.nativeEvent.locationX),
-      onPanResponderRelease: (evt) => {
-        const val = handleMoveRef.current(evt.nativeEvent.locationX);
-        onSlidingCompleteRef.current?.(val);
-      },
-    }),
-  ).current;
+  const drag = useTrackDrag({
+    onMove: (ratio) => {
+      const rate = RECOVERY_RATE_MIN + ratio * spanRef.current;
+      const val = parseFloat((Math.round(rate / 0.05) * 0.05).toFixed(2));
+      onChangeRef.current(val);
+      return val;
+    },
+    onRelease: (val) => onSlidingCompleteRef.current?.(val),
+  });
 
   const fillPercent = clamp((value - RECOVERY_RATE_MIN) / span, 0, 1) * 100;
 
@@ -437,7 +463,7 @@ export const RecoveryRateSlider = ({ theme, value, onChange, onSlidingComplete }
     <View style={styles.sliderContainer}>
       <View
         style={styles.sliderTrack}
-        onLayout={(e) => { sliderWidthRef.current = e.nativeEvent.layout.width; }}
+        onLayout={drag.onLayout}
       >
         <View
           style={[styles.sliderFill, { width: `${fillPercent}%`, backgroundColor: theme.primary }]}
@@ -449,7 +475,7 @@ export const RecoveryRateSlider = ({ theme, value, onChange, onSlidingComplete }
           ]}
         />
         <View
-          {...panResponder.panHandlers}
+          {...drag.panHandlers}
           style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
         />
       </View>
