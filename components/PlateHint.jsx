@@ -119,7 +119,6 @@ const PlateHint = ({ resolved, sets, theme, useImperial }) => {
                     </>
                 )}
 
-                <View style={styles.spacer} />
                 <Text style={styles.bar}>
                     {formatWeight(resolved.bar, useImperial, 2)} {unit} bar
                 </Text>
@@ -161,9 +160,14 @@ const getStyles = (theme) => {
         row: {
             flexDirection: 'row',
             alignItems: 'center',
+            // Wraps rather than overlaps. Six plates a side plus a corrected
+            // total plus the bar label is wider than a phone, and a fixed row
+            // ran them through each other. Real loads still fit on one line.
+            flexWrap: 'wrap',
             paddingHorizontal: 12,
             paddingVertical: 7,
-            gap: 8,
+            rowGap: 4,
+            columnGap: 8,
         },
         label: {
             fontSize: 10,
@@ -194,11 +198,13 @@ const getStyles = (theme) => {
             fontFamily: FONTS.medium,
             color: theme.textSecondary,
         },
-        spacer: { flex: 1 },
         bar: {
             fontSize: 10,
             fontFamily: FONTS.medium,
             color: theme.textSecondary,
+            // Holds the right edge on a single line, and stays right-aligned
+            // on its own line when the row wraps.
+            marginLeft: 'auto',
         },
         allList: {
             paddingHorizontal: 12,
