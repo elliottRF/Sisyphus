@@ -8,6 +8,7 @@ import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 import { secondsToClock } from '../utils/time';
 import { customAlert } from '../utils/customAlert';
 import { muscleMapping, broadMuscleGroups } from '../constants/muscles';
+import AnimatedList from './AnimatedList';
 
 
 const lightenColor = (color, percent) => {
@@ -332,22 +333,24 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                         const isAssisted = !!exerciseDetails?.isAssisted;
 
                         let workingSetCount = 0;
-                        const setsWithDisplayNumbers = exerciseGroup.map(set => {
+                        const setsWithDisplayNumbers = exerciseGroup.map((set, srcIndex) => {
                             let displayNumber = set.setType;
                             if (set.setType === 'N' || !set.setType) {
                                 workingSetCount++;
                                 displayNumber = workingSetCount;
                             }
-                            return { ...set, displayNumber };
+                            return { ...set, displayNumber, srcIndex };
                         });
 
                         const exerciseNote = exerciseGroup.find(e => e.notes)?.notes;
                         const warmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') === 'W');
                         const nonWarmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') !== 'W');
                         const warmupsExpanded = !!expandedWarmups[exerciseId];
-                        const visibleSets = warmupsExpanded
-                            ? [...warmups, ...nonWarmups]
-                            : [...warmups.filter(s => s.is1rmPR === 1 || s.isVolumePR === 1 || s.isWeightPR === 1), ...nonWarmups];
+                        // A warm-up that set a record is shown whether the group is
+                        // open or not -- it is the reason you would look. So the two
+                        // lists differ only by the warm-ups that did NOT, and those
+                        // are the only rows that should move.
+                        const visibleWarmups = warmupsExpanded ? warmups : warmups.filter(isPRSet);
 
                         const hasMuscles = exerciseDetails && (
                             (exerciseDetails.targetMuscle && exerciseDetails.targetMuscle.trim() !== '') ||
@@ -416,18 +419,13 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                         {!isAssisted && <Text style={[styles.colHeader, styles.colHeader1RM]}>{exerciseDetails?.isCardio ? "PACE" : "1RM"}</Text>}
                                     </View>
                                     {(() => {
-                                        let workingIndex = 0;
-                                        return visibleSets.map((set, setIndex) => {
-                                            const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+                                        const renderSetRow = (set, isOdd, key) => {
+                                            const isPR = isPRSet(set);
                                             const setType = set.setType || 'N';
                                             const isWarmup = setType === 'W';
-                                            const isDrop = setType === 'D';
-
-                                            const isOdd = !isWarmup && (workingIndex % 2 === 1);
-                                            if (!isWarmup) workingIndex++;
 
                                             return (
-                                                <View key={`${set.exerciseHistoryID ?? ''}-${setIndex}`} style={[
+                                                <View key={key} style={[
                                                     styles.setRowContainer,
                                                     isOdd && styles.setRowOdd,
                                                     isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
@@ -472,7 +470,29 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                                     )}
                                                 </View>
                                             );
-                                        });
+                                        };
+
+                                        return (
+                                            <>
+                                                {/* Only the warm-ups are animated, and only the
+                                                    ones that are actually appearing: a warm-up
+                                                    with a PR is already on screen in both states
+                                                    and must not blink out and back. AnimatedList
+                                                    keys by identity, so it grows the new rows in
+                                                    AROUND the ones that stay -- which matters,
+                                                    because a PR warm-up sits at the top of the
+                                                    collapsed list and back in its real place
+                                                    once the rest arrive. */}
+                                                <AnimatedList
+                                                    items={visibleWarmups}
+                                                    keyOf={(set) => set.srcIndex}
+                                                    renderItem={(set) => renderSetRow(set, false)}
+                                                />
+                                                {nonWarmups.map((set, workingIndex) =>
+                                                    renderSetRow(set, workingIndex % 2 === 1, set.srcIndex)
+                                                )}
+                                            </>
+                                        );
                                     })()}
                                 </View>
                             </View>
@@ -482,6 +502,10 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
         </ScrollView>
     );
 });
+
+// A set that set any record. Warm-ups that did are never hidden.
+const isPRSet = (set) =>
+    set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
 
 const getStyles = (theme) => {
     const lightTheme = isLightTheme(theme);
