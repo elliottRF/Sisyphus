@@ -245,6 +245,17 @@ Each of these cost a real bug. Don't undo them.
   every database write in the same import. The replacement parses the same file
   in 77ms and is checked field-for-field against Papa's output on the real
   export plus the edges it does not contain.  still writes.
+- **Anything weight-related must be exercised in POUNDS as well as kilos.**
+  Storage is kilograms and `set.weight` is the display unit, so in kilos they
+  are the same number and a missing conversion is invisible. In pounds it is
+  not: the plate breakdown read a 110.2 lb set as 110.2 kg and answered with
+  45 + 45 + 10 a side, a total of 245. Tolerances have to survive the round
+  trip too -- `lbs / 2.20462` against 4dp plate constants leaves ~5e-5 kg of
+  noise, so `utils/equipment.js` quantises comparisons to 10 g rather than
+  1e-6, or typing the bar's own weight reads as below the bar.
+  A test that converts with the exact 0.45359237 factor does NOT exercise
+  this: `utils/units.js` divides by 2.20462, and the first plate test passed
+  happily while the app was wrong. Drive the app's own conversion.
 - **Measure cold start on a release build**, with `[boot]` markers in logcat
   (`adb logcat -v epoch | grep '\[boot\]'`). Baseline on a 640-session DB:
   splash hides ~1.0s on the emulator, ~75% of it native before JS runs.
