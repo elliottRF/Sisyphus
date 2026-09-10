@@ -26,6 +26,7 @@ import {
     useWorkoutSuggestions,
 } from './suggestions';
 import { on, AppEvents } from '../utils/events';
+import { setWillBeSaved } from '../utils/workoutEntries';
 import CustomAlert from './CustomAlert';
 import RpePicker from './RpePicker';
 import Expandable from './Expandable';
@@ -912,7 +913,10 @@ const ExerciseEditable = ({
     const headerKey = showSuggestion ? 'suggest' : 'prev';
 
     // Set progress for the header: "2/4" while working, a check when done.
-    const setsDone = exercise.sets.filter(s => s.completed).length;
+    // Same predicate the page header and the save use: a set ticked while
+    // still empty is not written to history, so counting it here would have
+    // this card disagree with the header directly above it.
+    const setsDone = exercise.sets.filter(setWillBeSaved).length;
     const showSetProgress = !isTemplate && !hidePrevious && exercise.sets.length > 0;
     const allSetsDone = showSetProgress && setsDone === exercise.sets.length;
 

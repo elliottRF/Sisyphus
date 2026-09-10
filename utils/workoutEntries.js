@@ -10,14 +10,26 @@ const has = (v) => v !== null && v !== undefined && v !== '';
 // A completed strength set counts with EITHER weight or reps entered — the
 // other blank field stores as 0 (e.g. bodyweight reps, or a weighted hold).
 // Cardio needs both distance + time.
+/**
+ * Whether a set will actually be written to history: ticked, AND carrying
+ * something worth writing.
+ *
+ * Exported because the live set counter and the finish dialog have to
+ * promise exactly what this delivers. They used to count every ticked set,
+ * so a set ticked while still empty -- a mis-tap, easily done one-handed --
+ * was counted as completed, announced as completed in "N of M sets
+ * completed", and then quietly dropped here.
+ */
+export const setWillBeSaved = (set) => {
+    if (!set || !set.completed) return false;
+    return has(set.weight) || has(set.reps) || (has(set.distance) && has(set.minutes));
+};
+
 export const filterCompletedSets = (workout) => (workout || []).map(exerciseGroup => ({
     ...exerciseGroup,
     exercises: exerciseGroup.exercises.map(exercise => ({
         ...exercise,
-        sets: exercise.sets.filter(set => {
-            if (!set.completed) return false;
-            return has(set.weight) || has(set.reps) || (has(set.distance) && has(set.minutes));
-        })
+        sets: exercise.sets.filter(setWillBeSaved)
     }))
 }));
 

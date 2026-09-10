@@ -17,7 +17,7 @@ import { setPreloadedData } from '../../constants/preloader';
 import { toStorageKg, formatWeight, unitLabel } from '../../utils/units';
 import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
 import { estimateOneRMForStorage } from '../../utils/oneRM';
-import { filterCompletedSets, buildWorkoutEntries } from '../../utils/workoutEntries';
+import { filterCompletedSets, buildWorkoutEntries, setWillBeSaved } from '../../utils/workoutEntries';
 import { muscleMapping } from '../../constants/muscles';
 
 
@@ -945,9 +945,12 @@ const Current = () => {
         let volume = 0;
         let done = 0;
         let total = 0;
+        // Counted with the same predicate the save uses, so the header and the
+        // finish dialog cannot promise more than gets written. A set ticked
+        // while still empty was previously counted here and dropped there.
         currentWorkout.forEach(group => group.exercises.forEach(ex => ex.sets.forEach(set => {
             total++;
-            if (set.completed) {
+            if (setWillBeSaved(set)) {
                 done++;
                 volume += (parseFloat(set.weight) || 0) * (parseInt(set.reps, 10) || 0);
             }
