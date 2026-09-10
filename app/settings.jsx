@@ -15,7 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import { AppEvents, emit } from '../utils/events';
 import { getHapticsEnabled, setHapticsEnabled } from '../utils/haptics';
 import { customAlert } from '../utils/customAlert';
-import Expandable from '../components/Expandable';
+import Collapsible from '../components/Collapsible';
 import {
     AppThemeSelector,
     recoveryRateLabel,
@@ -103,15 +103,13 @@ const SettingsRow = ({ iconNode, title, description, children, isLast, theme, st
 const CHEVRON_SPIN = { duration: 220, easing: REasing.out(REasing.cubic) };
 
 const ExpandableRow = ({ iconNode, title, value, expanded, onToggle, children, isLast, theme, styles }) => {
-    // Mounted outlives `expanded` by the length of the closing animation.
-    const [mounted, setMounted] = useState(expanded);
-    // Expandable's grow mode runs once per instance, and ignores a second
-    // collapse. Reopening mid-close therefore needs a fresh instance, or the
-    // in-flight collapse would finish and unmount the row we just reopened.
-    const [instance, setInstance] = useState(0);
-    const instanceRef = useRef(0);
-    const contentRef = useRef(null);
-    const closingRef = useRef(false);
+    // The separator has to follow the CONTENT, not the prop: while the row is
+    // closing the content is still on screen, and a border blinking back into
+    // place halfway through the animation is exactly the pop this replaced.
+    const [hasContent, setHasContent] = useState(expanded);
+    useEffect(() => {
+        if (expanded) setHasContent(true);
+    }, [expanded]);
 
     const spin = useSharedValue(expanded ? 1 : 0);
     useEffect(() => {
@@ -121,36 +119,8 @@ const ExpandableRow = ({ iconNode, title, value, expanded, onToggle, children, i
         transform: [{ rotate: `${spin.value * 180}deg` }],
     }));
 
-    useEffect(() => {
-        if (expanded) {
-            if (closingRef.current) {
-                closingRef.current = false;
-                instanceRef.current += 1;
-                setInstance(instanceRef.current);
-            }
-            setMounted(true);
-            return;
-        }
-        if (!mounted || closingRef.current) return;
-        const collapse = contentRef.current?.collapse;
-        if (!collapse) {
-            setMounted(false);
-            return;
-        }
-        const token = instanceRef.current;
-        closingRef.current = true;
-        collapse(() => {
-            // Reopened while this was closing; that open owns the row now.
-            if (instanceRef.current !== token) return;
-            closingRef.current = false;
-            setMounted(false);
-        });
-    }, [expanded, mounted]);
-
     return (
-        // The separator lives on the open content while the row is open, so it
-        // rides up with it instead of blinking back into place halfway through.
-        <View style={!isLast && !mounted ? { borderBottomWidth: 1, borderBottomColor: theme.border } : null}>
+        <View style={!isLast && !hasContent ? { borderBottomWidth: 1, borderBottomColor: theme.border } : null}>
             <TouchableOpacity style={styles.rowContainer} onPress={onToggle} activeOpacity={0.6}>
                 <View style={styles.rowLeft}>
                     {iconNode}
@@ -165,13 +135,11 @@ const ExpandableRow = ({ iconNode, title, value, expanded, onToggle, children, i
                     </Reanimated.View>
                 </View>
             </TouchableOpacity>
-            {mounted && (
-                <Expandable key={instance} ref={contentRef} animateOnMount>
-                    <View style={[styles.expandedContent, !isLast && { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
-                        {children}
-                    </View>
-                </Expandable>
-            )}
+            <Collapsible open={expanded} onClosed={() => setHasContent(false)}>
+                <View style={[styles.expandedContent, !isLast && { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                    {children}
+                </View>
+            </Collapsible>
         </View>
     );
 };

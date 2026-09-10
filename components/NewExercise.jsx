@@ -6,6 +6,7 @@ import {
 import Body from 'react-native-body-highlighter';
 import { insertExercise, updateExercise, fetchExercises, recalculateExercisePRs, updateExerciseEquipment } from '../components/db';
 import { EquipmentEditor } from './EquipmentEditor';
+import Collapsible from './Collapsible';
 import { EQUIPMENT, EQUIPMENT_LABELS, parseEquipment, serialiseEquipment, guessEquipmentType } from '../utils/equipment';
 import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -541,12 +542,15 @@ const NewExercise = (props) => {
                             but what the machine in front of the user weighs is
                             theirs, and most people never create an exercise at
                             all. Hidden for cardio, where there is no weight. */}
-                        {!isCardio && (
+                        <Collapsible open={!isCardio}>
                             <View style={styles.sectionContainer}>
                                 <View style={styles.sectionTitleRow}>
                                     <Text style={styles.sectionTitle}>Equipment</Text>
                                 </View>
-                                {!equipment && equipmentGuess !== EQUIPMENT.NONE && (
+                                {/* Tapping this sets the equipment, which is what
+                                    hides it -- so it has to collapse rather than
+                                    vanish out from under the finger. */}
+                                <Collapsible open={!equipment && equipmentGuess !== EQUIPMENT.NONE}>
                                     <TouchableOpacity
                                         style={styles.guessRow}
                                         onPress={() => setEquipment(blankEquipment(equipmentGuess))}
@@ -557,7 +561,7 @@ const NewExercise = (props) => {
                                             Looks like {EQUIPMENT_LABELS[equipmentGuess].toLowerCase()} — set it up
                                         </Text>
                                     </TouchableOpacity>
-                                )}
+                                </Collapsible>
                                 <EquipmentEditor
                                     value={equipment}
                                     onChange={setEquipment}
@@ -566,7 +570,7 @@ const NewExercise = (props) => {
                                     gym={gymEquipment}
                                 />
                             </View>
-                        )}
+                        </Collapsible>
 
                         {/* Muscle sections – animate out when Cardio is enabled */}
                         <Animated.View style={{

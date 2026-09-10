@@ -1,6 +1,10 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import Reanimated, { FadeIn, FadeOut, LinearTransition, Easing } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
+
+import AnimatedList from './AnimatedList';
+import Collapsible from './Collapsible';
 
 import { FONTS, TYPE, SPACING, RADIUS, isLightTheme, withAlpha } from '../constants/theme';
 import { formatWeight, toStorageKg, unitLabel } from '../utils/units';
@@ -22,6 +26,20 @@ import { EQUIPMENT, EQUIPMENT_LABELS, resolveEquipment } from '../utils/equipmen
 const show = (kg, useImperial) => {
     if (kg == null || !Number.isFinite(kg)) return '';
     return String(formatWeight(kg, useImperial, 2));
+};
+
+// Keeps the last value a block had while it was open.
+//
+// The toggle that closes these editors is the same field that holds their
+// contents -- untick "Use my gym's plates" and cfg.plates goes null. Without
+// this the rows would empty out first and an empty shell would collapse
+// afterwards, which is the pop with extra steps.
+const useHeld = (value) => {
+    const [held, setHeld] = useState(value);
+    useEffect(() => {
+        if (value != null && value !== held) setHeld(value);
+    }, [value, held]);
+    return value != null ? value : held;
 };
 
 const parseInput = (text, useImperial) => {
@@ -69,14 +87,17 @@ export const PlateInventoryEditor = ({ plates, onChange, theme, useImperial, sty
     const styles = outer || own;
     const [draft, setDraft] = useState('');
 
-    const setCount = (i, delta) => {
-        const next = plates.map((p, idx) => (
-            idx === i ? { ...p, count: Math.max(1, Math.min(20, p.count + delta)) } : p
+    // Addressed by weight, not by index. An index is not an identity:
+    // removing the middle of the rack renumbers every row under it, so a
+    // keyed animation would see them all leave and come back.
+    const setCount = (w, delta) => {
+        const next = plates.map((p) => (
+            p.w === w ? { ...p, count: Math.max(1, Math.min(20, p.count + delta)) } : p
         ));
         onChange(next);
     };
 
-    const remove = (i) => onChange(plates.filter((_, idx) => idx !== i));
+    const remove = (w) => onChange(plates.filter((p) => p.w !== w));
 
     const add = () => {
         const kg = parseInput(draft, useImperial);
@@ -94,25 +115,29 @@ export const PlateInventoryEditor = ({ plates, onChange, theme, useImperial, sty
                 </Text>
             )}
 
-            {plates.map((p, i) => (
-                <View key={`${p.w}-${i}`} style={styles.plateRow}>
-                    <Text style={styles.plateWeight}>
-                        {show(p.w, useImperial)} <Text style={styles.plateUnit}>{unitLabel(useImperial)}</Text>
-                    </Text>
-                    <View style={styles.stepper}>
-                        <TouchableOpacity onPress={() => setCount(i, -1)} style={styles.stepperButton} hitSlop={8} activeOpacity={0.6}>
-                            <Feather name="minus" size={15} color={theme.textSecondary} />
-                        </TouchableOpacity>
-                        <Text style={styles.stepperValue}>{p.count}</Text>
-                        <TouchableOpacity onPress={() => setCount(i, +1)} style={styles.stepperButton} hitSlop={8} activeOpacity={0.6}>
-                            <Feather name="plus" size={15} color={theme.textSecondary} />
+            <AnimatedList
+                items={plates}
+                keyOf={(p) => p.w}
+                renderItem={(p) => (
+                    <View style={styles.plateRow}>
+                        <Text style={styles.plateWeight}>
+                            {show(p.w, useImperial)} <Text style={styles.plateUnit}>{unitLabel(useImperial)}</Text>
+                        </Text>
+                        <View style={styles.stepper}>
+                            <TouchableOpacity onPress={() => setCount(p.w, -1)} style={styles.stepperButton} hitSlop={8} activeOpacity={0.6}>
+                                <Feather name="minus" size={15} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                            <Text style={styles.stepperValue}>{p.count}</Text>
+                            <TouchableOpacity onPress={() => setCount(p.w, +1)} style={styles.stepperButton} hitSlop={8} activeOpacity={0.6}>
+                                <Feather name="plus" size={15} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity onPress={() => remove(p.w)} style={styles.removeButton} hitSlop={8} activeOpacity={0.6}>
+                            <Feather name="x" size={15} color={theme.textSecondary} />
                         </TouchableOpacity>
                     </View>
-                    <TouchableOpacity onPress={() => remove(i)} style={styles.removeButton} hitSlop={8} activeOpacity={0.6}>
-                        <Feather name="x" size={15} color={theme.textSecondary} />
-                    </TouchableOpacity>
-                </View>
-            ))}
+                )}
+            />
 
             <View style={styles.addRow}>
                 <TextInput
@@ -162,10 +187,19 @@ export const LadderEditor = ({ ladder, onChange, theme, useImperial, styles: out
 };
 
 // ── A free list of weights (stack pins, add-on magnets, odd dumbbells) ──────
+//
+// Chips wrap, so removing one moves its neighbours SIDEWAYS -- the one place
+// here where animating height would be animating the wrong axis. The chip
+// fades where it stands and the rest slide along to close the gap.
+const CHIP_SHUFFLE = LinearTransition.duration(180).easing(Easing.out(Easing.ease));
 export const WeightListEditor = ({ values, onChange, theme, useImperial, placeholder, styles: outer }) => {
     const own = useStyles(theme);
     const styles = outer || own;
     const [draft, setDraft] = useState('');
+    // Chips already on screen at first paint must not animate in; only what
+    // the user adds afterwards.
+    const [primed, setPrimed] = useState(false);
+    useEffect(() => setPrimed(true), []);
 
     const add = () => {
         const kg = parseInput(draft, useImperial);
@@ -178,18 +212,31 @@ export const WeightListEditor = ({ values, onChange, theme, useImperial, placeho
     return (
         <View>
             <View style={styles.chipWrap}>
-                {values.map((v, i) => (
-                    <TouchableOpacity
-                        key={`${v}-${i}`}
-                        style={styles.chip}
-                        onPress={() => onChange(values.filter((_, idx) => idx !== i))}
-                        activeOpacity={0.6}
+                {values.map((v) => (
+                    <Reanimated.View
+                        key={v}
+                        entering={primed ? FadeIn.duration(140) : undefined}
+                        exiting={FadeOut.duration(120)}
+                        layout={CHIP_SHUFFLE}
                     >
-                        <Text style={styles.chipText}>{show(v, useImperial)}</Text>
-                        <Feather name="x" size={11} color={theme.textSecondary} />
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.chip}
+                            onPress={() => onChange(values.filter((x) => x !== v))}
+                            activeOpacity={0.6}
+                        >
+                            <Text style={styles.chipText}>{show(v, useImperial)}</Text>
+                            <Feather name="x" size={11} color={theme.textSecondary} />
+                        </TouchableOpacity>
+                    </Reanimated.View>
                 ))}
-                {values.length === 0 && <Text style={styles.hint}>Nothing added yet.</Text>}
+                {values.length === 0 && (
+                    <Reanimated.Text
+                        entering={primed ? FadeIn.duration(140) : undefined}
+                        style={styles.hint}
+                    >
+                        Nothing added yet.
+                    </Reanimated.Text>
+                )}
             </View>
 
             <View style={styles.addRow}>
@@ -304,6 +351,10 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
     const styles = useStyles(theme);
     const cfg = value;
     const type = (cfg && cfg.type) || EQUIPMENT.NONE;
+    // Both of these blocks are closed by nulling the very field they render,
+    // so they need their old contents to collapse with.
+    const heldPlates = useHeld(cfg && cfg.plates);
+    const heldLadder = useHeld(cfg && cfg.ladder);
 
     const setType = useCallback((t) => {
         if (t === EQUIPMENT.NONE) return onChange(null);
@@ -388,15 +439,15 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
                         theme={theme}
                         styles={styles}
                     />
-                    {cfg.plates != null && (
+                    <Collapsible open={cfg.plates != null}>
                         <PlateInventoryEditor
-                            plates={cfg.plates}
+                            plates={heldPlates || []}
                             onChange={(plates) => patch({ plates })}
                             theme={theme}
                             useImperial={useImperial}
                             styles={styles}
                         />
-                    )}
+                    </Collapsible>
                 </View>
             )}
 
@@ -409,15 +460,15 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
                         theme={theme}
                         styles={styles}
                     />
-                    {cfg.ladder != null && (
+                    <Collapsible open={cfg.ladder != null}>
                         <LadderEditor
-                            ladder={cfg.ladder}
+                            ladder={heldLadder}
                             onChange={(ladder) => patch({ ladder })}
                             theme={theme}
                             useImperial={useImperial}
                             styles={styles}
                         />
-                    )}
+                    </Collapsible>
 
                     <Text style={styles.sectionLabel}>EXTRAS</Text>
                     <WeightListEditor
