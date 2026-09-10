@@ -4,7 +4,7 @@ import {
     ScrollView as RNScrollView, Animated
 } from 'react-native';
 import Body from 'react-native-body-highlighter';
-import { insertExercise, updateExercise, fetchExercises, recalculateExercisePRs, updateExerciseEquipment } from '../components/db';
+import { insertExercise, updateExercise, fetchExercises, getCachedExercises, recalculateExercisePRs, updateExerciseEquipment } from '../components/db';
 import { EquipmentEditor } from './EquipmentEditor';
 import Collapsible from './Collapsible';
 import { EQUIPMENT, EQUIPMENT_LABELS, parseEquipment, serialiseEquipment, guessEquipmentType } from '../utils/equipment';
@@ -147,16 +147,36 @@ const NewExercise = (props) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Equipment and isCardio are not in the snapshot above, but they ARE in
+    // the exercise-list cache, so seed them from there for the same reason.
+    //
+    // Getting these wrong on the first paint is not cosmetic. A null
+    // equipment reads exactly like an exercise that has none, and isCardio
+    // false like one that is not cardio -- so the form offered "looks like a
+    // barbell" to an exercise configured months ago, showed the whole
+    // Equipment section to a cardio exercise, and rendered the muscle
+    // sections for one before animating them away.
+    const seededEquipment = useMemo(() => {
+        if (!props.exerciseID) return { known: true, equipment: null, isCardio: false };
+        const row = (getCachedExercises() || []).find((ex) => ex.exerciseID === props.exerciseID);
+        if (!row) return { known: false, equipment: null, isCardio: false };
+        return { known: true, equipment: parseEquipment(row.equipment), isCardio: !!row.isCardio };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const [exerciseName, setExerciseName] = useState(seededData.name);
     const [targetSelected, setTargetSelected] = useState(seededData.target);
     const [accessorySelected, setAccessorySelected] = useState(seededData.accessory);
-    const [isCardio, setIsCardio] = useState(false);
+    const [isCardio, setIsCardio] = useState(seededEquipment.isCardio);
     const [isAssisted, setIsAssisted] = useState(false);
     const [originalIsAssisted, setOriginalIsAssisted] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     // What this exercise's weight is made of. Held as a config object (or
     // null for "not set") and serialised on save.
-    const [equipment, setEquipment] = useState(null);
+    const [equipment, setEquipment] = useState(seededEquipment.equipment);
+    // False only when the cache was cold, which is the one case that has to
+    // wait for the read below rather than draw a guess it cannot make yet.
+    const [equipmentLoaded, setEquipmentLoaded] = useState(seededEquipment.known);
     // What the exercise looked like when it was loaded. Equipment lives on
     // this screen but is not part of the exercise definition, so opening it
     // to set a bar weight and saving must not run the definition update --
@@ -196,6 +216,7 @@ const NewExercise = (props) => {
                     setTargetSelected(targets);
                     setAccessorySelected(accessories);
                 }
+                setEquipmentLoaded(true);
             }
         };
         loadExercise();
@@ -542,6 +563,17 @@ const NewExercise = (props) => {
                             but what the machine in front of the user weighs is
                             theirs, and most people never create an exercise at
                             all. Hidden for cardio, where there is no weight. */}
+                        {/* Held back until the exercise's own equipment is known.
+                            Rendering on the first paint showed this section to a
+                            cardio exercise and offered "looks like a barbell" to one
+                            configured months ago, then took both away again. That was
+                            always wrong; it was a single frame before these blocks
+                            animated, and a visible 220ms afterwards.
+
+                            Mounting once, already settled, also means neither block
+                            animates on arrival: Collapsible only grows what opens
+                            AFTER it mounts. */}
+                        {equipmentLoaded && (
                         <Collapsible open={!isCardio}>
                             <View style={styles.sectionContainer}>
                                 <View style={styles.sectionTitleRow}>
@@ -571,6 +603,7 @@ const NewExercise = (props) => {
                                 />
                             </View>
                         </Collapsible>
+                        )}
 
                         {/* Muscle sections – animate out when Cardio is enabled */}
                         <Animated.View style={{
