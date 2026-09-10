@@ -501,6 +501,15 @@ const Settings = () => {
                     </ExpandableRow>
                 </View>
 
+                {/* --- Equipment --- */}
+                <Text style={styles.sectionTitle}>Your Gym</Text>
+                <View style={styles.cardGroup}>
+                    <ActionRow theme={theme} styles={styles} title="Bars, Plates & Dumbbells"
+                        description="What your gym has, so suggestions land on real weights"
+                        iconNode={<MaterialCommunityIcons name="dumbbell" size={20} color={theme.primary} />}
+                        onPress={() => router.push('/gym')} isLast />
+                </View>
+
                 {/* --- Rest Timer --- */}
                 <Text style={styles.sectionTitle}>Rest Timer</Text>
                 <View style={styles.cardGroup}>

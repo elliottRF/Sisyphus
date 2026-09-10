@@ -6,6 +6,7 @@ import {
     fetchBestSessionMatchingOccurrence
 } from './db';
 import { estimateOneRM } from '../utils/oneRM';
+import { resolveEquipmentCached, snapToGrid, stepOnGrid } from '../utils/equipment';
 import { on, AppEvents } from '../utils/events';
 
 export const DAYS_TO_CHECK = 60;
@@ -31,22 +32,46 @@ const bumpWeight = (kg, useImperial, dir = 1) => {
     return useImperial ? next * KG_PER_LB : next;
 };
 
-export const computeNextSet = (baseSet, repRangeMin, repRangeMax, isAssisted = false, useImperial = false) => {
+// A configured exercise snaps to the weights its equipment can actually
+// make; an unconfigured one keeps the old 2.5 kg / 5 lb rounding exactly.
+//
+// The grid is ignored when the weight being progressed sits outside it
+// entirely -- someone benching 120 on a stack profile that stops at 70 has
+// mis-tagged the exercise, and a profile that does not describe what they
+// are lifting must not be allowed to govern what they lift next.
+const gridFor = (grid, weight) => {
+    if (!grid || grid.length === 0) return null;
+    if (weight < grid[0] - 0.01 || weight > grid[grid.length - 1] + 0.01) return null;
+    return grid;
+};
+
+const roundWeightOn = (kg, useImperial, grid) =>
+    (grid ? snapToGrid(kg, grid) : roundWeight(kg, useImperial));
+
+// Returns null when a configured exercise has nothing further in that
+// direction: the last pin, or the plates run out. The caller turns that
+// into a rep instead of inventing a weight the gym cannot make.
+const bumpWeightOn = (kg, useImperial, dir, grid) =>
+    (grid ? stepOnGrid(kg, grid, dir) : bumpWeight(kg, useImperial, dir));
+
+export const computeNextSet = (baseSet, repRangeMin, repRangeMax, isAssisted = false, useImperial = false, equipmentGrid = null) => {
     if (!baseSet || !baseSet.reps || baseSet.reps === 0) return null;
 
     const weight = baseSet.weight || 0;
     const currentReps = baseSet.reps;
+    const grid = gridFor(equipmentGrid, weight);
 
     // Below the range — too heavy to reach the minimum reps.
     if (currentReps < repRangeMin) {
         if (isAssisted) {
             // More assistance (easier) so the minimum reps become achievable.
-            return { weight: Math.max(0, bumpWeight(weight, useImperial, +1)), reps: repRangeMin, isWeightIncrease: false };
+            const easier = bumpWeightOn(weight, useImperial, +1, grid);
+            return { weight: Math.max(0, easier == null ? weight : easier), reps: repRangeMin, isWeightIncrease: false };
         }
         // Drop to a weight that should allow the minimum reps (same est-1RM).
         const oneRM = weight * (1 + currentReps / 30);
         const raw = oneRM / (1 + repRangeMin / 30);
-        return { weight: roundWeight(raw, useImperial), reps: repRangeMin, isWeightIncrease: false };
+        return { weight: roundWeightOn(raw, useImperial, grid), reps: repRangeMin, isWeightIncrease: false };
     }
 
     // Within the range — add a rep at the same weight.
@@ -58,11 +83,15 @@ export const computeNextSet = (baseSet, repRangeMin, repRangeMax, isAssisted = f
     // At/above the top — bump the weight a small, scaled amount and reset to the
     // bottom of the range. Shown as "min+" (do at least the min, push for more),
     // so resetting to a low rep count on a wide range isn't misleading.
-    if (isAssisted) {
-        // Less assistance (harder).
-        return { weight: Math.max(0, bumpWeight(weight, useImperial, -1)), reps: repRangeMin, isWeightIncrease: true };
+    const next = bumpWeightOn(weight, useImperial, isAssisted ? -1 : +1, grid);
+    if (next == null) {
+        // Configured equipment with nothing left in that direction -- the
+        // stack is on its last pin, or the rack has no heavier dumbbell.
+        // Keep progressing the only way the hardware allows rather than
+        // printing a weight that does not exist in their gym.
+        return { weight, reps: targetReps, isWeightIncrease: false };
     }
-    return { weight: bumpWeight(weight, useImperial, +1), reps: repRangeMin, isWeightIncrease: true };
+    return { weight: Math.max(0, next), reps: repRangeMin, isWeightIncrease: true };
 };
 
 /**
@@ -96,7 +125,8 @@ const resolveAgainstRecentHistory = (
     repRangeMin,
     repRangeMax,
     isAssisted,
-    useImperial
+    useImperial,
+    equipmentGrid
 ) => {
     if (!suggestion) return null;
 
@@ -107,7 +137,7 @@ const resolveAgainstRecentHistory = (
     if (alreadyAchieved.length === 0) return suggestion;
 
     const bestAchieved = findBestSet(alreadyAchieved);
-    return computeNextSet(bestAchieved, repRangeMin, repRangeMax, isAssisted, useImperial);
+    return computeNextSet(bestAchieved, repRangeMin, repRangeMax, isAssisted, useImperial, equipmentGrid);
 };
 
 // Session cache keyed by exerciseID. The reorderable list force-remounts
@@ -131,6 +161,8 @@ export const useWorkoutSuggestions = ({
     isAssisted,
     muscleOccurrenceIndex,
     useImperial = false,
+    equipment = null,
+    gym = null,
 }) => {
     const [suggestions, setSuggestions] = useState(() => {
         const c = suggestionsCache.get(exerciseID);
@@ -146,7 +178,12 @@ export const useWorkoutSuggestions = ({
 
         let cancelled = false;
 
-        const cacheKey = `${exerciseID}|${muscleOccurrenceIndex}|${repRangeMin}|${repRangeMax}|${isAssisted ? 1 : 0}|${useImperial ? 1 : 0}`;
+        const resolved = resolveEquipmentCached(equipment, gym);
+        const equipmentGrid = resolved ? resolved.values : null;
+
+        // The profile is part of the key: retagging an exercise as a 9 kg EZ
+        // bar has to invalidate the numbers computed for a 20 kg one.
+        const cacheKey = `${exerciseID}|${muscleOccurrenceIndex}|${repRangeMin}|${repRangeMax}|${isAssisted ? 1 : 0}|${useImperial ? 1 : 0}|${equipment || ''}|${gym ? JSON.stringify(gym) : ''}`;
 
         // Serve the cached result synchronously so toggling suggestions on
         // goes straight from the previous value to the suggestion instead of
@@ -212,7 +249,7 @@ export const useWorkoutSuggestions = ({
 
             // 5. Compute suggestions
             const computedSuggestions = baseSets.map((baseSet) => {
-                const initial = computeNextSet(baseSet, repRangeMin, repRangeMax, isAssisted, useImperial);
+                const initial = computeNextSet(baseSet, repRangeMin, repRangeMax, isAssisted, useImperial, equipmentGrid);
                 if (!initial) return null;
 
                 // 🔥 NEW RULE (exactly what you asked for):
@@ -233,9 +270,9 @@ export const useWorkoutSuggestions = ({
                     return initial;  // ← back to original, no history check
                 }
 
-                const anchorSuggestion = computeNextSet(globalAnchorSet, repRangeMin, repRangeMax, isAssisted, useImperial);
+                const anchorSuggestion = computeNextSet(globalAnchorSet, repRangeMin, repRangeMax, isAssisted, useImperial, equipmentGrid);
                 return resolveAgainstRecentHistory(
-                    anchorSuggestion, recentWorkingSets, repRangeMin, repRangeMax, isAssisted, useImperial
+                    anchorSuggestion, recentWorkingSets, repRangeMin, repRangeMax, isAssisted, useImperial, equipmentGrid
                 );
             });
 
@@ -255,6 +292,8 @@ export const useWorkoutSuggestions = ({
         isAssisted,
         muscleOccurrenceIndex,
         useImperial,
+        equipment,
+        gym,
     ]);
 
     return suggestions;

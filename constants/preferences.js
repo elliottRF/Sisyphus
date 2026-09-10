@@ -34,4 +34,5 @@ export const SETTINGS_KEYS = {
   onboardingSeen: 'user_onboarding_seen_v1',
   alternateView: 'user_alternate_view',
   trackRPE: 'user_track_rpe',
+  gymEquipment: 'user_gym_equipment',
 };

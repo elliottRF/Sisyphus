@@ -29,6 +29,8 @@ import { on, AppEvents } from '../utils/events';
 import CustomAlert from './CustomAlert';
 import RpePicker from './RpePicker';
 import Expandable from './Expandable';
+import PlateHint from './PlateHint';
+import { EQUIPMENT, resolveEquipmentCached } from '../utils/equipment';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
@@ -545,6 +547,13 @@ const ExerciseEditable = ({
     onSetComplete,
     isCardio,
     isAssisted,
+    // The exercises.equipment blob, straight from the DB row. Null on
+    // every exercise nobody has configured, which is all of them until
+    // the user says otherwise.
+    equipment = null,
+    // Only the live workout loads a bar. An old session being edited and
+    // a template being written are not standing at the rack.
+    showPlates = false,
     isTemplate = false,
     hidePrevious = false,
     muscleOccurrenceIndex = 1,
@@ -553,7 +562,14 @@ const ExerciseEditable = ({
     onReorderEnd,
     reorderFingerY
 }) => {
-    const { theme, useImperial, repRangeMin, repRangeMax, trackRPE } = useTheme();
+    const { theme, useImperial, repRangeMin, repRangeMax, trackRPE, gymEquipment } = useTheme();
+    // What this exercise's equipment can actually make. Drives both the
+    // suggestion rounding and the plate breakdown, so they can never
+    // disagree about what is loadable.
+    const resolvedEquipment = useMemo(
+        () => resolveEquipmentCached(equipment, gymEquipment),
+        [equipment, gymEquipment]
+    );
     const styles = useMemo(() => getStyles(theme), [theme]);
     // The parent's callback is keyed by id/name rather than closing over this
     // card, so wrap it here instead of passing an inline arrow to Pressable.
@@ -798,6 +814,8 @@ const ExerciseEditable = ({
         isAssisted,
         muscleOccurrenceIndex,
         useImperial,
+        equipment,
+        gym: gymEquipment,
     });
 
     // When PR mode turns on, grow this card so there's a row for every
@@ -1180,6 +1198,19 @@ const ExerciseEditable = ({
                     );
                 })}
             </View>
+
+            {/* What to load on the bar. Rendered for the whole life of the
+                card once the exercise is set up as a barbell, showing the
+                empty bar until a weight is typed, so the card never changes
+                height when one lands. */}
+            {showPlates && !isCardio && resolvedEquipment && resolvedEquipment.type === EQUIPMENT.BARBELL && (
+                <PlateHint
+                    resolved={resolvedEquipment}
+                    sets={exercise.sets}
+                    theme={theme}
+                    useImperial={useImperial}
+                />
+            )}
 
             {/* Footer */}
             <View>

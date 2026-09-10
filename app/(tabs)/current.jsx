@@ -1132,6 +1132,8 @@ const Current = () => {
                             onSetComplete={handleSetComplete}
                             isCardio={!!exerciseDetails?.isCardio}
                             isAssisted={!!exerciseDetails?.isAssisted}
+                            equipment={exerciseDetails?.equipment}
+                            showPlates
                             muscleOccurrenceIndex={occurrenceMap[exercise.id]}
                             PRMODE={PRMODE}
                             onReorderStart={startReorder}

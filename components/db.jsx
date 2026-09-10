@@ -21,8 +21,8 @@ let lastLivenessProbe = 0;
 // fast path in setupDatabase), so BUMP THIS on any schema change -- a new
 // column, table or index -- or existing installs will never receive it.
 // History: 1 = exercise catalogue reconciled; 2 = full schema verified;
-// 3 = per-set RPE.
-const DB_SETUP_VERSION = 3;
+// 3 = per-set RPE; 4 = per-exercise equipment profiles.
+const DB_SETUP_VERSION = 4;
 
 const getDb = async () => {
   // Cache the PROMISE, not the instance: concurrent first callers previously
@@ -238,7 +238,8 @@ export const setupDatabase = async () => {
         isCardio INTEGER DEFAULT 0,
         isAssisted INTEGER DEFAULT 0,
         strengthRatios TEXT,
-        userCustomised INTEGER DEFAULT 0
+        userCustomised INTEGER DEFAULT 0,
+        equipment TEXT
       );
       
       CREATE TABLE IF NOT EXISTS workoutHistory (
@@ -290,6 +291,7 @@ export const setupDatabase = async () => {
     await ensureColumnExists('workoutHistory', 'rpe', 'REAL');
     await ensureColumnExists('exercises', 'strengthRatios', 'TEXT');
     await ensureColumnExists('exercises', 'userCustomised', 'INTEGER DEFAULT 0');
+    await ensureColumnExists('exercises', 'equipment', 'TEXT');
 
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS pinnedExercises (
@@ -517,6 +519,25 @@ export const updateExercise = async (exerciseID, exerciseName, targetMuscles, ac
     }
     throw error;
   }
+};
+
+/**
+ * Store (or clear) an exercise's equipment profile.
+ *
+ * `json` is a serialised profile from utils/equipment.js, or null to go
+ * back to plain unit rounding. Never touches userCustomised: this says
+ * what the machine in front of the user can make, not that they have
+ * redefined the exercise.
+ */
+export const updateExerciseEquipment = async (exerciseID, json) => {
+  const database = await getDb();
+  await database.runAsync(
+    'UPDATE exercises SET equipment = ? WHERE exerciseID = ?;',
+    [json || null, exerciseID]
+  );
+  // Cards read equipment off the cached exercise list, so refresh it or
+  // the change only lands after the next cold start.
+  await fetchExercises().catch(() => {});
 };
 
 // The name the first split is created with. Exported so the Train tab can tell

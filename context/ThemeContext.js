@@ -6,6 +6,7 @@ import {
     DEFAULT_REP_RANGE_PRESET,
     SETTINGS_KEYS
 } from '../constants/preferences';
+import { defaultGym } from '../utils/equipment';
 
 const ThemeContext = createContext();
 
@@ -17,6 +18,13 @@ export const ThemeProvider = ({ children }) => {
     // stored when present; this only governs whether the column is offered,
     // because it is a sixth column on a row used one-handed between sets.
     const [trackRPE, setTrackRPE] = useState(true);
+    // The bar, plate rack and dumbbell ladder this user's gym has, in kg.
+    // Per-exercise profiles fall back to these, so setting up a gym once
+    // is most of the work; an exercise only overrides what differs (the
+    // 9 kg EZ bar on the preacher station, say). Null until settings load
+    // -- the defaults depend on whether they work in kg or lb, and that
+    // preference arrives in the same read.
+    const [gymEquipment, setGymEquipment] = useState(null);
 
     const [gender, setGender] = useState('male');
     const [accessoryWeight, setAccessoryWeight] = useState(0.5);
@@ -48,6 +56,7 @@ export const ThemeProvider = ({ children }) => {
                 storedCustomThemes,
                 storedCurrentWorkout,
                 storedTrackRPE,
+                storedGym,
             ] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
@@ -61,6 +70,7 @@ export const ThemeProvider = ({ children }) => {
                 AsyncStorage.getItem('user_custom_themes'),
                 AsyncStorage.getItem('@currentWorkout'),
                 AsyncStorage.getItem(SETTINGS_KEYS.trackRPE),
+                AsyncStorage.getItem(SETTINGS_KEYS.gymEquipment),
             ]);
 
             // Custom themes are stored as full theme objects (each with an id).
@@ -112,6 +122,14 @@ export const ThemeProvider = ({ children }) => {
             if (storedTrackRPE !== null) {
                 setTrackRPE(storedTrackRPE === 'true');
             }
+            // Seeded from the unit preference read above, not from state:
+            // setUseImperial has not committed yet at this point.
+            const imperial = storedUnitPref === 'true';
+            let parsedGym = null;
+            if (storedGym) {
+                try { parsedGym = JSON.parse(storedGym); } catch (e) { parsedGym = null; }
+            }
+            setGymEquipment(parsedGym || defaultGym(imperial));
             // The Train tab owns this flag while it is mounted (same rule:
             // exercises present OR a start time), but tabs now mount lazily,
             // so after a cold start it isn't mounted until visited. Without
@@ -269,6 +287,15 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updateGymEquipment = async (next) => {
+        setGymEquipment(next);
+        try {
+            await AsyncStorage.setItem(SETTINGS_KEYS.gymEquipment, JSON.stringify(next));
+        } catch (error) {
+            console.error("Failed to save gym equipment:", error);
+        }
+    };
+
     const updateWorkoutStartTime = async (time) => {
         setWorkoutStartTime(time);
         try {
@@ -289,6 +316,8 @@ export const ThemeProvider = ({ children }) => {
             updateTheme,
             trackRPE,
             updateTrackRPE,
+            gymEquipment,
+            updateGymEquipment,
             customThemes,
             addCustomTheme,
             updateCustomTheme,

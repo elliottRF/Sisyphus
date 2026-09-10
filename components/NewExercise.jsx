@@ -4,7 +4,9 @@ import {
     ScrollView as RNScrollView, Animated
 } from 'react-native';
 import Body from 'react-native-body-highlighter';
-import { insertExercise, updateExercise, fetchExercises, recalculateExercisePRs } from '../components/db';
+import { insertExercise, updateExercise, fetchExercises, recalculateExercisePRs, updateExerciseEquipment } from '../components/db';
+import { EquipmentEditor } from './EquipmentEditor';
+import { EQUIPMENT, EQUIPMENT_LABELS, parseEquipment, serialiseEquipment, guessEquipmentType } from '../utils/equipment';
 import { FONTS, getThemedShadow, isLightTheme } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -30,6 +32,13 @@ const OPTION_BY_SLUG = MUSCLE_OPTIONS.reduce((acc, opt) => {
     return acc;
 }, {});
 const canonicalMuscle = (m) => OPTION_BY_SLUG[String(m || '').trim().toLowerCase()] || null;
+
+const blankEquipment = (type) => {
+    if (type === EQUIPMENT.BARBELL) return { type, bar: null, plates: null, perSide: true };
+    if (type === EQUIPMENT.DUMBBELL) return { type, ladder: null, extra: [], pair: false };
+    if (type === EQUIPMENT.STACK) return { type, stack: [], addOns: [] };
+    return null;
+};
 
 const MUSCLE_DISPLAY_NAMES = {
     'Gluteal': 'Glutes',
@@ -116,7 +125,7 @@ const GradientOrView = ({ colors, style, theme, children }) => {
 };
 
 const NewExercise = (props) => {
-    const { theme, gender } = useTheme();
+    const { theme, gender, useImperial, gymEquipment } = useTheme();
     // Memoised: `styles` is a prop of the React.memo'd AnimatedMuscleChip, and
     // there is one chip per muscle — a new object each render re-rendered them all.
     const styles = useMemo(() => getStyles(theme), [theme]);
@@ -144,7 +153,11 @@ const NewExercise = (props) => {
     const [isAssisted, setIsAssisted] = useState(false);
     const [originalIsAssisted, setOriginalIsAssisted] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    // What this exercise's weight is made of. Held as a config object (or
+    // null for "not set") and serialised on save.
+    const [equipment, setEquipment] = useState(null);
     const isCanonical = props.exerciseID && props.exerciseID < 1000;
+    const equipmentGuess = useMemo(() => guessEquipmentType(exerciseName), [exerciseName]);
 
     // Load exercise data if exerciseID is provided
     useEffect(() => {
@@ -159,6 +172,7 @@ const NewExercise = (props) => {
                     setIsCardio(!!exercise.isCardio);
                     setIsAssisted(!!exercise.isAssisted);
                     setOriginalIsAssisted(!!exercise.isAssisted);
+                    setEquipment(parseEquipment(exercise.equipment));
 
                     const targets = exercise.targetMuscle ? exercise.targetMuscle.split(',').map((m) => m.trim()) : [];
                     const accessories = exercise.accessoryMuscles ? exercise.accessoryMuscles.split(',').map((m) => m.trim()) : [];
@@ -281,6 +295,16 @@ const NewExercise = (props) => {
             );
             newExerciseObj.exerciseID = newId;
         }
+
+        // Equipment goes through its own writer: it describes the user's gym
+        // rather than the exercise, so it is saveable on a built-in exercise
+        // whose name and type are locked, and it must not mark the exercise
+        // as customised (which would freeze its muscles against future
+        // catalogue updates).
+        await updateExerciseEquipment(
+            props.exerciseID || newExerciseObj.exerciseID,
+            serialiseEquipment(isCardio ? null : equipment)
+        );
 
         // Update snapshot cache for muscles and name so history screen is instant
         const existingSnapshot = getExerciseSnapshotSync(props.exerciseID || newExerciseObj.exerciseID);
@@ -486,6 +510,38 @@ const NewExercise = (props) => {
                                 />
                             )}
                         </AnimatedCard>
+
+                        {/* Equipment. Deliberately outside the isCanonical lock:
+                            the name and muscles of a built-in exercise are ours,
+                            but what the machine in front of the user weighs is
+                            theirs, and most people never create an exercise at
+                            all. Hidden for cardio, where there is no weight. */}
+                        {!isCardio && (
+                            <View style={styles.sectionContainer}>
+                                <View style={styles.sectionTitleRow}>
+                                    <Text style={styles.sectionTitle}>Equipment</Text>
+                                </View>
+                                {!equipment && equipmentGuess !== EQUIPMENT.NONE && (
+                                    <TouchableOpacity
+                                        style={styles.guessRow}
+                                        onPress={() => setEquipment(blankEquipment(equipmentGuess))}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Feather name="zap" size={14} color={theme.primary} />
+                                        <Text style={styles.guessText}>
+                                            Looks like {EQUIPMENT_LABELS[equipmentGuess].toLowerCase()} — set it up
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                                <EquipmentEditor
+                                    value={equipment}
+                                    onChange={setEquipment}
+                                    theme={theme}
+                                    useImperial={useImperial}
+                                    gym={gymEquipment}
+                                />
+                            </View>
+                        )}
 
                         {/* Muscle sections – animate out when Cardio is enabled */}
                         <Animated.View style={{
@@ -695,6 +751,22 @@ const getStyles = (theme) => {
             backgroundColor: lightTheme ? 'rgba(255,255,255,0.72)' : 'transparent',
             borderRadius: 18,
             padding: lightTheme ? 16 : 0,
+        },
+        guessRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            alignSelf: 'flex-start',
+            paddingHorizontal: 10,
+            paddingVertical: 7,
+            borderRadius: 100,
+            backgroundColor: theme.overlayInput,
+            marginBottom: 12,
+        },
+        guessText: {
+            fontSize: 12,
+            fontFamily: FONTS.semiBold,
+            color: theme.primary,
         },
         sectionTitleRow: {
             flexDirection: 'row',

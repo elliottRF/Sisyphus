@@ -23,9 +23,19 @@ config.resolver.assetExts.push("db", "lottie");
 //  2. .claude/worktrees — git worktrees live inside the project, and each holds a
 //     full second copy of the app plus its own node_modules. Crawling it doubles
 //     startup for no benefit, and Metro would resolve modules out of it.
+//
+//     ANCHORED TO THE PROJECT ROOT, which matters more than it looks. blockList
+//     is matched against absolute paths, so an unanchored pattern also matches
+//     every file of a worktree that is itself the project root -- Metro then
+//     blocks the whole app and dies on `Unable to resolve module
+//     ./node_modules/expo-router/entry`, which reads like a broken install
+//     rather than a config problem. The rule means "the worktrees inside MY
+//     project", and now says so.
+const ROOT = __dirname.replace(/[.*+?^${}()|[\]\\/]/g, (c) => (c === '\\' || c === '/' ? '[\\\\/]' : `\\${c}`));
+
 config.resolver.blockList = [
     /[\\/]node_modules[\\/].*[\\/]android[\\/].*[\\/]build[\\/].*/,
-    /[\\/]\.claude[\\/]worktrees[\\/].*/,
+    new RegExp(`^${ROOT}[\\\\/]\\.claude[\\\\/]worktrees[\\\\/]`),
 ];
 
 module.exports = config;

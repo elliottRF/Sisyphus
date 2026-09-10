@@ -272,6 +272,7 @@ const ThemeConsumer = ({ fontsLoaded, dbReady }) => {
                     <Stack.Screen name="workout/EditWorkout" options={{ headerShown: false }} />
                     <Stack.Screen name="template/[id]" options={{ headerShown: false }} />
                     <Stack.Screen name="settings" options={{ headerShown: false }} />
+                    <Stack.Screen name="gym" options={{ headerShown: false }} />
                     <Stack.Screen name="onboarding" options={{ headerShown: false }} />
                     <Stack.Screen name="exercise/[id]" options={{ headerShown: false }} />
                     <Stack.Screen name="exercise/new" options={{ headerShown: false }} />
