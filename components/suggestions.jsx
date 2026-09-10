@@ -5,7 +5,7 @@ import {
     fetchRecentSets,
     fetchBestSessionMatchingOccurrence
 } from './db';
-import { estimateOneRM } from '../utils/oneRM';
+import { estimateOneRM, weightForReps } from '../utils/oneRM';
 import { resolveEquipmentCached, snapToGrid, stepOnGrid } from '../utils/equipment';
 import { on, AppEvents } from '../utils/events';
 
@@ -69,8 +69,16 @@ export const computeNextSet = (baseSet, repRangeMin, repRangeMax, isAssisted = f
             return { weight: Math.max(0, easier == null ? weight : easier), reps: repRangeMin, isWeightIncrease: false };
         }
         // Drop to a weight that should allow the minimum reps (same est-1RM).
-        const oneRM = weight * (1 + currentReps / 30);
-        const raw = oneRM / (1 + repRangeMin / 30);
+        //
+        // Through the shared estimator, not the Epley formula written out
+        // again. utils/oneRM.js is the single source of truth precisely so
+        // that its conventions hold everywhere, and the inline copy broke the
+        // one that matters most here: a single counts as exactly the weight.
+        // A 60 kg single is stored with oneRM 60, but this read it as 62, and
+        // after rounding that is a whole 2.5 kg step of daylight between what
+        // the set is worth and what the app suggests off the back of it.
+        const oneRM = estimateOneRM(weight, currentReps);
+        const raw = weightForReps(oneRM, repRangeMin);
         return { weight: roundWeightOn(raw, useImperial, grid), reps: repRangeMin, isWeightIncrease: false };
     }
 
