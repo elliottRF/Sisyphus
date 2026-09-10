@@ -7,7 +7,7 @@ import Body from 'react-native-body-highlighter';
 import { insertExercise, updateExercise, fetchExercises, getCachedExercises, recalculateExercisePRs, updateExerciseEquipment, getExerciseUsage, deleteExercise } from '../components/db';
 import { EquipmentEditor } from './EquipmentEditor';
 import Collapsible from './Collapsible';
-import { EQUIPMENT, EQUIPMENT_LABELS, parseEquipment, serialiseEquipment, guessEquipmentType } from '../utils/equipment';
+import { EQUIPMENT, EQUIPMENT_PHRASES, isPlateLoaded, parseEquipment, serialiseEquipment, guessEquipmentType } from '../utils/equipment';
 import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -36,7 +36,14 @@ const OPTION_BY_SLUG = MUSCLE_OPTIONS.reduce((acc, opt) => {
 const canonicalMuscle = (m) => OPTION_BY_SLUG[String(m || '').trim().toLowerCase()] || null;
 
 const blankEquipment = (type) => {
-    if (type === EQUIPMENT.BARBELL) return { type, bar: null, plates: null, perSide: true };
+    if (isPlateLoaded(type)) {
+        return {
+            type,
+            bar: type === EQUIPMENT.PLATE_MACHINE ? 0 : null,
+            plates: null,
+            perSide: true,
+        };
+    }
     if (type === EQUIPMENT.DUMBBELL) return { type, ladder: null, extra: [], pair: false };
     if (type === EQUIPMENT.STACK) return { type, stack: [], addOns: [] };
     return null;
@@ -649,7 +656,7 @@ const NewExercise = (props) => {
                                     >
                                         <Feather name="zap" size={14} color={theme.primary} />
                                         <Text style={styles.guessText}>
-                                            Looks like {EQUIPMENT_LABELS[equipmentGuess].toLowerCase()} — set it up
+                                            Looks like {EQUIPMENT_PHRASES[equipmentGuess]} — set it up
                                         </Text>
                                     </TouchableOpacity>
                                 </Collapsible>

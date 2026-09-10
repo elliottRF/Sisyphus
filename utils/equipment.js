@@ -20,16 +20,41 @@
 export const EQUIPMENT = {
     NONE: 'none',
     BARBELL: 'barbell',
+    // A leg press, hack squat or hip thrust sled: you load plates onto it,
+    // and the carriage itself may weigh something before you start. That is
+    // the same arithmetic as a barbell -- a baseline the plates add to -- so
+    // it shares the resolver. What differs is the DEFAULT baseline: a bar is
+    // 20 kg unless told otherwise, a sled is whatever that machine says on
+    // its frame, and most people counting only the plates want 0.
+    PLATE_MACHINE: 'plateMachine',
     DUMBBELL: 'dumbbell',
     STACK: 'stack',
 };
 
+// Types whose weight is a baseline plus a combination of plates.
+export const isPlateLoaded = (type) =>
+    type === EQUIPMENT.BARBELL || type === EQUIPMENT.PLATE_MACHINE;
+
 export const EQUIPMENT_LABELS = {
     [EQUIPMENT.NONE]: 'Not set',
     [EQUIPMENT.BARBELL]: 'Barbell',
+    [EQUIPMENT.PLATE_MACHINE]: 'Plate machine',
     [EQUIPMENT.DUMBBELL]: 'Dumbbells',
     [EQUIPMENT.STACK]: 'Weight stack',
 };
+
+// Same names in a sentence. "Looks like weight stack" reads like a telegram.
+export const EQUIPMENT_PHRASES = {
+    [EQUIPMENT.BARBELL]: 'a barbell',
+    [EQUIPMENT.PLATE_MACHINE]: 'a plate-loaded machine',
+    [EQUIPMENT.DUMBBELL]: 'dumbbells',
+    [EQUIPMENT.STACK]: 'a weight stack',
+};
+
+// What the plates are added TO, named for the type. Used wherever the app
+// talks about the baseline: "9 kg bar", "25 kg machine".
+export const baseNoun = (type) =>
+    type === EQUIPMENT.PLATE_MACHINE ? 'machine' : 'bar';
 
 // ── Defaults ────────────────────────────────────────────────────────────────
 // Two sets, because a gym stocked in kg and one stocked in lb have genuinely
@@ -119,10 +144,11 @@ export const parseEquipment = (raw) => {
     if (!cfg || typeof cfg !== 'object') return null;
     const type = cfg.type;
 
-    if (type === EQUIPMENT.BARBELL) {
+    if (isPlateLoaded(type)) {
         return {
             type,
-            bar: num(cfg.bar),                       // null = use the gym default
+            // `bar` is the baseline the plates add to, whatever holds them.
+            bar: num(cfg.bar),                       // null = use the type's default
             plates: plateList(cfg.plates),           // null = use the gym default
             perSide: cfg.perSide !== false,          // default: loads in pairs
         };
@@ -275,9 +301,15 @@ export const resolveEquipment = (cfg, gym) => {
     if (!parsed) return null;
     const g = gym || defaultGym(false);
 
-    if (parsed.type === EQUIPMENT.BARBELL) {
+    if (isPlateLoaded(parsed.type)) {
+        // A machine has no gym-wide default to fall back on: every sled
+        // weighs something different and plenty of people count only the
+        // plates. Unset means zero, and the editor says so.
         const gymBar = num(g.bar);
-        const bar = parsed.bar != null ? parsed.bar : (gymBar == null ? 20 : gymBar);
+        const fallback = parsed.type === EQUIPMENT.PLATE_MACHINE
+            ? 0
+            : (gymBar == null ? 20 : gymBar);
+        const bar = parsed.bar != null ? parsed.bar : fallback;
         const plates = parsed.plates || plateList(g.plates) || [];
         if (plates.length === 0) return null;
         const loads = buildLoadMap(plates, parsed.perSide);
@@ -365,7 +397,7 @@ export const stepOnGrid = (current, values, dir = 1, pct = 0.025) => {
  * still read 34.
  */
 export const platesForWeight = (target, resolved) => {
-    if (!resolved || resolved.type !== EQUIPMENT.BARBELL || !Number.isFinite(target)) return null;
+    if (!resolved || !isPlateLoaded(resolved.type) || !Number.isFinite(target)) return null;
     const load = target - resolved.bar;
     if (load < -EPS) {
         return { belowBar: true, bar: resolved.bar, total: resolved.bar, combo: [], exact: false, perSide: resolved.perSide };
@@ -420,7 +452,16 @@ export const guessEquipmentType = (name) => {
     // machine take plates, not a pin -- and checked the other way round,
     // "Bench Press (Smith Machine)" guessed a stack while "Smith Shoulder
     // Press" guessed a bar, which is the same station answered two ways.
-    if (/smith|plate.?loaded|hex bar|trap bar/.test(n)) return EQUIPMENT.BARBELL;
+    //
+    // Only names that say plate-loaded outright, or brands that only ever
+    // are. "Leg press" is left alone deliberately: most are sleds but plenty
+    // are pin-selected, and a wrong guess on a common exercise is worse than
+    // no guess. A Smith bar stays a barbell -- it IS a bar, with its own
+    // weight, which the bar field already handles.
+    if (/plate.?loaded|hammer strength|iso.?lateral|hack squat|t.?bar row/.test(n)) {
+        return EQUIPMENT.PLATE_MACHINE;
+    }
+    if (/smith|hex bar|trap bar/.test(n)) return EQUIPMENT.BARBELL;
 
     if (/machine|cable|pulldown|pull-down|pushdown|press-?down|pec deck|stack/.test(n)) return EQUIPMENT.STACK;
     if (/barbell|deadlift|bench press|squat|\bez\b/.test(n)) return EQUIPMENT.BARBELL;

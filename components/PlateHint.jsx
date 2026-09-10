@@ -2,10 +2,11 @@ import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { FONTS, RADIUS, isLightTheme, withAlpha } from '../constants/theme';
 import { formatWeight, toStorageKg, unitLabel } from '../utils/units';
-import { platesForWeight, flattenCombo } from '../utils/equipment';
+import { platesForWeight, flattenCombo, baseNoun } from '../utils/equipment';
 import Expandable from './Expandable';
 
-// What to actually load on the bar, on the exercise card itself.
+// What to actually load on the bar — or on the sled — on the exercise card
+// itself.
 //
 // Working out that 34 kg on a 9 kg bar is a pair of 10s and a pair of 2.5s is
 // arithmetic nobody should be doing between sets, and it is the one piece of
@@ -16,10 +17,12 @@ import Expandable from './Expandable';
 // One line, showing the next set you have not ticked. Tap it to see every
 // distinct weight on the card at once, for pyramids and drop sets.
 
-const PlateRow = ({ plates, styles, useImperial, dim }) => (
+const PlateRow = ({ plates, styles, useImperial, dim, noun, hasBase }) => (
     <View style={styles.plates}>
         {plates.length === 0 ? (
-            <Text style={[styles.barOnly, dim && styles.dim]}>bar only</Text>
+            <Text style={[styles.barOnly, dim && styles.dim]}>
+                {hasBase ? `${noun} only` : 'no plates'}
+            </Text>
         ) : plates.map((w, i) => (
             // Keyed by position: the same plate weight legitimately appears
             // twice in a row (two 10s a side) and both must render.
@@ -108,7 +111,11 @@ const PlateHint = ({ resolved, sets, theme, useImperial }) => {
     if (!resolved || !primary) return null;
 
     const unit = unitLabel(useImperial);
-    const label = resolved.perSide ? 'PER SIDE' : 'ON THE BAR';
+    // A sled is not a bar, and a machine that weighs nothing before you load
+    // it has no baseline worth putting on the row at all.
+    const noun = baseNoun(resolved.type);
+    const hasBase = Number.isFinite(resolved.bar) && resolved.bar > 0;
+    const label = resolved.perSide ? 'PER SIDE' : `ON THE ${noun.toUpperCase()}`;
 
     // The weight typed is not one the plates can build. Say so rather than
     // rounding the display, or someone loads 32.5 while the card reads 34.
@@ -127,11 +134,11 @@ const PlateHint = ({ resolved, sets, theme, useImperial }) => {
 
                 {primary.belowBar ? (
                     <Text style={styles.note}>
-                        under the {formatWeight(resolved.bar, useImperial, 2)} {unit} bar
+                        under the {formatWeight(resolved.bar, useImperial, 2)} {unit} {noun}
                     </Text>
                 ) : (
                     <>
-                        <PlateRow plates={flattenCombo(primary.combo)} styles={styles} useImperial={useImperial} />
+                        <PlateRow plates={flattenCombo(primary.combo)} styles={styles} useImperial={useImperial} noun={noun} hasBase={hasBase} />
                         {inexact && (
                             <Text style={styles.note}>
                                 = {formatWeight(primary.total, useImperial, 2)}
@@ -140,9 +147,11 @@ const PlateHint = ({ resolved, sets, theme, useImperial }) => {
                     </>
                 )}
 
-                <Text style={styles.bar}>
-                    {formatWeight(resolved.bar, useImperial, 2)} {unit} bar
-                </Text>
+                {hasBase && (
+                    <Text style={styles.bar}>
+                        {formatWeight(resolved.bar, useImperial, 2)} {unit} {noun}
+                    </Text>
+                )}
             </TouchableOpacity>
 
             {expanded && (
@@ -157,9 +166,9 @@ const PlateHint = ({ resolved, sets, theme, useImperial }) => {
                                         {formatWeight(w, useImperial, 2)}
                                     </Text>
                                     {p.belowBar ? (
-                                        <Text style={styles.note}>under the bar</Text>
+                                        <Text style={styles.note}>under the {noun}</Text>
                                     ) : (
-                                        <PlateRow plates={flattenCombo(p.combo)} styles={styles} useImperial={useImperial} dim />
+                                        <PlateRow plates={flattenCombo(p.combo)} styles={styles} useImperial={useImperial} dim noun={noun} hasBase={hasBase} />
                                     )}
                                     {!p.exact && !p.belowBar && (
                                         <Text style={styles.note}>= {formatWeight(p.total, useImperial, 2)}</Text>

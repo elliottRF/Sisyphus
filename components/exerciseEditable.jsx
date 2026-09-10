@@ -31,7 +31,7 @@ import CustomAlert from './CustomAlert';
 import RpePicker from './RpePicker';
 import Expandable from './Expandable';
 import PlateHint from './PlateHint';
-import { EQUIPMENT, resolveEquipmentCached } from '../utils/equipment';
+import { isPlateLoaded, resolveEquipmentCached } from '../utils/equipment';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = -100;
@@ -1208,7 +1208,7 @@ const ExerciseEditable = ({
                 card once the exercise is set up as a barbell, showing the
                 empty bar until a weight is typed, so the card never changes
                 height when one lands. */}
-            {showPlates && !isCardio && resolvedEquipment && resolvedEquipment.type === EQUIPMENT.BARBELL && (
+            {showPlates && !isCardio && resolvedEquipment && isPlateLoaded(resolvedEquipment.type) && (
                 <PlateHint
                     resolved={resolvedEquipment}
                     sets={exercise.sets}

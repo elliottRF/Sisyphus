@@ -8,7 +8,7 @@ import Collapsible from './Collapsible';
 
 import { FONTS, TYPE, SPACING, RADIUS, isLightTheme, withAlpha } from '../constants/theme';
 import { formatWeight, toStorageKg, unitLabel } from '../utils/units';
-import { EQUIPMENT, EQUIPMENT_LABELS, resolveEquipment } from '../utils/equipment';
+import { EQUIPMENT, EQUIPMENT_LABELS, isPlateLoaded, resolveEquipment } from '../utils/equipment';
 
 // Editors for what a gym actually has.
 //
@@ -308,7 +308,13 @@ const StackGenerator = ({ onGenerate, theme, useImperial, styles }) => {
 };
 
 // ── Type picker ─────────────────────────────────────────────────────────────
-const TYPES = [EQUIPMENT.NONE, EQUIPMENT.BARBELL, EQUIPMENT.DUMBBELL, EQUIPMENT.STACK];
+const TYPES = [
+    EQUIPMENT.NONE,
+    EQUIPMENT.BARBELL,
+    EQUIPMENT.PLATE_MACHINE,
+    EQUIPMENT.DUMBBELL,
+    EQUIPMENT.STACK,
+];
 
 const TypePicker = ({ value, onChange, theme, styles }) => (
     <View style={styles.typeRow}>
@@ -351,6 +357,7 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
     const styles = useStyles(theme);
     const cfg = value;
     const type = (cfg && cfg.type) || EQUIPMENT.NONE;
+    const isMachine = type === EQUIPMENT.PLATE_MACHINE;
     // Both of these blocks are closed by nulling the very field they render,
     // so they need their old contents to collapse with.
     const heldPlates = useHeld(cfg && cfg.plates);
@@ -358,7 +365,16 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
 
     const setType = useCallback((t) => {
         if (t === EQUIPMENT.NONE) return onChange(null);
-        if (t === EQUIPMENT.BARBELL) return onChange({ type: t, bar: null, plates: null, perSide: true });
+        // A bar inherits the gym's standard one; a machine starts at zero,
+        // because there is no such thing as a standard sled.
+        if (isPlateLoaded(t)) {
+            return onChange({
+                type: t,
+                bar: t === EQUIPMENT.PLATE_MACHINE ? 0 : null,
+                plates: null,
+                perSide: true,
+            });
+        }
         if (t === EQUIPMENT.DUMBBELL) return onChange({ type: t, ladder: null, extra: [], pair: false });
         return onChange({ type: t, stack: [], addOns: [] });
     }, [onChange]);
@@ -389,16 +405,19 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
                 <Text style={styles.hint}>
                     Suggestions round to the nearest {useImperial ? '5 lb' : '2.5 kg'}, as they
                     always have. Pick what this exercise uses and they will land on
-                    weights your gym can actually make.
+                    weights your gym can actually make. A leg press, hack squat or hip
+                    thrust sled is a plate machine.
                 </Text>
             )}
 
-            {type === EQUIPMENT.BARBELL && (
+            {isPlateLoaded(type) && (
                 <View style={styles.section}>
                     <View style={styles.fieldRow}>
                         <NumberField
-                            label={`BAR (${unitLabel(useImperial).toUpperCase()})`}
-                            valueKg={cfg.bar != null ? cfg.bar : (gym && gym.bar)}
+                            label={isMachine
+                                ? `MACHINE (${unitLabel(useImperial).toUpperCase()})`
+                                : `BAR (${unitLabel(useImperial).toUpperCase()})`}
+                            valueKg={cfg.bar != null ? cfg.bar : (isMachine ? 0 : (gym && gym.bar))}
                             onCommit={(kg) => patch({ bar: kg })}
                             useImperial={useImperial}
                             styles={styles}
@@ -406,7 +425,13 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
                             width={110}
                         />
                         <View style={styles.barPresets}>
-                            {(useImperial ? [45, 35, 25, 15] : [20, 15, 10, 7]).map((disp) => (
+                            {/* One shortcut, for the common case of counting only
+                                the plates you put on. Sled weights vary far too
+                                much to offer invented ones. */}
+                            {(isMachine
+                                ? [0]
+                                : (useImperial ? [45, 35, 25, 15] : [20, 15, 10, 7])
+                            ).map((disp) => (
                                 <TouchableOpacity
                                     key={disp}
                                     style={styles.presetChip}
@@ -419,9 +444,11 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
                         </View>
                     </View>
                     <Text style={styles.hint}>
-                        {useImperial
-                            ? 'The empty bar. A curl or preacher bar is often 15-25 lbs, not the 45 an Olympic bar weighs.'
-                            : 'The empty bar. An EZ or preacher bar is often 7-10 kg, not the 20 an Olympic bar weighs.'}
+                        {isMachine
+                            ? 'What the sled or carriage weighs before you load it — often printed on the frame. Leave it at 0 if you count only the plates you add, which is what most people log.'
+                            : (useImperial
+                                ? 'The empty bar. A curl or preacher bar is often 15-25 lbs, not the 45 an Olympic bar weighs.'
+                                : 'The empty bar. An EZ or preacher bar is often 7-10 kg, not the 20 an Olympic bar weighs.')}
                     </Text>
 
                     <InheritToggle
@@ -567,9 +594,12 @@ export const getStyles = (theme) => {
         },
 
         // Type picker
-        typeRow: { flexDirection: 'row', gap: SPACING.xs },
+        typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
         typeButton: {
-            flex: 1,
+            // Five of these no longer fit on one line, so they wrap: a basis
+            // just under a third leaves three up and two under.
+            flexGrow: 1,
+            flexBasis: '30%',
             paddingVertical: 10,
             paddingHorizontal: 4,
             borderRadius: RADIUS.m,
