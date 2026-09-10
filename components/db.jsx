@@ -868,6 +868,12 @@ export const fetchLastWorkoutSets = async (exerciseID) => {
 // window would be a 14% error.
 const isoDaysAgo = (days) => new Date(Date.now() - days * 86400000).toISOString();
 
+// The cutoff for a lookback window, where 0 days means "all time". Going
+// through a real epoch timestamp rather than branching the SQL keeps every
+// query below a single shape.
+const EPOCH_ISO = new Date(0).toISOString();
+const lookbackCutoff = (days) => (days > 0 ? isoDaysAgo(days) : EPOCH_ISO);
+
 export const fetchRecentSets = async (exerciseID, days) => {
   const database = await getDb();
 
@@ -877,7 +883,7 @@ export const fetchRecentSets = async (exerciseID, days) => {
      WHERE exerciseID = ?
      AND time >= ?
      ORDER BY time DESC, setNum ASC;`,
-    [exerciseID, isoDaysAgo(days)]
+    [exerciseID, lookbackCutoff(days)]
   );
 };
 
@@ -1171,9 +1177,11 @@ export const fetchRecentMuscleUsage = async (days) => {
   );
 };
 
+// Kept as the default for every caller, so anything that does not pass a
+// window behaves exactly as it did before the setting existed.
 const DAYS_TO_CHECK = 60;
 
-export const fetchRecentPRSession = async (exerciseID) => {
+export const fetchRecentPRSession = async (exerciseID, days = DAYS_TO_CHECK) => {
   const database = await getDb();
 
   // 1. Find the workoutSession that contains the single best set
@@ -1186,7 +1194,7 @@ export const fetchRecentPRSession = async (exerciseID) => {
            AND reps > 0
          ORDER BY weight DESC, reps DESC, time DESC
          LIMIT 1;`,
-    [exerciseID, isoDaysAgo(DAYS_TO_CHECK)]
+    [exerciseID, lookbackCutoff(days)]
   );
 
   if (!prSession?.workoutSession) return [];
@@ -1236,7 +1244,7 @@ export const fetchMostRecentSession = async (exerciseID) => {
 
 
 // Fetch the best (PR) session where this exercise was performed with the exact same muscle occurrence index
-export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex) => {
+export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex, days = DAYS_TO_CHECK) => {
   const database = await getDb();
 
   const recentSessions = await database.getAllAsync(`
@@ -1244,7 +1252,7 @@ export const fetchBestSessionMatchingOccurrence = async (exerciseID, targetIndex
     FROM workoutHistory
     WHERE exerciseID = ? AND time >= ? AND (setType IS NULL OR setType != 'W')
     GROUP BY workoutSession
-  `, [exerciseID, isoDaysAgo(60)]);
+  `, [exerciseID, lookbackCutoff(days)]);
 
   const validSessions = [];
 

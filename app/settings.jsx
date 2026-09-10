@@ -21,8 +21,10 @@ import {
     GenderSegment,
     RepRangeSelector,
     SecondaryVolumeSlider,
-    RecoveryRateSlider
+    RecoveryRateSlider,
+    PRLookbackSegment
 } from '../components/PreferenceControls';
+import { prLookbackName } from '../constants/preferences';
 
 // --- Sub-components (Helpers) ---
 
@@ -154,6 +156,7 @@ const Settings = () => {
         repRangePreset, repRangeMin, repRangeMax, updateRepRange,
         useImperial, updateUnitPref,
         trackRPE, updateTrackRPE,
+        prLookbackDays, updatePrLookbackDays,
     } = useTheme();
 
     const styles = useMemo(() => getStyles(theme), [theme]);
@@ -474,6 +477,19 @@ const Settings = () => {
                     >
                         <Text style={styles.expandedHint}>Used for progressive overload suggestions.</Text>
                         <RepRangeSelector theme={theme} value={localRepPreset} min={localRepMin} max={localRepMax} onRangeChange={(r) => { setLocalRepMin(r.min); setLocalRepMax(r.max); setLocalRepPreset(r.preset); pendingRangeRef.current = r; }} onRangeChangeComplete={() => updateRepRange(pendingRangeRef.current)} compact />
+                    </ExpandableRow>
+                    <ExpandableRow
+                        theme={theme} styles={styles} title="Suggest From" value={prLookbackName(prLookbackDays)}
+                        iconNode={<Feather name="rotate-ccw" size={20} color={theme.primary} />}
+                        expanded={openRow === 'lookback'} onToggle={() => toggleRow('lookback')}
+                    >
+                        <Text style={styles.expandedHint}>
+                            How far back a session counts as your current form. Suggestions
+                            progress from your best session inside this window, so a longer
+                            one chases an older, usually harder best. If you have not trained
+                            an exercise inside it, your last session is used whatever its age.
+                        </Text>
+                        <PRLookbackSegment theme={theme} value={prLookbackDays} onChange={updatePrLookbackDays} />
                     </ExpandableRow>
                     <ExpandableRow
                         theme={theme} styles={styles} title="Secondary Volume" value={Number(localAccessoryWeight).toFixed(1)}

@@ -4,6 +4,7 @@ import { THEMES } from '../constants/theme';
 import {
     DEFAULT_REP_RANGE,
     DEFAULT_REP_RANGE_PRESET,
+    DEFAULT_PR_LOOKBACK_DAYS,
     SETTINGS_KEYS
 } from '../constants/preferences';
 import { defaultGym, isDefaultGym } from '../utils/equipment';
@@ -32,6 +33,9 @@ export const ThemeProvider = ({ children }) => {
     const [repRangePreset, setRepRangePreset] = useState(DEFAULT_REP_RANGE_PRESET);
     const [repRangeMin, setRepRangeMin] = useState(DEFAULT_REP_RANGE.min);
     const [repRangeMax, setRepRangeMax] = useState(DEFAULT_REP_RANGE.max);
+    // How far back the suggestion engine looks for the session to progress
+    // from. 0 means all time.
+    const [prLookbackDays, setPrLookbackDays] = useState(DEFAULT_PR_LOOKBACK_DAYS);
     const [workoutInProgress, setWorkoutInProgress] = useState(false);
     const [workoutStartTime, setWorkoutStartTime] = useState(null);
     const [useImperial, setUseImperial] = useState(false);
@@ -57,6 +61,7 @@ export const ThemeProvider = ({ children }) => {
                 storedCurrentWorkout,
                 storedTrackRPE,
                 storedGym,
+                storedLookback,
             ] = await Promise.all([
                 AsyncStorage.getItem('user_theme'),
                 AsyncStorage.getItem('user_gender'),
@@ -71,6 +76,7 @@ export const ThemeProvider = ({ children }) => {
                 AsyncStorage.getItem('@currentWorkout'),
                 AsyncStorage.getItem(SETTINGS_KEYS.trackRPE),
                 AsyncStorage.getItem(SETTINGS_KEYS.gymEquipment),
+                AsyncStorage.getItem(SETTINGS_KEYS.prLookbackDays),
             ]);
 
             // Custom themes are stored as full theme objects (each with an id).
@@ -130,6 +136,12 @@ export const ThemeProvider = ({ children }) => {
                 try { parsedGym = JSON.parse(storedGym); } catch (e) { parsedGym = null; }
             }
             setGymEquipment(parsedGym || defaultGym(imperial));
+            // 0 is a real value here (all time), so test for null rather
+            // than falsiness.
+            if (storedLookback !== null) {
+                const n = parseInt(storedLookback, 10);
+                if (Number.isFinite(n) && n >= 0) setPrLookbackDays(n);
+            }
             // The Train tab owns this flag while it is mounted (same rule:
             // exercises present OR a start time), but tabs now mount lazily,
             // so after a cold start it isn't mounted until visited. Without
@@ -300,6 +312,15 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
+    const updatePrLookbackDays = async (days) => {
+        setPrLookbackDays(days);
+        try {
+            await AsyncStorage.setItem(SETTINGS_KEYS.prLookbackDays, String(days));
+        } catch (error) {
+            console.error("Failed to save PR lookback:", error);
+        }
+    };
+
     const updateGymEquipment = async (next) => {
         setGymEquipment(next);
         try {
@@ -346,6 +367,8 @@ export const ThemeProvider = ({ children }) => {
             repRangeMin,
             repRangeMax,
             updateRepRange,
+            prLookbackDays,
+            updatePrLookbackDays,
             workoutInProgress,
             setWorkoutInProgress,
             workoutStartTime,

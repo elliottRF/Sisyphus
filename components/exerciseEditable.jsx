@@ -563,7 +563,7 @@ const ExerciseEditable = ({
     onReorderEnd,
     reorderFingerY
 }) => {
-    const { theme, useImperial, repRangeMin, repRangeMax, trackRPE, gymEquipment } = useTheme();
+    const { theme, useImperial, repRangeMin, repRangeMax, trackRPE, gymEquipment, prLookbackDays } = useTheme();
     // What this exercise's equipment can actually make. Drives both the
     // suggestion rounding and the plate breakdown, so they can never
     // disagree about what is loadable.
@@ -817,6 +817,7 @@ const ExerciseEditable = ({
         useImperial,
         equipment,
         gym: gymEquipment,
+        lookbackDays: prLookbackDays,
     });
 
     // When PR mode turns on, grow this card so there's a row for every

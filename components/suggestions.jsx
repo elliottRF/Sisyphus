@@ -9,6 +9,8 @@ import { estimateOneRM, weightForReps } from '../utils/oneRM';
 import { resolveEquipmentCached, snapToGrid, stepOnGrid } from '../utils/equipment';
 import { on, AppEvents } from '../utils/events';
 
+// The default window, kept so a caller that does not pass one behaves as
+// it always did. Settings can override it per user.
 export const DAYS_TO_CHECK = 60;
 
 /**
@@ -171,6 +173,7 @@ export const useWorkoutSuggestions = ({
     useImperial = false,
     equipment = null,
     gym = null,
+    lookbackDays = DAYS_TO_CHECK,
 }) => {
     const [suggestions, setSuggestions] = useState(() => {
         const c = suggestionsCache.get(exerciseID);
@@ -191,7 +194,7 @@ export const useWorkoutSuggestions = ({
 
         // The profile is part of the key: retagging an exercise as a 9 kg EZ
         // bar has to invalidate the numbers computed for a 20 kg one.
-        const cacheKey = `${exerciseID}|${muscleOccurrenceIndex}|${repRangeMin}|${repRangeMax}|${isAssisted ? 1 : 0}|${useImperial ? 1 : 0}|${equipment || ''}|${gym ? JSON.stringify(gym) : ''}`;
+        const cacheKey = `${exerciseID}|${muscleOccurrenceIndex}|${repRangeMin}|${repRangeMax}|${isAssisted ? 1 : 0}|${useImperial ? 1 : 0}|${equipment || ''}|${gym ? JSON.stringify(gym) : ''}|${lookbackDays}`;
 
         // Serve the cached result synchronously so toggling suggestions on
         // goes straight from the previous value to the suggestion instead of
@@ -209,7 +212,7 @@ export const useWorkoutSuggestions = ({
 
         const loadAndCompute = async () => {
             // 1. All working sets in the last 60 days — ONLY needed for first-muscle case
-            const recentSetsRaw = await fetchRecentSets(exerciseID, DAYS_TO_CHECK);
+            const recentSetsRaw = await fetchRecentSets(exerciseID, lookbackDays);
             const recentWorkingSets = (recentSetsRaw || []).filter(
                 (set) => !set.setType || set.setType !== 'W'
             );
@@ -221,9 +224,9 @@ export const useWorkoutSuggestions = ({
             // 2. Decide which workout to base suggestions on
             let baseSets = [];
             if (muscleOccurrenceIndex === 1) {
-                baseSets = await fetchRecentPRSession(exerciseID);
+                baseSets = await fetchRecentPRSession(exerciseID, lookbackDays);
             } else if (muscleOccurrenceIndex >= 2) {
-                baseSets = await fetchBestSessionMatchingOccurrence(exerciseID, muscleOccurrenceIndex);
+                baseSets = await fetchBestSessionMatchingOccurrence(exerciseID, muscleOccurrenceIndex, lookbackDays);
             }
             if (!baseSets || baseSets.length === 0) {
                 baseSets = await fetchMostRecentSession(exerciseID);
@@ -302,6 +305,7 @@ export const useWorkoutSuggestions = ({
         useImperial,
         equipment,
         gym,
+        lookbackDays,
     ]);
 
     return suggestions;

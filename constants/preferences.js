@@ -27,6 +27,26 @@ export const DEFAULT_REP_RANGE = {
   max: 12,
 };
 
+// How far back the suggestion engine looks for the session to progress
+// from. Longer means it chases an older, usually harder best; shorter
+// means it follows what you have been doing lately. 0 means no cutoff.
+//
+// Nothing breaks at the short end: if no session for an exercise falls
+// inside the window, the engine falls back to that exercise's most recent
+// session however old it is.
+export const PR_LOOKBACK_OPTIONS = [
+  { days: 30, label: '1m', name: '1 month' },
+  { days: 60, label: '2m', name: '2 months' },
+  { days: 90, label: '3m', name: '3 months' },
+  { days: 180, label: '6m', name: '6 months' },
+  { days: 0, label: 'All', name: 'All time' },
+];
+
+export const DEFAULT_PR_LOOKBACK_DAYS = 60;
+
+export const prLookbackName = (days) =>
+  (PR_LOOKBACK_OPTIONS.find((o) => o.days === days) || PR_LOOKBACK_OPTIONS[1]).name;
+
 export const SETTINGS_KEYS = {
   repRangePreset: 'user_rep_range_preset',
   repRangeMin: 'user_rep_range_min',
@@ -35,4 +55,5 @@ export const SETTINGS_KEYS = {
   alternateView: 'user_alternate_view',
   trackRPE: 'user_track_rpe',
   gymEquipment: 'user_gym_equipment',
+  prLookbackDays: 'user_pr_lookback_days',
 };

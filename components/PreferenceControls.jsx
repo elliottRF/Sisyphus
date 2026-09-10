@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { FONTS, THEMES } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { customAlert } from '../utils/customAlert';
+import { PR_LOOKBACK_OPTIONS } from '../constants/preferences';
 import CustomThemeCreator from './CustomThemeCreator';
 import {
   DEFAULT_REP_RANGE,
@@ -413,6 +414,34 @@ export const RecoveryRateSlider = ({ theme, value, onChange, onSlidingComplete }
 };
 
 // ---------------------------------------------------------------------------
+// PRLookbackSegment
+// ---------------------------------------------------------------------------
+
+export const PRLookbackSegment = ({ theme, value, onChange }) => {
+  const styles = getStyles(theme);
+  return (
+    <View style={styles.lookbackRow}>
+      {PR_LOOKBACK_OPTIONS.map((opt) => {
+        const active = value === opt.days;
+        return (
+          <TouchableOpacity
+            key={opt.days}
+            style={[styles.lookbackOption, active && { backgroundColor: theme.primary }]}
+            onPress={() => onChange(opt.days)}
+            activeOpacity={0.85}
+            accessibilityLabel={opt.name}
+          >
+            <Text style={[styles.lookbackText, active && { color: theme.textAlternate }]}>
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // GenderSegment
 // ---------------------------------------------------------------------------
 
@@ -708,7 +737,21 @@ const getStyles = (theme) =>
       color: theme.textSecondary,
       fontFamily: FONTS.medium,
     },
-    genderToggleContainer: { flexDirection: 'row', gap: 12 },
+    lookbackRow: { flexDirection: 'row', gap: 6 },
+  lookbackOption: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: theme.overlayInput,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lookbackText: {
+    fontSize: 13,
+    fontFamily: FONTS.semiBold,
+    color: theme.text,
+  },
+  genderToggleContainer: { flexDirection: 'row', gap: 12 },
     genderOption: {
       flex: 1,
       flexDirection: 'row',
