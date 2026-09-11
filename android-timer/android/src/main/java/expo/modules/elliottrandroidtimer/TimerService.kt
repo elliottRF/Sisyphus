@@ -179,7 +179,11 @@ class TimerService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(body)
-            .setSmallIcon(smallIcon())
+            // Ships with this module rather than the app, so it is a plain R
+            // reference the compiler checks -- and it survives a prebuild, which
+            // regenerates the app's res. A stopwatch rather than the app mark:
+            // in a status bar full of icons, what it IS beats whose it is.
+            .setSmallIcon(R.drawable.ic_stat_timer)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
@@ -201,17 +205,6 @@ class TimerService : Service() {
             .addAction(0, "+30s", plusPi)
             .setContentIntent(launchPi)
             .build()
-    }
-
-    /**
-     * The app's own notification icon. This service lives in a library module,
-     * so the app's R class is not on its classpath -- looked up by name, with
-     * the platform alarm icon as a fallback so a rename cannot leave the
-     * notification with no icon at all.
-     */
-    private fun smallIcon(): Int {
-        val id = resources.getIdentifier("notification_icon", "drawable", packageName)
-        return if (id != 0) id else android.R.drawable.ic_lock_idle_alarm
     }
 
     /** Builds a PendingIntent that re-starts this service with a given action + optional int extra. */
