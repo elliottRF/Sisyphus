@@ -18,7 +18,8 @@ export const ThemeProvider = ({ children }) => {
     // Whether the RPE column shows in a live workout. The data is always
     // stored when present; this only governs whether the column is offered,
     // because it is a sixth column on a row used one-handed between sets.
-    const [trackRPE, setTrackRPE] = useState(true);
+    // Off unless asked for: an extra column on every set is a cost you opt into.
+    const [trackRPE, setTrackRPE] = useState(false);
     // The bar, plate rack and dumbbell ladder this user's gym has, in kg.
     // Per-exercise profiles fall back to these, so setting up a gym once
     // is most of the work; an exercise only overrides what differs (the
@@ -131,8 +132,8 @@ export const ThemeProvider = ({ children }) => {
             if (storedWorkoutStartTime) {
                 setWorkoutStartTime(storedWorkoutStartTime);
             }
-            // Absent means never set, which is on: the feature is new and
-            // meant to be visible. Only an explicit 'false' hides it.
+            // Absent means never chosen, which is off. RPE has not shipped, so
+            // there is no one already using the column to migrate.
             if (storedTrackRPE !== null) {
                 setTrackRPE(storedTrackRPE === 'true');
             }
