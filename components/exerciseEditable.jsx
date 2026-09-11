@@ -18,7 +18,7 @@ import { FONTS, RADIUS, getThemedShadow, isLightTheme, isLightColor, withAlpha }
 import { Feather, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchLastWorkoutSets, fetchLifetimePRs } from './db';
 import { useTheme } from '../context/ThemeContext';
-import { formatWeight, unitLabel } from '../utils/units';
+import { formatWeight, loadLabel, unitLabel } from '../utils/units';
 import { secondsToClock, minutesToClock, clockDigitsToDisplay, clockDigitsToMinutes } from '../utils/time';
 import * as haptics from '../utils/haptics';
 import {
@@ -591,6 +591,11 @@ const ExerciseEditable = ({
     hidePrevious = false,
     muscleOccurrenceIndex = 1,
     PRMODE = false,
+    // A Map, by card id, of "describe your next unticked set". Each card puts
+    // its own in so the workout can carry the rest notification into the next
+    // exercise once this one has no sets left -- only the card that owns a set
+    // can name it with the suggestions it computed.
+    describers,
     onReorderStart,
     onReorderEnd,
     reorderFingerY
@@ -730,10 +735,10 @@ const ExerciseEditable = ({
     // rows, and the note above rowMeta explains why their props must stay put.
     const suggestionViewRef = useRef({ rowMeta: null, showSuggestion: false });
 
-    // What the rest notification should say you are resting FOR: the next
-    // set of this exercise that is not already ticked. Only this exercise --
-    // the card does not know what comes after it, and "next" across an
-    // exercise boundary is a guess about what you will do, not a fact.
+    // What the rest notification should say you are resting FOR: the first set
+    // after `completedIndex` that is not already ticked. Pass -1 to ask for the
+    // first unticked set in the card at all, which is how the workout asks the
+    // NEXT exercise to describe itself once this one is finished.
     //
     // Name and load kept APART, because the notification puts them on
     // separate lines. Joined into one string they shared the title with the
@@ -747,14 +752,7 @@ const ExerciseEditable = ({
         const next = sets[nextIndex];
         if (isCardio) return { name: exerciseName, load: '' };
 
-        const unit = unitLabel(useImperial);
-        const quantify = (weight, reps) => {
-            const w = String(weight ?? '').trim();
-            const r = String(reps ?? '').trim();
-            if (!w && !r) return '';
-            const loaded = w ? `${w} ${unit}` : '';
-            return loaded && r ? `${loaded} × ${r}` : (loaded || `× ${r}`);
-        };
+        const quantify = (weight, reps) => loadLabel(weight, reps, useImperial);
 
         // In PR mode the suggestion is the plan, and the row it belongs to is
         // usually still empty -- the number is shown beside the row rather than
@@ -787,13 +785,26 @@ const ExerciseEditable = ({
         return { name: exerciseName, load: quantify(next.weight, next.reps) };
     }, [exerciseName, isCardio, useImperial]);
 
+    // Tick the last set of an exercise and the rest that follows is for the
+    // next exercise, not this one. Only the card that owns a set can name it
+    // with the suggestions it computed, so each lends the workout the function
+    // rather than the answer -- see handleSetComplete in app/(tabs)/current.jsx.
+    useEffect(() => {
+        if (!describers) return;
+        const registry = describers.current;
+        registry.set(exerciseId, describeNextSet);
+        return () => {
+            if (registry.get(exerciseId) === describeNextSet) registry.delete(exerciseId);
+        };
+    }, [describers, exerciseId, describeNextSet]);
+
     const toggleSetComplete = useCallback((setIndex) => {
         if (isTemplate) return;
         const set = setsRef.current[setIndex];
         if (!set.completed) {
             Keyboard.dismiss();
             haptics.tap();
-            if (onSetComplete) onSetComplete(describeNextSet(setIndex));
+            if (onSetComplete) onSetComplete(describeNextSet(setIndex), exerciseId);
         }
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
     }, [isTemplate, onSetComplete, describeNextSet, updateCurrentWorkout, workoutID, exerciseId]);

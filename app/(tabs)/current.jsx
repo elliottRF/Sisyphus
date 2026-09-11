@@ -14,7 +14,7 @@ import * as NavigationBar from 'expo-navigation-bar';
 
 import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculateIfPR, setupDatabase, getExercisePRs, getTemplates, deleteTemplate, createTemplate, fetchLastWorkoutSets, getTemplate, fetchRecentMuscleUsage, getSplits, createSplit, renameSplit, deleteSplit, moveTemplateToSplit, DEFAULT_SPLIT_NAME } from '../../components/db';
 import { setPreloadedData } from '../../constants/preloader';
-import { toStorageKg, formatWeight, unitLabel } from '../../utils/units';
+import { toStorageKg, formatWeight, loadLabel, unitLabel } from '../../utils/units';
 import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
 import { estimateOneRMForStorage } from '../../utils/oneRM';
 import { filterCompletedSets, buildWorkoutEntries, setWillBeSaved } from '../../utils/workoutEntries';
@@ -938,9 +938,46 @@ const Current = () => {
         });
     }, [reorderSession, currentWorkout, exercises]);
 
-    const handleSetComplete = useCallback((nextUp) => {
+    // Each card registers "describe your next unticked set" here, by card id.
+    // A card can only answer for its own sets, so finishing one exercise used
+    // to leave the rest notification with nothing to name; now the workout
+    // walks on to the next exercise and asks that card instead.
+    const describersRef = useRef(new Map());
+    const currentWorkoutRef = useRef(currentWorkout);
+    currentWorkoutRef.current = currentWorkout;
+    const exercisesRef = useRef(exercises);
+    exercisesRef.current = exercises;
+    const useImperialRef = useRef(useImperial);
+    useImperialRef.current = useImperial;
+
+    const handleSetComplete = useCallback((nextUp, fromExerciseId) => {
+        // Fallback for a card the list has scrolled far enough away to unmount,
+        // so there is no describer to ask. No suggestion -- nobody computed one
+        // -- but naming the exercise still beats a bare "Rest timer".
+        const describeFromRows = (card) => {
+            const next = card.sets.find((set) => !set.completed);
+            if (!next) return null;
+            const details = exercisesRef.current.find((e) => e.exerciseID === card.exerciseID);
+            if (!details) return null;
+            return { name: details.name, load: loadLabel(next.weight, next.reps, useImperialRef.current) };
+        };
+
+        let upNext = nextUp;
+        if (!upNext && fromExerciseId != null) {
+            const cards = currentWorkoutRef.current.flatMap((group) => group.exercises);
+            // Not finding the card would make the walk start from the top of
+            // the workout and name a set the user is nowhere near.
+            const from = cards.findIndex((ex) => ex.id === fromExerciseId);
+            for (let i = from + 1; from >= 0 && i < cards.length && !upNext; i++) {
+                // -1 asks for the first set in that card that is not ticked.
+                // The card's own answer is the good one: it carries the PR
+                // suggestion, which only the card computes.
+                const describe = describersRef.current.get(cards[i].id);
+                upNext = describe ? describe(-1) : describeFromRows(cards[i]);
+            }
+        }
         if (autoTimerEnabledRef.current) {
-            restTimerRef.current?.restartTimer(nextUp);
+            restTimerRef.current?.restartTimer(upNext);
         }
     }, []);
 
@@ -1143,6 +1180,7 @@ const Current = () => {
                             showPlates
                             muscleOccurrenceIndex={occurrenceMap[exercise.id]}
                             PRMODE={PRMODE}
+                            describers={describersRef}
                             onReorderStart={startReorder}
                             onReorderEnd={endReorder}
                             reorderFingerY={fingerY}

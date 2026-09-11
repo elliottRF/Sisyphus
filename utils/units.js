@@ -58,3 +58,19 @@ export const toStorageKg = (val, useImperial) => {
 
 /** Unit label string: "kg" or "lbs" */
 export const unitLabel = (useImperial) => (useImperial ? 'lbs' : 'kg');
+
+/**
+ * "82 kg × 8" for a set, in the user's unit. Either half may be missing --
+ * a weight with no reps, or a bodyweight set with reps only -- and an empty
+ * string means there was nothing to say.
+ *
+ * Shared because the rest notification is now built from two places: the card
+ * that owns the set, and the workout when the next set is in a different card.
+ */
+export const loadLabel = (weight, reps, useImperial) => {
+    const w = String(weight ?? '').trim();
+    const r = String(reps ?? '').trim();
+    if (!w && !r) return '';
+    const loaded = w ? `${w} ${unitLabel(useImperial)}` : '';
+    return loaded && r ? `${loaded} × ${r}` : (loaded || `× ${r}`);
+};
