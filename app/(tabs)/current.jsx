@@ -938,9 +938,9 @@ const Current = () => {
         });
     }, [reorderSession, currentWorkout, exercises]);
 
-    const handleSetComplete = useCallback(() => {
+    const handleSetComplete = useCallback((nextUp) => {
         if (autoTimerEnabledRef.current) {
-            restTimerRef.current?.restartTimer();
+            restTimerRef.current?.restartTimer(nextUp);
         }
     }, []);
 

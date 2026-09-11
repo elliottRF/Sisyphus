@@ -13,12 +13,15 @@ class ElliottrAndroidTimerModule : Module() {
     // reify the lambda's return type; a body ending in a bare `null` infers
     // R = Nothing?, which cannot be reified and throws "This function has a
     // reified type parameter" at module registration. Keep the return type Unit.
-    Function("startTimer") { seconds: Int, muted: Boolean ->
+    // `nextUp` is what the notification puts front and centre: the set you
+    // are resting for. Empty string when there is nothing after this one.
+    Function("startTimer") { seconds: Int, muted: Boolean, nextUp: String ->
       val ctx = appContext.reactContext ?: return@Function
       val intent = Intent(ctx, TimerService::class.java).apply {
         action = "start"
         putExtra("seconds", seconds)
         putExtra("muted", muted)
+        putExtra("nextUp", nextUp)
       }
       ctx.startForegroundService(intent)
       Unit

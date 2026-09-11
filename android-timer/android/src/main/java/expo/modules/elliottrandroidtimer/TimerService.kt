@@ -13,14 +13,27 @@ import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationCompat
 import java.util.Timer
 import java.util.TimerTask
+import kotlin.math.ceil
+import kotlin.math.max
 
+/**
+ * The rest timer, as a foreground service so it survives the app being
+ * backgrounded, killed from recents, or the screen locking.
+ *
+ * The deadline is the truth. `endTimeMs` is an absolute wall-clock time and
+ * everything -- the tick, the notification, the value JS polls -- is derived
+ * from it. An earlier version counted a `remaining--` down on its own, which
+ * drifted away from the clock whenever the tick was delayed, so the
+ * notification's chronometer (which IS clock-based) and the app disagreed, and
+ * the finish alert landed late.
+ */
 class TimerService : Service() {
 
     private var timer: Timer? = null
-    private var remaining = 0
     private var totalSeconds = 0
     private var isMuted = false
     private var endTimeMs = 0L
+    private var nextUp: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -29,37 +42,50 @@ class TimerService : Service() {
         createChannel()
     }
 
+    /** Seconds left, from the clock, never negative. */
+    private fun remaining(): Int {
+        if (endTimeMs == 0L) return 0
+        val ms = endTimeMs - System.currentTimeMillis()
+        return max(0, ceil(ms / 1000.0).toInt())
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "start" -> {
-                remaining = intent.getIntExtra("seconds", 0)
-                totalSeconds = remaining
+                val seconds = intent.getIntExtra("seconds", 0)
+                // A zero-length timer is a stop. The app used to ask for one to
+                // clear the stored value, which started a foreground service
+                // just to tear it down -- and if the stop that followed lost the
+                // race, the first tick found no time left and played the finish
+                // alert, dinging at someone who had just cancelled.
+                if (seconds <= 0) {
+                    shutDown(alert = false)
+                    return START_NOT_STICKY
+                }
+                totalSeconds = seconds
                 isMuted = intent.getBooleanExtra("muted", false)
-                endTimeMs = System.currentTimeMillis() + remaining * 1000L
+                nextUp = intent.getStringExtra("nextUp")?.takeIf { it.isNotBlank() }
+                endTimeMs = System.currentTimeMillis() + seconds * 1000L
                 persistRemaining()
                 startForegroundCompat()
                 startTicking()
             }
             "adjust" -> {
                 val delta = intent.getIntExtra("delta", 0)
-                remaining = maxOf(5, remaining + delta)
-                if (remaining > totalSeconds) totalSeconds = remaining
-                endTimeMs = System.currentTimeMillis() + remaining * 1000L
+                val next = max(5, remaining() + delta)
+                if (next > totalSeconds) totalSeconds = next
+                endTimeMs = System.currentTimeMillis() + next * 1000L
                 persistRemaining()
                 notifyUpdate()
             }
             "stop" -> {
-                // Write 0 so JS polling detects the stop
-                getSharedPreferences("timer", MODE_PRIVATE)
-                    .edit()
-                    .putInt("remaining", 0)
-                    .apply()
-                stopForeground(true)
-                stopSelf()
+                shutDown(alert = false)
             }
             else -> {
-                // START_STICKY restart with no intent — just re-post notification
-                startForegroundCompat()
+                // START_STICKY restart with no intent. Only worth re-posting if
+                // there is still time on the clock; otherwise the service has
+                // nothing to show.
+                if (remaining() > 0) startForegroundCompat() else shutDown(alert = false)
             }
         }
         return START_STICKY
@@ -70,7 +96,7 @@ class TimerService : Service() {
     // -------------------------------------------------------------------------
 
     private fun startForegroundCompat() {
-        val notification = buildNotification(remaining)
+        val notification = buildNotification(remaining())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
@@ -87,26 +113,39 @@ class TimerService : Service() {
         timer = Timer()
         timer?.scheduleAtFixedRate(object : TimerTask() {
             override fun run() {
-                remaining--
-                persistRemaining()
-                if (remaining <= 0) {
-                    playAlert()
-                    stopForeground(true)
-                    stopSelf()
+                if (remaining() <= 0) {
+                    shutDown(alert = true)
                 } else {
+                    persistRemaining()
                     notifyUpdate()
                 }
             }
         }, 1000L, 1000L)
     }
 
+    /**
+     * The one way out. Writes 0 so the JS poll sees the stop, plays the finish
+     * alert only when the clock actually ran out, and tears the service down.
+     */
+    private fun shutDown(alert: Boolean) {
+        timer?.cancel()
+        timer = null
+        endTimeMs = 0L
+        nextUp = null
+        persistRemaining()
+        if (alert) playAlert()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     private fun notifyUpdate() {
         getSystemService(NotificationManager::class.java)
-            .notify(NOTIF_ID, buildNotification(remaining))
+            .notify(NOTIF_ID, buildNotification(remaining()))
     }
 
     override fun onDestroy() {
         timer?.cancel()
+        timer = null
         super.onDestroy()
     }
 
@@ -125,32 +164,54 @@ class TimerService : Service() {
         val plusPi  = pendingServiceIntent(REQUEST_PLUS,  "adjust", "delta" to  30)
         val stopPi  = pendingServiceIntent(REQUEST_STOP,  "stop")
 
-        val safe = maxOf(seconds, 0)
+        val safe = max(seconds, 0)
+
+        // What you are resting FOR is the useful line, so it is the headline and
+        // it does not change every second.
+        //
+        // The time is the chronometer's job and ONLY the chronometer's: the
+        // system renders it live, including in the status bar chip, whereas a
+        // copy in the text is redrawn once a second from a different rounding
+        // and the header ended up reading "2:55 left" next to "02:53".
+        val title = nextUp ?: "Rest timer"
+        val body = if (nextUp != null) "Up next" else "Resting"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Rest Timer")
-            .setContentText(formatTime(safe))
-            .setSubText("Tap to open Sisyphus")
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setSmallIcon(smallIcon())
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            // Live Update (Android 16+): promoted chip in status bar
+            .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
+            // Live Update (Android 16+): promoted chip in the status bar.
             .addExtras(android.os.Bundle().apply {
                 putBoolean("android.requestPromotedOngoing", true)
             })
-            .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("${formatTime(safe)} remaining"))
-            // Chronometer countdown — system renders live time in the chip
+            // How far through the rest you are, at a glance.
+            .setProgress(max(totalSeconds, 1), max(totalSeconds - safe, 0), false)
+            // Chronometer countdown -- the system renders the live time itself,
+            // including in the promoted chip.
             .setWhen(endTimeMs)
             .setShowWhen(true)
             .setUsesChronometer(true)
             .setChronometerCountDown(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(0, "\u221230s", minusPi)
+            .addAction(0, "−30s", minusPi)
             .addAction(0, "Stop",  stopPi)
             .addAction(0, "+30s", plusPi)
             .setContentIntent(launchPi)
             .build()
+    }
+
+    /**
+     * The app's own notification icon. This service lives in a library module,
+     * so the app's R class is not on its classpath -- looked up by name, with
+     * the platform alarm icon as a fallback so a rename cannot leave the
+     * notification with no icon at all.
+     */
+    private fun smallIcon(): Int {
+        val id = resources.getIdentifier("notification_icon", "drawable", packageName)
+        return if (id != 0) id else android.R.drawable.ic_lock_idle_alarm
     }
 
     /** Builds a PendingIntent that re-starts this service with a given action + optional int extra. */
@@ -171,10 +232,11 @@ class TimerService : Service() {
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(CHANNEL_ID, "Timer", NotificationManager.IMPORTANCE_DEFAULT)
-            channel.description = "Rest timer countdown"
+            val channel = NotificationChannel(CHANNEL_ID, "Rest timer", NotificationManager.IMPORTANCE_DEFAULT)
+            channel.description = "The countdown between sets"
             channel.enableVibration(false)
             channel.setSound(null, null)
+            channel.setShowBadge(false)
             channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
@@ -187,7 +249,7 @@ class TimerService : Service() {
     private fun persistRemaining() {
         getSharedPreferences("timer", MODE_PRIVATE)
             .edit()
-            .putInt("remaining", remaining)
+            .putInt("remaining", remaining())
             .apply()
     }
 

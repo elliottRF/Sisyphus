@@ -691,16 +691,38 @@ const ExerciseEditable = ({
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: value } : s) } : e) } : w));
     }, [updateCurrentWorkout, workoutID, exerciseId]);
 
+    // What the rest notification should say you are resting FOR: the next
+    // set of this exercise that is not already ticked. Only this exercise --
+    // the card does not know what comes after it, and "next" across an
+    // exercise boundary is a guess about what you will do, not a fact.
+    //
+    // Weight and reps come from the row as it stands, which is prefilled
+    // from the template or the suggestion, so it is the number you are
+    // about to lift. A row with neither is named but not quantified.
+    const describeNextSet = useCallback((completedIndex) => {
+        const sets = setsRef.current || [];
+        const next = sets.slice(completedIndex + 1).find((s) => !s.completed);
+        if (!next || !exerciseName) return '';
+        if (isCardio) return exerciseName;
+        const weight = String(next.weight ?? '').trim();
+        const reps = String(next.reps ?? '').trim();
+        if (!weight && !reps) return exerciseName;
+        const unit = unitLabel(useImperial);
+        const load = weight ? `${weight} ${unit}` : '';
+        const both = load && reps ? `${load} × ${reps}` : (load || `× ${reps}`);
+        return `${exerciseName} · ${both}`;
+    }, [exerciseName, isCardio, useImperial]);
+
     const toggleSetComplete = useCallback((setIndex) => {
         if (isTemplate) return;
         const set = setsRef.current[setIndex];
         if (!set.completed) {
             Keyboard.dismiss();
             haptics.tap();
-            if (onSetComplete) onSetComplete();
+            if (onSetComplete) onSetComplete(describeNextSet(setIndex));
         }
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, completed: !s.completed } : s) } : e) } : w));
-    }, [isTemplate, onSetComplete, updateCurrentWorkout, workoutID, exerciseId]);
+    }, [isTemplate, onSetComplete, describeNextSet, updateCurrentWorkout, workoutID, exerciseId]);
 
     const toggleSetType = useCallback((setIndex) => {
         haptics.select();

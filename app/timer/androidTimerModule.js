@@ -6,12 +6,17 @@ function AndroidTimerModule() {
     return null;
 }
 
-AndroidTimerModule.startTimer = (s, m) => {
+// The native side has gained arguments over time and a JS bundle can be
+// newer than the binary it is running against, so fall back in order.
+AndroidTimerModule.startTimer = (s, m, nextUp) => {
     try {
-        return Native.startTimer(s, m);
+        return Native.startTimer(s, m, nextUp || '');
     } catch (e) {
-        // Fallback for older native binaries that only expect 1 argument
-        return Native.startTimer(s);
+        try {
+            return Native.startTimer(s, m);
+        } catch (e2) {
+            return Native.startTimer(s);
+        }
     }
 };
 AndroidTimerModule.stopTimer = () => Native.stopTimer();
