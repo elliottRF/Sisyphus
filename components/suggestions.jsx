@@ -290,7 +290,25 @@ export const useWorkoutSuggestions = ({
             publish(computedSuggestions, baseWarmups);
         };
 
-        loadAndCompute();
+        // A rejection here used to be silent, and silent meant permanent: the
+        // state is only ever written by publish(), so one failed query left
+        // every suggestion in the card showing "-" until PR mode was toggled
+        // off and on. It does happen -- expo-sqlite rejects prepareAsync with
+        // a native NullPointerException when a burst of queries lands at the
+        // wrong moment (every card on screen fires several the instant PR mode
+        // turns on), which is exactly the "all of them were blank" case.
+        // Transient, so retry before giving up, and say so if it still fails.
+        const attempt = (retriesLeft, delay) => {
+            loadAndCompute().catch((e) => {
+                if (cancelled) return;
+                if (retriesLeft <= 0) {
+                    console.warn('[suggestions] gave up for exercise', exerciseID, e?.message || e);
+                    return;
+                }
+                setTimeout(() => { if (!cancelled) attempt(retriesLeft - 1, delay * 3); }, delay);
+            });
+        };
+        attempt(2, 300);
 
         return () => {
             cancelled = true;

@@ -305,10 +305,42 @@ const SetRowBody = React.memo(({
     // (e.g. reordering in "previous" mode, where history doesn't depend on order).
     const cellTextOpacity = useSharedValue(1);
     const [displayedText, setDisplayedText] = useState(columnText);
+    // The last value the effect below decided to animate TO.
     const displayedTextRef = useRef(columnText);
+    // The current prop, written during render rather than in an effect: the
+    // fade-out's completion callback arrives through runOnJS and can land
+    // between a render and that render's effects, so this is the only value
+    // the callback can trust to be current.
+    const columnTextRef = useRef(columnText);
+    columnTextRef.current = columnText;
 
+    // Commit the LATEST text, not the one captured when the fade started.
+    const commitLatest = useCallback(() => {
+        setDisplayedText(columnTextRef.current);
+    }, []);
+
+    // PR mode made the ordering here matter. A warm-up's suggestion is the
+    // warm-up from the base session shown UN-incremented, so it is
+    // character-for-character the text it replaces, and the column goes
+    //
+    //     "50 × 11"  →  "-"  (suggestions still loading)  →  "50 × 11"
+    //
+    // With the swap committing a captured value, that there-and-back stranded
+    // the cell: the fade-out completed and wrote "-", then the effect for the
+    // new value saw columnText === displayedTextRef.current and returned, so
+    // nothing ever wrote the real text back and the row showed "-" for the
+    // rest of the workout. Toggling PR mode off and on cleared it only because
+    // the cache then serves synchronously and there is no "-" in between.
+    // Working sets escaped because their suggestion differs from their
+    // previous (82 × 7 → 82 × 8).
     useEffect(() => {
-        if (columnText === displayedTextRef.current) return;
+        if (columnText === displayedTextRef.current) {
+            // Already animating to this value — but a swap that was in flight
+            // when it was decided may since have committed an older one, and
+            // no later change will correct it. Put the truth back.
+            if (displayedText !== columnText) setDisplayedText(columnText);
+            return;
+        }
         displayedTextRef.current = columnText;
         if (columnText === displayedText) {
             // Changed back before a pending swap committed — just restore.
@@ -316,9 +348,9 @@ const SetRowBody = React.memo(({
             return;
         }
         cellTextOpacity.value = withTiming(0, { duration: 110 }, (finished) => {
-            if (finished) runOnJS(setDisplayedText)(columnText);
+            if (finished) runOnJS(commitLatest)();
         });
-    }, [columnText, displayedText, cellTextOpacity]);
+    }, [columnText, displayedText, cellTextOpacity, commitLatest]);
 
     // Fade back in only after the swapped text has been committed by React —
     // sequencing the fade-in off the animation clock instead would briefly
