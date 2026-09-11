@@ -52,10 +52,26 @@ const parseInput = (text, useImperial) => {
 
 // ── A small labelled number field ───────────────────────────────────────────
 // Keeps its own text while focused so a half-typed "1." is not parsed to 1 and
-// rewritten under the user's fingers; commits on blur.
+// rewritten under the user's fingers -- but commits every keystroke that parses.
+//
+// It used to commit only on blur, and blur is not guaranteed to land before
+// whatever you tap next acts on the value. Dismissing the keyboard with the
+// back gesture leaves the field focused, so the blur arrives in the same event
+// as the following tap on Save, whose handler had already closed over the old
+// config: the bar weight you just typed was simply dropped. It only stuck if
+// you closed the keyboard with the enter key, which blurs a frame earlier.
 const NumberField = ({ label, valueKg, onCommit, useImperial, styles, theme, width, allowBlank }) => {
     const [text, setText] = useState(null);
     const display = text != null ? text : show(valueKg, useImperial);
+
+    // The draft still governs what is DISPLAYED; this only decides what is
+    // stored. Junk (or an empty field, unless the caller allows it) leaves the
+    // last good value alone, exactly as blur did.
+    const commit = (next) => {
+        const parsed = parseInput(next, useImperial);
+        if (parsed == null && !allowBlank) return;
+        onCommit(parsed);
+    };
 
     return (
         <View style={[styles.field, width ? { width } : null]}>
@@ -63,13 +79,13 @@ const NumberField = ({ label, valueKg, onCommit, useImperial, styles, theme, wid
             <TextInput
                 style={styles.fieldInput}
                 value={display}
-                onChangeText={setText}
+                onChangeText={(next) => { setText(next); commit(next); }}
                 onFocus={() => setText(show(valueKg, useImperial))}
                 onBlur={() => {
-                    const parsed = parseInput(text, useImperial);
+                    // Hand the draft back to the stored value so it re-renders
+                    // normalised ("9" typed into a pounds gym reads back "9").
+                    commit(text);
                     setText(null);
-                    if (parsed == null && !allowBlank) return;   // reject junk, keep what was there
-                    onCommit(parsed);
                 }}
                 keyboardType="decimal-pad"
                 placeholder="-"

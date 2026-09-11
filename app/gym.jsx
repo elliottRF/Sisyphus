@@ -92,14 +92,19 @@ export default function GymScreen() {
                             <TextInput
                                 style={styles.barValue}
                                 value={barText != null ? barText : String(formatWeight(gym.bar, useImperial, 2))}
-                                onChangeText={setBarText}
-                                onFocus={() => setBarText(String(formatWeight(gym.bar, useImperial, 2)))}
-                                onBlur={() => {
-                                    const n = parseFloat(barText);
-                                    setBarText(null);
+                                // Commits per keystroke rather than on blur:
+                                // leaving this screen does not reliably blur a
+                                // focused field, so a bar weight typed and then
+                                // navigated away from was lost. Same reason the
+                                // exercise editor's fields changed.
+                                onChangeText={(next) => {
+                                    setBarText(next);
+                                    const n = parseFloat(next);
                                     if (!Number.isFinite(n) || n <= 0) return;   // junk keeps the old bar
                                     patch({ bar: toStorageKg(n, useImperial) });
                                 }}
+                                onFocus={() => setBarText(String(formatWeight(gym.bar, useImperial, 2)))}
+                                onBlur={() => setBarText(null)}
                                 keyboardType="decimal-pad"
                                 maxLength={6}
                                 selectTextOnFocus
