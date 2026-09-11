@@ -33,7 +33,8 @@ class TimerService : Service() {
     private var totalSeconds = 0
     private var isMuted = false
     private var endTimeMs = 0L
-    private var nextUp: String? = null
+    private var nextName: String? = null
+    private var nextLoad: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -64,7 +65,8 @@ class TimerService : Service() {
                 }
                 totalSeconds = seconds
                 isMuted = intent.getBooleanExtra("muted", false)
-                nextUp = intent.getStringExtra("nextUp")?.takeIf { it.isNotBlank() }
+                nextName = intent.getStringExtra("nextName")?.takeIf { it.isNotBlank() }
+                nextLoad = intent.getStringExtra("nextLoad")?.takeIf { it.isNotBlank() }
                 endTimeMs = System.currentTimeMillis() + seconds * 1000L
                 persistRemaining()
                 startForegroundCompat()
@@ -131,7 +133,8 @@ class TimerService : Service() {
         timer?.cancel()
         timer = null
         endTimeMs = 0L
-        nextUp = null
+        nextName = null
+        nextLoad = null
         persistRemaining()
         if (alert) playAlert()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -169,12 +172,18 @@ class TimerService : Service() {
         // What you are resting FOR is the useful line, so it is the headline and
         // it does not change every second.
         //
+        // The name and the load go on SEPARATE lines. Android 16 renders a
+        // promoted ongoing notification with the countdown on the title line,
+        // so a long exercise name plus the numbers plus the clock did not fit
+        // and the numbers -- the part you cannot infer -- fell off the end.
+        //
         // The time is the chronometer's job and ONLY the chronometer's: the
         // system renders it live, including in the status bar chip, whereas a
         // copy in the text is redrawn once a second from a different rounding
         // and the header ended up reading "2:55 left" next to "02:53".
-        val title = nextUp ?: "Rest timer"
-        val body = if (nextUp != null) "Up next" else "Resting"
+        val title = nextName ?: "Rest timer"
+        val body = nextLoad
+            ?: if (nextName != null) "Up next" else "Resting"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)

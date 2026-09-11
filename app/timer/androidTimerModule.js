@@ -8,9 +8,9 @@ function AndroidTimerModule() {
 
 // The native side has gained arguments over time and a JS bundle can be
 // newer than the binary it is running against, so fall back in order.
-AndroidTimerModule.startTimer = (s, m, nextUp) => {
+AndroidTimerModule.startTimer = (s, m, nextName, nextLoad) => {
     try {
-        return Native.startTimer(s, m, nextUp || '');
+        return Native.startTimer(s, m, nextName || '', nextLoad || '');
     } catch (e) {
         try {
             return Native.startTimer(s, m);

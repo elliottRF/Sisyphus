@@ -14,9 +14,10 @@ import * as haptics from '../utils/haptics';
 
 const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     const { theme } = useTheme();
-    // What the notification says you are resting for. Held in a ref so a
-    // +30s or a resync re-sends the same label without re-rendering.
-    const nextUpRef = useRef('');
+    // What the notification says you are resting for: {name, load}. Held in
+    // a ref so a +30s or a resync re-sends the same label without
+    // re-rendering.
+    const nextUpRef = useRef({ name: '', load: '' });
     const [timeLeft, setTimeLeft] = useState(0);
     const [defaultDuration, setDefaultDuration] = useState(180);
     const targetEndTimeRef = useRef(null); // The absolute timestamp when the timer should end
@@ -189,7 +190,7 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
         // foreground service purely to tear it down -- and if the stop lost
         // the race, the first tick found no time left and played the finish
         // alert at someone who had just cancelled.
-        nextUpRef.current = '';
+        nextUpRef.current = { name: '', load: '' };
         Timer.stopTimer();
 
         targetEndTimeRef.current = null;
@@ -201,7 +202,7 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
     };
 
     const restartTimer = useCallback((nextUp) => {
-        nextUpRef.current = nextUp || '';
+        nextUpRef.current = nextUp || { name: '', load: '' };
 
         // 0. Auto-start (ticking a set) is also a "first start" — make sure the
         // one-time notification-permission prompt fires here too, not just on the
@@ -220,7 +221,7 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
         setTimeLeft(defaultDuration);
 
         // 4. Sync with Native persistence (This overwrites the previous native timer)
-        Timer.startTimer(defaultDuration, isMuted, nextUpRef.current);
+        Timer.startTimer(defaultDuration, isMuted, nextUpRef.current.name, nextUpRef.current.load);
 
         // 5. Start the UI update loop
         updateUI();
@@ -261,7 +262,7 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
             // START
             targetEndTimeRef.current = Date.now() + (defaultDuration * 1000);
             timerRunning.current = true;
-            Timer.startTimer(defaultDuration, isMuted, nextUpRef.current);
+            Timer.startTimer(defaultDuration, isMuted, nextUpRef.current.name, nextUpRef.current.load);
             updateUI(); // Start loop
 
             scale.value = withSequence(
@@ -288,7 +289,7 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
         // Optimistically update immediately
         setTimeLeft(newDuration);
 
-        Timer.startTimer(newDuration, isMuted, nextUpRef.current); // Sync native
+        Timer.startTimer(newDuration, isMuted, nextUpRef.current.name, nextUpRef.current.load); // Sync native
 
         // Ensure loop is running
         if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
@@ -311,7 +312,7 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
         } else {
             targetEndTimeRef.current = Date.now() + (newDuration * 1000);
             setTimeLeft(newDuration);
-            Timer.startTimer(newDuration, isMuted, nextUpRef.current);
+            Timer.startTimer(newDuration, isMuted, nextUpRef.current.name, nextUpRef.current.load);
             // Ensure loop is running
             if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
             updateUI();

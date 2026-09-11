@@ -699,18 +699,22 @@ const ExerciseEditable = ({
     // Weight and reps come from the row as it stands, which is prefilled
     // from the template or the suggestion, so it is the number you are
     // about to lift. A row with neither is named but not quantified.
+    // Name and load kept APART, because the notification puts them on
+    // separate lines. Joined into one string they shared the title with the
+    // countdown, and a long exercise name pushed the numbers off the end --
+    // losing exactly the part you cannot infer.
     const describeNextSet = useCallback((completedIndex) => {
         const sets = setsRef.current || [];
         const next = sets.slice(completedIndex + 1).find((s) => !s.completed);
-        if (!next || !exerciseName) return '';
-        if (isCardio) return exerciseName;
+        if (!next || !exerciseName) return null;
+        if (isCardio) return { name: exerciseName, load: '' };
         const weight = String(next.weight ?? '').trim();
         const reps = String(next.reps ?? '').trim();
-        if (!weight && !reps) return exerciseName;
+        if (!weight && !reps) return { name: exerciseName, load: '' };
         const unit = unitLabel(useImperial);
-        const load = weight ? `${weight} ${unit}` : '';
-        const both = load && reps ? `${load} × ${reps}` : (load || `× ${reps}`);
-        return `${exerciseName} · ${both}`;
+        const loaded = weight ? `${weight} ${unit}` : '';
+        const load = loaded && reps ? `${loaded} × ${reps}` : (loaded || `× ${reps}`);
+        return { name: exerciseName, load };
     }, [exerciseName, isCardio, useImperial]);
 
     const toggleSetComplete = useCallback((setIndex) => {
