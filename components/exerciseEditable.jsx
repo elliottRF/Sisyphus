@@ -723,30 +723,68 @@ const ExerciseEditable = ({
         updateCurrentWorkout(prev => prev.map(w => w.id === workoutID ? { ...w, exercises: w.exercises.map(e => e.id === exerciseId ? { ...e, sets: e.sets.map((s, i) => i === setIndex ? { ...s, minutes: value } : s) } : e) } : w));
     }, [updateCurrentWorkout, workoutID, exerciseId]);
 
+    // What the suggestion column is currently showing, filled in during render
+    // further down -- both of these are declared below this point, and reading
+    // them through a ref at call time is what lets describeNextSet see them
+    // without naming them as dependencies. It is handed to the memoised set
+    // rows, and the note above rowMeta explains why their props must stay put.
+    const suggestionViewRef = useRef({ rowMeta: null, showSuggestion: false });
+
     // What the rest notification should say you are resting FOR: the next
     // set of this exercise that is not already ticked. Only this exercise --
     // the card does not know what comes after it, and "next" across an
     // exercise boundary is a guess about what you will do, not a fact.
     //
-    // Weight and reps come from the row as it stands, which is prefilled
-    // from the template or the suggestion, so it is the number you are
-    // about to lift. A row with neither is named but not quantified.
     // Name and load kept APART, because the notification puts them on
     // separate lines. Joined into one string they shared the title with the
     // countdown, and a long exercise name pushed the numbers off the end --
     // losing exactly the part you cannot infer.
     const describeNextSet = useCallback((completedIndex) => {
         const sets = setsRef.current || [];
-        const next = sets.slice(completedIndex + 1).find((s) => !s.completed);
-        if (!next || !exerciseName) return null;
+        const offset = sets.slice(completedIndex + 1).findIndex((s) => !s.completed);
+        if (offset < 0 || !exerciseName) return null;
+        const nextIndex = completedIndex + 1 + offset;
+        const next = sets[nextIndex];
         if (isCardio) return { name: exerciseName, load: '' };
-        const weight = String(next.weight ?? '').trim();
-        const reps = String(next.reps ?? '').trim();
-        if (!weight && !reps) return { name: exerciseName, load: '' };
+
         const unit = unitLabel(useImperial);
-        const loaded = weight ? `${weight} ${unit}` : '';
-        const load = loaded && reps ? `${loaded} × ${reps}` : (loaded || `× ${reps}`);
-        return { name: exerciseName, load };
+        const quantify = (weight, reps) => {
+            const w = String(weight ?? '').trim();
+            const r = String(reps ?? '').trim();
+            if (!w && !r) return '';
+            const loaded = w ? `${w} ${unit}` : '';
+            return loaded && r ? `${loaded} × ${r}` : (loaded || `× ${r}`);
+        };
+
+        // In PR mode the suggestion is the plan, and the row it belongs to is
+        // usually still empty -- the number is shown beside the row rather than
+        // typed into it. So rest towards the suggestion, and say what it is:
+        // unlabelled it would read as something the user had already entered,
+        // which is the one thing it is not.
+        const { rowMeta: currentRowMeta, showSuggestion: prModeOn } = suggestionViewRef.current;
+        if (prModeOn) {
+            const meta = currentRowMeta?.[nextIndex];
+            const suggested = meta?.computedSuggestion;
+            if (suggested) {
+                // "+" carries the same meaning as in the card: a weight
+                // increase asks for at least this many, and more if they come.
+                const reps = suggested.isWeightIncrease ? `${suggested.reps}+` : `${suggested.reps}`;
+                const load = quantify(formatWeight(suggested.weight, useImperial), reps);
+                if (load) {
+                    const label = meta.isLifetimePRSuggestion ? 'PR target' : 'Target';
+                    return { name: exerciseName, load: `${label} · ${load}` };
+                }
+            } else if (next.setType === 'W' && meta?.fillData) {
+                // A warm-up suggestion is last session's warm-up, not a target.
+                const load = quantify(formatWeight(meta.fillData.weight, useImperial), meta.fillData.reps);
+                if (load) return { name: exerciseName, load: `Warm-up · ${load}` };
+            }
+        }
+
+        // Otherwise the row as it stands, which is prefilled from the template
+        // or a tapped suggestion, so it is the number you are about to lift.
+        // A row with neither is named but not quantified.
+        return { name: exerciseName, load: quantify(next.weight, next.reps) };
     }, [exerciseName, isCardio, useImperial]);
 
     const toggleSetComplete = useCallback((setIndex) => {
@@ -1090,6 +1128,7 @@ const ExerciseEditable = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [setTypeKey, prevWarmups, prevWorking, showSuggestion, suggestedWarmups,
         workingSuggestions, isCardio, useImperial, lifetimePRs]);
+    suggestionViewRef.current = { rowMeta, showSuggestion };
 
     const headerLeftContent = (
         <>
