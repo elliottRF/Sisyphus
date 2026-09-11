@@ -42,21 +42,23 @@ export const RADIUS = {
 };
 
 // Soft, diffuse, low-opacity — shadows should be felt, not seen.
+// boxShadow, not Android's `elevation`, and the difference is not cosmetic.
+//
+// An elevation shadow is drawn by the framework from the view's outline, and it
+// does NOT take part in an ancestor's alpha unless that ancestor is composited
+// offscreen -- which React Native does not do by default. So anything that
+// fades a screen or a card in or out left every shadow underneath it at full
+// strength while its contents went transparent, and on a light theme that reads
+// as a hard grey box around each card. Tab reveals, card entrances, a pressed
+// TouchableOpacity: all of them.
+//
+// boxShadow is part of the view's own drawing, so it fades with everything
+// else. The values below are matched to what the elevation shadows rendered as
+// -- measured against the old build, the difference at rest is a few levels of
+// grey, slightly softer.
 export const SHADOWS = {
-    small: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.10,
-        shadowRadius: 8,
-        elevation: 1,
-    },
-    medium: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.14,
-        shadowRadius: 16,
-        elevation: 3,
-    },
+    small: { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.10)' },
+    medium: { boxShadow: '0px 6px 16px rgba(0, 0, 0, 0.14)' },
 };
 
 export const withAlpha = (color, opacity) => {
@@ -199,22 +201,10 @@ export const isLightTheme = (theme) => {
 export const getThemedShadow = (theme, size = 'medium') => {
     if (isLightTheme(theme)) {
         if (size === 'small') {
-            return {
-                shadowColor: '#3C3C43',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.06,
-                shadowRadius: 12,
-                elevation: 2,
-            };
+            return { boxShadow: '0px 4px 12px rgba(60, 60, 67, 0.06)' };
         }
 
-        return {
-            shadowColor: '#3C3C43',
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.08,
-            shadowRadius: 20,
-            elevation: 4,
-        };
+        return { boxShadow: '0px 8px 20px rgba(60, 60, 67, 0.08)' };
     }
 
     return SHADOWS[size] || SHADOWS.medium;

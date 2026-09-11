@@ -1972,10 +1972,7 @@ const getStyles = (theme, width) => {
             // inherited from templateCard (its grey elevation halo around a
             // near-transparent fill looks janky in light mode).
             backgroundColor: theme.overlayInput,
-            shadowColor: 'transparent',
-            shadowOpacity: 0,
-            shadowRadius: 0,
-            elevation: 0,
+            boxShadow: 'none',
         },
         // Borderless, like every other card. It used a dashed outline, which the
         // design rules rule out everywhere — and this is the first card a new
@@ -1985,10 +1982,7 @@ const getStyles = (theme, width) => {
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: withAlpha(theme.primary, isLightTheme(theme) ? 0.10 : 0.16),
-            shadowColor: 'transparent',
-            shadowOpacity: 0,
-            shadowRadius: 0,
-            elevation: 0,
+            boxShadow: 'none',
         },
         starterTitle: {
             fontSize: 14,

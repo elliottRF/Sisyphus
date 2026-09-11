@@ -51,12 +51,10 @@ const CustomSelectionDot = ({ isActive, color, borderColor }) => (
         backgroundColor: color,
         borderWidth: 3,
         borderColor: borderColor,
+        // Drawn at 0.7 when it is not the active series, which is exactly
+        // the case an elevation shadow does not follow -- see SHADOWS.
         opacity: isActive ? 1 : 0.7,
-        shadowColor: borderColor,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.18,
-        shadowRadius: 4,
-        elevation: 5,
+        boxShadow: `0px 2px 4px ${withAlpha(borderColor, 0.18)}`,
     }} />
 );
 

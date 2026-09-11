@@ -1342,8 +1342,8 @@ const getStyles = (theme) => {
         backgroundColor: theme.surfaceElevated || theme.surface,
         borderRadius: 14,
         overflow: 'hidden',
-        ...getThemedShadow(theme, 'medium'),
-        elevation: 12,
+        // Deliberately heavier than a card: this floats over the page.
+        boxShadow: '0px 10px 28px rgba(0, 0, 0, 0.22)',
     },
     contextMenuRow: {
         flexDirection: 'row',

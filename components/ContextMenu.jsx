@@ -3,7 +3,7 @@ import { Modal, Pressable, View, Text, TouchableOpacity, StyleSheet, Dimensions 
 import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FONTS, getThemedShadow } from '../constants/theme';
+import { FONTS } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -104,8 +104,8 @@ const getStyles = (theme) => StyleSheet.create({
         backgroundColor: theme.surfaceElevated || theme.surface,
         borderRadius: 14,
         overflow: 'hidden',
-        ...getThemedShadow(theme, 'medium'),
-        elevation: 12,
+        // Deliberately heavier than a card: this floats over the page.
+        boxShadow: '0px 10px 28px rgba(0, 0, 0, 0.22)',
     },
     header: {
         flexDirection: 'row',
