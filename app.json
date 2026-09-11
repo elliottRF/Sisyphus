@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sisyphus",
     "slug": "sisyphus",
-    "version": "1.5.4",
+    "version": "1.5.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "myapp",
@@ -22,7 +22,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.elliottr.sisyphus",
-      "versionCode": 54,
+      "versionCode": 55,
       "permissions": [
         "FOREGROUND_SERVICE",
         "WAKE_LOCK",

@@ -30,13 +30,21 @@ const monochrome = adaptive.monochromeImage && path.resolve(projectRoot, adaptiv
   console.log('icon           :', icon);
   console.log('foreground     :', foreground);
   console.log('backgroundColor:', backgroundColor);
+  // The keys have to match setIconAsync's signature exactly. It reads
+  //
+  //     const adaptiveForegroundImage = foregroundImage ?? legacyIcon;
+  //
+  // so a misspelt key does not throw -- it silently falls back to the square
+  // legacy icon, and the adaptive foreground comes out full-bleed and opaque
+  // instead of the padded transparent artwork. Which is precisely what
+  // happened when this passed `adaptiveIcon` instead of `foregroundImage`.
   await setIconAsync(projectRoot, {
     icon,
+    foregroundImage: foreground || null,
     backgroundColor,
     backgroundImage: background || null,
+    monochromeImage: monochrome || null,
     isAdaptive: Boolean(foreground),
-    adaptiveIcon: foreground || null,
-    monochromeIcon: monochrome || null,
   });
   console.log('launcher icons regenerated');
 })().catch((e) => {
