@@ -5,7 +5,7 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, runOnJS } from 'react-native-reanimated';
 
 import { MaterialIcons } from '@expo/vector-icons';
-import { createAudioPlayer } from 'expo-audio';
+import { playOneShot } from '../utils/sound';
 import { FONTS } from '../constants/theme';
 import { useFocusEffect } from 'expo-router';
 import Timer from '../app/timer/androidTimerModule';
@@ -166,22 +166,11 @@ const RestTimer = forwardRef(({ onFirstStart }, ref) => {
         };
     }, [updateUI])); // updateUI is stable (useCallback with no deps that change)
 
-    // Play "Ding" sound helper
-    const playDing = async () => {
+    // Play "Ding" sound helper. The native timer service plays its own alert
+    // when the countdown runs out; this is only for a stop that asks for one.
+    const playDing = () => {
         if (isMuted) return;
-
-        try {
-            const player = createAudioPlayer(require('../assets/notifications/dingnoti.wav'));
-            player.volume = 1;
-            player.addListener('playbackStatusUpdate', (status) => {
-                if (status.didJustFinish) {
-                    player.remove();
-                }
-            });
-            player.play();
-        } catch (error) {
-            console.error("Failed to play ding", error);
-        }
+        playOneShot(require('../assets/notifications/dingnoti.wav'));
     };
 
     const internalStop = (playAudio = false) => {

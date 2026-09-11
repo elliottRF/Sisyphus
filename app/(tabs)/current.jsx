@@ -34,7 +34,7 @@ import RestTimer from '../../components/RestTimer';
 import { useOverlayReorder } from '../../utils/useOverlayReorder';
 import ReorderOverlay from '../../components/ReorderOverlay';
 import { useFocusEffect, router } from 'expo-router';
-import { createAudioPlayer } from 'expo-audio';
+import { playOneShot } from '../../utils/sound';
 import LottieView from 'lottie-react-native';
 
 import { useTheme } from '../../context/ThemeContext';
@@ -604,18 +604,7 @@ const Current = () => {
             await insertWorkoutHistory(workoutEntries, workoutTitle, durationMinutes);
             saved = true;
 
-            try {
-                const player = createAudioPlayer(require('../../assets/notifications/greatSuccess.mp3'));
-                player.volume = 0.6;
-                player.addListener('playbackStatusUpdate', (status) => {
-                    if (status.didJustFinish) {
-                        player.remove();
-                    }
-                });
-                player.play();
-            } catch (e) {
-                console.warn("Error playing success sound", e);
-            }
+            playOneShot(require('../../assets/notifications/greatSuccess.mp3'), { volume: 0.6 });
 
             // Push the celebratory summary straight over the current tab (one
             // clean flip transition — no instant flash to History first). Done
