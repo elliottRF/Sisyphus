@@ -475,11 +475,19 @@ const Home = () => {
                                 <Text style={styles.liveTitle} numberOfLines={1}>
                                     {liveWorkout?.title || 'Workout'}
                                 </Text>
-                                {liveWorkout && liveWorkout.total > 0 && (
-                                    <Text style={styles.liveMeta}>
-                                        {liveWorkout.done} of {liveWorkout.total} sets done
-                                    </Text>
-                                )}
+                                {/* Always rendered, with a space when the counts
+                                    are not known yet. The banner shows the moment
+                                    the context flag is true, but liveWorkout comes
+                                    from AsyncStorage on focus -- so without this the
+                                    card gained a line the instant it landed, and
+                                    everything below it jumped. Only ever visible on
+                                    the FIRST Home visit after starting, which is
+                                    exactly when it was reported. */}
+                                <Text style={styles.liveMeta} numberOfLines={1}>
+                                    {liveWorkout && liveWorkout.total > 0
+                                        ? `${liveWorkout.done} of ${liveWorkout.total} sets done`
+                                        : ' '}
+                                </Text>
                             </View>
                             <View style={styles.liveRight}>
                                 <LiveTimer startTime={workoutStartTime} style={styles.liveTimer} />
@@ -829,6 +837,10 @@ const getStyles = (theme) => {
     },
     liveMeta: {
         fontSize: 12,
+        lineHeight: 15,
+        // Fixed, so the reserved blank line is exactly the height of the real
+        // one whatever the device's font scaling does.
+        minHeight: 15,
         fontFamily: FONTS.medium,
         color: theme.textSecondary,
         marginTop: 1,
