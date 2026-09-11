@@ -8,7 +8,7 @@ import { formatWeight, formatWeightLabel, unitLabel } from '../utils/units';
 import { secondsToClock } from '../utils/time';
 import { customAlert } from '../utils/customAlert';
 import { muscleMapping, broadMuscleGroups } from '../constants/muscles';
-import AnimatedList from './AnimatedList';
+import Collapsible from './Collapsible';
 
 
 const lightenColor = (color, percent) => {
@@ -350,7 +350,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                         // open or not -- it is the reason you would look. So the two
                         // lists differ only by the warm-ups that did NOT, and those
                         // are the only rows that should move.
-                        const visibleWarmups = warmupsExpanded ? warmups : warmups.filter(isPRSet);
+                        const warmupRuns = warmupRunsOf(warmups);
 
                         const hasMuscles = exerciseDetails && (
                             (exerciseDetails.targetMuscle && exerciseDetails.targetMuscle.trim() !== '') ||
@@ -474,20 +474,30 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
 
                                         return (
                                             <>
-                                                {/* Only the warm-ups are animated, and only the
-                                                    ones that are actually appearing: a warm-up
-                                                    with a PR is already on screen in both states
-                                                    and must not blink out and back. AnimatedList
-                                                    keys by identity, so it grows the new rows in
-                                                    AROUND the ones that stay -- which matters,
-                                                    because a PR warm-up sits at the top of the
-                                                    collapsed list and back in its real place
-                                                    once the rest arrive. */}
-                                                <AnimatedList
-                                                    items={visibleWarmups}
-                                                    keyOf={(set) => set.srcIndex}
-                                                    renderItem={(set) => renderSetRow(set, false)}
-                                                />
+                                                {/* Each run of hideable warm-ups opens as ONE
+                                                    block. A row each meant two heights animating
+                                                    side by side, and because each starts when its
+                                                    own child reports a size, they could begin a
+                                                    frame apart -- the group arrived in two steps
+                                                    and read as a stutter. One block is one
+                                                    height, so the rows cannot disagree.
+
+                                                    Warm-ups that set a record stay outside the
+                                                    blocks: they are on screen in both states and
+                                                    must not blink, and rendering them BETWEEN the
+                                                    runs keeps them in their real place rather
+                                                    than bunched at the top. */}
+                                                {warmupRuns.map((run) => (
+                                                    run.pr
+                                                        ? renderSetRow(run.pr, false, `w${run.pr.srcIndex}`)
+                                                        : (
+                                                            <Collapsible key={`r${run.sets[0].srcIndex}`} open={warmupsExpanded}>
+                                                                <View>
+                                                                    {run.sets.map((set) => renderSetRow(set, false, set.srcIndex))}
+                                                                </View>
+                                                            </Collapsible>
+                                                        )
+                                                ))}
                                                 {nonWarmups.map((set, workingIndex) =>
                                                     renderSetRow(set, workingIndex % 2 === 1, set.srcIndex)
                                                 )}
@@ -506,6 +516,28 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
 // A set that set any record. Warm-ups that did are never hidden.
 const isPRSet = (set) =>
     set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+
+// Warm-ups, split into the runs that can be hidden and the record-setting
+// rows that cannot. [W1, W2(PR), W3] becomes run[W1], pr W2, run[W3] -- so
+// W2 renders between the two collapsing blocks and keeps its real position
+// instead of jumping to the top when the rest go away.
+const warmupRunsOf = (warmups) => {
+    const runs = [];
+    let open = null;
+    warmups.forEach((set) => {
+        if (isPRSet(set)) {
+            runs.push({ pr: set });
+            open = null;
+            return;
+        }
+        if (!open) {
+            open = { sets: [] };
+            runs.push(open);
+        }
+        open.sets.push(set);
+    });
+    return runs;
+};
 
 const getStyles = (theme) => {
     const lightTheme = isLightTheme(theme);
