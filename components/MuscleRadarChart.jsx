@@ -158,6 +158,16 @@ const MuscleRadarChart = () => {
 
     useEffect(() => { if (rangeLoaded) loadData(); }, [loadData, rangeLoaded]);
 
+    // The chart starts at opacity 0 and only loadData's `finally` raises it, so
+    // any path that leaves that unrun leaves a card with a heading, a score and
+    // an empty space where the radar should be. If there is data and nothing is
+    // loading, it should be on screen -- whatever happened to the fade.
+    useEffect(() => {
+        if (loading) return;
+        if (Object.keys(radarData).length === 0) return;
+        chartOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.ease) });
+    }, [loading, radarData, chartOpacity]);
+
     useEffect(() => {
         const handler = () => loadData();
         on(AppEvents.REFRESH_HOME, handler, 'muscle-radar');

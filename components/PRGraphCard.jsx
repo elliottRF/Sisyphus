@@ -438,20 +438,35 @@ const PRGraphCard = ({ exerciseID, exerciseName, onRemove, isCompact = false, on
         };
     }, [allData, timeRange, graphMode, useImperial]);
 
+    // Reveal once per load. This used to be keyed on `loading` alone while its
+    // condition also read points.length, and that combination can strand the
+    // graph invisible: run it once with loading already false and no points yet
+    // -- a load that ended without data, a refresh that resolves before the
+    // memo catches up -- and neither branch fires. Points arriving afterwards
+    // do not re-run it, because `loading` never changes again, so the card
+    // draws its header and its axes around a graph left at opacity 0. The only
+    // thing that puts it back is the range crossfade below, which is exactly
+    // the "hidden until I change the time scale" this is here to stop.
+    //
+    // points.length is a dependency now, and a ref keeps the original intent:
+    // range and mode switches recompute points without touching `loading`, and
+    // they keep their own crossfade rather than re-running this one.
+    const revealedRef = useRef(false);
     useEffect(() => {
-        if (!loading && points && points.length > 0) {
-            Animated.timing(graphOpacity, {
-                toValue: 1,
-                duration: 200,
-                useNativeDriver: true,
-            }).start();
-        } else if (loading) {
+        if (loading) {
+            revealedRef.current = false;
             graphOpacity.setValue(0);
+            return;
         }
-        // Keyed on `loading` only: range/mode switches recompute points without
-        // toggling loading, so they don't trigger this fade-in.
+        if (revealedRef.current || !points || points.length === 0) return;
+        revealedRef.current = true;
+        Animated.timing(graphOpacity, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+        }).start();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loading]);
+    }, [loading, points?.length]);
 
     // Crossfade the line when the time range changes. Range switches change the
     // point count, so react-native-graph can't morph between them — it snaps.
