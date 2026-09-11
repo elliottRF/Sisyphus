@@ -4,9 +4,13 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.content.pm.ServiceInfo
@@ -35,6 +39,8 @@ class TimerService : Service() {
     private var endTimeMs = 0L
     private var nextName: String? = null
     private var nextLoad: String? = null
+    private var focusRequest: AudioFocusRequest? = null
+    private var holdsFocus = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -272,17 +278,83 @@ class TimerService : Service() {
                 vibrator.vibrate(500)
             }
 
+            val attributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            duckOthers(attributes)
+
             val mp = MediaPlayer.create(applicationContext, R.raw.dingnoti)
-            mp.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
-            mp.setOnCompletionListener { it.release() }
+            mp.setAudioAttributes(attributes)
+            mp.setOnCompletionListener {
+                it.release()
+                releaseDucking()
+            }
+            mp.setOnErrorListener { player, _, _ ->
+                player.release()
+                releaseDucking()
+                true
+            }
             mp.start()
         } catch (e: Exception) {
             e.printStackTrace()
+            releaseDucking()
+        }
+    }
+
+    /**
+     * Ask whatever else is playing to drop its volume for the length of the
+     * ding. Without it the alert competes with music at the same volume through
+     * the same output, and in a gym it is easy to miss entirely.
+     *
+     * TRANSIENT_MAY_DUCK, not a pause: the point is to be heard over the track,
+     * not to interrupt it. setWillPauseWhenDucked(false) says we are happy for
+     * the system to duck the other app rather than hand us exclusive focus.
+     */
+    private fun duckOthers(attributes: AudioAttributes) {
+        if (holdsFocus) return
+        // Via applicationContext: the service calls stopSelf right after the ding
+        // starts, so by the time focus is released this Service is gone.
+        val audio = applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest
+                .Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                .setAudioAttributes(attributes)
+                .setWillPauseWhenDucked(false)
+                .build()
+            focusRequest = request
+            audio.requestAudioFocus(request)
+        } else {
+            @Suppress("DEPRECATION")
+            audio.requestAudioFocus(
+                null,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+            )
+        }
+        holdsFocus = granted == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        // Whatever happens to the player, the music comes back up. Holding
+        // focus after the ding would leave someone's Spotify quiet for the rest
+        // of the session with nothing on screen to explain it, so this is the
+        // backstop for a completion callback that never arrives.
+        if (holdsFocus) {
+            Handler(Looper.getMainLooper()).postDelayed({ releaseDucking() }, DUCK_MAX_MS)
+        }
+    }
+
+    private fun releaseDucking() {
+        if (!holdsFocus) return
+        holdsFocus = false
+        // Via applicationContext: the service calls stopSelf right after the ding
+        // starts, so by the time focus is released this Service is gone.
+        val audio = applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            focusRequest?.let { audio.abandonAudioFocusRequest(it) }
+            focusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            audio.abandonAudioFocus(null)
         }
     }
 
@@ -292,5 +364,7 @@ class TimerService : Service() {
         private const val REQUEST_MINUS = 1
         private const val REQUEST_PLUS  = 2
         private const val REQUEST_STOP  = 3
+        /** Longest the ding may hold other audio down, however it ends. */
+        private const val DUCK_MAX_MS = 6000L
     }
 }
