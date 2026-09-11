@@ -67,7 +67,7 @@ const LiveTimer = ({ startTime, style }) => {
 
 const Home = () => {
     const insets = useSafeAreaInsets();
-    const { theme, gender, accessoryWeight, recoveryRate, workoutInProgress, workoutStartTime, settingsLoaded } = useTheme();
+    const { theme, gender, accessoryWeight, recoveryRate, workoutInProgress, workoutStartTime, liveWorkoutTitle, settingsLoaded } = useTheme();
     const styles = getStyles(theme);
 
     const [bodyData, setBodyData] = useState([]);
@@ -473,7 +473,7 @@ const Home = () => {
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.liveEyebrow}>WORKOUT IN PROGRESS</Text>
                                 <Text style={styles.liveTitle} numberOfLines={1}>
-                                    {liveWorkout?.title || 'Workout'}
+                                    {liveWorkoutTitle || liveWorkout?.title || 'Workout'}
                                 </Text>
                                 {/* Always rendered, with a space when the counts
                                     are not known yet. The banner shows the moment

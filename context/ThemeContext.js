@@ -37,6 +37,14 @@ export const ThemeProvider = ({ children }) => {
     // from. 0 means all time.
     const [prLookbackDays, setPrLookbackDays] = useState(DEFAULT_PR_LOOKBACK_DAYS);
     const [workoutInProgress, setWorkoutInProgress] = useState(false);
+    // The live workout's name, held here rather than re-read from storage by
+    // whoever needs it, so Home's banner has it on its FIRST paint instead of
+    // showing a placeholder for a frame.
+    //
+    // The name only, not the set counts: the Train tab would have to push
+    // those on every set edit, and a context update re-renders every consumer
+    // of useTheme -- which is every set row on the screen being edited.
+    const [liveWorkoutTitle, setLiveWorkoutTitle] = useState(null);
     const [workoutStartTime, setWorkoutStartTime] = useState(null);
     const [useImperial, setUseImperial] = useState(false);
     const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -150,7 +158,15 @@ export const ThemeProvider = ({ children }) => {
             // state the tab restores from, so the bar is right from first paint.
             let storedHasExercises = false;
             if (storedCurrentWorkout) {
-                try { storedHasExercises = JSON.parse(storedCurrentWorkout).length > 0; } catch (_) {}
+                try {
+                    // {workout: [...], workoutTitle}, not a bare array. This read
+                    // `.length` off the object, which is undefined, so the check
+                    // was always false and only the start time below kept the
+                    // flag right.
+                    const parsed = JSON.parse(storedCurrentWorkout) || {};
+                    storedHasExercises = (parsed.workout || []).length > 0;
+                    if (parsed.workoutTitle) setLiveWorkoutTitle(parsed.workoutTitle);
+                } catch (_) {}
             }
             if (storedHasExercises || storedWorkoutStartTime) {
                 setWorkoutInProgress(true);
@@ -370,6 +386,8 @@ export const ThemeProvider = ({ children }) => {
             prLookbackDays,
             updatePrLookbackDays,
             workoutInProgress,
+            liveWorkoutTitle,
+            setLiveWorkoutTitle,
             setWorkoutInProgress,
             workoutStartTime,
             updateWorkoutStartTime,

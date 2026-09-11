@@ -72,7 +72,7 @@ const DEFAULT_TEMPLATES = [
 const Current = () => {
     const insets = useSafeAreaInsets();
     const { width: windowWidth } = useWindowDimensions();
-    const { theme, setWorkoutInProgress, useImperial, workoutStartTime, updateWorkoutStartTime, accessoryWeight, recoveryRate } = useTheme();
+    const { theme, setWorkoutInProgress, setLiveWorkoutTitle, useImperial, workoutStartTime, updateWorkoutStartTime, accessoryWeight, recoveryRate } = useTheme();
     const styles = useMemo(() => getStyles(theme, windowWidth), [theme, windowWidth]);
 
     const [exercises, setExercises] = useState([]);
@@ -877,6 +877,10 @@ const Current = () => {
             saveWorkoutToAsyncStorage(currentWorkout);
         }
         setWorkoutInProgress(currentWorkout.length > 0 || !!workoutStartTime);
+        // Home's banner reads this instead of the stored workout, so the name
+        // is right on its first paint. Setting the same string again is a
+        // no-op for React, so this costs nothing on a set edit.
+        setLiveWorkoutTitle(workoutTitle || null);
     }, [currentWorkout, workoutStartTime, workoutTitle]);
 
     const inputExercise = (item) => {
