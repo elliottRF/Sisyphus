@@ -1,8 +1,10 @@
 import React, { useMemo, useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { FONTS, RADIUS, SPACING, buildCustomTheme, randomThemeInput, isValidHex, DEFAULT_CUSTOM_INPUT } from '../constants/theme';
 import ColorWheel from './ColorWheel';
+import Collapsible from './Collapsible';
 
 // Custom-theme editor: pick four colours -- by wheel, by hex, or at random --
 // see a live preview, save. Everything else (borders, muted text, the readable
@@ -19,6 +21,12 @@ const FIELDS = [
     { key: 'surface', label: 'Cards' },
     { key: 'text', label: 'Text' },
 ];
+
+// A touch longer than the app's usual collapse, because this block is: the
+// wheel is most of a screen tall, and the standard duration covers that much
+// travel fast enough to read as a jump rather than a movement. Shared with the
+// scroll that follows the wheel open.
+const WHEEL_MS = 320;
 
 const normalizeHex = (raw) => {
     let h = raw.trim();
@@ -45,6 +53,15 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
         }, 150);
     };
 
+    // Opening a wheel on one of the lower rows puts it below the fold. Wait for
+    // the block to have grown before scrolling, or the target is measured
+    // against the height the sheet had before the wheel existed.
+    const openWheel = (key) => {
+        const next = wheelField === key ? null : key;
+        setWheelField(next);
+        if (next) setTimeout(() => scrollFieldIntoView(next), WHEEL_MS + 40);
+    };
+
     // Fall back to defaults for any field that isn't a valid hex yet, so the
     // preview never breaks while typing.
     const preview = useMemo(() => {
@@ -67,11 +84,16 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
 
     const setField = (key, value) => setInput((prev) => ({ ...prev, [key]: value }));
 
+    // The Modal's own fade carries the scrim; the sheet rises into it, so it
+    // arrives rather than simply being there.
     return (
         <Modal transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
             <View style={styles.scrim}>
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.center}>
-                    <View style={styles.sheet}>
+                    <Reanimated.View
+                        style={styles.sheet}
+                        entering={FadeIn.duration(220).withInitialValues({ transform: [{ translateY: 18 }, { scale: 0.97 }] })}
+                    >
                         <View style={styles.header}>
                             <Text style={styles.title}>{editing ? 'Edit Theme' : 'New Theme'}</Text>
                             <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={10}>
@@ -79,7 +101,7 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 48 }}>
+                        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
                             {/* Live preview */}
                             <View style={[styles.preview, { backgroundColor: preview.background }]}>
                                 <View style={[styles.previewCard, { backgroundColor: preview.surface }]}>
@@ -108,7 +130,7 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                                     <View key={field.key} onLayout={(e) => { rowYRef.current[field.key] = e.nativeEvent.layout.y; }}>
                                     <View style={styles.row}>
                                         <TouchableOpacity
-                                            onPress={() => setWheelField(isOpen ? null : field.key)}
+                                            onPress={() => openWheel(field.key)}
                                             activeOpacity={0.7}
                                             style={[
                                                 styles.swatch,
@@ -118,7 +140,7 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                                         >
                                             {!valid && <Feather name="alert-circle" size={14} color={theme.danger} />}
                                         </TouchableOpacity>
-                                        <TouchableOpacity style={styles.rowLabelWrap} onPress={() => setWheelField(isOpen ? null : field.key)} activeOpacity={0.7}>
+                                        <TouchableOpacity style={styles.rowLabelWrap} onPress={() => openWheel(field.key)} activeOpacity={0.7}>
                                             <Text style={styles.rowLabel}>{field.label}</Text>
                                         </TouchableOpacity>
                                         <TextInput
@@ -134,8 +156,12 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                                         />
                                     </View>
                                     {/* The wheel opens under the colour it edits, so there
-                                        is never a question of which one is changing. */}
-                                    {isOpen && (
+                                        is never a question of which one is changing -- and it
+                                        grows to its real height, so the rows below it travel
+                                        with it rather than being shoved down a screen. The
+                                        sheet is centred, so this also stops the whole dialog
+                                        jumping taller the instant a swatch is tapped. */}
+                                    <Collapsible open={isOpen} duration={WHEEL_MS}>
                                         <View style={styles.wheelWrap}>
                                             <ColorWheel
                                                 theme={theme}
@@ -146,11 +172,17 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                                                 <Text style={styles.wheelDoneText}>Done</Text>
                                             </TouchableOpacity>
                                         </View>
-                                    )}
+                                    </Collapsible>
                                     </View>
                                 );
                             })}
 
+                        </ScrollView>
+
+                        {/* Outside the ScrollView. These used to scroll with the
+                            fields, so opening a wheel pushed the save button under
+                            the sheet's own edge and left it sliced in half. */}
+                        <View style={styles.actions}>
                             <TouchableOpacity style={styles.randomBtn} onPress={() => setInput(randomThemeInput())} activeOpacity={0.7}>
                                 <Feather name="shuffle" size={16} color={theme.primary} />
                                 <Text style={styles.randomText}>Randomise</Text>
@@ -164,8 +196,8 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                             >
                                 <Text style={styles.saveText}>{editing ? 'Save Changes' : 'Save Theme'}</Text>
                             </TouchableOpacity>
-                        </ScrollView>
-                    </View>
+                        </View>
+                    </Reanimated.View>
                 </KeyboardAvoidingView>
             </View>
         </Modal>
@@ -225,9 +257,16 @@ const getStyles = (theme) => StyleSheet.create({
         color: theme.text, fontFamily: FONTS.semiBold, fontSize: 15,
         textAlign: 'center', textTransform: 'uppercase',
     },
+    // The pinned footer. A hairline above it so the fields read as scrolling
+    // underneath rather than stopping short.
+    actions: {
+        paddingTop: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: theme.border,
+    },
     randomBtn: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-        paddingVertical: 12, marginTop: 6, borderRadius: RADIUS.m,
+        paddingVertical: 12, borderRadius: RADIUS.m,
         backgroundColor: theme.overlayInput,
     },
     randomText: { fontSize: 15, fontFamily: FONTS.semiBold, color: theme.primary },
