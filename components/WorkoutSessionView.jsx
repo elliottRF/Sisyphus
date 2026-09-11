@@ -419,7 +419,11 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                         {!isAssisted && <Text style={[styles.colHeader, styles.colHeader1RM]}>{exerciseDetails?.isCardio ? "PACE" : "1RM"}</Text>}
                                     </View>
                                     {(() => {
-                                        const renderSetRow = (set, isOdd, key) => {
+                                        // `tinted` is false for rows inside a warm-up block:
+                                        // the block paints the tint once behind all of them,
+                                        // so two translucent backgrounds never meet and there
+                                        // is no seam to double-paint.
+                                        const renderSetRow = (set, isOdd, key, tinted = true) => {
                                             const isPR = isPRSet(set);
                                             const setType = set.setType || 'N';
                                             const isWarmup = setType === 'W';
@@ -428,7 +432,7 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                                 <View key={key} style={[
                                                     styles.setRowContainer,
                                                     isOdd && styles.setRowOdd,
-                                                    isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
+                                                    isWarmup && tinted && styles.warmupTint,
                                                 ]}>
                                                     <View style={styles.setRow}>
                                                         <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
@@ -491,10 +495,12 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
                                                     run.pr
                                                         ? renderSetRow(run.pr, false, `w${run.pr.srcIndex}`)
                                                         : (
-                                                            <Collapsible key={`r${run.sets[0].srcIndex}`} open={warmupsExpanded}>
-                                                                <View>
-                                                                    {run.sets.map((set) => renderSetRow(set, false, set.srcIndex))}
-                                                                </View>
+                                                            <Collapsible
+                                                                key={`r${run.sets[0].srcIndex}`}
+                                                                open={warmupsExpanded}
+                                                                style={styles.warmupTint}
+                                                            >
+                                                                {run.sets.map((set) => renderSetRow(set, false, set.srcIndex, false))}
                                                             </Collapsible>
                                                         )
                                                 ))}
@@ -710,6 +716,7 @@ const getStyles = (theme) => {
             alignItems: 'center',
             minHeight: 28,
         },
+        warmupTint: { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
         setRowOdd: {
             backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlaySubtle,
         },

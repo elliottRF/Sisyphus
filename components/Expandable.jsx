@@ -1,5 +1,5 @@
 import React, { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, PixelRatio } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -40,6 +40,14 @@ import Animated, {
 // Dropping a key (handing `height` back to auto layout once grown) makes
 // Reanimated restore that property's pre-animation value, which was 0 -- the
 // row grew in and then silently collapsed again.
+
+// Measured heights are floats, and a container left on a fractional height
+// puts everything inside it half a pixel off the grid. Where two rows with
+// translucent backgrounds meet, that overlap paints the tint TWICE and
+// leaves a lighter hairline -- visible on a 420dpi phone, invisible at 480.
+// Snapping to whole device pixels costs nothing and removes the class.
+const snap = (h) => PixelRatio.roundToNearestPixel(h);
+
 const DURATION = 220;
 const EASING = Easing.out(Easing.cubic);
 // Any cap above the content's height leaves the view free to size itself.
@@ -56,7 +64,7 @@ const CollapseOnly = forwardRef(({ children, style, duration }, ref) => {
     const [clipping, setClipping] = useState(false);
 
     const onLayout = useCallback((e) => {
-        natural.current = e.nativeEvent.layout.height;
+        natural.current = snap(e.nativeEvent.layout.height);
     }, []);
 
     useImperativeHandle(ref, () => ({
@@ -86,7 +94,7 @@ const Grow = forwardRef(({ children, style, duration }, ref) => {
     const collapsing = useRef(false);
 
     const onMeasure = useCallback((e) => {
-        const h = e.nativeEvent.layout.height;
+        const h = snap(e.nativeEvent.layout.height);
         if (h <= 0 || collapsing.current) return;
         const first = measured.current === 0;
         measured.current = h;
