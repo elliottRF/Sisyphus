@@ -9,6 +9,7 @@ import { secondsToClock } from '../utils/time';
 import { customAlert } from '../utils/customAlert';
 import { muscleMapping, broadMuscleGroups } from '../constants/muscles';
 import Collapsible from './Collapsible';
+import { isPRSet, warmupRunsOf } from '../utils/warmups';
 
 
 const lightenColor = (color, percent) => {
@@ -518,32 +519,6 @@ const WorkoutSessionView = forwardRef(({ workoutDetails, exercisesList, onEdit, 
         </ScrollView>
     );
 });
-
-// A set that set any record. Warm-ups that did are never hidden.
-const isPRSet = (set) =>
-    set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
-
-// Warm-ups, split into the runs that can be hidden and the record-setting
-// rows that cannot. [W1, W2(PR), W3] becomes run[W1], pr W2, run[W3] -- so
-// W2 renders between the two collapsing blocks and keeps its real position
-// instead of jumping to the top when the rest go away.
-const warmupRunsOf = (warmups) => {
-    const runs = [];
-    let open = null;
-    warmups.forEach((set) => {
-        if (isPRSet(set)) {
-            runs.push({ pr: set });
-            open = null;
-            return;
-        }
-        if (!open) {
-            open = { sets: [] };
-            runs.push(open);
-        }
-        open.sets.push(set);
-    });
-    return runs;
-};
 
 const getStyles = (theme) => {
     const lightTheme = isLightTheme(theme);

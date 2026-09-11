@@ -12,6 +12,8 @@ import { useRouter } from 'expo-router';
 import { formatWeight, unitLabel } from '../utils/units';
 import { secondsToClock } from '../utils/time';
 import { muscleMapping, broadMuscleGroups } from '../constants/muscles';
+import Collapsible from './Collapsible';
+import { isPRSet, warmupRunsOf } from '../utils/warmups';
 
 // Count a number up from 0 → value on mount; used for the celebratory stats.
 // Driven by requestAnimationFrame with the clock started on the FIRST painted
@@ -326,22 +328,30 @@ const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDo
                         const isAssisted = !!exerciseDetails?.isAssisted;
 
                         let workingSetCount = 0;
-                        const setsWithDisplayNumbers = exerciseGroup.map(set => {
+                        // srcIndex is the row's position in the session, which does
+                        // not change when the warm-ups are hidden. The key used to
+                        // be its position in the VISIBLE list, so every row below a
+                        // collapsing warm-up was a different row as far as React was
+                        // concerned -- harmless when they simply appeared, not
+                        // harmless when they have to animate.
+                        const setsWithDisplayNumbers = exerciseGroup.map((set, srcIndex) => {
                             let displayNumber = set.setType;
                             if (set.setType === 'N' || !set.setType) {
                                 workingSetCount++;
                                 displayNumber = workingSetCount;
                             }
-                            return { ...set, displayNumber };
+                            return { ...set, displayNumber, srcIndex };
                         });
 
                         const exerciseNote = exerciseGroup.find(e => e.notes)?.notes;
                         const warmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') === 'W');
                         const nonWarmups = setsWithDisplayNumbers.filter(s => (s.setType || 'N') !== 'W');
                         const warmupsExpanded = !!expandedWarmups[exerciseId];
-                        const visibleSets = warmupsExpanded
-                            ? [...warmups, ...nonWarmups]
-                            : [...warmups.filter(s => s.is1rmPR === 1 || s.isVolumePR === 1 || s.isWeightPR === 1), ...nonWarmups];
+                        // A warm-up that set a record is shown whether the group is
+                        // open or not -- it is the reason you would look. So the two
+                        // states differ only by the warm-ups that did not, and those
+                        // are the only rows that should move.
+                        const warmupRuns = warmupRunsOf(warmups);
 
                         const hasMuscles = exerciseDetails && (
                             (exerciseDetails.targetMuscle && exerciseDetails.targetMuscle.trim() !== '') ||
@@ -407,21 +417,20 @@ const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDo
                                         {!isAssisted && <Text style={[styles.colHeader, styles.colHeader1RM]}>{exerciseDetails?.isCardio ? "PACE" : "1RM"}</Text>}
                                     </View>
                                     {(() => {
-                                        let workingIndex = 0;
-                                        return visibleSets.map((set, setIndex) => {
-                                            const isPR = set.is1rmPR === 1 || set.isVolumePR === 1 || set.isWeightPR === 1;
+                                        // `tinted` is false for rows inside a warm-up block:
+                                        // the block paints the tint once behind all of them,
+                                        // so two translucent backgrounds never meet and there
+                                        // is no seam to double-paint.
+                                        const renderSetRow = (set, isOdd, key, tinted = true) => {
+                                            const isPR = isPRSet(set);
                                             const setType = set.setType || 'N';
                                             const isWarmup = setType === 'W';
-                                            const isDrop = setType === 'D';
-
-                                            const isOdd = !isWarmup && (workingIndex % 2 === 1);
-                                            if (!isWarmup) workingIndex++;
 
                                             return (
-                                                <View key={`${set.exerciseHistoryID ?? ''}-${setIndex}`} style={[
+                                                <View key={key} style={[
                                                     styles.setRowContainer,
                                                     isOdd && styles.setRowOdd,
-                                                    isWarmup && { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
+                                                    isWarmup && tinted && styles.warmupTint,
                                                 ]}>
                                                     <View style={styles.setRow}>
                                                         <SetNumberBadge type={setType} number={set.displayNumber} theme={theme} />
@@ -455,7 +464,35 @@ const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDo
                                                     )}
                                                 </View>
                                             );
-                                        });
+                                        };
+
+                                        return (
+                                            <>
+                                                {/* Each run of hideable warm-ups opens as ONE
+                                                    block, for the reason given in utils/warmups.
+                                                    Record-setting warm-ups stay outside the
+                                                    blocks: they are on screen in both states and
+                                                    must not blink, and rendering them BETWEEN the
+                                                    runs keeps them in their real place rather than
+                                                    bunched at the top. */}
+                                                {warmupRuns.map((run) => (
+                                                    run.pr
+                                                        ? renderSetRow(run.pr, false, `w${run.pr.srcIndex}`)
+                                                        : (
+                                                            <Collapsible
+                                                                key={`r${run.sets[0].srcIndex}`}
+                                                                open={warmupsExpanded}
+                                                                style={styles.warmupTint}
+                                                            >
+                                                                {run.sets.map((set) => renderSetRow(set, false, set.srcIndex, false))}
+                                                            </Collapsible>
+                                                        )
+                                                ))}
+                                                {nonWarmups.map((set, workingIndex) =>
+                                                    renderSetRow(set, workingIndex % 2 === 1, set.srcIndex)
+                                                )}
+                                            </>
+                                        );
                                     })()}
                                 </View>
                             </View>
@@ -835,6 +872,10 @@ const getStyles = (theme) => {
         setRowOdd: {
             backgroundColor: lightTheme ? theme.overlaySubtle : theme.overlaySubtle,
         },
+        // Painted on the collapsing block rather than each row inside it, so
+        // two translucent layers never overlap at a sub-pixel boundary and
+        // leave a visible seam between warm-ups. Same value as before.
+        warmupTint: { backgroundColor: 'rgba(253, 203, 110, 0.06)' },
         badgeRow: {
             flexDirection: 'row',
             alignItems: 'center',
