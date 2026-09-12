@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { StyleSheet, PixelRatio } from 'react-native';
 import Animated, {
     useSharedValue,
@@ -59,9 +59,14 @@ const snap = (h) => PixelRatio.roundToNearestPixel(h);
 const NOISE_DP = 1;
 
 const DURATION = 260;
-// Short enough that the two halves overlap into one movement rather than
-// reading as "out, then in".
-const FADE = 150;
+// The two halves do NOT overlap. An earlier version started the incoming
+// content rising while the outgoing was still at half opacity, which sounds
+// like a soft cross-fade and looks like a double exposure: two sets of labels
+// legible on top of each other, in the same place, for 80ms. Out first, then
+// in, and the height animation running underneath for the whole 260ms is what
+// stops it reading as two separate events.
+const FADE_OUT = 120;
+const FADE_IN = 140;
 
 const Swap = ({ token, children, duration = DURATION, style }) => {
     // The outgoing element tree, held on screen for the length of the fade.
@@ -129,7 +134,16 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
         });
     }, [duration, finish]);
 
-    useEffect(() => {
+    // useLayoutEffect, NOT useEffect, and that is the whole fix for the flash.
+    //
+    // A passive effect runs after the frame has been painted. By then the new
+    // children have already been drawn -- at whatever opacity the last swap
+    // left behind, which is 1 -- with no ghost over them yet. So every switch
+    // showed one full-brightness frame of the option being switched TO before
+    // any fade began. A layout effect runs before that paint, so the incoming
+    // content is already at zero and the ghost is already mounted in the frame
+    // the user actually sees.
+    useLayoutEffect(() => {
         if (!arrived.current) {
             arrived.current = true;
             return undefined;
@@ -142,9 +156,9 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
         setGhost(previous.current);
 
         ghostOpacity.value = 1;
-        ghostOpacity.value = withTiming(0, { duration: FADE });
+        ghostOpacity.value = withTiming(0, { duration: FADE_OUT });
         liveOpacity.value = 0;
-        liveOpacity.value = withDelay(FADE * 0.45, withTiming(1, { duration: FADE }));
+        liveOpacity.value = withDelay(FADE_OUT, withTiming(1, { duration: FADE_IN }));
 
         return () => {
             // Unmounted mid-swap: make sure a pending completion cannot fire

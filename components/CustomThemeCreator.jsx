@@ -39,26 +39,17 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
     const [input, setInput] = useState(() => ({ ...DEFAULT_CUSTOM_INPUT, ...(initial || {}) }));
     const [name, setName] = useState(initialName || '');
     // Which colour the wheel is open on, if any.
-    // A NEW theme opens with the first colour's wheel already showing. It is
-    // the one moment where the wheel is certainly worth seeing, and a sheet of
-    // four hex fields teaches people to type hex codes instead. Editing an
-    // existing theme starts closed -- by then they know, and someone who came
-    // back to change one value should not have to scroll past a wheel.
-    //
-    // Open AT MOUNT, so it is simply there rather than animating in: Collapsible
-    // only grows what opens after it mounts, which is the rule in DESIGN.md.
-    const [wheelField, setWheelField] = useState(editing ? null : FIELDS[0].key);
+    // Every field starts closed, including on a new theme. Opening one by
+    // default put a wheel between the name field and the other three colours
+    // before anyone had asked for it; the chevron on each row and the line
+    // under the name field do the pointing instead.
+    const [wheelField, setWheelField] = useState(null);
     // Which wheels may draw themselves. A field is added once its block has
     // finished opening -- the block opens first and the wheel fills it, see
     // ColorWheel's `ready` -- and removed only when the block has finished
     // CLOSING, so a wheel on its way out stays drawn while it shrinks instead
     // of vanishing and leaving an empty box to collapse.
-    // The wheel's 72 paths are normally deferred until a field's open animation
-    // has finished, so the animation is not competing with mounting them. There
-    // is no animation on the one that starts open, so it is granted upfront --
-    // otherwise the first thing a new user sees is an empty canvas.
-    const [readyFields, setReadyFields] = useState(
-        () => new Set(editing ? [] : [FIELDS[0].key]));
+    const [readyFields, setReadyFields] = useState(() => new Set());
     const grantReady = (key) => setReadyFields((prev) => new Set(prev).add(key));
     const revokeReady = (key) => setReadyFields((prev) => {
         if (!prev.has(key)) return prev;
