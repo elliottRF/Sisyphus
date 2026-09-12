@@ -158,148 +158,83 @@ const DEFAULT = {
     overlayInputFocused: "rgba(118,118,128,0.40)",
 };
 
-// ── Dark directions, for comparison ────────────────────────────
-// These are whole palettes, not DEFAULT with one value swapped: accent,
-// surface ramp, border, semantics, overlays and chart fill all move together.
+// ── Dark variants ───────────────────────────────────────────
+// Adjustments of DEFAULT, not alternatives to it. systemBlue, the semantic
+// colours, the overlays and the chart fill are all inherited untouched -- the
+// only thing that moves is the greys, which is the part of a dark theme people
+// actually react to.
 //
-// Two rules held every one of them to the same standard, because a tint is
-// very easy to make look designed and unreadable at the same time:
-//
-//   1. Cards separate from the page by at least 1.221:1 -- exactly what the
-//      app has today. Reaching it by DARKENING the page pushed every tinted
-//      theme to within a few levels of black and threw away the tint, so the
-//      cards are lightened instead. A hue reads on a lighter surface; on a
-//      near-black one it does not read at all.
-//   2. Body text clears 7:1 on a card, secondary 4.5:1, and the text drawn on
-//      a filled primary button clears 4.5:1. That last one DEFAULT fails:
-//      white on systemBlue is 3.65, which is large-text-only. Each direction
-//      below either darkens the accent or puts dark text on it.
+// The number that matters is how far a card sits off the page. DEFAULT is
+// 1.221:1. Below about 1.15 the cards stop reading as separate objects and the
+// screen goes monolithic; far above it they start to look like cut-outs.
 
-// Cool navy. The page is blue-black rather than neutral and every surface
-// carries the same tint, so the blue reads as the material rather than as an
-// accent dropped onto grey.
-const MIDNIGHT = {
+// The page drops, the cards stay. Same charcoal, but the cards sit further off
+// it -- 1.343:1 rather than 1.221:1 -- so the layout reads as panels floating
+// on a darker ground. The crispest of the set.
+const DEEP = {
     ...DEFAULT,
-    primary: "#5B9DFF",
-    primaryDark: "#3D82EA",
-    secondary: "#5B9DFF",
-    background: "#0D1017",
-    surface: "#1F2430",
-    surfaceElevated: "#2B303C",
-    text: "#E8EDF7",
-    textSecondary: "#9DA8BE",
-    textTertiary: "#6C7688",
-    textAlternate: "#00142E",
-    border: "#303541",
-    success: "#3DDC84",
-    danger: "#FF6B6B",
-    error: "#FF6B6B",
-    warning: "#FFB340",
-    bodyFill: "#2B303C",
-    chartFill: "rgba(91, 157, 255, 0.20)",
-    overlaySubtle: "rgba(190, 210, 255, 0.05)",
-    overlayMedium: "rgba(190, 210, 255, 0.08)",
-    overlayBorder: "rgba(190, 210, 255, 0.12)",
+    background: "#121214",
 };
 
-// Warm charcoal. The opposite temperature: browns and a gold accent, with the
-// text warmed off white to match. Warm palettes read as less clinical at
-// night, which is when a dark theme is actually used.
-const IRON = {
+// The opposite: the page comes UP toward the cards, 1.153:1, so the screen
+// reads as one surface with content on it rather than a stack of panels.
+// Calmer, and the one to pick if the current look feels busy.
+const FLAT = {
     ...DEFAULT,
-    primary: "#F5C043",
-    primaryDark: "#D9A62E",
-    secondary: "#F5C043",
-    background: "#171411",
-    surface: "#2A2621",
-    surfaceElevated: "#36322D",
-    text: "#F2ECE3",
-    textSecondary: "#B4A996",
-    textTertiary: "#867C6D",
-    textAlternate: "#1A1203",
-    border: "#3B3732",
-    success: "#5BD97A",
-    danger: "#FF6B5B",
-    error: "#FF6B5B",
-    // Pushed well past the gold accent -- a warning has to be distinguishable
-    // from a button at a glance, and amber next to gold is not.
-    warning: "#FF8A3D",
-    bodyFill: "#36322D",
-    chartFill: "rgba(245, 192, 67, 0.18)",
-    overlaySubtle: "rgba(255, 236, 200, 0.05)",
-    overlayMedium: "rgba(255, 236, 200, 0.08)",
-    overlayBorder: "rgba(255, 236, 200, 0.12)",
+    background: "#212123",
 };
 
-// Deep teal. The accent is the furthest from blue that does not collide with
-// success green or danger red, and it is bright enough to take dark text at
-// 9.7:1 -- filled buttons stop being the weakest contrast on the screen.
-const TIDE = {
+// Neutral grey nudged very slightly cool. Not a blue theme -- at this strength
+// it does not read as a hue at all, it reads as the grey being deliberate
+// rather than default. The text is taken off pure white to match, since a cool
+// grey under pure white is where the halation is most obvious.
+const SLATE = {
     ...DEFAULT,
-    primary: "#3ED8D0",
-    primaryDark: "#2BB8B1",
-    secondary: "#3ED8D0",
-    background: "#081416",
-    surface: "#18282B",
-    surfaceElevated: "#243437",
-    text: "#E4F2F1",
-    textSecondary: "#95AFAE",
-    textTertiary: "#67807F",
-    textAlternate: "#00201F",
-    border: "#29393C",
-    success: "#4ADE80",
-    danger: "#FF6B6B",
-    error: "#FF6B6B",
-    warning: "#FFB340",
-    bodyFill: "#243437",
-    chartFill: "rgba(62, 216, 208, 0.18)",
-    overlaySubtle: "rgba(200, 245, 242, 0.05)",
-    overlayMedium: "rgba(200, 245, 242, 0.08)",
-    overlayBorder: "rgba(200, 245, 242, 0.12)",
+    background: "#1A1C20",
+    surface: "#292C31",
+    surfaceElevated: "#363A40",
+    border: "#363A40",
+    bodyFill: "#363A40",
+    text: "#F4F5F7",
+    textSecondary: "#ABAFB8",
+    textTertiary: "#7B7F88",
 };
 
-// Violet. The most opinionated of the four, and the one that looks least like
-// every other fitness app.
-const VIOLET = {
+// The same idea in the other direction. A warm grey is easier on the eyes at
+// night than a cool one, which is when a dark theme is actually used.
+const WARM = {
     ...DEFAULT,
-    primary: "#C07BF5",
-    primaryDark: "#A35FD9",
-    secondary: "#C07BF5",
-    background: "#120F1A",
-    surface: "#272234",
-    surfaceElevated: "#332E40",
-    text: "#EDE7F6",
-    textSecondary: "#AEA2C2",
-    textTertiary: "#7C7290",
-    textAlternate: "#1B0630",
-    border: "#383345",
-    success: "#4ADE80",
-    danger: "#FF6B81",
-    error: "#FF6B81",
-    warning: "#FFB340",
-    bodyFill: "#332E40",
-    chartFill: "rgba(192, 123, 245, 0.18)",
-    overlaySubtle: "rgba(235, 215, 255, 0.05)",
-    overlayMedium: "rgba(235, 215, 255, 0.08)",
-    overlayBorder: "rgba(235, 215, 255, 0.12)",
+    background: "#1E1D1B",
+    surface: "#2E2C29",
+    surfaceElevated: "#3C3A36",
+    border: "#3C3A36",
+    bodyFill: "#3C3A36",
+    text: "#F6F4F1",
+    textSecondary: "#B2AFA9",
+    textTertiary: "#827F79",
+};
+
+// DEFAULT's exact surfaces, with the text off pure white and the dividers
+// brought up so they are actually visible. Pure white on near-black halates --
+// the faint glow that makes text look slightly out of focus -- and DEFAULT's
+// border is the same colour as surfaceElevated, so separators currently
+// disappear wherever they sit on a raised row.
+const SOFT = {
+    ...DEFAULT,
+    text: "#F0F0F2",
+    textSecondary: "#A8A8AE",
+    border: "#434345",
 };
 
 // True black page, for OLED: black pixels are switched off rather than lit, so
 // it saves power on a screen left open between sets. The cards stay where
-// DEFAULT has them, so they separate far harder against the page -- 1.51:1
-// rather than 1.23:1 -- which is what makes the structure readable once the
-// background has no brightness of its own to provide it.
+// DEFAULT has them, so they separate at 1.51:1 rather than 1.23:1 -- which is
+// what keeps the structure readable once the background has no brightness of
+// its own to provide it.
 const OLED = {
     ...DEFAULT,
     background: "#000000",
     text: "#F5F5F7",
-    // systemBlue is kept, because `primary` is a text colour as often as it is
-    // a fill -- values, links, the active tab -- and deepening it to carry
-    // white text dropped it to 2.84:1 as text, which is worse than the problem
-    // it fixed. The button is fixed at the other end instead: dark navy on the
-    // bright blue.
-    textAlternate: "#001330",
-    chartFill: "rgba(10, 132, 255, 0.22)",
 };
 
 // iOS light, grouped style: grey canvas, white cards.
@@ -340,10 +275,11 @@ const LIGHT = {
 // fall back to DEFAULT in ThemeContext (it checks `THEMES[storedThemeID]`).
 export const THEMES = {
     DEFAULT,
-    MIDNIGHT,
-    IRON,
-    TIDE,
-    VIOLET,
+    DEEP,
+    FLAT,
+    SLATE,
+    WARM,
+    SOFT,
     OLED,
     LIGHT,
 };
