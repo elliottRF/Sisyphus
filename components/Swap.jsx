@@ -72,10 +72,14 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
     // The token this render is showing, and the outgoing element tree held on
     // screen for the length of the fade. One object, because they change
     // together and they change DURING RENDER -- see the block below.
-    // `starting` is true for exactly the first commit of a swap. During that
-    // commit the two opacities are forced by PLAIN styles rather than animated
-    // ones -- see the block below for why that is not belt and braces.
-    const [phase, setPhase] = useState({ token, ghost: null, starting: false });
+    // Two separate guards, because the outgoing and the incoming need the
+    // guarantee for different lengths of time -- see the block below.
+    //
+    //   cover    -- the ghost is held opaque by a plain style, for one frame.
+    //   hideLive -- the incoming content is held invisible by a plain style
+    //               for the whole of FADE_OUT, which is exactly as long as it
+    //               is supposed to be invisible anyway.
+    const [phase, setPhase] = useState({ token, ghost: null, cover: false, hideLive: false });
     const ghost = phase.ghost;
     // False until the first measure lands. Until then the content sits in
     // normal flow and the container sizes itself, so the first paint is the
@@ -164,10 +168,18 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
     // BAR (KG) -> Use my gym's rack -> BAR (KG) -> fade: the incoming content
     // for one frame, then the ghost catching up over it, then the real fade.
     //
-    // So for the first commit of a swap the opacities are PLAIN styles, which
-    // are part of that same commit and cannot arrive late. The shared values
-    // are still set here so the animations start from the right place, and the
-    // effect stands the plain styles down once they are running.
+    // So the opacities start as PLAIN styles, which are part of that same
+    // commit as the children and cannot arrive late. The shared values are set
+    // here too, so the animations start from the right place.
+    //
+    // Taking the plain styles back OFF is the same trap in reverse, and that is
+    // where the flash actually lived once the first commit was right: drop the
+    // plain hide while Reanimated is still showing the 1 it was left on, and
+    // the incoming section appears at full brightness for a frame before the
+    // scheduled 0 lands and puts it back. Old, new, old, fade -- which is
+    // exactly how it was reported. So the incoming content keeps its plain hide
+    // for the whole of FADE_OUT, which it is meant to be invisible for anyway,
+    // and the ghost keeps its for a single frame.
     if (token !== phase.token) {
         hold();
         swappingRef.current = true;
@@ -177,7 +189,8 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
         setPhase({
             token,
             ghost: arrived.current ? previous.current : null,
-            starting: arrived.current,
+            cover: arrived.current,
+            hideLive: arrived.current,
         });
     }
 
@@ -190,13 +203,23 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
 
         ghostOpacity.value = withTiming(0, { duration: FADE_OUT });
         liveOpacity.value = withDelay(FADE_OUT, withTiming(1, { duration: FADE_IN }));
-        // The animations are running now, so the shared values are known-good
-        // and the plain styles can stand down.
-        setPhase((p) => (p.starting ? { ...p, starting: false } : p));
+
+        // Hand the ghost over to its animation one frame later, by which point
+        // the scheduled value has reached the UI thread. A frame in, the fade
+        // has barely started, so there is nothing to see in the handover.
+        const frame = requestAnimationFrame(() => {
+            setPhase((p) => (p.cover ? { ...p, cover: false } : p));
+        });
+        // The incoming content keeps its plain hide for the whole fade-out.
+        const t = setTimeout(() => {
+            setPhase((p) => (p.hideLive ? { ...p, hideLive: false } : p));
+        }, FADE_OUT);
 
         return () => {
             // Unmounted mid-swap: make sure a pending completion cannot fire
             // against a later run.
+            cancelAnimationFrame(frame);
+            clearTimeout(t);
             if (run.current === mine) run.current += 1;
         };
         // Only the token starts a swap. Children changing is an ordinary
@@ -218,7 +241,7 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
         <Animated.View style={[style, driven && styles.clip, driven && heightStyle]}>
             {ghost != null && (
                 <Animated.View
-                    style={[styles.outOfFlow, ghostStyle, phase.starting && styles.opaque]}
+                    style={[styles.outOfFlow, ghostStyle, phase.cover && styles.opaque]}
                     pointerEvents="none"
                 >
                     {ghost}
@@ -228,7 +251,7 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
                 it WANTS rather than the one the container is capped at.
                 Toggling the style does not remount it. */}
             <Animated.View
-                style={[driven && styles.outOfFlow, liveStyle, phase.starting && styles.invisible]}
+                style={[driven && styles.outOfFlow, liveStyle, phase.hideLive && styles.invisible]}
                 onLayout={onMeasure}
             >
                 {children}
