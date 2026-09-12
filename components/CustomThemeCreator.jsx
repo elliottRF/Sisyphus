@@ -2,7 +2,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
-import { FONTS, RADIUS, SPACING, buildCustomTheme, randomThemeInput, isValidHex, DEFAULT_CUSTOM_INPUT } from '../constants/theme';
+import { FONTS, TYPE, RADIUS, SPACING, buildCustomTheme, randomThemeInput, isValidHex, DEFAULT_CUSTOM_INPUT } from '../constants/theme';
 import ColorWheel from './ColorWheel';
 import Collapsible from './Collapsible';
 import { EASING_GENTLE } from './Expandable';
@@ -39,13 +39,26 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
     const [input, setInput] = useState(() => ({ ...DEFAULT_CUSTOM_INPUT, ...(initial || {}) }));
     const [name, setName] = useState(initialName || '');
     // Which colour the wheel is open on, if any.
-    const [wheelField, setWheelField] = useState(null);
+    // A NEW theme opens with the first colour's wheel already showing. It is
+    // the one moment where the wheel is certainly worth seeing, and a sheet of
+    // four hex fields teaches people to type hex codes instead. Editing an
+    // existing theme starts closed -- by then they know, and someone who came
+    // back to change one value should not have to scroll past a wheel.
+    //
+    // Open AT MOUNT, so it is simply there rather than animating in: Collapsible
+    // only grows what opens after it mounts, which is the rule in DESIGN.md.
+    const [wheelField, setWheelField] = useState(editing ? null : FIELDS[0].key);
     // Which wheels may draw themselves. A field is added once its block has
     // finished opening -- the block opens first and the wheel fills it, see
     // ColorWheel's `ready` -- and removed only when the block has finished
     // CLOSING, so a wheel on its way out stays drawn while it shrinks instead
     // of vanishing and leaving an empty box to collapse.
-    const [readyFields, setReadyFields] = useState(() => new Set());
+    // The wheel's 72 paths are normally deferred until a field's open animation
+    // has finished, so the animation is not competing with mounting them. There
+    // is no animation on the one that starts open, so it is granted upfront --
+    // otherwise the first thing a new user sees is an empty canvas.
+    const [readyFields, setReadyFields] = useState(
+        () => new Set(editing ? [] : [FIELDS[0].key]));
     const grantReady = (key) => setReadyFields((prev) => new Set(prev).add(key));
     const revokeReady = (key) => setReadyFields((prev) => {
         if (!prev.has(key)) return prev;
@@ -168,6 +181,10 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                                 maxLength={24}
                             />
 
+                            <Text style={styles.hint}>
+                                Tap a colour to pick it on the wheel, or type a hex code.
+                            </Text>
+
                             {FIELDS.map((field) => {
                                 const value = input[field.key];
                                 const valid = isValidHex(value);
@@ -186,8 +203,21 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                                         >
                                             {!valid && <Feather name="alert-circle" size={14} color={theme.danger} />}
                                         </TouchableOpacity>
+                                        {/* The whole row has always opened the
+                                            wheel, but nothing said so: the hex
+                                            box is the only thing on the row that
+                                            LOOKS interactive, so people typed
+                                            codes and never found the wheel at
+                                            all. Same disclosure chevron the
+                                            settings rows use, so the row now
+                                            reads as something that opens. */}
                                         <TouchableOpacity style={styles.rowLabelWrap} onPress={() => openWheel(field.key)} activeOpacity={0.7}>
                                             <Text style={styles.rowLabel}>{field.label}</Text>
+                                            <Feather
+                                                name={isOpen ? 'chevron-up' : 'chevron-down'}
+                                                size={16}
+                                                color={isOpen ? theme.primary : theme.textSecondary}
+                                            />
                                         </TouchableOpacity>
                                         <TextInput
                                             style={[styles.hexInput, !valid && { color: theme.danger }]}
@@ -287,7 +317,13 @@ const getStyles = (theme) => StyleSheet.create({
     },
     row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
     swatch: { width: 34, height: 34, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    rowLabelWrap: { flex: 1 },
+    rowLabelWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    hint: {
+        fontSize: TYPE.footnote,
+        fontFamily: FONTS.regular,
+        color: theme.textSecondary,
+        marginBottom: 14,
+    },
     rowLabel: { fontSize: 15, fontFamily: FONTS.medium, color: theme.text },
     swatchOpen: { borderWidth: 2 },
     wheelWrap: {
