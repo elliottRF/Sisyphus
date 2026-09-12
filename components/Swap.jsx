@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, PixelRatio } from 'react-native';
+import { View, StyleSheet, PixelRatio } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -76,9 +76,9 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
     // guarantee for different lengths of time -- see the block below.
     //
     //   cover    -- the ghost is held opaque by a plain style, for one frame.
-    //   hideLive -- the incoming content is held invisible by a plain style
-    //               for the whole of FADE_OUT, which is exactly as long as it
-    //               is supposed to be invisible anyway.
+    //   hideLive -- the incoming content is held invisible by a plain style on
+    //               a SEPARATE inner view, for the whole of FADE_OUT, which is
+    //               exactly as long as it is supposed to be invisible anyway.
     const [phase, setPhase] = useState({ token, ghost: null, cover: false, hideLive: false });
     const ghost = phase.ghost;
     // False until the first measure lands. Until then the content sits in
@@ -251,10 +251,20 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
                 it WANTS rather than the one the container is capped at.
                 Toggling the style does not remount it. */}
             <Animated.View
-                style={[driven && styles.outOfFlow, liveStyle, phase.hideLive && styles.invisible]}
+                style={[driven && styles.outOfFlow, liveStyle]}
                 onLayout={onMeasure}
             >
-                {children}
+                {/* The hide has to be on its OWN view, not alongside the
+                    animated opacity on the one above. Reanimated writes its
+                    value straight to the native view after the commit, so a
+                    plain opacity in the same style array loses to whatever the
+                    shared value was last left on -- which is 1, and which is
+                    why both sections were briefly legible on top of each other.
+                    Two views multiply their opacities and Reanimated only
+                    touches the outer one, so a 0 here cannot be overridden. */}
+                <View style={phase.hideLive ? styles.invisible : null}>
+                    {children}
+                </View>
             </Animated.View>
         </Animated.View>
     );
