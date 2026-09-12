@@ -72,7 +72,10 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
     // The token this render is showing, and the outgoing element tree held on
     // screen for the length of the fade. One object, because they change
     // together and they change DURING RENDER -- see the block below.
-    const [phase, setPhase] = useState({ token, ghost: null });
+    // `starting` is true for exactly the first commit of a swap. During that
+    // commit the two opacities are forced by PLAIN styles rather than animated
+    // ones -- see the block below for why that is not belt and braces.
+    const [phase, setPhase] = useState({ token, ghost: null, starting: false });
     const ghost = phase.ghost;
     // False until the first measure lands. Until then the content sits in
     // normal flow and the container sizes itself, so the first paint is the
@@ -153,17 +156,29 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
     // and the zeroed incoming content are in the SAME output as the new
     // children. There is no frame in between for anything to show through.
     //
-    // The two shared values are written here for the same reason: they must
-    // hold before the first paint, not one effect later. The effect below
-    // still owns the ANIMATIONS -- it only has to be in time for the second
-    // frame, and it is.
+    // Getting the ghost into the right commit is only half of it, and the half
+    // that did not show. Writing a Reanimated shared value from JS does not
+    // change the view in that commit: it SCHEDULES an update for the UI thread,
+    // which lands a frame later. So the first frame still painted the new
+    // children at the opacity the last swap left behind. On device that read as
+    // BAR (KG) -> Use my gym's rack -> BAR (KG) -> fade: the incoming content
+    // for one frame, then the ghost catching up over it, then the real fade.
+    //
+    // So for the first commit of a swap the opacities are PLAIN styles, which
+    // are part of that same commit and cannot arrive late. The shared values
+    // are still set here so the animations start from the right place, and the
+    // effect stands the plain styles down once they are running.
     if (token !== phase.token) {
         hold();
         swappingRef.current = true;
         target.current = -1;
         ghostOpacity.value = 1;
         liveOpacity.value = 0;
-        setPhase({ token, ghost: arrived.current ? previous.current : null });
+        setPhase({
+            token,
+            ghost: arrived.current ? previous.current : null,
+            starting: arrived.current,
+        });
     }
 
     useEffect(() => {
@@ -175,6 +190,9 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
 
         ghostOpacity.value = withTiming(0, { duration: FADE_OUT });
         liveOpacity.value = withDelay(FADE_OUT, withTiming(1, { duration: FADE_IN }));
+        // The animations are running now, so the shared values are known-good
+        // and the plain styles can stand down.
+        setPhase((p) => (p.starting ? { ...p, starting: false } : p));
 
         return () => {
             // Unmounted mid-swap: make sure a pending completion cannot fire
@@ -199,7 +217,10 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
     return (
         <Animated.View style={[style, driven && styles.clip, driven && heightStyle]}>
             {ghost != null && (
-                <Animated.View style={[styles.outOfFlow, ghostStyle]} pointerEvents="none">
+                <Animated.View
+                    style={[styles.outOfFlow, ghostStyle, phase.starting && styles.opaque]}
+                    pointerEvents="none"
+                >
                     {ghost}
                 </Animated.View>
             )}
@@ -207,7 +228,7 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
                 it WANTS rather than the one the container is capped at.
                 Toggling the style does not remount it. */}
             <Animated.View
-                style={[driven && styles.outOfFlow, liveStyle]}
+                style={[driven && styles.outOfFlow, liveStyle, phase.starting && styles.invisible]}
                 onLayout={onMeasure}
             >
                 {children}
@@ -219,6 +240,11 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
 const styles = StyleSheet.create({
     clip: { overflow: 'hidden' },
     outOfFlow: { position: 'absolute', left: 0, right: 0, top: 0 },
+    // Only ever applied on the first commit of a swap. A plain style is part
+    // of the same commit as the children; a shared value written next to it is
+    // not, which is the whole problem these two exist to solve.
+    opaque: { opacity: 1 },
+    invisible: { opacity: 0 },
 });
 
 export default Swap;
