@@ -80,6 +80,35 @@ export const withAlpha = (color, opacity) => {
     return color;
 };
 
+// Composite a translucent overlay onto an opaque base and return the flat
+// result. A fill painted with alpha is blended against whatever is behind it
+// at draw time, which means it can be blended TWICE -- and a fill blended
+// twice comes out lighter. Anything that has to survive an opacity animation
+// unchanged should be painted flat instead, using this.
+export const flattenOverlay = (overlay, base) => {
+    const rgba = typeof overlay === 'string' && overlay.match(
+        /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/);
+    if (!rgba) return overlay;
+    const a = rgba[4] === undefined ? 1 : parseFloat(rgba[4]);
+
+    let b = base;
+    if (typeof b === 'string' && b.startsWith('#')) {
+        let hex = b.slice(1);
+        if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('');
+        if (hex.length < 6) return overlay;
+        b = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    } else {
+        const m = typeof b === 'string' && b.match(
+            /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+        if (!m) return overlay;
+        b = [1, 2, 3].map((i) => parseInt(m[i], 10));
+    }
+
+    const mix = (o, u) => Math.round(o * a + u * (1 - a));
+    const out = [1, 2, 3].map((i, n) => mix(parseInt(rgba[i], 10), b[n]));
+    return `#${out.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+};
+
 export const SIZES = {
     height,
     width,

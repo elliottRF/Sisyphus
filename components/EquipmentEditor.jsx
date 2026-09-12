@@ -16,7 +16,7 @@ import AnimatedList from './AnimatedList';
 import Collapsible from './Collapsible';
 import Swap from './Swap';
 
-import { FONTS, TYPE, SPACING, RADIUS, isLightTheme, withAlpha } from '../constants/theme';
+import { FONTS, TYPE, SPACING, RADIUS, flattenOverlay, isLightTheme, withAlpha } from '../constants/theme';
 import { formatWeight, toStorageKg, unitLabel } from '../utils/units';
 import { EQUIPMENT, EQUIPMENT_LABELS, isPlateLoaded, resolveEquipment } from '../utils/equipment';
 
@@ -687,6 +687,13 @@ const useStyles = (theme) => useMemo(() => getStyles(theme), [theme]);
 export const getStyles = (theme) => {
     const light = isLightTheme(theme);
     const tile = theme.overlayInput;
+    // What the chips actually sit on. The equipment section has no background
+    // of its own on a dark theme, so that is the page; on a light one it is
+    // the translucent white panel over the page.
+    const chipBase = light
+        ? flattenOverlay('rgba(255,255,255,0.72)', theme.background)
+        : theme.background;
+    const chipFill = flattenOverlay(theme.overlayInput, chipBase);
     return StyleSheet.create({
         section: { marginTop: SPACING.s },
         sectionLabel: {
@@ -813,6 +820,14 @@ export const getStyles = (theme) => {
 
         // Chips
         chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs, alignItems: 'center' },
+        // Flat, not the translucent `tile` every other well here uses, and
+        // that is the whole point. An alpha fill is blended at draw time
+        // against whatever is behind it, so it can be blended twice, and twice
+        // comes out lighter -- which is what these were doing for one frame
+        // every time the equipment type changed and the section was replaced.
+        // Painted flat there is nothing left to blend, so no frame can differ.
+        // The value is the exact composite, so nothing moves at rest: measured
+        // (50,50,54) on device before this change, and it still is.
         chip: {
             flexDirection: 'row',
             alignItems: 'center',
@@ -820,7 +835,7 @@ export const getStyles = (theme) => {
             paddingHorizontal: 10,
             paddingVertical: 6,
             borderRadius: RADIUS.pill,
-            backgroundColor: tile,
+            backgroundColor: chipFill,
         },
         chipText: { fontSize: TYPE.footnote, fontFamily: FONTS.semiBold, color: theme.text },
 
