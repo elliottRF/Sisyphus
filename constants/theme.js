@@ -158,6 +158,40 @@ const DEFAULT = {
     overlayInputFocused: "rgba(118,118,128,0.40)",
 };
 
+// ── Dark variants, for comparison ───────────────────────────────────────────
+// DEFAULT with the text taken off pure white. Pure white on near-black halates
+// -- the glow that makes text look slightly out of focus -- which is worst at
+// night, which is when a dark theme is used.
+const SOFT = { ...DEFAULT, text: "#F5F5F7" };
+const SOFTER = { ...DEFAULT, text: "#EDEDF0" };
+
+// True black page, for OLED: black pixels are switched off rather than lit, so
+// it saves power on a screen left open between sets.
+//
+// Two ways to do it, because they trade differently.
+//
+// DEEP shifts every surface down a step, so the page is black and the whole
+// hierarchy keeps its present spacing -- cards separate from the page by 1.23,
+// exactly as they do today.
+const OLED_DEEP = {
+    ...DEFAULT,
+    background: "#000000",
+    surface: "#1C1C1E",
+    surfaceElevated: "#2C2C2E",
+    border: "#2C2C2E",
+    bodyFill: "#2C2C2E",
+    text: "#F5F5F7",
+};
+
+// CONTRAST blackens only the page and leaves the cards where they are, so they
+// separate far harder: 1.51 against the page rather than 1.23. Less uniformly
+// black, easier to read the structure.
+const OLED_CONTRAST = {
+    ...DEFAULT,
+    background: "#000000",
+    text: "#F5F5F7",
+};
+
 // iOS light, grouped style: grey canvas, white cards.
 const LIGHT = {
     primary: "#007AFF",            // systemBlue (light)
@@ -196,6 +230,10 @@ const LIGHT = {
 // fall back to DEFAULT in ThemeContext (it checks `THEMES[storedThemeID]`).
 export const THEMES = {
     DEFAULT,
+    SOFT,
+    SOFTER,
+    OLED_DEEP,
+    OLED_CONTRAST,
     LIGHT,
 };
 
