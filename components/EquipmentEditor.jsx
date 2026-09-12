@@ -438,10 +438,29 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
     const heldPlates = useHeld(cfg && cfg.plates);
     const heldLadder = useHeld(cfg && cfg.ladder);
 
+    // What each type was last set to, so that leaving a type and coming back
+    // does not throw the work away. Somebody who has typed a twelve-pin stack
+    // in, then taps Barbell to see what it does, should not be punished for
+    // looking -- and a mis-tap on a five-button row is easy.
+    //
+    // This is for the life of the editor, not the database: nothing is saved
+    // until Save is pressed, and a type the user leaves on is the one that
+    // gets written. Closing the editor forgets the rest, which is right --
+    // they were never part of the exercise.
+    const remembered = useRef({});
+
     const setType = useCallback((t) => {
+        // Stash what is on screen before leaving it. `cfg` is live, so this
+        // picks up every edit made since the type was chosen.
+        if (cfg && cfg.type) remembered.current[cfg.type] = cfg;
         if (t === EQUIPMENT.NONE) return onChange(null);
-        // A bar inherits the gym's standard one; a machine starts at zero,
-        // because there is no such thing as a standard sled.
+
+        const kept = remembered.current[t];
+        if (kept) return onChange(kept);
+
+        // First time on this type. A bar inherits the gym's standard one; a
+        // machine starts at zero, because there is no such thing as a standard
+        // sled.
         if (isPlateLoaded(t)) {
             return onChange({
                 type: t,
@@ -452,7 +471,7 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
         }
         if (t === EQUIPMENT.DUMBBELL) return onChange({ type: t, ladder: null, extra: [], pair: false });
         return onChange({ type: t, stack: [], addOns: [] });
-    }, [onChange]);
+    }, [cfg, onChange]);
 
     const patch = useCallback((fields) => onChange({ ...cfg, ...fields }), [cfg, onChange]);
 
