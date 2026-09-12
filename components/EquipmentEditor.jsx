@@ -238,12 +238,21 @@ export const WeightListEditor = ({ values, onChange, theme, useImperial, placeho
     return (
         <View>
             <View style={styles.chipWrap}>
+                {/* `layout` below is gated on primed for the same reason
+                    `entering` is, and it is the stronger of the two. A
+                    LinearTransition on a view's FIRST frame animates it from
+                    wherever Reanimated thinks it was, which on a mount is
+                    nothing useful -- and these chips are mounted fresh every
+                    time the equipment type changes, because the whole section
+                    is. One frame of that read as the chips flashing lighter.
+                    The shuffle is only wanted when a chip is REMOVED from a
+                    list already on screen, which is always after primed. */}
                 {values.map((v) => (
                     <Reanimated.View
                         key={v}
                         entering={primed ? FadeIn.duration(140) : undefined}
                         exiting={FadeOut.duration(120)}
-                        layout={CHIP_SHUFFLE}
+                        layout={primed ? CHIP_SHUFFLE : undefined}
                     >
                         <TouchableOpacity
                             style={styles.chip}

@@ -81,8 +81,6 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
     //               exactly as long as it is supposed to be invisible anyway.
     const [phase, setPhase] = useState({ token, ghost: null, cover: false, hideLive: false });
     const ghost = phase.ghost;
-    // True for the length of a swap -- the ghost is mounted exactly then.
-    const swapping = ghost != null;
     // False until the first measure lands. Until then the content sits in
     // normal flow and the container sizes itself, so the first paint is the
     // finished article rather than a frame of nothing. Goes true once, and
@@ -245,7 +243,6 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
                 <Animated.View
                     style={[styles.outOfFlow, ghostStyle, phase.cover && styles.opaque]}
                     pointerEvents="none"
-                    needsOffscreenAlphaCompositing={swapping}
                 >
                     {ghost}
                 </Animated.View>
@@ -253,23 +250,9 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
             {/* Out of flow once the height is driven, so it reports the height
                 it WANTS rather than the one the container is capped at.
                 Toggling the style does not remount it. */}
-            {/* Composited as one layer for the length of the swap. These
-                sections are full of translucent fills -- the chips and the
-                input wells are theme.overlayInput, which is only 26% opaque --
-                and a translucent fill that gets blended twice comes out
-                lighter, which is the hairline artefact DESIGN.md describes on
-                overlapping rows. Fading a subtree like that WITHOUT an
-                offscreen layer blends each fill against whatever is behind it
-                separately, and the frame where Android creates or drops the
-                layer on its own is a frame where the blend changes: the chips
-                flash lighter, once, then settle. Holding the layer for the
-                whole animation makes every frame composite the same way. It is
-                off at rest, because a permanent layer costs memory and buys
-                nothing once nothing is fading. */}
             <Animated.View
                 style={[driven && styles.outOfFlow, liveStyle]}
                 onLayout={onMeasure}
-                needsOffscreenAlphaCompositing={swapping}
             >
                 {/* The hide has to be on its OWN view, not alongside the
                     animated opacity on the one above. Reanimated writes its
