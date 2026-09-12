@@ -166,16 +166,6 @@ const DEFAULT = {
     overlayInputFocused: "rgba(118,118,128,0.40)",
 };
 
-// True black page, for OLED: black pixels are switched off rather than lit, so
-// it saves power on a screen left open between sets. The cards stay where
-// DEFAULT has them, so they separate at 1.51:1 rather than 1.22:1 -- which is
-// what keeps the structure readable once the background has no brightness of
-// its own to provide it.
-const OLED = {
-    ...DEFAULT,
-    background: "#000000",
-};
-
 // iOS light, grouped style: grey canvas, white cards.
 const LIGHT = {
     primary: "#007AFF",            // systemBlue (light)
@@ -214,7 +204,6 @@ const LIGHT = {
 // fall back to DEFAULT in ThemeContext (it checks `THEMES[storedThemeID]`).
 export const THEMES = {
     DEFAULT,
-    OLED,
     LIGHT,
 };
 
