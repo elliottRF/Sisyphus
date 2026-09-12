@@ -39,6 +39,19 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
     const [name, setName] = useState(initialName || '');
     // Which colour the wheel is open on, if any.
     const [wheelField, setWheelField] = useState(null);
+    // Which wheels may draw themselves. A field is added once its block has
+    // finished opening -- the block opens first and the wheel fills it, see
+    // ColorWheel's `ready` -- and removed only when the block has finished
+    // CLOSING, so a wheel on its way out stays drawn while it shrinks instead
+    // of vanishing and leaving an empty box to collapse.
+    const [readyFields, setReadyFields] = useState(() => new Set());
+    const grantReady = (key) => setReadyFields((prev) => new Set(prev).add(key));
+    const revokeReady = (key) => setReadyFields((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+    });
     const styles = getStyles(theme);
 
     // Scroll the focused colour field into view so it isn't hidden behind the
@@ -74,9 +87,12 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
         scrollRef.current?.scrollTo({ y: Math.min(target, reachable), animated: false });
     };
 
+    const readyTimer = useRef(null);
     const openWheel = (key) => {
         const next = wheelField === key ? null : key;
         setWheelField(next);
+        if (readyTimer.current) clearTimeout(readyTimer.current);
+        if (next) readyTimer.current = setTimeout(() => grantReady(next), WHEEL_MS + 20);
         // A little above the row, so it does not sit flush against the header.
         followRef.current = next ? Math.max(0, (rowYRef.current[key] ?? 0) - 12) : null;
         // Let go once the growth is over, or an unrelated layout change later
@@ -190,12 +206,17 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                                         with it rather than being shoved down a screen. The
                                         sheet is centred, so this also stops the whole dialog
                                         jumping taller the instant a swatch is tapped. */}
-                                    <Collapsible open={isOpen} duration={WHEEL_MS}>
+                                    <Collapsible
+                                        open={isOpen}
+                                        duration={WHEEL_MS}
+                                        onClosed={() => revokeReady(field.key)}
+                                    >
                                         <View style={styles.wheelWrap}>
                                             <ColorWheel
                                                 theme={theme}
                                                 color={valid ? value : DEFAULT_CUSTOM_INPUT[field.key]}
                                                 onChange={(hex) => setField(field.key, hex)}
+                                                ready={readyFields.has(field.key)}
                                             />
                                             <TouchableOpacity style={styles.wheelDone} onPress={() => setWheelField(null)} activeOpacity={0.7}>
                                                 <Text style={styles.wheelDoneText}>Done</Text>

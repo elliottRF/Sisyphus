@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, PanResponder } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import Svg, { G, Path, Circle, Defs, RadialGradient, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { FONTS, RADIUS, SPACING, TYPE } from '../constants/theme';
 
@@ -78,7 +79,17 @@ const wedgePath = (cx, cy, r, startDeg, endDeg) => {
     return `M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1} Z`;
 };
 
-const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
+// `ready` lets the caller keep the expensive part out of an animation.
+//
+// The hue ring is 72 <Path> nodes, and 72 native views is a 65ms frame to
+// create -- measured with `dumpsys gfxinfo`. Mounted while the block containing
+// it was animating open, that one frame cost most of the animation: 8 frames
+// drawn where 320ms should draw about 19. Held back until the movement is over,
+// the same work lands on a still screen where nothing can stutter.
+//
+// The canvas keeps its exact size either way, so nothing reflows when the wheel
+// arrives -- it fades into a box that was already the right shape.
+const ColorWheel = ({ theme, color, onChange, size = 220, ready = true }) => {
     const styles = useMemo(() => getStyles(theme), [theme]);
     const R = size / 2;
     // Canvas is bigger than the wheel; the wheel's centre sits PAD in.
@@ -176,6 +187,8 @@ const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
     return (
         <View style={styles.wrap}>
             <View style={{ width: CANVAS, height: CANVAS }} {...wheelPan.panHandlers}>
+                {!ready ? null : (
+                <Animated.View entering={FadeIn.duration(140)}>
                 <Svg width={CANVAS} height={CANVAS}>
                     <Defs>
                         <RadialGradient id="sat" cx="50%" cy="50%" r="50%">
@@ -201,6 +214,8 @@ const ColorWheel = ({ theme, color, onChange, size = 220 }) => {
                     <Circle cx={markerX} cy={markerY} r={MARKER_R} fill={current} stroke="#FFFFFF" strokeWidth={MARKER_STROKE} />
                     <Circle cx={markerX} cy={markerY} r={MARKER_R + 2.5} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth={1} />
                 </Svg>
+                </Animated.View>
+                )}
             </View>
 
             {/* Explicit pixel dimensions, not percentages: react-native-svg
