@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, ActivityIndicator, Keyboard } from 'react-native'
-import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -209,10 +209,13 @@ const EditTemplate = () => {
 
     const renderItem = useCallback(({ item, index }) => {
         return (
+            {/* No layout animation. ExerciseEditable already animates its
+                real height when a set is added or removed, and a transition on
+                the wrapper re-targets every frame of that, so the wrapper
+                trailed the card inside it. */}
             <Animated.View
                 collapsable={false}
                 style={styles.exerciseWrapper}
-                layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
             >
                 {item.exercises.map((exercise, exerciseIndex) => {
                     const exerciseDetails = exercises.find(
@@ -439,7 +442,10 @@ const EditTemplate = () => {
                     onScrollToIndexFailed={handleScrollToIndexFailed}
                     keyExtractor={(item) => String(item.id)}
                     renderItem={renderItem}
-                    itemLayoutAnimation={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
+                    // No itemLayoutAnimation, matching Current: a card being
+                    // removed shrinks its own height, and a cell-level layout
+                    // transition on top of that re-targets every frame, so the
+                    // cell trailed the card it contains.
                     style={styles.list}
                     contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 1 }}
                     keyboardShouldPersistTaps="handled"
@@ -448,10 +454,11 @@ const EditTemplate = () => {
                     showsVerticalScrollIndicator={false}
                     scrollEnabled={!isReordering}
                     ListFooterComponent={
-                        <Animated.View
-                            layout={LinearTransition.duration(200).easing(Easing.out(Easing.ease))}
-                            style={styles.footer}
-                        >
+                        {/* Deliberately NOT layout-animated, matching
+                            Current. Animating its position leaves it a frame
+                            behind the card that just resized; the height
+                            animation inside the card is what moves it. */}
+                        <Animated.View style={styles.footer}>
                             <TouchableOpacity
                                 style={styles.addExerciseButton}
                                 onPress={plusButtonShowExerciseList}

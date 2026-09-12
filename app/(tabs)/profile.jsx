@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, TextInput, Keyboard, FlatList, TouchableOpacity, InteractionManager } from 'react-native'
-import Animated, { LinearTransition, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useScrollToTop } from 'expo-router';
 
@@ -9,6 +9,7 @@ import ActionSheet from "react-native-actions-sheet";
 import * as haptics from '../../utils/haptics';
 
 import NewExercise from "../../components/NewExercise"
+import AnimatedList from "../../components/AnimatedList"
 
 import Feather from '@expo/vector-icons/Feather';
 import { FONTS, RADIUS, withAlpha } from '../../constants/theme';
@@ -535,15 +536,21 @@ const Profile = () => {
                             {showRecents && (
                                 <>
                                     <Text style={styles.listSectionLabel}>Recent</Text>
-                                    {recentExercises.slice(0, visibleRecentsCount).map(item => (
-                                        <Animated.View
-                                            key={`recent-${item.exerciseID}`}
-                                            layout={LinearTransition.duration(300)}
-                                            entering={FadeIn.duration(250)}
-                                        >
-                                            {renderExerciseRow(item)}
-                                        </Animated.View>
-                                    ))}
+                                    {/* Show more added five rows at full height
+                                        in one frame: they faded in where they
+                                        landed while the button under them and
+                                        the whole list below it jumped down to
+                                        make room. Fading a row in but not
+                                        moving what it displaces is worse than
+                                        animating nothing. AnimatedList grows
+                                        each new row's real height instead, so
+                                        everything below travels with it. Rows
+                                        already on screen appear instantly. */}
+                                    <AnimatedList
+                                        items={recentExercises.slice(0, visibleRecentsCount)}
+                                        keyOf={(item) => `recent-${item.exerciseID}`}
+                                        renderItem={(item) => renderExerciseRow(item)}
+                                    />
                                     {visibleRecentsCount < recentExercises.length && (
                                         <TouchableOpacity
                                             style={styles.showMoreButton}

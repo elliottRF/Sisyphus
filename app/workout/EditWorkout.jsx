@@ -1,7 +1,7 @@
 // COMPLETE FIXED EditWorkout.js
 
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, LayoutAnimation, FlatList } from 'react-native'
-import Animated, { LinearTransition, Easing } from 'react-native-reanimated';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, KeyboardAvoidingView, ScrollView, FlatList } from 'react-native'
+import Animated from 'react-native-reanimated';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -28,17 +28,21 @@ import ExerciseEditable from '../../components/exerciseEditable'
 import FilteredExerciseList from '../../components/FilteredExerciseList';
 import { useOverlayReorder } from '../../utils/useOverlayReorder';
 import ReorderOverlay from '../../components/ReorderOverlay';
-import { FONTS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
+import { FONTS, RADIUS, getThemedShadow, isLightTheme, withAlpha } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { formatWeight } from '../../utils/units';
 import { filterCompletedSets, buildWorkoutEntries } from '../../utils/workoutEntries';
 import { customAlert } from '../../utils/customAlert';
 
-// See the matching flag in exerciseEditable.jsx — layout animations restored
-// after the leak was pinned on scrolled-wrapper retention instead.
-const DISABLE_LAYOUT_ANIMS = false;
-const layoutAnim = DISABLE_LAYOUT_ANIMS ? undefined : LinearTransition.duration(200).easing(Easing.out(Easing.ease));
+// No layout animations on this screen, for the same reasons the Current tab
+// dropped them. The cards here are the SAME ExerciseEditable, and it already
+// animates its real layout height when a set is added or removed -- which is
+// what carries the cards below and the footer. A LinearTransition on top of
+// that animates a frame AFTER the change has landed and re-targets on every
+// frame of the height animation underneath it, so the wrapper trailed the card
+// it contains and the buttons trailed the wrapper. That is the difference
+// between this screen and Current that made the same delete feel different.
 
 // FIXED: Component now uses route params instead of props
 const EditWorkout = () => {
@@ -128,7 +132,6 @@ const EditWorkout = () => {
             <Animated.View
                 collapsable={false}
                 style={styles.exerciseWrapper}
-                layout={layoutAnim}
             >
                 {item.exercises.map((exercise, exerciseIndex) => {
                     const exerciseDetails = exercises.find(
@@ -415,10 +418,13 @@ const EditWorkout = () => {
                         keyboardDismissMode="on-drag"
                         scrollEnabled={!isReordering}
                         ListFooterComponent={
-                            <Animated.View
-                                layout={layoutAnim}
-                                style={styles.footer}
-                            >
+                            {/* Deliberately NOT layout-animated, matching
+                                Current. Animating its position leaves it a
+                                frame behind the card that just resized, and an
+                                interrupted animation can strand it over the
+                                sets. The height animation inside the card is
+                                what moves it. */}
+                            <Animated.View style={styles.footer}>
                                 <TouchableOpacity
                                     style={styles.addExerciseButton}
                                     onPress={plusButtonShowExerciseList}
@@ -551,16 +557,18 @@ const getStyles = (theme) => {
         exerciseWrapper: {
             marginBottom: 0,
         },
+        // Matched to the same button on Current. This one had kept a dashed
+        // border and a hardcoded white overlay from before the two screens were
+        // brought in line -- DESIGN.md rules out dashed borders anywhere, and a
+        // tile inside a sheet is theme.overlayInput rather than surface-on-
+        // surface with a border drawn round it to make it visible.
         addExerciseButton: {
-            backgroundColor: lightTheme ? theme.overlaySubtle : 'rgba(255,255,255,0.05)',
-            paddingVertical: 16,
-            borderRadius: 12,
+            backgroundColor: theme.overlayInput,
+            paddingVertical: 15,
+            borderRadius: RADIUS.m,
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: 24,
-            borderWidth: 1,
-            borderColor: safeBorder,
-            borderStyle: 'dashed',
         },
         addExerciseText: {
             color: safePrimary,
