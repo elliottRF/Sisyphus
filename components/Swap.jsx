@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, PixelRatio } from 'react-native';
 import Animated, {
     useSharedValue,
@@ -69,8 +69,11 @@ const FADE_OUT = 120;
 const FADE_IN = 140;
 
 const Swap = ({ token, children, duration = DURATION, style }) => {
-    // The outgoing element tree, held on screen for the length of the fade.
-    const [ghost, setGhost] = useState(null);
+    // The token this render is showing, and the outgoing element tree held on
+    // screen for the length of the fade. One object, because they change
+    // together and they change DURING RENDER -- see the block below.
+    const [phase, setPhase] = useState({ token, ghost: null });
+    const ghost = phase.ghost;
     // False until the first measure lands. Until then the content sits in
     // normal flow and the container sizes itself, so the first paint is the
     // finished article rather than a frame of nothing. Goes true once, and
@@ -102,7 +105,7 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
     const finish = useCallback((mine) => {
         if (run.current !== mine) return;
         swappingRef.current = false;
-        setGhost(null);
+        setPhase((p) => (p.ghost == null ? p : { ...p, ghost: null }));
     }, []);
 
     // Hold at the height being left. Interrupting a swap has to stop the
@@ -134,30 +137,43 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
         });
     }, [duration, finish]);
 
-    // useLayoutEffect, NOT useEffect, and that is the whole fix for the flash.
+    // ── The swap starts DURING RENDER, and it has to ────────────────────────
     //
-    // A passive effect runs after the frame has been painted. By then the new
-    // children have already been drawn -- at whatever opacity the last swap
-    // left behind, which is 1 -- with no ghost over them yet. So every switch
-    // showed one full-brightness frame of the option being switched TO before
-    // any fade began. A layout effect runs before that paint, so the incoming
-    // content is already at zero and the ghost is already mounted in the frame
-    // the user actually sees.
-    useLayoutEffect(() => {
+    // Both of the obvious places to start it are too late. A useEffect runs
+    // after the frame has been painted; a useLayoutEffect is not reliably
+    // before it either, because React Native commits the tree to the native
+    // side and the paint does not wait on JS effects. Measured on a release
+    // build: the first frame after a tap showed the INCOMING section at full
+    // brightness -- old content already unmounted, no ghost over it, nothing
+    // faded -- because the children had changed while the opacity was still
+    // whatever the last swap left it at, which is 1.
+    //
+    // Updating state during render is React's own answer to this. It
+    // re-renders the component immediately, before committing, so the ghost
+    // and the zeroed incoming content are in the SAME output as the new
+    // children. There is no frame in between for anything to show through.
+    //
+    // The two shared values are written here for the same reason: they must
+    // hold before the first paint, not one effect later. The effect below
+    // still owns the ANIMATIONS -- it only has to be in time for the second
+    // frame, and it is.
+    if (token !== phase.token) {
+        hold();
+        swappingRef.current = true;
+        target.current = -1;
+        ghostOpacity.value = 1;
+        liveOpacity.value = 0;
+        setPhase({ token, ghost: arrived.current ? previous.current : null });
+    }
+
+    useEffect(() => {
         if (!arrived.current) {
             arrived.current = true;
             return undefined;
         }
         const mine = ++run.current;
-        hold();
-        target.current = -1;
-        swappingRef.current = true;
 
-        setGhost(previous.current);
-
-        ghostOpacity.value = 1;
         ghostOpacity.value = withTiming(0, { duration: FADE_OUT });
-        liveOpacity.value = 0;
         liveOpacity.value = withDelay(FADE_OUT, withTiming(1, { duration: FADE_IN }));
 
         return () => {
@@ -168,7 +184,7 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
         // Only the token starts a swap. Children changing is an ordinary
         // re-render and must leave the animation alone.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [token]);
+    }, [phase.token]);
 
     // Declared AFTER the swap effect on purpose: that one needs the previous
     // render's children, and this is what retires them.
