@@ -22,7 +22,7 @@ import Expandable from './Expandable';
 // `onClosed` fires once the block has finished collapsing and left the tree --
 // for anything that has to wait for the content to actually be gone, such as a
 // separator that would otherwise blink back mid-animation.
-const Collapsible = ({ open, children, duration, style, onClosed }) => {
+const Collapsible = ({ open, children, duration, easing, style, onClosed }) => {
     // Mounted outlives `open` by the length of the closing animation.
     const [mounted, setMounted] = useState(open);
     // Expandable's grow mode runs once per instance and ignores a second
@@ -76,6 +76,7 @@ const Collapsible = ({ open, children, duration, style, onClosed }) => {
             ref={contentRef}
             animateOnMount={primed}
             duration={duration}
+            easing={easing}
             style={style}
         >
             {children}

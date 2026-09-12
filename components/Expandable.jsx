@@ -49,11 +49,23 @@ import Animated, {
 const snap = (h) => PixelRatio.roundToNearestPixel(h);
 
 const DURATION = 220;
+// Ease-out is right for the short travels this was built for -- a set row, a
+// note, a warm-up group -- where landing quickly and settling reads as snappy.
+//
+// It is wrong for a big one. Over 400dp it puts HALF the movement in the first
+// 68ms and then crawls the last tenth for another 134ms: measured, not guessed.
+// That is the "opens up hugely with a pop" on the colour wheel, and anything
+// following the height -- the scroll that keeps the block in view -- inherits
+// the same lopsided curve and jolts with it.
+//
+// So the curve is a prop. Nothing that was tuned against ease-out changes; a
+// caller moving a panel rather than a row asks for GENTLE instead.
 const EASING = Easing.out(Easing.cubic);
+export const EASING_GENTLE = Easing.inOut(Easing.cubic);
 // Any cap above the content's height leaves the view free to size itself.
 const UNCAPPED = 100000;
 
-const CollapseOnly = forwardRef(({ children, style, duration }, ref) => {
+const CollapseOnly = forwardRef(({ children, style, duration, easing = EASING }, ref) => {
     const cap = useSharedValue(UNCAPPED);
     const natural = useRef(0);
     const collapsing = useRef(false);
@@ -73,7 +85,7 @@ const CollapseOnly = forwardRef(({ children, style, duration }, ref) => {
             collapsing.current = true;
             setClipping(true);
             cap.value = natural.current || 0;
-            cap.value = withTiming(0, { duration, easing: EASING }, (finished) => {
+            cap.value = withTiming(0, { duration, easing }, (finished) => {
                 if (finished && onDone) runOnJS(onDone)();
             });
         },
@@ -88,7 +100,7 @@ const CollapseOnly = forwardRef(({ children, style, duration }, ref) => {
     );
 });
 
-const Grow = forwardRef(({ children, style, duration }, ref) => {
+const Grow = forwardRef(({ children, style, duration, easing = EASING }, ref) => {
     const height = useSharedValue(0);
     const measured = useRef(0);
     const collapsing = useRef(false);
@@ -96,15 +108,24 @@ const Grow = forwardRef(({ children, style, duration }, ref) => {
     const onMeasure = useCallback((e) => {
         const h = snap(e.nativeEvent.layout.height);
         if (h <= 0 || collapsing.current) return;
+        // A REPEAT of the height we already have is not the content resizing.
+        // Android re-runs layout on the absolutely-positioned measuring child
+        // while the parent's height animates, so onLayout fires several times
+        // during a normal open reporting the same number every time. Without
+        // this guard the second of those took the branch below and hard-set
+        // the height, which killed the opening animation about 60ms in and
+        // snapped the block to full size -- the "opens up hugely with a pop".
+        // Invisible on a 44dp set row; impossible to miss on a 400dp panel.
+        if (h === measured.current) return;
         const first = measured.current === 0;
         measured.current = h;
         if (first) {
-            height.value = withTiming(h, { duration, easing: EASING });
+            height.value = withTiming(h, { duration, easing });
         } else {
-            // Content changed size on its own (a set added to a card, a note
-            // growing a line). Track it exactly rather than animating toward
-            // it: an animation would re-target on every frame of whatever is
-            // moving inside, and arrive late.
+            // Content genuinely changed size on its own (a set added to a
+            // card, a note growing a line). Track it exactly rather than
+            // animating toward it: an animation would re-target on every frame
+            // of whatever is moving inside, and arrive late.
             height.value = h;
         }
     }, [height, duration]);
@@ -113,7 +134,7 @@ const Grow = forwardRef(({ children, style, duration }, ref) => {
         collapse: (onDone) => {
             if (collapsing.current) return;
             collapsing.current = true;
-            height.value = withTiming(0, { duration, easing: EASING }, (finished) => {
+            height.value = withTiming(0, { duration, easing }, (finished) => {
                 if (finished && onDone) runOnJS(onDone)();
             });
         },
@@ -137,14 +158,14 @@ const styles = StyleSheet.create({
     measure: { position: 'absolute', left: 0, right: 0, top: 0 },
 });
 
-const Expandable = forwardRef(({ children, style, animateOnMount = false, duration = DURATION }, ref) => {
+const Expandable = forwardRef(({ children, style, animateOnMount = false, duration = DURATION, easing = EASING }, ref) => {
     // Frozen at mount. Callers pass a mount guard that flips to true once the
     // screen has settled, and swapping component type mid-life would remount
     // the subtree -- losing what is typed into a set's weight and reps.
     const modeRef = useRef(animateOnMount);
     const Impl = modeRef.current ? Grow : CollapseOnly;
     return (
-        <Impl ref={ref} style={style} duration={duration}>
+        <Impl ref={ref} style={style} duration={duration} easing={easing}>
             {children}
         </Impl>
     );

@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { FONTS, RADIUS, SPACING, buildCustomTheme, randomThemeInput, isValidHex, DEFAULT_CUSTOM_INPUT } from '../constants/theme';
 import ColorWheel from './ColorWheel';
 import Collapsible from './Collapsible';
+import { EASING_GENTLE } from './Expandable';
 
 // Custom-theme editor: pick four colours -- by wheel, by hex, or at random --
 // see a live preview, save. Everything else (borders, muted text, the readable
@@ -209,6 +210,10 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                                     <Collapsible
                                         open={isOpen}
                                         duration={WHEEL_MS}
+                                        // 400dp of travel, so the app's usual
+                                        // ease-out would put half of it in the
+                                        // first 68ms -- see EASING_GENTLE.
+                                        easing={EASING_GENTLE}
                                         onClosed={() => revokeReady(field.key)}
                                     >
                                         <View style={styles.wheelWrap}>
