@@ -2089,12 +2089,55 @@ export const exportBodyWeightData = async () => {
 
 const DB_NAME = 'sisyphus.db';
 
+// Preferences that live in AsyncStorage but belong WITH the data.
+//
+// A backup is a copy of the SQLite file, so anything outside it is not in the
+// backup -- restore onto a new phone and the workouts came back while the
+// themes the user built did not. These are copied into the database just
+// before it is checkpointed, and written back out after a restore.
+//
+// Only the theme keys, deliberately. Units, gym profile and rep range describe
+// the phone and the person using it now; carrying those over would quietly
+// change what the app records rather than what it looks like. The mechanism
+// generalises if that turns out to be wanted.
+const BACKED_UP_PREFERENCES = ['user_custom_themes', 'user_theme'];
+
+// Created on demand at both ends rather than in setupDatabase, so this does not
+// need a DB_SETUP_VERSION bump -- that would put the full schema pass back on
+// every user's next cold start for the sake of a table only the backup path
+// touches.
+const ensureSettingsTable = async (database) => {
+  await database.execAsync(
+    'CREATE TABLE IF NOT EXISTS appSettings (key TEXT PRIMARY KEY NOT NULL, value TEXT);'
+  );
+};
+
 /**
  * Flushes WAL and returns the on-disk path of the SQLite database file,
  * ready to be copied/shared as a complete backup.
  */
 export const prepareDatabaseBackup = async () => {
   const database = await getDb();
+
+  // Stash the preferences that travel with the data BEFORE the checkpoint, or
+  // they sit in the WAL and the copied file does not have them.
+  try {
+    await ensureSettingsTable(database);
+    const stored = await AsyncStorage.multiGet(BACKED_UP_PREFERENCES);
+    for (const [key, value] of stored) {
+      if (value == null) {
+        await database.runAsync('DELETE FROM appSettings WHERE key = ?;', [key]);
+      } else {
+        await database.runAsync(
+          'INSERT OR REPLACE INTO appSettings (key, value) VALUES (?, ?);',
+          [key, value]
+        );
+      }
+    }
+  } catch (e) {
+    // A backup missing its themes is worth far less than no backup at all.
+    console.warn('Could not store preferences in the backup:', e);
+  }
   // Merge the write-ahead log into the main db file so the copy is complete.
   //
   // The result row matters and used to be discarded. A checkpoint that can't
@@ -2152,6 +2195,7 @@ export const reopenDatabaseAfterRestore = async () => {
   dbPromise = null;
   lastLivenessProbe = 0;
   await setupDatabase();
+  await restorePreferences();
 
   // A restore replaces every row in the database, so every cache derived from
   // the old rows is now describing data that no longer exists. Drop them here,
@@ -2174,4 +2218,33 @@ export const reopenDatabaseAfterRestore = async () => {
 
   emit(AppEvents.WORKOUT_DATA_IMPORTED);
   emit(AppEvents.BODYWEIGHT_DATA_IMPORTED);
+};
+
+/**
+ * Puts the preferences a backup carried back into AsyncStorage.
+ *
+ * Every backup written before this existed has no appSettings table, and one
+ * written by a future version may carry keys this one does not know. Both are
+ * normal: read what is there, ignore the rest, and leave the current settings
+ * alone when there is nothing to restore -- a restore should never blank a
+ * theme the user is looking at because the backup predates the feature.
+ */
+const restorePreferences = async () => {
+  try {
+    const database = await getDb();
+    const rows = await database.getAllAsync(
+      "SELECT key, value FROM appSettings WHERE key IN (?, ?);",
+      BACKED_UP_PREFERENCES
+    );
+    const pairs = rows
+      .filter((r) => r && r.key && typeof r.value === 'string')
+      .map((r) => [r.key, r.value]);
+    if (pairs.length === 0) return;
+    await AsyncStorage.multiSet(pairs);
+    emit(AppEvents.PREFERENCES_RESTORED);
+  } catch (e) {
+    // No appSettings table: an older backup. Nothing to restore, and nothing
+    // about the workouts that just came back is affected.
+    console.log('No preferences in this backup:', e?.message || e);
+  }
 };

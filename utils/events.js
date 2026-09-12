@@ -10,6 +10,9 @@ export const AppEvents = {
   BODYWEIGHT_DATA_IMPORTED: 'BODYWEIGHT_DATA_IMPORTED',
   SHOW_CUSTOM_ALERT: 'SHOW_CUSTOM_ALERT',
   ONBOARDING_COMPLETED: 'ONBOARDING_COMPLETED',
+  // A restore has written preferences back into AsyncStorage. Whoever read
+  // them at boot needs to read them again.
+  PREFERENCES_RESTORED: 'PREFERENCES_RESTORED',
 };
 
 // Listener-count diagnostics for the view-retention investigation. That bug is

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppEvents, on, off } from '../utils/events';
 import { THEMES } from '../constants/theme';
 import {
     DEFAULT_REP_RANGE,
@@ -178,6 +179,41 @@ export const ThemeProvider = ({ children }) => {
             setSettingsLoaded(true); console.log('[boot] settings-loaded', Date.now());
         }
     };
+
+    // A database restore brings the user's custom themes back with the data,
+    // writing them into AsyncStorage before it announces itself. Everything
+    // here was read once at boot, so without this the themes are on the device
+    // but not on the screen until the next launch.
+    useEffect(() => {
+        const reloadThemes = async () => {
+            try {
+                const [storedCustom, storedID] = await Promise.all([
+                    AsyncStorage.getItem('user_custom_themes'),
+                    AsyncStorage.getItem('user_theme'),
+                ]);
+
+                let parsed = [];
+                if (storedCustom) {
+                    try { parsed = JSON.parse(storedCustom) || []; } catch (e) { parsed = []; }
+                }
+                setCustomThemes(parsed);
+
+                // Only follow the backup's selection if it still resolves. A
+                // theme id naming something neither built in nor in the list
+                // would leave the app with no theme at all.
+                const resolved = THEMES[storedID] || parsed.find((t) => t.id === storedID);
+                if (resolved) {
+                    setThemeID(storedID);
+                    setTheme(resolved);
+                }
+            } catch (error) {
+                console.error('Failed to reload themes after restore:', error);
+            }
+        };
+
+        on(AppEvents.PREFERENCES_RESTORED, reloadThemes, 'theme-context');
+        return () => off(AppEvents.PREFERENCES_RESTORED, reloadThemes);
+    }, []);
 
     const updateTheme = async (newThemeID) => {
         const resolved = THEMES[newThemeID] || customThemes.find((t) => t.id === newThemeID);
