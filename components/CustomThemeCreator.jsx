@@ -53,13 +53,35 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
         }, 150);
     };
 
-    // Opening a wheel on one of the lower rows puts it below the fold. Wait for
-    // the block to have grown before scrolling, or the target is measured
-    // against the height the sheet had before the wheel existed.
+    // The wheel is taller than the space under the row it opens from, so the
+    // view has to move as well as grow. Doing that as a scroll AFTER the growth
+    // is two separate movements -- a quick expansion, a pause, then a slower
+    // slide -- and it reads as jank however each one is tuned.
+    //
+    // So the scroll is not animated at all: it is driven by the growth. The
+    // block gets taller, the content gets taller with it, and each time it does
+    // the view follows by exactly as much as it now can. Nothing moves while
+    // the content still fits, and once it stops fitting the page climbs in
+    // lockstep with the wheel unfolding. One movement, and it ends the moment
+    // the growth does.
+    const followRef = useRef(null);
+    const viewportRef = useRef(0);
+
+    const followGrowth = (contentHeight) => {
+        const target = followRef.current;
+        if (target == null) return;
+        const reachable = Math.max(0, contentHeight - viewportRef.current);
+        scrollRef.current?.scrollTo({ y: Math.min(target, reachable), animated: false });
+    };
+
     const openWheel = (key) => {
         const next = wheelField === key ? null : key;
         setWheelField(next);
-        if (next) setTimeout(() => scrollFieldIntoView(next), WHEEL_MS + 40);
+        // A little above the row, so it does not sit flush against the header.
+        followRef.current = next ? Math.max(0, (rowYRef.current[key] ?? 0) - 12) : null;
+        // Let go once the growth is over, or an unrelated layout change later
+        // (the keyboard, a hex edit) would drag the page about.
+        if (next) setTimeout(() => { followRef.current = null; }, WHEEL_MS + 80);
     };
 
     // Fall back to defaults for any field that isn't a valid hex yet, so the
@@ -101,7 +123,14 @@ const CustomThemeCreator = ({ theme, onCreate, onClose, initial, initialName, ed
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
+                        <ScrollView
+                            ref={scrollRef}
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                            contentContainerStyle={{ paddingBottom: 8 }}
+                            onLayout={(e) => { viewportRef.current = e.nativeEvent.layout.height; }}
+                            onContentSizeChange={(_w, h) => followGrowth(h)}
+                        >
                             {/* Live preview */}
                             <View style={[styles.preview, { backgroundColor: preview.background }]}>
                                 <View style={[styles.previewCard, { backgroundColor: preview.surface }]}>
