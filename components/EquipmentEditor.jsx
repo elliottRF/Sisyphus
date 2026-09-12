@@ -1,10 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import Reanimated, { FadeIn, FadeOut, LinearTransition, Easing } from 'react-native-reanimated';
+import Reanimated, {
+    FadeIn,
+    FadeOut,
+    LinearTransition,
+    Easing,
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    interpolateColor,
+} from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 
 import AnimatedList from './AnimatedList';
 import Collapsible from './Collapsible';
+import Swap from './Swap';
 
 import { FONTS, TYPE, SPACING, RADIUS, isLightTheme, withAlpha } from '../constants/theme';
 import { formatWeight, toStorageKg, unitLabel } from '../utils/units';
@@ -332,23 +342,72 @@ const TYPES = [
     EQUIPMENT.STACK,
 ];
 
+// Five buttons that wrap onto two rows, so the selection cannot be a single
+// pill sliding between them -- it would have to jump rows. Each button fills
+// and empties on its own instead, which reads as one control changing state.
+//
+// Slightly quicker than the section beneath it (180ms against 260ms): the
+// thing the finger touched should confirm before the consequence of touching
+// it finishes arriving.
+const TYPE_FILL_MS = 180;
+const TYPE_EASING = Easing.out(Easing.cubic);
+
+const TypeButton = ({ type, active, onPress, theme, styles }) => {
+    const on = useSharedValue(active ? 1 : 0);
+    // Frozen at mount: the first paint is a state, not a transition.
+    const primed = useRef(false);
+
+    useEffect(() => {
+        if (!primed.current) {
+            primed.current = true;
+            on.value = active ? 1 : 0;
+            return;
+        }
+        on.value = withTiming(active ? 1 : 0, {
+            duration: TYPE_FILL_MS,
+            easing: TYPE_EASING,
+        });
+    }, [active, on]);
+
+    // interpolateColor rather than cross-fading two stacked layers: the label
+    // has to change colour WITH the fill, and a label fading through its own
+    // midpoint against a fill doing the same goes muddy in the middle.
+    const fill = useAnimatedStyle(() => ({
+        backgroundColor: interpolateColor(
+            on.value, [0, 1], [theme.overlayInput, theme.primary]),
+    }));
+    const label = useAnimatedStyle(() => ({
+        color: interpolateColor(
+            on.value, [0, 1], [theme.text, theme.textAlternate]),
+    }));
+
+    return (
+        <TouchableOpacity
+            style={styles.typeButtonWrap}
+            onPress={onPress}
+            activeOpacity={0.8}
+        >
+            <Reanimated.View style={[styles.typeButton, fill]}>
+                <Reanimated.Text style={[styles.typeText, label]} numberOfLines={2}>
+                    {EQUIPMENT_LABELS[type]}
+                </Reanimated.Text>
+            </Reanimated.View>
+        </TouchableOpacity>
+    );
+};
+
 const TypePicker = ({ value, onChange, theme, styles }) => (
     <View style={styles.typeRow}>
-        {TYPES.map((t) => {
-            const active = value === t;
-            return (
-                <TouchableOpacity
-                    key={t}
-                    style={[styles.typeButton, active && styles.typeButtonActive]}
-                    onPress={() => onChange(t)}
-                    activeOpacity={0.8}
-                >
-                    <Text style={[styles.typeText, active && styles.typeTextActive]} numberOfLines={2}>
-                        {EQUIPMENT_LABELS[t]}
-                    </Text>
-                </TouchableOpacity>
-            );
-        })}
+        {TYPES.map((t) => (
+            <TypeButton
+                key={t}
+                type={t}
+                active={value === t}
+                onPress={() => onChange(t)}
+                theme={theme}
+                styles={styles}
+            />
+        ))}
     </View>
 );
 
@@ -416,6 +475,12 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
     return (
         <View>
             <TypePicker value={type} onChange={setType} theme={theme} styles={styles} />
+
+            {/* Keyed on the TYPE, not on the config. Everything in here
+                re-renders on every keystroke in a weight field, and none of
+                that is a swap -- only changing what the exercise IS. */}
+            <Swap token={type}>
+            <View>
 
             {type === EQUIPMENT.NONE && (
                 <Text style={styles.hint}>
@@ -581,6 +646,9 @@ export const EquipmentEditor = ({ value, onChange, theme, useImperial, gym }) =>
                     </Text>
                 </View>
             )}
+
+            </View>
+            </Swap>
         </View>
     );
 };
@@ -611,27 +679,28 @@ export const getStyles = (theme) => {
 
         // Type picker
         typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
-        typeButton: {
+        // The touchable owns the sizing and the animated view inside owns the
+        // fill, because backgroundColor cannot be animated on a
+        // TouchableOpacity -- its own opacity animation already owns its style.
+        typeButtonWrap: {
             // Five of these no longer fit on one line, so they wrap: a basis
             // just under a third leaves three up and two under.
             flexGrow: 1,
             flexBasis: '30%',
+        },
+        typeButton: {
             paddingVertical: 10,
             paddingHorizontal: 4,
             borderRadius: RADIUS.m,
-            backgroundColor: tile,
             alignItems: 'center',
             justifyContent: 'center',
             minHeight: 52,
         },
-        typeButtonActive: { backgroundColor: theme.primary },
         typeText: {
             fontSize: 11,
             fontFamily: FONTS.semiBold,
-            color: theme.text,
             textAlign: 'center',
         },
-        typeTextActive: { color: theme.textAlternate },
 
         // Number fields
         fieldRow: { flexDirection: 'row', gap: SPACING.s, alignItems: 'flex-end' },

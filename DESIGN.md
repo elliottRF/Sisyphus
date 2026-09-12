@@ -175,6 +175,21 @@ Two things that cost real time here:
   at idle and again while scrolling, so an index gate has rows animating under
   the user's thumb long after the screen has settled. The 14px rise is reserved
 for content that is genuinely new (exercise cards landing).
+- **Detaching an animated style does not hand the property back to layout.**
+  Taking `useAnimatedStyle`'s result out of a view's style array once an
+  animation is done leaves the native view on the last value Reanimated wrote.
+  A container driven to a height and then "released" stays that height
+  forever; content that grows afterwards spills out of the bottom and draws on
+  top of whatever follows, which looks like a stray absolutely-positioned box
+  and is not one. Attach such a style once and leave it, driving the value
+  back to whatever the content measures -- see `components/Swap.jsx`. This is
+  the same class as the stable-keys rule below and cost the same kind of bug.
+
+**Replacing one block of content with another** -- a picker that changes what is
+below it -- is `components/Swap.jsx`: the outgoing fades out where it stands,
+the incoming fades in behind it, and the container animates its real height
+between the two. It keys off a TOKEN, not off the children, because the subtree
+re-renders on every keystroke and only a change of identity is a swap.
 
 ---
 
