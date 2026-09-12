@@ -65,6 +65,23 @@ export const EASING_GENTLE = Easing.inOut(Easing.cubic);
 // Any cap above the content's height leaves the view free to size itself.
 const UNCAPPED = 100000;
 
+// Measured heights are not stable between layout passes. On a 420dpi screen
+// (a Pixel 9a, scale 2.625) the same unchanged content reports 424.3809524,
+// then 424.7619048, then 424.3809524 again -- a wobble of 0.381dp, which is
+// exactly ONE physical pixel, arriving 150ms into an animation.
+//
+// That matters because the difference between "the content resized itself"
+// and "the same content measured again" is what decides whether the height
+// is animated or hard-set. An exact-equality check calls a one-pixel wobble a
+// resize, hard-sets the height, and the opening animation dies mid-flight --
+// the "opens up hugely with a pop". It reproduces on a 420dpi screen and not
+// on a 480dpi one, which is why it survived being tested on an emulator.
+//
+// So a change smaller than this is noise, not content. 1dp is at least two
+// physical pixels at any density this runs on, and far below anything real:
+// the smallest thing that genuinely opens here is a set row at 44dp.
+const NOISE_DP = 1;
+
 const CollapseOnly = forwardRef(({ children, style, duration, easing = EASING }, ref) => {
     const cap = useSharedValue(UNCAPPED);
     const natural = useRef(0);
@@ -104,28 +121,37 @@ const Grow = forwardRef(({ children, style, duration, easing = EASING }, ref) =>
     const height = useSharedValue(0);
     const measured = useRef(0);
     const collapsing = useRef(false);
+    // True from the first measure until the opening animation lands. While it
+    // is set, a size change re-targets the animation; afterwards it is tracked
+    // exactly. The two need telling apart -- see onMeasure.
+    const growing = useRef(false);
+    const settle = useCallback(() => { growing.current = false; }, []);
 
     const onMeasure = useCallback((e) => {
         const h = snap(e.nativeEvent.layout.height);
         if (h <= 0 || collapsing.current) return;
-        // A REPEAT of the height we already have is not the content resizing.
-        // Android re-runs layout on the absolutely-positioned measuring child
-        // while the parent's height animates, so onLayout fires several times
-        // during a normal open reporting the same number every time. Without
-        // this guard the second of those took the branch below and hard-set
-        // the height, which killed the opening animation about 60ms in and
-        // snapped the block to full size -- the "opens up hugely with a pop".
-        // Invisible on a 44dp set row; impossible to miss on a 400dp panel.
-        if (h === measured.current) return;
+        // A RE-MEASURE of the height we already have is not the content
+        // resizing. Android re-runs layout on the absolutely-positioned
+        // measuring child while the parent's height animates, so onLayout
+        // fires several times during a normal open -- reporting the same
+        // number, or one a physical pixel off it. See NOISE_DP: treating that
+        // as a resize is what killed the animation mid-open.
+        if (Math.abs(h - measured.current) < NOISE_DP) return;
         const first = measured.current === 0;
         measured.current = h;
-        if (first) {
-            height.value = withTiming(h, { duration, easing });
+        if (first || growing.current) {
+            // Still opening. A genuine size change mid-open re-targets the
+            // animation rather than jumping to the new height, so the block
+            // keeps moving instead of snapping part-way.
+            growing.current = true;
+            height.value = withTiming(h, { duration, easing }, (done) => {
+                if (done) runOnJS(settle)();
+            });
         } else {
-            // Content genuinely changed size on its own (a set added to a
-            // card, a note growing a line). Track it exactly rather than
-            // animating toward it: an animation would re-target on every frame
-            // of whatever is moving inside, and arrive late.
+            // Content genuinely changed size on its own, after it had settled
+            // (a set added to a card, a note growing a line). Track it exactly
+            // rather than animating toward it: an animation would re-target on
+            // every frame of whatever is moving inside, and arrive late.
             height.value = h;
         }
     }, [height, duration]);

@@ -52,6 +52,12 @@ import { EASING_GENTLE } from './Expandable';
 // same reason, and it is much the smaller of the two.
 const snap = (h) => PixelRatio.roundToNearestPixel(h);
 
+// Layout heights wobble by a physical pixel between passes -- see NOISE_DP in
+// components/Expandable, where treating that as a real change killed the
+// animation outright. Here it would restart the timing mid-swap instead, which
+// is less violent and still wrong.
+const NOISE_DP = 1;
+
 const DURATION = 260;
 // Short enough that the two halves overlap into one movement rather than
 // reading as "out, then in".
@@ -106,7 +112,7 @@ const Swap = ({ token, children, duration = DURATION, style }) => {
 
     const onMeasure = useCallback((e) => {
         const h = snap(e.nativeEvent.layout.height);
-        if (h <= 0 || h === target.current) return;
+        if (h <= 0 || Math.abs(h - target.current) < NOISE_DP) return;
         natural.current = h;
         target.current = h;
         if (!swappingRef.current) {
