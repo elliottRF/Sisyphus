@@ -166,7 +166,13 @@ const LIGHT = {
     background: "#F2F2F7",         // systemGroupedBackground (light)
     surface: "#FFFFFF",            // secondarySystemGroupedBackground (light)
     surfaceElevated: "#F2F2F7",    // tertiarySystemGroupedBackground (light)
-    text: "#000000",               // label
+    // Not pure black. #000 on #FFF is 21:1, the highest contrast two colours
+    // can have, and on a page that is mostly white -- a session's set list, the
+    // exercise library -- it glares rather than reads. A near-black keeps the
+    // text unmistakably black while taking the hard edge off; at 17:1 there is
+    // no legibility being traded for it. Chosen to match the dark theme's own
+    // surface colour, so the two themes are the same near-black inverted.
+    text: "#1C1C1E",               // label, softened from #000000 (21:1 -> 17:1)
     textSecondary: "#8A8A8E",      // secondaryLabel flattened to hex
     textTertiary: "#C5C5C7",       // tertiaryLabel flattened to hex
     textAlternate: "#FFFFFF",
