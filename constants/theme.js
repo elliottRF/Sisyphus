@@ -138,11 +138,19 @@ const DEFAULT = {
     background: "#1C1C1E",         // systemGroupedBackground (dark, elevated)
     surface: "#2C2C2E",            // secondarySystemGroupedBackground (elevated)
     surfaceElevated: "#3A3A3C",    // tertiarySystemGroupedBackground (elevated)
-    text: "#FFFFFF",               // label
-    textSecondary: "#AEAEB4",      // secondaryLabel, boosted for bright rooms
+    // Off pure white. White on near-black halates -- the faint glow that
+    // makes text look very slightly out of focus -- and a dark theme is
+    // mostly read at night, which is exactly when that shows. Still
+    // 12.25:1 on a card, well past AAA.
+    text: "#F0F0F2",               // label
+    textSecondary: "#A8A8AE",      // secondaryLabel, boosted for bright rooms
     textTertiary: "#7C7C82",       // tertiaryLabel, boosted for bright rooms
     textAlternate: "#FFFFFF",      // text on primary-filled controls
-    border: "#3A3A3C",             // separator flattened to hex
+    // Was #3A3A3C, the same value as surfaceElevated -- which meant every
+    // separator sitting on a raised row was invisible, drawn in exactly
+    // the colour underneath it. Lightened until a divider is actually a
+    // divider.
+    border: "#434345",             // separator flattened to hex
     success: "#30D158",            // systemGreen (dark)
     danger: "#FF453A",             // systemRed (dark)
     error: "#FF453A",
@@ -158,83 +166,14 @@ const DEFAULT = {
     overlayInputFocused: "rgba(118,118,128,0.40)",
 };
 
-// ── Dark variants ───────────────────────────────────────────
-// Adjustments of DEFAULT, not alternatives to it. systemBlue, the semantic
-// colours, the overlays and the chart fill are all inherited untouched -- the
-// only thing that moves is the greys, which is the part of a dark theme people
-// actually react to.
-//
-// The number that matters is how far a card sits off the page. DEFAULT is
-// 1.221:1. Below about 1.15 the cards stop reading as separate objects and the
-// screen goes monolithic; far above it they start to look like cut-outs.
-
-// The page drops, the cards stay. Same charcoal, but the cards sit further off
-// it -- 1.343:1 rather than 1.221:1 -- so the layout reads as panels floating
-// on a darker ground. The crispest of the set.
-const DEEP = {
-    ...DEFAULT,
-    background: "#121214",
-};
-
-// The opposite: the page comes UP toward the cards, 1.153:1, so the screen
-// reads as one surface with content on it rather than a stack of panels.
-// Calmer, and the one to pick if the current look feels busy.
-const FLAT = {
-    ...DEFAULT,
-    background: "#212123",
-};
-
-// Neutral grey nudged very slightly cool. Not a blue theme -- at this strength
-// it does not read as a hue at all, it reads as the grey being deliberate
-// rather than default. The text is taken off pure white to match, since a cool
-// grey under pure white is where the halation is most obvious.
-const SLATE = {
-    ...DEFAULT,
-    background: "#1A1C20",
-    surface: "#292C31",
-    surfaceElevated: "#363A40",
-    border: "#363A40",
-    bodyFill: "#363A40",
-    text: "#F4F5F7",
-    textSecondary: "#ABAFB8",
-    textTertiary: "#7B7F88",
-};
-
-// The same idea in the other direction. A warm grey is easier on the eyes at
-// night than a cool one, which is when a dark theme is actually used.
-const WARM = {
-    ...DEFAULT,
-    background: "#1E1D1B",
-    surface: "#2E2C29",
-    surfaceElevated: "#3C3A36",
-    border: "#3C3A36",
-    bodyFill: "#3C3A36",
-    text: "#F6F4F1",
-    textSecondary: "#B2AFA9",
-    textTertiary: "#827F79",
-};
-
-// DEFAULT's exact surfaces, with the text off pure white and the dividers
-// brought up so they are actually visible. Pure white on near-black halates --
-// the faint glow that makes text look slightly out of focus -- and DEFAULT's
-// border is the same colour as surfaceElevated, so separators currently
-// disappear wherever they sit on a raised row.
-const SOFT = {
-    ...DEFAULT,
-    text: "#F0F0F2",
-    textSecondary: "#A8A8AE",
-    border: "#434345",
-};
-
 // True black page, for OLED: black pixels are switched off rather than lit, so
 // it saves power on a screen left open between sets. The cards stay where
-// DEFAULT has them, so they separate at 1.51:1 rather than 1.23:1 -- which is
+// DEFAULT has them, so they separate at 1.51:1 rather than 1.22:1 -- which is
 // what keeps the structure readable once the background has no brightness of
 // its own to provide it.
 const OLED = {
     ...DEFAULT,
     background: "#000000",
-    text: "#F5F5F7",
 };
 
 // iOS light, grouped style: grey canvas, white cards.
@@ -275,11 +214,6 @@ const LIGHT = {
 // fall back to DEFAULT in ThemeContext (it checks `THEMES[storedThemeID]`).
 export const THEMES = {
     DEFAULT,
-    DEEP,
-    FLAT,
-    SLATE,
-    WARM,
-    SOFT,
     OLED,
     LIGHT,
 };
