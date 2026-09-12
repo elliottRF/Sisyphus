@@ -417,13 +417,12 @@ const EditWorkout = () => {
                         keyboardShouldPersistTaps="handled"
                         keyboardDismissMode="on-drag"
                         scrollEnabled={!isReordering}
+                        // The footer is deliberately NOT layout-animated,
+                        // matching Current. Animating its position leaves it a
+                        // frame behind the card that just resized, and an
+                        // interrupted animation can strand it over the sets.
+                        // The height animation inside the card is what moves it.
                         ListFooterComponent={
-                            {/* Deliberately NOT layout-animated, matching
-                                Current. Animating its position leaves it a
-                                frame behind the card that just resized, and an
-                                interrupted animation can strand it over the
-                                sets. The height animation inside the card is
-                                what moves it. */}
                             <Animated.View style={styles.footer}>
                                 <TouchableOpacity
                                     style={styles.addExerciseButton}

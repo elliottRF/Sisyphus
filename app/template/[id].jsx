@@ -207,12 +207,12 @@ const EditTemplate = () => {
         });
     }, [reorderSession, currentWorkout, exercises]);
 
+    // No layout animation on this wrapper. ExerciseEditable already animates
+    // its real height when a set is added or removed, and a transition here
+    // re-targets on every frame of that, so the wrapper trailed the card
+    // inside it.
     const renderItem = useCallback(({ item, index }) => {
         return (
-            {/* No layout animation. ExerciseEditable already animates its
-                real height when a set is added or removed, and a transition on
-                the wrapper re-targets every frame of that, so the wrapper
-                trailed the card inside it. */}
             <Animated.View
                 collapsable={false}
                 style={styles.exerciseWrapper}
@@ -453,11 +453,11 @@ const EditTemplate = () => {
                     onScrollBeginDrag={() => Keyboard.dismiss()}
                     showsVerticalScrollIndicator={false}
                     scrollEnabled={!isReordering}
+                    // The footer is deliberately NOT layout-animated,
+                    // matching Current. Animating its position leaves it a
+                    // frame behind the card that just resized; the height
+                    // animation inside the card is what moves it.
                     ListFooterComponent={
-                        {/* Deliberately NOT layout-animated, matching
-                            Current. Animating its position leaves it a frame
-                            behind the card that just resized; the height
-                            animation inside the card is what moves it. */}
                         <Animated.View style={styles.footer}>
                             <TouchableOpacity
                                 style={styles.addExerciseButton}
