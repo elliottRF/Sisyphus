@@ -167,28 +167,14 @@ const LIGHT = {
     surface: "#FFFFFF",            // secondarySystemGroupedBackground (light)
     surfaceElevated: "#F2F2F7",    // tertiarySystemGroupedBackground (light)
     text: "#000000",               // label
-    // Apple's own secondaryLabel is #8A8A8E, which is 3.44:1 on a white card
-    // -- under the 4.5 that normal text needs, and this carries the set/lift
-    // column headers, the workout stat line and the muscle split. The dark
-    // theme had already been boosted for the same reason; this is light's turn.
-    textSecondary: "#6C6C70",      // secondaryLabel, darkened: 3.44 -> 5.23:1
+    textSecondary: "#8A8A8E",      // secondaryLabel flattened to hex
     textTertiary: "#C5C5C7",       // tertiaryLabel flattened to hex
     textAlternate: "#FFFFFF",
     border: "#E3E3E8",             // separator flattened to hex
-    // The system greens, oranges and reds are meant as FILLS on iOS, not as
-    // small text on white, and used as text they were the least legible things
-    // on the screen: systemGreen is 2.2:1, systemOrange 2.2:1 -- and those are
-    // the readiness percentages, the numbers the card exists to communicate.
-    // Darkened until they pass. They stay recognisably the same hues, and at
-    // the 10-16% alpha the chips and bars use them the difference is slight.
-    success: "#1E8E3E",            // green,  2.22 -> 4.21:1 on white
-    danger: "#D70015",             // red,    3.55 -> 5.38:1
-    error: "#D70015",
-    // Orange is the awkward one: dark enough to pass and it reads BROWN, which
-    // breaks the green-amber-red ramp the readiness tiles depend on. This is
-    // the lightest value that still clears 4.5, so it stays the most vivid
-    // orange available rather than the most legible brown.
-    warning: "#BF5700",            // orange, 2.20 -> 4.59:1
+    success: "#34C759",            // systemGreen (light)
+    danger: "#FF3B30",             // systemRed (light)
+    error: "#FF3B30",
+    warning: "#FF9500",            // systemOrange (light)
     info: "#32ADE6",               // systemCyan (light)
     bodyFill: "#D1D1D6",
     chartFill: "rgba(0, 122, 255, 0.14)",
@@ -285,15 +271,10 @@ export const buildCustomTheme = ({ primary, background, surface, text }) => {
         // Legible text on solid-primary fills (buttons, inputs).
         textAlternate: isLight(primary) ? '#000000' : '#FFFFFF',
         border: mix(surface, text, 0.14),
-        // These followed the overlays' lead and now branch on the background
-        // too. They were fixed at the dark variants, so a custom theme built on
-        // a light background got systemGreen at about 1.9:1 -- less legible
-        // than the built-in light theme it sits beside. Same values as LIGHT
-        // and DEFAULT, chosen the same way.
-        success: lightBg ? '#1E8E3E' : '#30D158',
-        danger: lightBg ? '#D70015' : '#FF453A',
-        error: lightBg ? '#D70015' : '#FF453A',
-        warning: lightBg ? '#BF5700' : '#FF9F0A',
+        success: '#30D158',
+        danger: '#FF453A',
+        error: '#FF453A',
+        warning: '#FF9F0A',
         info: '#64D2FF',
         bodyFill: mix(surface, text, 0.16),
         chartFill: withAlpha(primary, 0.16),
