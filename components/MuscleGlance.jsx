@@ -27,6 +27,11 @@ const BODY_NATURAL_WIDTH = 163;
 const FATIGUED_BELOW = 60;
 const RECOVERING_BELOW = 80;
 
+// How present the untrained body is. The library draws every striation, and at
+// 50dp that detail is noise rather than anatomy, so the ghost is kept faint
+// enough to read as one silhouette instead of a bundle of little shapes.
+const GHOST = 0.09;
+
 // Every part the body library draws, so the untrained ones can be themed rather
 // than left to its own default. Same list the Home tab's map is built from.
 const ALL_SLUGS = [
@@ -66,11 +71,18 @@ const MuscleGlance = ({
     // muscle is drawn in the accent at full strength and slides toward the
     // warning colour as it tires, so a session that is not worth doing today
     // looks wrong before you have read the number.
+    //
+    // The untrained body is kept BARELY there. The Home tab's bodyFill is a
+    // solid mid-grey, which is right at the size Home draws it and wrong here:
+    // at 50dp every striation the library draws turns into lumpy noise and the
+    // card reads as an anatomy chart. Dropped to a ghost, the figure is a
+    // silhouette and the worked muscles are the only thing with any colour in
+    // them, which is the whole point of putting it on the card.
     const colors = useMemo(() => [
-        withAlpha(theme.primary, 0.85),
-        withAlpha(theme.warning, 0.8),
-        withAlpha(theme.danger, 0.8),
-        theme.bodyFill,
+        theme.primary,
+        theme.warning,
+        theme.danger,
+        withAlpha(theme.text, GHOST),
     ], [theme]);
 
     // The female body is drawn slightly smaller by the library; matching the
@@ -86,11 +98,12 @@ const MuscleGlance = ({
                     gender={gender}
                     side={side}
                     scale={scale}
-                    // The head and hands are not in the slug list, so they
-                    // still fall to the library's own default; the theme's bare
-                    // fill keeps them in step with the rest of the figure.
-                    defaultFill={theme.bodyFill}
-                    border={theme.bodyFill}
+                    // The head, hands and feet are not in the slug list, so
+                    // they fall to the library's own default; matching them to
+                    // the ghost keeps the figure one piece. The outline matches
+                    // too -- a contrasting one at this size is just noise.
+                    defaultFill={withAlpha(theme.text, GHOST)}
+                    border={withAlpha(theme.text, GHOST)}
                     colors={colors}
                     width={width}
                 />

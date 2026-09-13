@@ -17,7 +17,6 @@ import { setPreloadedData } from '../../constants/preloader';
 import { toStorageKg, formatWeight, loadLabel, unitLabel } from '../../utils/units';
 import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
 import MuscleGlance from '../../components/MuscleGlance';
-import { broadMuscleGroups } from '../../constants/muscles';
 import { estimateOneRMForStorage } from '../../utils/oneRM';
 import { filterCompletedSets, buildWorkoutEntries, setWillBeSaved } from '../../utils/workoutEntries';
 import { muscleMapping } from '../../constants/muscles';
@@ -336,17 +335,6 @@ const Current = () => {
         }));
         return [...slugs];
     }, [exercises]);
-
-    // The broad groups a template covers, most-specific first, for the line
-    // under the hero's name: "Quads · Hams · Glutes" says more about a session
-    // than four truncated exercise names did.
-    const templateMuscleLabels = useCallback((slugs) => {
-        const labels = [];
-        for (const group of broadMuscleGroups) {
-            if (group.slugs.some((slug) => slugs.includes(slug))) labels.push(group.label);
-        }
-        return labels;
-    }, []);
 
     // Human "time until" string, e.g. "45m", "3h 20m", "1d 4h".
     const formatTimeUntil = (ms) => {
@@ -1250,7 +1238,6 @@ const Current = () => {
                             {hero && (() => {
                                 const slugs = templateTargetSlugs(hero.template);
                                 const badge = readinessBadge(hero.readiness);
-                                const labels = templateMuscleLabels(slugs);
                                 const count = hero.template.data.reduce((t, g) => t + g.exercises.length, 0);
                                 const ms = hero.readiness != null && hero.readiness < 80 && recentUsage
                                     ? timeUntilSlugRecovery(recentUsage, accessoryWeight, slugs, 80, recoveryRate)
@@ -1273,9 +1260,8 @@ const Current = () => {
                                                     <Text style={styles.heroName} numberOfLines={2}>
                                                         {hero.template.name}
                                                     </Text>
-                                                    <Text style={styles.heroMeta} numberOfLines={2}>
+                                                    <Text style={styles.heroMeta} numberOfLines={1}>
                                                         {count} {count === 1 ? 'exercise' : 'exercises'}
-                                                        {labels.length > 0 ? `  ·  ${labels.slice(0, 3).join(' · ')}` : ''}
                                                     </Text>
                                                     {badge && (
                                                         <View style={styles.heroBadgeRow}>
@@ -1320,7 +1306,7 @@ const Current = () => {
                             })()}
 
                             {gridEntries.length > 0 && hero && (
-                                <Text style={styles.gridHeading}>ALSO IN THIS SPLIT</Text>
+                                <Text style={styles.gridHeading}>OTHER TEMPLATES</Text>
                             )}
 
                             <Animated.View entering={FadeIn.duration(300)} style={styles.templatesGrid}>
@@ -1864,7 +1850,7 @@ const gridMetrics = (width) => {
         // because a body is about 2.1x as tall as it is wide: any wider and the
         // pair outgrows the 200dp card and pushes up into the name.
         cardGlanceWidth: Math.min(56, Math.floor((itemWidth - 28 - 4) / 2)),
-        heroGlanceWidth: 58,
+        heroGlanceWidth: 68,
     };
 };
 
