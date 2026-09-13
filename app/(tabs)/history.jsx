@@ -36,7 +36,7 @@ const GLOW_OUT = 620;
 // Measured from the LANDING, not from the tap: a long jump can spend a second
 // travelling, and a hold timed from the tap would be most of the way gone by
 // the time the card was on screen.
-const GLOW_HOLD = 1600;
+const GLOW_HOLD = 800;
 
 // Where a jumped-to session lands: a third of the way down, clear of the
 // pinned month label and of the page header above it.
