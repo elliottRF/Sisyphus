@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicator, Modal, Pressable, Dimensions, Animated as RNAnimated } from 'react-native'
+import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicator, Modal, Pressable, Dimensions, PixelRatio, Animated as RNAnimated } from 'react-native'
 import ActionSheet from 'react-native-actions-sheet';
 import AppCalendar from '../../components/AppCalendar';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -28,6 +28,56 @@ import { EASING_GENTLE } from '../../components/Expandable';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// ── Card geometry ────────────────────────────────────────────────────────────
+//
+// Every part of a session card is pinned to a height, so a card's total height
+// is a pure function of how many exercises it lists. That is what lets the list
+// have getItemLayout, and getItemLayout is the only way it will scroll to a
+// session it has never rendered -- see the note on scrollToSession.
+//
+// The numbers come from measuring the cards as they were, across the whole
+// history, so pinning them changes nothing anyone can see:
+//
+//     rows  more   was      now
+//       2    no    169.00   170
+//       3    no    193.33   194
+//       4    no    217.67   218
+//       4   yes    242.00   242
+//
+// Two things had to change for that to be possible. The meta line (date,
+// duration, volume, sets) used to WRAP to a second line on cards with big
+// numbers -- worth 21.33dp, and impossible to predict without measuring the
+// text -- so it is one line now, with the last two items allowed to shrink. And
+// the PR badge made the header exactly 1dp taller than a bare title, so the
+// header is pinned to fit the badge either way.
+//
+// Snapped to whole device pixels: a height that is already pixel-aligned is
+// rendered at exactly that size, so the declared and the real heights cannot
+// drift apart -- which matters at 420dpi as much as at 480.
+const SNAP = (dp) => PixelRatio.roundToNearestPixel(dp);
+const CARD_HEADER_H = SNAP(26);
+const CARD_META_H = SNAP(18);
+const CARD_ROW_H = SNAP(20);
+const CARD_ROW_GAP = SNAP(4);
+const CARD_MORE_H = SNAP(20);
+const CARD_MORE_GAP = SNAP(4);
+// The parts that never vary: the card's bottom margin, its padding top and
+// bottom, the gap under the header, the gap under the meta line, and the
+// divider with its own gap.
+const CARD_MARGIN = SNAP(14);
+const CARD_CHROME = CARD_MARGIN + SNAP(18 + 18 + 7 + 12 + 1 + 12);
+const SECTION_HEADER_H = SNAP(41);
+// At most four exercises are listed, with a "+N more" line if there are others.
+const CARD_MAX_ROWS = 4;
+
+const cardHeight = (exerciseCount) => {
+    const rows = Math.min(CARD_MAX_ROWS, Math.max(1, exerciseCount));
+    const more = exerciseCount > CARD_MAX_ROWS;
+    return CARD_CHROME + CARD_HEADER_H + CARD_META_H
+        + rows * CARD_ROW_H + (rows - 1) * CARD_ROW_GAP
+        + (more ? CARD_MORE_GAP + CARD_MORE_H : 0);
+};
+
 // The tint on a jumped-to card comes up quickly and leaves slowly: arriving is
 // the part that has to catch the eye, and a glow that lingers on the way out
 // reads as the card settling rather than as a second event.
@@ -41,15 +91,9 @@ const GLOW_HOLD = 800;
 // Where a jumped-to session lands: a third of the way down, clear of the
 // pinned month label and of the page header above it.
 const JUMP_VIEW_POSITION = 0.3;
-// A jump rides the edge of the measured range one round at a time; these bound
-// how long it may keep doing that before giving up and opening the session
-// instead. See scrollToSession.
-const JUMP_ROUND_MS = 60;
-const JUMP_MAX_ROUNDS = 40;
-const JUMP_TIMEOUT = 2500;
-// How long after the last hop to reposition once more, and how many times.
-const JUMP_SETTLE_MS = 450;
-const JUMP_SETTLES = 2;
+// The scroll is animated, so the highlight's hold is restarted once it has
+// arrived rather than when it was asked for.
+const JUMP_SETTLE_MS = 350;
 
 
 const lightenColor = (color, percent) => {
@@ -549,15 +593,15 @@ const HistoryCard = React.memo(({ highlighted = false, session, exercises, exerc
                         {volumeKg > 0 && (
                             <>
                                 <View style={styles.metaDivider} />
-                                <View style={styles.metaItem}>
+                                <View style={[styles.metaItem, styles.metaItemFlexible]}>
                                     <Feather name="bar-chart-2" size={12} color={theme.textSecondary} />
-                                    <Text style={styles.metaText}>{formatVolume(volumeKg, useImperial)}</Text>
+                                    <Text style={styles.metaText} numberOfLines={1}>{formatVolume(volumeKg, useImperial)}</Text>
                                 </View>
                             </>
                         )}
                         <View style={styles.metaDivider} />
-                        <View style={styles.metaItem}>
-                            <Text style={styles.metaText}>{workingSets.length} sets</Text>
+                        <View style={[styles.metaItem, styles.metaItemFlexible]}>
+                            <Text style={styles.metaText} numberOfLines={1}>{workingSets.length} sets</Text>
                         </View>
                     </View>
 
@@ -839,52 +883,55 @@ const History = () => {
         return [...map.values()];
     }, [workoutHistory]);
 
+    // Where every cell in the list begins and how tall it is, worked out once
+    // per data load. A section contributes a header, then its rows, then a
+    // footer that renders nothing.
+    //
+    // This is what makes a jump to an unrendered session possible; it also means
+    // the scroll bar is honest from the first frame, instead of the content
+    // growing as you scroll through it.
+    const getItemLayout = useMemo(() => {
+        const cells = [];
+        let offset = 0;
+        const push = (length) => {
+            cells.push({ length, offset, index: cells.length });
+            offset += length;
+        };
+        for (const section of sections) {
+            push(SECTION_HEADER_H);
+            for (const [, exercises] of section.data) {
+                // The card lists one row per distinct exercise, in first-seen
+                // order -- the same count groupExercisesByName arrives at.
+                const ids = new Set();
+                for (const e of exercises) ids.add(e.exerciseID);
+                push(cardHeight(ids.size));
+            }
+            push(0);
+        }
+        const past = { length: 0, offset, index: cells.length };
+        return (_data, index) => cells[index] ?? past;
+    }, [sections]);
+
     // The month label, pinned above the list rather than by it. See
     // components/usePinnedSection, and the note on the SectionList below for
     // why the list cannot be allowed to stick its own headers.
     const { pinned, viewabilityConfigCallbackPairs } = usePinnedSection(sections);
 
     // ── Jumping to a session ─────────────────────────────────────────────────
+    // One scrollToLocation and it is there, at any distance, because the list
+    // has getItemLayout -- see the card geometry at the top of the file for what
+    // it took to be able to give it one.
     //
-    // Tapping a trained day -- on the activity graph or in the calendar --
-    // scrolls the list to that day's session and flashes it, rather than
-    // opening it. The whole history is in the list now, so every session is
-    // reachable this way.
-    //
-    // The loop below exists because of how far the list will let you scroll.
-    // With no getItemLayout (see the note on the SectionList) VirtualizedList
-    // does not pad its content out to an estimated full length: the scrollable
-    // range covers only the cells it has actually measured. Measured on the
-    // 646-session list, asking to jump to a session five months back:
-    //
-    //     scrollTo y=18848  ->  landed at 2705, content was only 3466
-    //
-    // The scroll was clamped to the end of what the list knew about, and it is
-    // clamped there ON PURPOSE -- VirtualizedList limits its tail spacer to the
-    // highest cell it has measured, in its own words "to prevent the user for
-    // hyperscrolling into un-measured area because otherwise content will
-    // likely jump around as it renders in above the viewport". scrollToLocation
-    // is no better: past the measured range it does not scroll at all, it just
-    // calls onScrollToIndexFailed.
-    //
-    // So the jump rides the edge: scroll to the end of what is known, which
-    // measures the next stretch, and ask again. That only advances as fast as
-    // the cards can be rendered, and these render at about FIFTY A SECOND.
-    // Measured on a cold list: a five-month jump arrives in about a second, and
-    // a two-year one (582 cells) would need 9.4 seconds.
-    //
-    // Nobody waits 9 seconds, so the ride has a budget. Past it the session is
-    // opened instead, which is what tapping a day did before this screen could
-    // scroll at all. The budget covers roughly half a year, which is the whole
-    // span the activity graph shows before you page it back -- so ordinary taps
-    // scroll, and only deliberately ancient ones open.
-    //
-    // (initialScrollIndex looks like the way out -- it mounts the list AT the
-    // target, skipping everything in between, and did the same two-year jump in
-    // 616ms. It is not reliable here: without getItemLayout the remounted list
-    // draws nothing until a scroll event tells it where it is, and the nudge
-    // that provides one drags it back to the top. Three shapes of it were built
-    // and measured; each one left the list blank for seconds.)
+    // Without it this was not possible at all. VirtualizedList clamps its tail
+    // spacer to the highest cell it has measured, on purpose, "to prevent the
+    // user for hyperscrolling into un-measured area because otherwise content
+    // will likely jump around as it renders in above the viewport" -- so the
+    // list would not scroll past what it had already rendered, and
+    // scrollToLocation past that point did not scroll at all. A jump had to ride
+    // the edge, measuring as it went, which only advanced as fast as the cards
+    // rendered: about FIFTY A SECOND. A two-year jump (582 cells) took 9.4
+    // seconds, and with any sane budget it just gave up partway and left the
+    // list somewhere wrong.
     const [highlight, setHighlight] = useState(null);
     const jumpTarget = useRef(null);
     const jumpTimer = useRef(null);
@@ -919,8 +966,6 @@ const History = () => {
         const t = jumpTarget.current;
         if (!t) return;
         if (!isSettle) armSettle(runJump);
-        else if (t.settles >= JUMP_SETTLES) return;
-        else t.settles += 1;
         try {
             scrollRef.current?.scrollToLocation({
                 sectionIndex: t.sectionIndex,
@@ -928,10 +973,7 @@ const History = () => {
                 // and scrollToLocation counts from the header.
                 itemIndex: t.itemIndex + 1,
                 viewPosition: JUMP_VIEW_POSITION,
-                // Only the first hop is animated. Once the loop is riding the
-                // edge of the measured range, animating each hop would queue
-                // animations against each other and crawl.
-                animated: t.rounds === 0 || isSettle,
+                animated: true,
             });
         } catch {
             // The flash still identifies the card once it is scrolled to.
@@ -939,30 +981,9 @@ const History = () => {
             return;
         }
         // A new object for the same session: same card stays lit, but the hold
-        // above restarts from here.
+        // restarts from here, which is after the animated scroll has arrived.
         if (isSettle) setHighlight((h) => (h ? { session: h.session } : h));
     }, [endJump, armSettle]);
-
-    // Called by the list when the target is past what it has measured.
-    const onJumpMiss = React.useCallback(() => {
-        const t = jumpTarget.current;
-        if (!t) return;
-        if (t.rounds >= JUMP_MAX_ROUNDS || Date.now() - t.startedAt > JUMP_TIMEOUT) {
-            // Out of reach. Leaving the list wherever the ride got to would be
-            // the worst answer -- it looks like the tap went to the wrong
-            // workout -- so open the one that was asked for.
-            const { session } = t;
-            endJump();
-            setHighlight(null);
-            router.push(`/workout/${session}`);
-            return;
-        }
-        t.rounds += 1;
-        // As far as the list currently knows how to go. That measures the next
-        // stretch of cells, which is what moves the target within reach.
-        scrollRef.current?.getScrollResponder()?.scrollToEnd({ animated: false });
-        jumpTimer.current = setTimeout(runJump, JUMP_ROUND_MS);
-    }, [endJump, runJump, router]);
 
     const scrollToSession = React.useCallback((session) => {
         if (!session) return;
@@ -971,7 +992,7 @@ const History = () => {
             if (itemIndex < 0) continue;
             endJump();
             setHighlight({ session });
-            jumpTarget.current = { session, sectionIndex, itemIndex, rounds: 0, settles: 0, startedAt: Date.now() };
+            jumpTarget.current = { sectionIndex, itemIndex };
             runJump();
             return;
         }
@@ -1156,8 +1177,8 @@ const History = () => {
                 // text-sized (194.3 / 217.7 / 242 / 243dp) so any table of
                 // heights would drift a dp per card and re-open the same loop.
                 stickySectionHeadersEnabled={false}
+                getItemLayout={getItemLayout}
                 viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
-                onScrollToIndexFailed={onJumpMiss}
                 // A long jump rides the list forward for up to a second or so.
                 // If the user grabs the list in the meantime the jump has to
                 // let go, or it would keep yanking them onward.
@@ -1457,9 +1478,10 @@ const getStyles = (theme) => {
         justifyContent: 'space-between',
         alignItems: 'center',
         backgroundColor: theme.background,
-        // Overlap 1px upward: sticky headers can leave a subpixel seam at
-        // their top edge while scrolling, letting content peek through.
-        marginTop: -1,
+        // Pinned, like the cards, so getItemLayout can account for it. The 1px
+        // upward overlap that used to be here was covering a seam the list's
+        // own sticky headers left; they are gone.
+        height: SECTION_HEADER_H,
         paddingTop: 15,
         paddingBottom: 8,
         paddingHorizontal: 4,
@@ -1510,6 +1532,9 @@ const getStyles = (theme) => {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        // Tall enough for the PR badge, which is 1dp taller than a bare title.
+        // Pinning it means a card's height does not depend on having a PR.
+        height: CARD_HEADER_H,
         marginBottom: 7,
     },
     workoutName: {
@@ -1521,15 +1546,25 @@ const getStyles = (theme) => {
     metaContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 8,
-        rowGap: 4,
+        // One line, always. Wrapping was worth 21.33dp and could not be
+        // predicted without measuring the text. The gap is 6 rather than 8 to
+        // buy back the width that costs: the widest real row measures about
+        // 282dp against 292 available, so the shrink below stays inert.
+        flexWrap: 'nowrap',
+        gap: 6,
+        height: CARD_META_H,
         marginBottom: 12,
     },
     metaItem: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
+    },
+    // Only the last two give way if a row ever does run out of room, and they
+    // ellipsize rather than wrap.
+    metaItemFlexible: {
+        flexShrink: 1,
+        minWidth: 0,
     },
     metaText: {
         fontSize: 12,
@@ -1548,11 +1583,12 @@ const getStyles = (theme) => {
         opacity: 0.5,
     },
     summaryList: {
-        gap: 4,
+        gap: CARD_ROW_GAP,
     },
     summaryRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        height: CARD_ROW_H,
     },
     missingMuscleIcon: {
         marginLeft: 6,
@@ -1578,7 +1614,12 @@ const getStyles = (theme) => {
         fontSize: 12,
         fontFamily: FONTS.medium,
         color: theme.textSecondary,
-        marginTop: 4,
+        // lineHeight rather than padding, so the one line sits centred in a box
+        // of exactly the height getItemLayout is told about. No marginTop: it
+        // is a child of summaryList, whose gap already separates it from the
+        // last row -- adding one put 8dp there and 4 in the arithmetic.
+        height: CARD_MORE_H,
+        lineHeight: CARD_MORE_H,
         fontStyle: 'italic',
     },
 
