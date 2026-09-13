@@ -16,8 +16,6 @@ import { fetchExercises, getLatestWorkoutSession, insertWorkoutHistory, calculat
 import { setPreloadedData } from '../../constants/preloader';
 import { toStorageKg, formatWeight, loadLabel, unitLabel } from '../../utils/units';
 import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
-import MuscleGlance from '../../components/MuscleGlance';
-import { broadMuscleGroups } from '../../constants/muscles';
 import { estimateOneRMForStorage } from '../../utils/oneRM';
 import { filterCompletedSets, buildWorkoutEntries, setWillBeSaved } from '../../utils/workoutEntries';
 import { muscleMapping } from '../../constants/muscles';
@@ -60,14 +58,6 @@ import ContextMenu from '../../components/ContextMenu';
 // Template ordering within a split. Persisted so it survives a restart.
 const TEMPLATE_SORT_KEY = 'settings_templateSort';
 const LAST_SPLIT_KEY = 'settings_lastSplitId';
-// Deleting a template used to just blink: the row faded, and then everything
-// under it snapped up with no movement at all. The cards this replaced could not
-// have a layout animation -- LinearTransition animates absolute positions, and
-// in the flexWrap grid they lived in, survivors were animated toward positions
-// computed against the old wrap and settled a row-gap out, leaving the two
-// columns visibly misaligned. A vertical list has no such problem.
-const ROW_LAYOUT = LinearTransition.duration(240).easing(Easing.out(Easing.ease));
-
 const SORT_READINESS = 'readiness';
 const SORT_CREATED = 'created';
 
@@ -82,9 +72,8 @@ const DEFAULT_TEMPLATES = [
 const Current = () => {
     const insets = useSafeAreaInsets();
     const { width: windowWidth } = useWindowDimensions();
-    const { theme, gender, setWorkoutInProgress, setLiveWorkoutTitle, useImperial, workoutStartTime, updateWorkoutStartTime, accessoryWeight, recoveryRate } = useTheme();
+    const { theme, setWorkoutInProgress, setLiveWorkoutTitle, useImperial, workoutStartTime, updateWorkoutStartTime, accessoryWeight, recoveryRate } = useTheme();
     const styles = useMemo(() => getStyles(theme, windowWidth), [theme, windowWidth]);
-    const { heroGlanceWidth } = useMemo(() => gridMetrics(windowWidth), [windowWidth]);
 
     const [exercises, setExercises] = useState([]);
     const [isReady, setIsReady] = useState(false);
@@ -124,11 +113,8 @@ const Current = () => {
     const [workoutRestored, setWorkoutRestored] = useState(false);
     const [splits, setSplits] = useState([]);
     const [activeSplitIndex, setActiveSplitIndex] = useState(0);
-    // Readiness-first by default. The page exists to answer "what should I
-    // train today", and the app already knows; sorting by age made the reader
-    // work it out from percentages instead. Creation order is still there
-    // behind the eyebrow for anyone who wants their own arrangement back.
-    const [templateSort, setTemplateSort] = useState(SORT_READINESS);
+    // Newest-first by default; readiness is available behind the eyebrow toggle.
+    const [templateSort, setTemplateSort] = useState(SORT_CREATED);
     // { mode: 'create' | 'rename', split, name } — drives the split name dialog.
     const [splitEditor, setSplitEditor] = useState(null);
     const [splitMenu, setSplitMenu] = useState(false);
@@ -344,15 +330,6 @@ const Current = () => {
         }));
         return [...slugs];
     }, [exercises]);
-
-    // The broad groups a template covers, for a row's subtitle.
-    const templateMuscleLabels = useCallback((slugs) => {
-        const labels = [];
-        for (const group of broadMuscleGroups) {
-            if (group.slugs.some((slug) => slugs.includes(slug))) labels.push(group.label);
-        }
-        return labels;
-    }, []);
 
     // Human "time until" string, e.g. "45m", "3h 20m", "1d 4h".
     const formatTimeUntil = (ms) => {
@@ -1235,198 +1212,139 @@ const Current = () => {
         // The starter pack is only ever offered when the user has nothing at all.
         const showStarter = templates.length === 0;
 
-        // The most recovered template in this split leads the page. It is picked
-        // on readiness whatever the grid is sorted by -- the hero answers "what
-        // should I train today", which is a different question from "how do I
-        // like my templates arranged" -- and it is left out of the grid below so
-        // the same card is never on screen twice.
-        const hero = entries.length > 1
-            ? entries.reduce(
-                (best, e) => (e.readiness != null && (best == null || e.readiness > best.readiness) ? e : best),
-                null,
-            )
-            : null;
-        const gridEntries = hero ? entries.filter((e) => e.template.id !== hero.template.id) : entries;
-
         return (
             <View style={styles.splitPage}>
                 <ScrollView contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false}>
                     {(templatesLoaded && exercises.length > 0) && (
-                        <>
-                            {hero && (() => {
-                                const slugs = templateTargetSlugs(hero.template);
-                                const badge = readinessBadge(hero.readiness);
-                                const count = hero.template.data.reduce((t, g) => t + g.exercises.length, 0);
-                                const ms = hero.readiness != null && hero.readiness < 80 && recentUsage
-                                    ? timeUntilSlugRecovery(recentUsage, accessoryWeight, slugs, 80, recoveryRate)
-                                    : null;
-                                return (
-                                    // Deliberately NOT a Reanimated entering
-                                    // animation. The whole screen already fades
-                                    // in one level up, so this only ever added a
-                                    // second fade over the same pixels -- and it
-                                    // was the one animation in the app whose
-                                    // subtree contains SVG. An ANR was traced to
-                                    // Reanimated failing to apply props to about
-                                    // twenty view tags and logging a 155-frame
-                                    // stack trace for each failure, 5,746 of them
-                                    // in fourteen seconds, which blocked the UI
-                                    // thread inside Log.println_native. The
-                                    // failing tag count matches the parts of a
-                                    // body figure. Not reproduced on demand, so
-                                    // this removes the suspect rather than
-                                    // claiming a fix.
-                                    <View
-                                        key={`hero-${hero.template.id}`}
-                                        style={styles.heroCard}
-                                    >
-                                        <TouchableOpacity
-                                            activeOpacity={0.85}
-                                            onLongPress={(e) => openTemplateMenu(hero.template, e)}
-                                            delayLongPress={300}
-                                            onPress={() => loadTemplate(hero.template)}
-                                        >
-                                            <Text style={styles.heroEyebrow}>NEXT UP</Text>
-                                            <Text style={styles.heroName} numberOfLines={1}>
-                                                {hero.template.name}
-                                            </Text>
-                                            <View style={styles.heroFigure}>
-                                                <MuscleGlance
-                                                    slugs={slugs}
-                                                    muscleScores={muscleScores}
-                                                    theme={theme}
-                                                    gender={gender}
-                                                    width={heroGlanceWidth}
-                                                    gap={10}
-                                                />
-                                            </View>
-                                            <View style={styles.heroFacts}>
-                                                {badge && (
-                                                    <View style={[styles.pill, { backgroundColor: withAlpha(badge.color, 0.15) }]}>
-                                                        <Text style={[styles.pillText, { color: badge.color }]}>
-                                                            {hero.readiness >= 80
-                                                                ? (hero.readiness >= 95 ? 'Fully recovered' : `${hero.readiness}% recovered`)
-                                                                : (ms != null
-                                                                    ? `Ready in ${formatTimeUntil(ms)}`
-                                                                    : `${hero.readiness}% recovered`)}
-                                                        </Text>
-                                                    </View>
-                                                )}
-                                                <Text style={styles.heroCount}>
-                                                    {count} {count === 1 ? 'exercise' : 'exercises'}
-                                                </Text>
-                                            </View>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            activeOpacity={0.85}
-                                            onPress={() => loadTemplate(hero.template)}
-                                            disabled={!!loadingTemplateId}
-                                        >
-                                            <ButtonBackground style={styles.heroStart}>
-                                                {loadingTemplateId === hero.template.id ? (
-                                                    <ActivityIndicator color={theme.textAlternate} />
-                                                ) : (
-                                                    <Text style={styles.heroStartText} numberOfLines={1}>
-                                                        Start {hero.template.name}
-                                                    </Text>
-                                                )}
-                                            </ButtonBackground>
-                                        </TouchableOpacity>
-                                    </View>
-                                );
-                            })()}
-
-                            {gridEntries.length > 0 && hero && (
-                                <Text style={styles.gridHeading}>OTHER TEMPLATES</Text>
-                            )}
-
-                            <Animated.View entering={FadeIn.duration(300)}>
-                                {gridEntries.map(({ template, readiness }) => {
-                                    const exerciseCount = template.data.reduce((t, g) => t + g.exercises.length, 0);
-                                    const slugs = templateTargetSlugs(template);
+                            <Animated.View entering={FadeIn.duration(300)} style={styles.templatesGrid}>
+                                {entries.map(({ template, readiness }) => {
+                                    const exerciseNames = template.data.flatMap(group =>
+                                        group.exercises.map(ex => {
+                                            const detail = exercises.find(e => e.exerciseID === ex.exerciseID);
+                                            return detail ? detail.name : 'Unknown';
+                                        })
+                                    );
+                                    const displayNames = exerciseNames.slice(0, 4);
+                                    const moreCount = exerciseNames.length - displayNames.length;
                                     const badge = readinessBadge(readiness);
-                                    const labels = templateMuscleLabels(slugs);
-                                    const ms = readiness != null && readiness < 80 && recentUsage
-                                        ? timeUntilSlugRecovery(recentUsage, accessoryWeight, slugs, 80, recoveryRate)
-                                        : null;
-                                    // Same two facts an Exercises row carries: what it
-                                    // is, and when you last / next touch it.
-                                    const subtitle = ms != null
-                                        ? `Ready in ${formatTimeUntil(ms)} · ${exerciseCount} ${exerciseCount === 1 ? 'exercise' : 'exercises'}`
-                                        : `${labels.slice(0, 2).join(', ') || 'No muscles set'} · ${exerciseCount} ${exerciseCount === 1 ? 'exercise' : 'exercises'}`;
+
+                                    // No layout animation on these cards. LinearTransition
+                                    // animates absolute positions, and this is a flexWrap grid:
+                                    // when a card leaves — deleted, or moved to another split —
+                                    // the survivors were animated toward positions computed
+                                    // against the old wrap and settled a row-gap out, leaving
+                                    // the two columns visibly misaligned. The entering and
+                                    // exiting fades stay; only the position animation goes, so
+                                    // cards reflow instantly and correctly.
                                     return (
                                         <Animated.View
                                             key={template.id}
                                             entering={FadeIn.duration(250)}
-                                            exiting={FadeOut.duration(160)}
-                                            layout={ROW_LAYOUT}
+                                            exiting={FadeOut.duration(180)}
+                                            style={styles.templateCardWrap}
                                         >
-                                            <TouchableOpacity
-                                                style={styles.templateRow}
-                                                activeOpacity={0.7}
-                                                onPress={() => loadTemplate(template)}
-                                                onLongPress={(e) => openTemplateMenu(template, e)}
-                                                delayLongPress={300}
-                                            >
-                                                <View style={styles.rowText}>
-                                                    <Text style={styles.rowName} numberOfLines={1}>{template.name}</Text>
-                                                    <Text style={styles.rowSub} numberOfLines={1}>{subtitle}</Text>
+                                        <TouchableOpacity
+                                            style={styles.templateCard}
+                                            activeOpacity={0.7}
+                                            onPress={() => loadTemplate(template)}
+                                            onLongPress={(e) => openTemplateMenu(template, e)}
+                                            delayLongPress={300}
+                                        >
+                                            <View style={{ flex: 1 }}>
+                                                <View style={styles.templateCardHeader}>
+                                                    <Text style={styles.templateName} numberOfLines={1}>{template.name}</Text>
+                                                    <TouchableOpacity
+                                                        style={styles.templateEditButton}
+                                                        onPress={(e) => {
+                                                            e.stopPropagation();
+                                                            handleLongPressTemplate(template);
+                                                        }}
+                                                        disabled={!!loadingTemplateId}
+                                                    >
+                                                        {loadingTemplateId === template.id ? (
+                                                            <ActivityIndicator size="small" color={theme.primary} />
+                                                        ) : (
+                                                            <Feather name="edit-2" size={14} color={theme.textSecondary} />
+                                                        )}
+                                                    </TouchableOpacity>
                                                 </View>
-                                                {loadingTemplateId === template.id ? (
-                                                    <ActivityIndicator size="small" color={theme.primary} />
-                                                ) : badge ? (
-                                                    <View style={styles.rowValue}>
-                                                        <Text style={[styles.rowPercent, { color: badge.color }]}>
-                                                            {readiness}%
+
+                                                <View style={styles.templateOverview}>
+                                                    {displayNames.map((name, idx) => (
+                                                        <Text key={idx} style={styles.templateExerciseItem} numberOfLines={1}>
+                                                            • {name}
                                                         </Text>
-                                                        <Text style={styles.rowValueLabel}>
-                                                            {readiness >= 80 ? 'READY' : readiness >= 60 ? 'RECOVERING' : 'FATIGUED'}
+                                                    ))}
+                                                    {moreCount > 0 ? (
+                                                        <Text style={styles.templateMoreCount}>
+                                                            + {moreCount} more
+                                                        </Text>
+                                                    ) : null}
+                                                </View>
+                                            </View>
+
+                                            <View style={styles.cardFooter}>
+                                                <Text style={styles.templateDetails}>
+                                                    {exerciseNames.length} {exerciseNames.length === 1 ? 'exercise' : 'exercises'}
+                                                </Text>
+                                                {badge ? (
+                                                    <View style={styles.readinessPill}>
+                                                        <View style={[styles.readinessPillDot, { backgroundColor: badge.color }]} />
+                                                        <Text style={[styles.readinessPillText, { color: badge.color }]}>
+                                                            {badge.label}
                                                         </Text>
                                                     </View>
                                                 ) : (
-                                                    <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+                                                    <Ionicons name="chevron-forward" size={16} color={theme.primary} opacity={0.5} />
                                                 )}
-                                            </TouchableOpacity>
+                                            </View>
+                                        </TouchableOpacity>
                                         </Animated.View>
                                     );
                                 })}
 
                                 {/* Starter pack — only when the user has no templates yet */}
                                 {showStarter && (
-                                    <Animated.View exiting={FadeOut.duration(160)} layout={ROW_LAYOUT}>
+                                    <Animated.View
+                                        exiting={FadeOut.duration(180)}
+                                        style={styles.templateCardWrap}
+                                    >
                                         <TouchableOpacity
-                                            style={[styles.templateRow, styles.starterRow]}
+                                            style={[styles.templateCard, styles.starterCard]}
                                             activeOpacity={0.8}
                                             onPress={addStarterTemplates}
                                             disabled={!!loadingTemplateId}
                                         >
-                                            <View style={styles.rowText}>
-                                                <Text style={styles.starterTitle}>Add starter templates</Text>
-                                                <Text style={styles.rowSub}>Push · Pull · Legs to get you going</Text>
+                                            <View style={styles.addTemplateInner}>
+                                                {loadingTemplateId === 'starter' ? (
+                                                    <ActivityIndicator color={theme.primary} />
+                                                ) : (
+                                                    <>
+                                                        <MaterialCommunityIcons name="auto-fix" size={28} color={theme.primary} style={{ marginBottom: 6 }} />
+                                                        <Text style={styles.starterTitle}>Add starter templates</Text>
+                                                        <Text style={styles.starterSub}>Push · Pull · Legs to get you going</Text>
+                                                    </>
+                                                )}
                                             </View>
-                                            {loadingTemplateId === 'starter'
-                                                ? <ActivityIndicator color={theme.primary} />
-                                                : <MaterialCommunityIcons name="auto-fix" size={22} color={theme.primary} />}
                                         </TouchableOpacity>
                                     </Animated.View>
                                 )}
 
-                                {/* Matches Home's "+ Add Tracker" row. Carries
-                                    the layout animation too, or it sits still
-                                    while the rows above close the gap. */}
-                                <Animated.View layout={ROW_LAYOUT}>
-                                    <TouchableOpacity
-                                        style={styles.addTemplateRow}
-                                        activeOpacity={0.7}
-                                        onPress={handleAddTemplate}
-                                        disabled={!!loadingTemplateId}
-                                    >
-                                        <AntDesign name="plus" size={18} color={theme.primary} />
+                                {/* Add Template Button */}
+                                <Animated.View style={styles.templateCardWrap}>
+                                <TouchableOpacity
+                                    style={[styles.templateCard, styles.addTemplateCard]}
+                                    activeOpacity={0.7}
+                                    onPress={handleAddTemplate}
+                                    disabled={!!loadingTemplateId}
+                                >
+                                    <View style={styles.addTemplateInner}>
+                                        <AntDesign name="plus" size={28} color={theme.textSecondary} style={{ marginBottom: 4 }} />
                                         <Text style={styles.addTemplateText}>New Template</Text>
-                                    </TouchableOpacity>
+                                    </View>
+                                </TouchableOpacity>
                                 </Animated.View>
                             </Animated.View>
-                        </>
                     )}
                 </ScrollView>
             </View>
@@ -1485,46 +1403,25 @@ const Current = () => {
                                     split there is still a New Split page to swipe to, and
                                     hiding the dots there left a fresh install with no hint
                                     that the page scrolls at all. */}
-                                {splits.length > 1 && (
-                                    <ScrollView
-                                        horizontal
-                                        showsHorizontalScrollIndicator={false}
-                                        contentContainerStyle={styles.splitTabs}
-                                    >
+                                {pagerData.length > 1 && (
+                                    <View style={styles.splitDots}>
                                         {pagerData.map((page, i) => (
                                             <TouchableOpacity
                                                 key={page.__newSplit ? 'new' : page.split.id}
-                                                activeOpacity={0.8}
                                                 onPress={() => {
                                                     setActiveSplitIndex(i);
                                                     splitPagerRef.current?.scrollToOffset({ offset: i * windowWidth, animated: true });
                                                 }}
-                                                style={[
-                                                    styles.splitTab,
-                                                    page.__newSplit && styles.splitTabNew,
-                                                    i === activeSplitIndex && styles.splitTabActive,
-                                                ]}
+                                                hitSlop={8}
                                             >
-                                                {page.__newSplit ? (
-                                                    <AntDesign
-                                                        name="plus"
-                                                        size={14}
-                                                        color={i === activeSplitIndex ? theme.textAlternate : theme.textSecondary}
-                                                    />
-                                                ) : (
-                                                    <Text
-                                                        style={[
-                                                            styles.splitTabText,
-                                                            i === activeSplitIndex && styles.splitTabTextActive,
-                                                        ]}
-                                                        numberOfLines={1}
-                                                    >
-                                                        {page.split.name}
-                                                    </Text>
-                                                )}
+                                                <View style={[
+                                                    styles.splitDot,
+                                                    page.__newSplit && styles.splitDotNew,
+                                                    i === activeSplitIndex && styles.splitDotActive,
+                                                ]} />
                                             </TouchableOpacity>
                                         ))}
-                                    </ScrollView>
+                                    </View>
                                 )}
 
                                 {/* Held back until the saved split has been read, so the
@@ -1826,30 +1723,17 @@ const Current = () => {
 
 
 
-// Card grid geometry. Both the stylesheet and the card contents need these,
-// and they have to agree, so they are worked out in one place.
-const gridMetrics = (width) => {
-    const numColumns = 2;
-    const gap = 12;
-    const padding = 16;
-    const itemWidth = Math.floor((width - (padding * 2) - ((numColumns - 1) * gap)) / numColumns);
-    return {
-        gap,
-        padding,
-        itemWidth,
-        // Only the lead card draws figures now, centred, so they can be the
-        // size Home draws its pair rather than squeezed into a grid tile.
-        heroGlanceWidth: 62,
-    };
-};
-
 const getStyles = (theme, width) => {
     const safePrimary = theme.primary;
     const safeText = theme.text;
     const safeBorder = theme.border;
     const safeDanger = theme.danger;
 
-    const { gap, padding, itemWidth } = gridMetrics(width);
+    const numColumns = 2;
+    const gap = 12;
+    const padding = 16;
+    const availableWidth = width - (padding * 2) - ((numColumns - 1) * gap);
+    const itemWidth = Math.floor(availableWidth / numColumns);
 
     return StyleSheet.create({
         container: {
@@ -1883,6 +1767,28 @@ const getStyles = (theme, width) => {
         splitEditButton: {
             padding: 8,
             marginTop: 4,
+        },
+        splitDots: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingHorizontal: 20,
+            paddingBottom: 10,
+        },
+        splitDot: {
+            width: 7,
+            height: 7,
+            borderRadius: 4,
+            backgroundColor: theme.overlayBorder,
+        },
+        splitDotActive: {
+            backgroundColor: theme.primary,
+            width: 18,
+        },
+        splitDotNew: {
+            backgroundColor: 'transparent',
+            borderWidth: 1,
+            borderColor: theme.overlayBorder,
         },
         // Each page is exactly one screen wide so paging lands cleanly.
         splitPage: {
@@ -1980,6 +1886,11 @@ const getStyles = (theme, width) => {
             letterSpacing: -0.6,
             color: safeText,
         },
+        readinessPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+        },
         readinessPillDot: {
             width: 7,
             height: 7,
@@ -1989,178 +1900,123 @@ const getStyles = (theme, width) => {
             fontSize: 12,
             fontFamily: FONTS.bold,
         },
-        // ── The lead card ───────────────────────────────────────────────────
-        heroCard: {
+        templatesGrid: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: gap,
+        },
+        templateCardWrap: {
+            width: itemWidth,
+        },
+        templateCard: {
+            width: itemWidth,
+            height: 200,
             backgroundColor: theme.surface,
             borderRadius: RADIUS.l,
-            padding: 16,
-            marginBottom: 20,
-            ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
-        },
-        // The figures sit centred under the name, the way Home's fatigue card
-        // arranges its pair -- that card is the one other place in the app
-        // where a body is the subject, so the lead card borrows its shape.
-        heroFigure: {
-            alignItems: 'center',
-            marginTop: 10,
-            marginBottom: 2,
-        },
-        heroFacts: {
-            flexDirection: 'row',
-            alignItems: 'center',
+            padding: 14,
             justifyContent: 'space-between',
-            marginTop: 12,
-        },
-        heroCount: {
-            fontSize: 13,
-            fontFamily: FONTS.medium,
-            color: theme.textSecondary,
-        },
-        // A tinted pill, like the "+49.0 kg since start" badge on Home's PR
-        // card. Bare coloured text was the plainest thing on the screen.
-        pill: {
-            paddingHorizontal: 10,
-            paddingVertical: 5,
-            borderRadius: RADIUS.pill,
-        },
-        pillText: {
-            fontSize: 12,
-            fontFamily: FONTS.bold,
-        },
-        heroEyebrow: {
-            fontSize: 11,
-            fontFamily: FONTS.bold,
-            color: theme.primary,
-            letterSpacing: 1.2,
-            marginBottom: 3,
-        },
-        heroName: {
-            fontSize: 24,
-            fontFamily: FONTS.bold,
-            color: theme.text,
-            letterSpacing: -0.5,
-        },
-        // ── Template rows ───────────────────────────────────────────────────
-        // Same anatomy as an Exercises row: bold name, secondary subtitle, and
-        // a right-aligned value with a caps micro-label under it. The two-column
-        // grid of picture cards this replaced was the only one in the app, which
-        // is what made the tab look like it came from somewhere else.
-        templateRow: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-            backgroundColor: theme.surface,
-            borderRadius: RADIUS.l,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-            marginBottom: 10,
+            position: 'relative',
             ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
         },
-        rowText: {
+        templateCardHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8,
+        },
+        templateOverview: {
             flex: 1,
+            marginTop: 4,
         },
-        rowName: {
-            fontSize: 17,
-            fontFamily: FONTS.bold,
-            color: theme.text,
-            letterSpacing: -0.2,
-        },
-        rowSub: {
-            fontSize: 13,
+        templateExerciseItem: {
+            fontSize: 12,
             fontFamily: FONTS.medium,
             color: theme.textSecondary,
-            marginTop: 3,
+            marginBottom: 2,
+            opacity: 0.8,
         },
-        rowValue: {
-            alignItems: 'flex-end',
-        },
-        rowPercent: {
-            fontSize: 19,
-            fontFamily: FONTS.bold,
-        },
-        rowValueLabel: {
-            fontSize: 10,
-            fontFamily: FONTS.semiBold,
-            color: theme.textSecondary,
-            letterSpacing: 0.8,
-            marginTop: 1,
-        },
-        starterRow: {
-            backgroundColor: withAlpha(theme.primary, isLightTheme(theme) ? 0.10 : 0.16),
-            boxShadow: 'none',
-        },
-        // Mirrors Home's "+ Add Tracker".
-        addTemplateRow: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            backgroundColor: theme.overlayInput,
-            borderRadius: RADIUS.l,
-            paddingVertical: 16,
-            marginTop: 2,
-        },
-        heroStart: {
-            marginTop: 12,
-            height: 46,
-            borderRadius: RADIUS.m,
-            alignItems: 'center',
-            justifyContent: 'center',
-        },
-        heroStartText: {
-            fontSize: 15,
-            fontFamily: FONTS.bold,
-            color: theme.textAlternate,
-            paddingHorizontal: 16,
-        },
-        gridHeading: {
+        templateMoreCount: {
             fontSize: 11,
-            fontFamily: FONTS.bold,
+            fontFamily: FONTS.regular,
             color: theme.textSecondary,
-            letterSpacing: 1.2,
-            marginBottom: 10,
+            marginTop: 2,
+            opacity: 0.6,
         },
-        // ── The split switcher ──────────────────────────────────────────────
-        splitTabs: {
-            gap: 8,
-            paddingHorizontal: 20,
-            paddingBottom: 12,
+        cardFooter: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: 8,
+            paddingTop: 8,
+            borderTopWidth: 1,
+            borderTopColor: theme.overlayBorder,
         },
-        splitTab: {
-            paddingHorizontal: 14,
-            height: 32,
-            borderRadius: RADIUS.pill,
-            backgroundColor: theme.overlayInput,
+        addTemplateInner: {
             alignItems: 'center',
             justifyContent: 'center',
-        },
-        splitTabActive: {
-            backgroundColor: theme.primary,
-        },
-        splitTabText: {
-            fontSize: 13,
-            fontFamily: FONTS.semiBold,
-            color: theme.textSecondary,
-        },
-        splitTabTextActive: {
-            color: theme.textAlternate,
-        },
-        splitTabNew: {
-            paddingHorizontal: 12,
         },
         addTemplateText: {
-            fontSize: 15,
+            fontSize: 14,
             fontFamily: FONTS.semiBold,
-            color: theme.primary,
+            color: theme.textSecondary,
+        },
+        plusCardLoader: {
+            position: 'absolute',
+            bottom: 12,
+            right: 12,
+        },
+        addTemplateCard: {
+            alignItems: 'center',
+            justifyContent: 'center',
+            // A recessed placeholder, not an elevated card — cancel the shadow
+            // inherited from templateCard (its grey elevation halo around a
+            // near-transparent fill looks janky in light mode).
+            backgroundColor: theme.overlayInput,
+            boxShadow: 'none',
         },
         // Borderless, like every other card. It used a dashed outline, which the
         // design rules rule out everywhere — and this is the first card a new
         // user ever sees. The primary-tinted fill is enough to mark it out as
         // the suggested action without an outline.
+        starterCard: {
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: withAlpha(theme.primary, isLightTheme(theme) ? 0.10 : 0.16),
+            boxShadow: 'none',
+        },
         starterTitle: {
-            fontSize: 16,
+            fontSize: 14,
             fontFamily: FONTS.bold,
             color: theme.primary,
+            textAlign: 'center',
+        },
+        starterSub: {
+            fontSize: 12,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            textAlign: 'center',
+            marginTop: 3,
+            paddingHorizontal: 8,
+        },
+        templateEditButton: {
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            backgroundColor: theme.overlayInput,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        templateName: {
+            fontSize: 15,
+            fontFamily: FONTS.bold,
+            color: safeText,
+            flex: 1,
+            marginRight: 8,
+        },
+        templateDetails: {
+            fontSize: 12,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
         },
         bottomButtonContainer: {
             position: 'absolute',
