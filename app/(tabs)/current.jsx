@@ -60,6 +60,14 @@ import ContextMenu from '../../components/ContextMenu';
 // Template ordering within a split. Persisted so it survives a restart.
 const TEMPLATE_SORT_KEY = 'settings_templateSort';
 const LAST_SPLIT_KEY = 'settings_lastSplitId';
+// Deleting a template used to just blink: the row faded, and then everything
+// under it snapped up with no movement at all. The cards this replaced could not
+// have a layout animation -- LinearTransition animates absolute positions, and
+// in the flexWrap grid they lived in, survivors were animated toward positions
+// computed against the old wrap and settled a row-gap out, leaving the two
+// columns visibly misaligned. A vertical list has no such problem.
+const ROW_LAYOUT = LinearTransition.duration(240).easing(Easing.out(Easing.ease));
+
 const SORT_READINESS = 'readiness';
 const SORT_CREATED = 'created';
 
@@ -1350,7 +1358,8 @@ const Current = () => {
                                         <Animated.View
                                             key={template.id}
                                             entering={FadeIn.duration(250)}
-                                            exiting={FadeOut.duration(180)}
+                                            exiting={FadeOut.duration(160)}
+                                            layout={ROW_LAYOUT}
                                         >
                                             <TouchableOpacity
                                                 style={styles.templateRow}
@@ -1384,7 +1393,7 @@ const Current = () => {
 
                                 {/* Starter pack — only when the user has no templates yet */}
                                 {showStarter && (
-                                    <Animated.View exiting={FadeOut.duration(180)}>
+                                    <Animated.View exiting={FadeOut.duration(160)} layout={ROW_LAYOUT}>
                                         <TouchableOpacity
                                             style={[styles.templateRow, styles.starterRow]}
                                             activeOpacity={0.8}
@@ -1402,16 +1411,20 @@ const Current = () => {
                                     </Animated.View>
                                 )}
 
-                                {/* Matches Home's "+ Add Tracker" row. */}
-                                <TouchableOpacity
-                                    style={styles.addTemplateRow}
-                                    activeOpacity={0.7}
-                                    onPress={handleAddTemplate}
-                                    disabled={!!loadingTemplateId}
-                                >
-                                    <AntDesign name="plus" size={18} color={theme.primary} />
-                                    <Text style={styles.addTemplateText}>New Template</Text>
-                                </TouchableOpacity>
+                                {/* Matches Home's "+ Add Tracker" row. Carries
+                                    the layout animation too, or it sits still
+                                    while the rows above close the gap. */}
+                                <Animated.View layout={ROW_LAYOUT}>
+                                    <TouchableOpacity
+                                        style={styles.addTemplateRow}
+                                        activeOpacity={0.7}
+                                        onPress={handleAddTemplate}
+                                        disabled={!!loadingTemplateId}
+                                    >
+                                        <AntDesign name="plus" size={18} color={theme.primary} />
+                                        <Text style={styles.addTemplateText}>New Template</Text>
+                                    </TouchableOpacity>
+                                </Animated.View>
                             </Animated.View>
                         </>
                     )}
