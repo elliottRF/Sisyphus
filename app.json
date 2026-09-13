@@ -21,6 +21,7 @@
         "foregroundImage": "./assets/adaptive.png",
         "backgroundColor": "#000000"
       },
+      "predictiveBackGestureEnabled": true,
       "package": "com.elliottr.sisyphus",
       "versionCode": 56,
       "permissions": [
