@@ -18,6 +18,17 @@ import { AppEvents, on, off } from '../../utils/events';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Which month the pinned label names: the topmost card at least half on
+// screen. Taking the topmost card VISIBLE AT ALL would keep naming the old
+// month while its last card was still peeking out from under the label.
+const VIEWABILITY = { itemVisiblePercentThreshold: 50 };
+
+// Distance from the bottom of the activity card to the first month header:
+// listContentContainer's top padding plus graphCard's bottom margin. Added to
+// the card's measured height to get the scroll offset at which the first month
+// header would have reached the top, which is when the label pins.
+const LIST_TOP_GAP = 12;
+
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
     try {
@@ -152,7 +163,7 @@ const computeWeeklyStreak = (workoutHistory, now = new Date()) => {
 const CELL = 11;
 const CELL_GAP = 3;
 
-const ContributionGraph = ({ workoutHistory, theme, styles, onOpenSession }) => {
+const ContributionGraph = ({ workoutHistory, theme, styles, onOpenSession, onMeasured }) => {
     // 0 = the window ending today; each page steps back a full window.
     const [page, setPage] = useState(0);
 
@@ -246,7 +257,10 @@ const ContributionGraph = ({ workoutHistory, theme, styles, onOpenSession }) => 
     };
 
     return (
-        <View style={styles.graphCard}>
+        <View
+            style={styles.graphCard}
+            onLayout={(e) => onMeasured?.(e.nativeEvent.layout.height)}
+        >
             <View style={styles.graphHeader}>
                 <Text style={styles.graphTitle}>Activity</Text>
                 <View style={styles.graphNav}>
@@ -745,23 +759,15 @@ const History = () => {
     );
 
     // ── Month sections ───────────────────────────────────────────────────────
-    // Windowed: only the most recent months are fed to the list, with a footer
-    // button extending the range. VirtualizedList on this RN version ignores
-    // its window and progressively mounts EVERY cell at idle — with 500+
-    // sessions that's ~13k retained native views (measured) on a screen where
-    // the user rarely looks past the last few weeks. The full history stays in
-    // `workoutHistory` for the heatmap and header count; old sessions remain
-    // reachable via the button (and deep links fetch by id regardless).
-    const [visibleMonths, setVisibleMonths] = useState(3);
-    // Guards the footer button against "tap to stop the fling" presses: a
-    // finger landing on it mid-momentum reads as a press on janky frames.
-    const isMomentumScrollingRef = useRef(false);
-    const showEarlier = () => {
-        if (isMomentumScrollingRef.current) return;
-        setVisibleMonths(m => m + 6);
-    };
-
-    const { sections, hiddenSessionCount } = useMemo(() => {
+    // The whole history goes into the list. It used to be capped to the three
+    // most recent months behind a "Show earlier workouts" button, on the belief
+    // that VirtualizedList ignored its window and progressively mounted every
+    // cell at idle. Re-measured on SDK 57 / RN 0.86 against 646 sessions with
+    // the cap removed: 12 cards mounted at rest, unchanged after a minute idle,
+    // peaking at 33 after sixty hard flings, 910 -> 1367 native views. It
+    // virtualizes correctly, so the cap was buying nothing and cost the user a
+    // button between them and their own history.
+    const sections = useMemo(() => {
         const map = new Map();
         workoutHistory.forEach(item => {
             const d = new Date(item[1][0].time);
@@ -776,11 +782,36 @@ const History = () => {
             }
             map.get(key).data.push(item);
         });
-        const all = [...map.values()];
-        const shown = all.slice(0, visibleMonths);
-        const hiddenSessionCount = all.slice(visibleMonths).reduce((n, s) => n + s.data.length, 0);
-        return { sections: shown, hiddenSessionCount };
-    }, [workoutHistory, visibleMonths]);
+        return [...map.values()];
+    }, [workoutHistory]);
+
+    // ── The pinned month label ───────────────────────────────────────────────
+    // This is what `stickySectionHeadersEnabled` used to do, moved out of the
+    // list. See the note on the SectionList below for why it had to move.
+    //
+    // Two pieces of state, each written only when it actually changes, because
+    // this is driven from the scroll: WHICH month (from the topmost item that
+    // is at least half on screen) and WHETHER to show it (once the activity
+    // card above the first month has been scrolled past).
+    const [pinnedSection, setPinnedSection] = useState(null);
+    const [pinnedVisible, setPinnedVisible] = useState(false);
+    // Height of the activity card, i.e. how far you scroll before the first
+    // month header would have reached the top.
+    const listHeaderHeight = useRef(0);
+
+    // Identity has to be stable -- VirtualizedList refuses to accept a new
+    // onViewableItemsChanged after mount.
+    const onViewableItemsChanged = useRef(({ viewableItems }) => {
+        const top = viewableItems.find((v) => v.section && v.index != null);
+        if (!top) return;
+        const { title, data } = top.section;
+        setPinnedSection((p) => (p && p.title === title ? p : { title, count: data.length }));
+    }).current;
+
+    const onListScroll = React.useCallback((e) => {
+        const past = e.nativeEvent.contentOffset.y > listHeaderHeight.current;
+        setPinnedVisible((v) => (v === past ? v : past));
+    }, []);
 
     const handleOpenSession = (session) => {
         router.push(`/workout/${session}`);
@@ -908,17 +939,59 @@ const History = () => {
                 </TouchableOpacity>
             </View>
             <View style={{ flex: 1 }}>
+            {pinnedVisible && pinnedSection && (
+                <View style={styles.pinnedHeader} pointerEvents="none">
+                    <Text style={styles.sectionHeaderTitle}>{pinnedSection.title}</Text>
+                    <Text style={styles.sectionHeaderCount}>
+                        {pinnedSection.count} {pinnedSection.count === 1 ? 'workout' : 'workouts'}
+                    </Text>
+                </View>
+            )}
             <SectionList
                 ref={scrollRef}
                 sections={sections}
                 style={styles.list}
                 contentContainerStyle={styles.listContentContainer}
                 showsVerticalScrollIndicator={false}
-                stickySectionHeadersEnabled={true}
-                keyExtractor={([session]) => session}
+                // ── Must stay false ──────────────────────────────────────
+                // A stuck section header reports its STUCK position as its
+                // layout offset, and VirtualizedList caches that as the cell's
+                // offset in the content. Measured at the bottom of the list:
+                // the two headers that had been stuck were both recorded at
+                // offset 0 instead of 225 and 1626. The leading spacer is sized
+                // from those offsets, so the content height flipped between
+                // 9881 and 11507 — and because the scroll is clamped to the
+                // content at the bottom, the scroll position flipped with it,
+                // which changed the render window, which changed the content
+                // height again. A closed loop: six cards remounted 180 times in
+                // three seconds and the page visibly juddered up and down.
+                //
+                // It only bites where the scroll is clamped, which is why it
+                // was the very bottom of the list that shook. With this false
+                // the same offsets come back correct and the content height
+                // climbs once and settles: 142 samples across the full 646
+                // sessions, not one decrease.
+                //
+                // The month label is pinned above the list instead — see
+                // pinnedSection. getItemLayout would also override the bad
+                // offsets, but only with exact heights, and these cards are
+                // text-sized (194.3 / 217.7 / 242 / 243dp) so any table of
+                // heights would drift a dp per card and re-open the same loop.
+                stickySectionHeadersEnabled={false}
+                onScroll={onListScroll}
+                scrollEventThrottle={16}
+                onViewableItemsChanged={onViewableItemsChanged}
+                viewabilityConfig={VIEWABILITY}
+                // Has to tolerate a non-array item: the viewability helper runs
+                // every viewable row through keyExtractor, SECTION HEADERS
+                // INCLUDED, and a section is a plain object. Destructuring one
+                // throws "iterator method is not callable" and takes the app
+                // down the moment the list scrolls.
+                keyExtractor={(item, index) => (Array.isArray(item) ? item[0] : `section-${index}`)}
                 extraData={exitingSessions}
                 ListHeaderComponent={
                     <ContributionGraph
+                        onMeasured={(h) => { listHeaderHeight.current = h + LIST_TOP_GAP; }}
                         workoutHistory={workoutHistory}
                         theme={theme}
                         styles={styles}
@@ -964,27 +1037,15 @@ const History = () => {
                         </View>
                     )
                 }
-                onMomentumScrollBegin={() => { isMomentumScrollingRef.current = true; }}
-                onMomentumScrollEnd={() => { isMomentumScrollingRef.current = false; }}
-                ListFooterComponent={
-                    hiddenSessionCount > 0 ? (
-                        <TouchableOpacity
-                            style={styles.showEarlierButton}
-                            onPress={showEarlier}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.showEarlierText}>
-                                Show earlier workouts ({hiddenSessionCount})
-                            </Text>
-                        </TouchableOpacity>
-                    ) : null
-                }
                 initialNumToRender={8}
                 maxToRenderPerBatch={8}
                 updateCellsBatchingPeriod={50}
                 windowSize={7}
-                // NOTE: must stay false — clipping + sticky section headers
-                // fight over child view indices on Android (addViewAt crash).
+                // NOTE: must stay false. It was originally false because
+                // clipping and sticky section headers fought over child view
+                // indices on Android (addViewAt crash); the sticky headers are
+                // gone now, but the list already holds a bounded ~33 cards at
+                // its worst, so there is nothing to win and a crash to lose.
                 removeClippedSubviews={false}
             />
             </View>
@@ -1116,21 +1177,6 @@ const getStyles = (theme) => {
         width: '100%',
         backgroundColor: theme.background,
     },
-    showEarlierButton: {
-        marginTop: 8,
-        marginBottom: 4,
-        paddingVertical: 14,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: theme.border,
-        backgroundColor: theme.surface,
-        alignItems: 'center',
-    },
-    showEarlierText: {
-        color: theme.textSecondary,
-        fontSize: 14,
-        fontFamily: FONTS.semiBold,
-    },
     listContentContainer: {
         paddingTop: 4,
         paddingBottom: 100,
@@ -1245,6 +1291,24 @@ const getStyles = (theme) => {
         fontSize: 12,
         fontFamily: FONTS.medium,
         color: theme.textSecondary,
+    },
+    // Sits exactly where a stuck section header sat, over the top of the list,
+    // opaque so the cards pass underneath it. Same metrics as sectionHeader
+    // plus the list's own horizontal padding, so the in-list header slides
+    // under it without shifting sideways.
+    pinnedHeader: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 2,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: theme.background,
+        paddingTop: 15,
+        paddingBottom: 8,
+        paddingHorizontal: 20,
     },
 
     // ── Session card ──────────────────────────────────────────────────────────
