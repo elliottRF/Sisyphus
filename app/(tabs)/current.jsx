@@ -17,6 +17,7 @@ import { setPreloadedData } from '../../constants/preloader';
 import { toStorageKg, formatWeight, loadLabel, unitLabel } from '../../utils/units';
 import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
 import MuscleGlance from '../../components/MuscleGlance';
+import { broadMuscleGroups } from '../../constants/muscles';
 import { estimateOneRMForStorage } from '../../utils/oneRM';
 import { filterCompletedSets, buildWorkoutEntries, setWillBeSaved } from '../../utils/workoutEntries';
 import { muscleMapping } from '../../constants/muscles';
@@ -75,7 +76,7 @@ const Current = () => {
     const { width: windowWidth } = useWindowDimensions();
     const { theme, gender, setWorkoutInProgress, setLiveWorkoutTitle, useImperial, workoutStartTime, updateWorkoutStartTime, accessoryWeight, recoveryRate } = useTheme();
     const styles = useMemo(() => getStyles(theme, windowWidth), [theme, windowWidth]);
-    const { cardGlanceWidth, heroGlanceWidth } = useMemo(() => gridMetrics(windowWidth), [windowWidth]);
+    const { heroGlanceWidth } = useMemo(() => gridMetrics(windowWidth), [windowWidth]);
 
     const [exercises, setExercises] = useState([]);
     const [isReady, setIsReady] = useState(false);
@@ -335,6 +336,15 @@ const Current = () => {
         }));
         return [...slugs];
     }, [exercises]);
+
+    // The broad groups a template covers, for a row's subtitle.
+    const templateMuscleLabels = useCallback((slugs) => {
+        const labels = [];
+        for (const group of broadMuscleGroups) {
+            if (group.slugs.some((slug) => slugs.includes(slug))) labels.push(group.label);
+        }
+        return labels;
+    }, []);
 
     // Human "time until" string, e.g. "45m", "3h 20m", "1d 4h".
     const formatTimeUntil = (ms) => {
@@ -1254,36 +1264,35 @@ const Current = () => {
                                             delayLongPress={300}
                                             onPress={() => loadTemplate(hero.template)}
                                         >
-                                            <View style={styles.heroTop}>
-                                                <View style={styles.heroText}>
-                                                    <Text style={styles.heroEyebrow}>NEXT UP</Text>
-                                                    <Text style={styles.heroName} numberOfLines={2}>
-                                                        {hero.template.name}
-                                                    </Text>
-                                                    <Text style={styles.heroMeta} numberOfLines={1}>
-                                                        {count} {count === 1 ? 'exercise' : 'exercises'}
-                                                    </Text>
-                                                    {badge && (
-                                                        <View style={styles.heroBadgeRow}>
-                                                            <View style={[styles.readinessPillDot, { backgroundColor: badge.color }]} />
-                                                            <Text style={[styles.heroBadgeText, { color: badge.color }]}>
-                                                                {hero.readiness >= 80
-                                                                    ? (hero.readiness >= 95 ? 'Fully recovered' : `${hero.readiness}% recovered`)
-                                                                    : (ms != null
-                                                                        ? `${hero.readiness}% · ready in ${formatTimeUntil(ms)}`
-                                                                        : `${hero.readiness}% recovered`)}
-                                                            </Text>
-                                                        </View>
-                                                    )}
-                                                </View>
+                                            <Text style={styles.heroEyebrow}>NEXT UP</Text>
+                                            <Text style={styles.heroName} numberOfLines={1}>
+                                                {hero.template.name}
+                                            </Text>
+                                            <View style={styles.heroFigure}>
                                                 <MuscleGlance
                                                     slugs={slugs}
                                                     muscleScores={muscleScores}
                                                     theme={theme}
                                                     gender={gender}
                                                     width={heroGlanceWidth}
-                                                    gap={4}
+                                                    gap={10}
                                                 />
+                                            </View>
+                                            <View style={styles.heroFacts}>
+                                                {badge && (
+                                                    <View style={[styles.pill, { backgroundColor: withAlpha(badge.color, 0.15) }]}>
+                                                        <Text style={[styles.pillText, { color: badge.color }]}>
+                                                            {hero.readiness >= 80
+                                                                ? (hero.readiness >= 95 ? 'Fully recovered' : `${hero.readiness}% recovered`)
+                                                                : (ms != null
+                                                                    ? `Ready in ${formatTimeUntil(ms)}`
+                                                                    : `${hero.readiness}% recovered`)}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                                <Text style={styles.heroCount}>
+                                                    {count} {count === 1 ? 'exercise' : 'exercises'}
+                                                </Text>
                                             </View>
                                         </TouchableOpacity>
                                         <TouchableOpacity
@@ -1309,131 +1318,86 @@ const Current = () => {
                                 <Text style={styles.gridHeading}>OTHER TEMPLATES</Text>
                             )}
 
-                            <Animated.View entering={FadeIn.duration(300)} style={styles.templatesGrid}>
+                            <Animated.View entering={FadeIn.duration(300)}>
                                 {gridEntries.map(({ template, readiness }) => {
                                     const exerciseCount = template.data.reduce((t, g) => t + g.exercises.length, 0);
                                     const slugs = templateTargetSlugs(template);
                                     const badge = readinessBadge(readiness);
-
-                                    // No layout animation on these cards. LinearTransition
-                                    // animates absolute positions, and this is a flexWrap grid:
-                                    // when a card leaves — deleted, or moved to another split —
-                                    // the survivors were animated toward positions computed
-                                    // against the old wrap and settled a row-gap out, leaving
-                                    // the two columns visibly misaligned. The entering and
-                                    // exiting fades stay; only the position animation goes, so
-                                    // cards reflow instantly and correctly.
+                                    const labels = templateMuscleLabels(slugs);
+                                    const ms = readiness != null && readiness < 80 && recentUsage
+                                        ? timeUntilSlugRecovery(recentUsage, accessoryWeight, slugs, 80, recoveryRate)
+                                        : null;
+                                    // Same two facts an Exercises row carries: what it
+                                    // is, and when you last / next touch it.
+                                    const subtitle = ms != null
+                                        ? `Ready in ${formatTimeUntil(ms)} · ${exerciseCount} ${exerciseCount === 1 ? 'exercise' : 'exercises'}`
+                                        : `${labels.slice(0, 2).join(', ') || 'No muscles set'} · ${exerciseCount} ${exerciseCount === 1 ? 'exercise' : 'exercises'}`;
                                     return (
                                         <Animated.View
                                             key={template.id}
                                             entering={FadeIn.duration(250)}
                                             exiting={FadeOut.duration(180)}
-                                            style={styles.templateCardWrap}
                                         >
-                                        <TouchableOpacity
-                                            style={styles.templateCard}
-                                            activeOpacity={0.7}
-                                            onPress={() => loadTemplate(template)}
-                                            onLongPress={(e) => openTemplateMenu(template, e)}
-                                            delayLongPress={300}
-                                        >
-                                            <View style={styles.templateCardHeader}>
-                                                <Text style={styles.templateName} numberOfLines={1}>{template.name}</Text>
-                                                {loadingTemplateId === template.id && (
-                                                    <ActivityIndicator size="small" color={theme.primary} />
-                                                )}
-                                            </View>
-
-                                            {/* The card's middle is the session
-                                                itself: which muscles it trains,
-                                                coloured by how recovered they
-                                                are. The edit pencil that used to
-                                                sit up here is still on the
-                                                hold-menu, with everything else. */}
-                                            <View style={styles.glanceWrap}>
-                                                <MuscleGlance
-                                                    slugs={slugs}
-                                                    muscleScores={muscleScores}
-                                                    theme={theme}
-                                                    gender={gender}
-                                                    width={cardGlanceWidth}
-                                                    gap={4}
-                                                />
-                                            </View>
-
-                                            <View style={styles.cardFooter}>
-                                                <Text style={styles.templateDetails}>
-                                                    {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'}
-                                                </Text>
-                                                {badge ? (
-                                                    <Text style={[styles.readinessPillText, { color: badge.color }]}>
-                                                        {badge.label}
-                                                    </Text>
-                                                ) : (
-                                                    <Ionicons name="chevron-forward" size={16} color={theme.primary} opacity={0.5} />
-                                                )}
-                                            </View>
-
-                                            {/* Readiness again, as the width of a
-                                                strip across the card's bottom
-                                                edge -- readable from across the
-                                                grid without reading a number. */}
-                                            {readiness != null && badge && (
-                                                <View style={styles.readinessTrack}>
-                                                    <View
-                                                        style={[
-                                                            styles.readinessFill,
-                                                            { width: `${Math.max(4, Math.min(100, readiness))}%`, backgroundColor: badge.color },
-                                                        ]}
-                                                    />
+                                            <TouchableOpacity
+                                                style={styles.templateRow}
+                                                activeOpacity={0.7}
+                                                onPress={() => loadTemplate(template)}
+                                                onLongPress={(e) => openTemplateMenu(template, e)}
+                                                delayLongPress={300}
+                                            >
+                                                <View style={styles.rowText}>
+                                                    <Text style={styles.rowName} numberOfLines={1}>{template.name}</Text>
+                                                    <Text style={styles.rowSub} numberOfLines={1}>{subtitle}</Text>
                                                 </View>
-                                            )}
-                                        </TouchableOpacity>
+                                                {loadingTemplateId === template.id ? (
+                                                    <ActivityIndicator size="small" color={theme.primary} />
+                                                ) : badge ? (
+                                                    <View style={styles.rowValue}>
+                                                        <Text style={[styles.rowPercent, { color: badge.color }]}>
+                                                            {readiness}%
+                                                        </Text>
+                                                        <Text style={styles.rowValueLabel}>
+                                                            {readiness >= 80 ? 'READY' : readiness >= 60 ? 'RECOVERING' : 'FATIGUED'}
+                                                        </Text>
+                                                    </View>
+                                                ) : (
+                                                    <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+                                                )}
+                                            </TouchableOpacity>
                                         </Animated.View>
                                     );
                                 })}
 
                                 {/* Starter pack — only when the user has no templates yet */}
                                 {showStarter && (
-                                    <Animated.View
-                                        exiting={FadeOut.duration(180)}
-                                        style={styles.templateCardWrap}
-                                    >
+                                    <Animated.View exiting={FadeOut.duration(180)}>
                                         <TouchableOpacity
-                                            style={[styles.templateCard, styles.starterCard]}
+                                            style={[styles.templateRow, styles.starterRow]}
                                             activeOpacity={0.8}
                                             onPress={addStarterTemplates}
                                             disabled={!!loadingTemplateId}
                                         >
-                                            <View style={styles.addTemplateInner}>
-                                                {loadingTemplateId === 'starter' ? (
-                                                    <ActivityIndicator color={theme.primary} />
-                                                ) : (
-                                                    <>
-                                                        <MaterialCommunityIcons name="auto-fix" size={28} color={theme.primary} style={{ marginBottom: 6 }} />
-                                                        <Text style={styles.starterTitle}>Add starter templates</Text>
-                                                        <Text style={styles.starterSub}>Push · Pull · Legs to get you going</Text>
-                                                    </>
-                                                )}
+                                            <View style={styles.rowText}>
+                                                <Text style={styles.starterTitle}>Add starter templates</Text>
+                                                <Text style={styles.rowSub}>Push · Pull · Legs to get you going</Text>
                                             </View>
+                                            {loadingTemplateId === 'starter'
+                                                ? <ActivityIndicator color={theme.primary} />
+                                                : <MaterialCommunityIcons name="auto-fix" size={22} color={theme.primary} />}
                                         </TouchableOpacity>
                                     </Animated.View>
                                 )}
 
-                                {/* Add Template Button */}
-                                <Animated.View style={styles.templateCardWrap}>
+                                {/* Matches Home's "+ Add Tracker" row. */}
                                 <TouchableOpacity
-                                    style={[styles.templateCard, styles.addTemplateCard]}
+                                    style={styles.addTemplateRow}
                                     activeOpacity={0.7}
                                     onPress={handleAddTemplate}
                                     disabled={!!loadingTemplateId}
                                 >
-                                    <View style={styles.addTemplateInner}>
-                                        <AntDesign name="plus" size={28} color={theme.textSecondary} style={{ marginBottom: 4 }} />
-                                        <Text style={styles.addTemplateText}>New Template</Text>
-                                    </View>
+                                    <AntDesign name="plus" size={18} color={theme.primary} />
+                                    <Text style={styles.addTemplateText}>New Template</Text>
                                 </TouchableOpacity>
-                                </Animated.View>
                             </Animated.View>
                         </>
                     )}
@@ -1846,11 +1810,9 @@ const gridMetrics = (width) => {
         gap,
         padding,
         itemWidth,
-        // Two figures side by side inside the card's 14dp padding. Capped at 56
-        // because a body is about 2.1x as tall as it is wide: any wider and the
-        // pair outgrows the 200dp card and pushes up into the name.
-        cardGlanceWidth: Math.min(56, Math.floor((itemWidth - 28 - 4) / 2)),
-        heroGlanceWidth: 68,
+        // Only the lead card draws figures now, centred, so they can be the
+        // size Home draws its pair rather than squeezed into a grid tile.
+        heroGlanceWidth: 62,
     };
 };
 
@@ -2000,26 +1962,43 @@ const getStyles = (theme, width) => {
             fontSize: 12,
             fontFamily: FONTS.bold,
         },
-        templatesGrid: {
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: gap,
-        },
         // ── The lead card ───────────────────────────────────────────────────
         heroCard: {
             backgroundColor: theme.surface,
             borderRadius: RADIUS.l,
             padding: 16,
-            marginBottom: 18,
+            marginBottom: 20,
             ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
         },
-        heroTop: {
+        // The figures sit centred under the name, the way Home's fatigue card
+        // arranges its pair -- that card is the one other place in the app
+        // where a body is the subject, so the lead card borrows its shape.
+        heroFigure: {
+            alignItems: 'center',
+            marginTop: 10,
+            marginBottom: 2,
+        },
+        heroFacts: {
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 12,
+            justifyContent: 'space-between',
+            marginTop: 12,
         },
-        heroText: {
-            flex: 1,
+        heroCount: {
+            fontSize: 13,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+        },
+        // A tinted pill, like the "+49.0 kg since start" badge on Home's PR
+        // card. Bare coloured text was the plainest thing on the screen.
+        pill: {
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: RADIUS.pill,
+        },
+        pillText: {
+            fontSize: 12,
+            fontFamily: FONTS.bold,
         },
         heroEyebrow: {
             fontSize: 11,
@@ -2034,24 +2013,68 @@ const getStyles = (theme, width) => {
             color: theme.text,
             letterSpacing: -0.5,
         },
-        heroMeta: {
-            fontSize: 12,
-            fontFamily: FONTS.medium,
-            color: theme.textSecondary,
-            marginTop: 4,
-        },
-        heroBadgeRow: {
+        // ── Template rows ───────────────────────────────────────────────────
+        // Same anatomy as an Exercises row: bold name, secondary subtitle, and
+        // a right-aligned value with a caps micro-label under it. The two-column
+        // grid of picture cards this replaced was the only one in the app, which
+        // is what made the tab look like it came from somewhere else.
+        templateRow: {
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 6,
-            marginTop: 8,
+            gap: 12,
+            backgroundColor: theme.surface,
+            borderRadius: RADIUS.l,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            marginBottom: 10,
+            ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
         },
-        heroBadgeText: {
-            fontSize: 12,
+        rowText: {
+            flex: 1,
+        },
+        rowName: {
+            fontSize: 17,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+            letterSpacing: -0.2,
+        },
+        rowSub: {
+            fontSize: 13,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+            marginTop: 3,
+        },
+        rowValue: {
+            alignItems: 'flex-end',
+        },
+        rowPercent: {
+            fontSize: 19,
             fontFamily: FONTS.bold,
         },
+        rowValueLabel: {
+            fontSize: 10,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
+            letterSpacing: 0.8,
+            marginTop: 1,
+        },
+        starterRow: {
+            backgroundColor: withAlpha(theme.primary, isLightTheme(theme) ? 0.10 : 0.16),
+            boxShadow: 'none',
+        },
+        // Mirrors Home's "+ Add Tracker".
+        addTemplateRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            backgroundColor: theme.overlayInput,
+            borderRadius: RADIUS.l,
+            paddingVertical: 16,
+            marginTop: 2,
+        },
         heroStart: {
-            marginTop: 14,
+            marginTop: 12,
             height: 46,
             borderRadius: RADIUS.m,
             alignItems: 'center',
@@ -2098,116 +2121,19 @@ const getStyles = (theme, width) => {
         splitTabNew: {
             paddingHorizontal: 12,
         },
-        templateCardWrap: {
-            width: itemWidth,
-        },
-        templateCard: {
-            width: itemWidth,
-            height: 200,
-            backgroundColor: theme.surface,
-            borderRadius: RADIUS.l,
-            padding: 14,
-            justifyContent: 'space-between',
-            position: 'relative',
-            // The readiness strip runs to the card's edge, so it has to be
-            // clipped to the corner radius.
-            overflow: 'hidden',
-            ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
-        },
-        templateCardHeader: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 6,
-        },
-        glanceWrap: {
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingVertical: 4,
-            // Belt and braces: the figures are sized to fit, but they are drawn
-            // at a fixed size and would overlap the name rather than shrink if
-            // that ever stopped being true.
-            overflow: 'hidden',
-        },
-        readinessTrack: {
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: 3,
-            backgroundColor: theme.overlayInput,
-        },
-        readinessFill: {
-            height: 3,
-        },
-        cardFooter: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginTop: 8,
-            paddingTop: 8,
-            borderTopWidth: 1,
-            borderTopColor: theme.overlayBorder,
-        },
-        addTemplateInner: {
-            alignItems: 'center',
-            justifyContent: 'center',
-        },
         addTemplateText: {
-            fontSize: 14,
+            fontSize: 15,
             fontFamily: FONTS.semiBold,
-            color: theme.textSecondary,
-        },
-        plusCardLoader: {
-            position: 'absolute',
-            bottom: 12,
-            right: 12,
-        },
-        addTemplateCard: {
-            alignItems: 'center',
-            justifyContent: 'center',
-            // A recessed placeholder, not an elevated card — cancel the shadow
-            // inherited from templateCard (its grey elevation halo around a
-            // near-transparent fill looks janky in light mode).
-            backgroundColor: theme.overlayInput,
-            boxShadow: 'none',
+            color: theme.primary,
         },
         // Borderless, like every other card. It used a dashed outline, which the
         // design rules rule out everywhere — and this is the first card a new
         // user ever sees. The primary-tinted fill is enough to mark it out as
         // the suggested action without an outline.
-        starterCard: {
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: withAlpha(theme.primary, isLightTheme(theme) ? 0.10 : 0.16),
-            boxShadow: 'none',
-        },
         starterTitle: {
-            fontSize: 14,
+            fontSize: 16,
             fontFamily: FONTS.bold,
             color: theme.primary,
-            textAlign: 'center',
-        },
-        starterSub: {
-            fontSize: 12,
-            fontFamily: FONTS.medium,
-            color: theme.textSecondary,
-            textAlign: 'center',
-            marginTop: 3,
-            paddingHorizontal: 8,
-        },
-        templateName: {
-            fontSize: 15,
-            fontFamily: FONTS.bold,
-            color: safeText,
-            flex: 1,
-            marginRight: 8,
-        },
-        templateDetails: {
-            fontSize: 12,
-            fontFamily: FONTS.semiBold,
-            color: theme.textSecondary,
         },
         bottomButtonContainer: {
             position: 'absolute',
