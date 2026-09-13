@@ -852,6 +852,32 @@ const Current = () => {
         AsyncStorage.setItem(LAST_SPLIT_KEY, String(page.split.id)).catch(() => {});
     }, [activeSplitIndex, splitPages, splitRestored]);
 
+    // Keep the pager on whatever page the index names.
+    //
+    // Creating and deleting a split set the index directly and nothing moved the
+    // list to match, so the two drifted apart: after creating a split the header
+    // renamed itself to the new one while the pager stayed on the old page, and
+    // deleting the split you were viewing left you looking at New Split with the
+    // first split's name above it. The dots have always done both halves -- set
+    // the index AND scroll -- and these two paths only ever did the first.
+    //
+    // Doing it here rather than in each caller means anything that moves the
+    // index is covered, including the clamp above. A swipe is already at the
+    // offset by the time onMomentumScrollEnd sets the index, so scrolling to it
+    // again is a no-op.
+    //
+    // Held until the saved split has been restored: at mount the pager is placed
+    // by initialScrollIndex, and scrolling it before it has laid out does
+    // nothing except fire onMomentumScrollEnd, which reads offset 0 and snaps
+    // the index back to the first split.
+    useEffect(() => {
+        if (!splitRestored) return;
+        splitPagerRef.current?.scrollToOffset({
+            offset: activeSplitIndex * windowWidth,
+            animated: true,
+        });
+    }, [activeSplitIndex, splitRestored, windowWidth]);
+
     const readinessBadge = (readiness) => {
         if (readiness == null) return null;
         if (readiness >= 80) return { color: theme.success, label: readiness >= 95 ? 'Ready' : `${readiness}%` };
