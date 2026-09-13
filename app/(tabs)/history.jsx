@@ -15,19 +15,10 @@ import { customAlert } from '../../utils/customAlert';
 import { kgToLbs, unitLabel } from '../../utils/units';
 import { buildWorkoutDataFromSession } from '../../utils/workoutBuilders';
 import { AppEvents, on, off } from '../../utils/events';
+import usePinnedSection from '../../components/usePinnedSection';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Which month the pinned label names: the topmost card at least half on
-// screen. Taking the topmost card VISIBLE AT ALL would keep naming the old
-// month while its last card was still peeking out from under the label.
-const VIEWABILITY = { itemVisiblePercentThreshold: 50 };
-
-// Distance from the bottom of the activity card to the first month header:
-// listContentContainer's top padding plus graphCard's bottom margin. Added to
-// the card's measured height to get the scroll offset at which the first month
-// header would have reached the top, which is when the label pins.
-const LIST_TOP_GAP = 12;
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -163,7 +154,7 @@ const computeWeeklyStreak = (workoutHistory, now = new Date()) => {
 const CELL = 11;
 const CELL_GAP = 3;
 
-const ContributionGraph = ({ workoutHistory, theme, styles, onOpenSession, onMeasured }) => {
+const ContributionGraph = ({ workoutHistory, theme, styles, onOpenSession }) => {
     // 0 = the window ending today; each page steps back a full window.
     const [page, setPage] = useState(0);
 
@@ -257,10 +248,7 @@ const ContributionGraph = ({ workoutHistory, theme, styles, onOpenSession, onMea
     };
 
     return (
-        <View
-            style={styles.graphCard}
-            onLayout={(e) => onMeasured?.(e.nativeEvent.layout.height)}
-        >
+        <View style={styles.graphCard}>
             <View style={styles.graphHeader}>
                 <Text style={styles.graphTitle}>Activity</Text>
                 <View style={styles.graphNav}>
@@ -785,33 +773,10 @@ const History = () => {
         return [...map.values()];
     }, [workoutHistory]);
 
-    // ── The pinned month label ───────────────────────────────────────────────
-    // This is what `stickySectionHeadersEnabled` used to do, moved out of the
-    // list. See the note on the SectionList below for why it had to move.
-    //
-    // Two pieces of state, each written only when it actually changes, because
-    // this is driven from the scroll: WHICH month (from the topmost item that
-    // is at least half on screen) and WHETHER to show it (once the activity
-    // card above the first month has been scrolled past).
-    const [pinnedSection, setPinnedSection] = useState(null);
-    const [pinnedVisible, setPinnedVisible] = useState(false);
-    // Height of the activity card, i.e. how far you scroll before the first
-    // month header would have reached the top.
-    const listHeaderHeight = useRef(0);
-
-    // Identity has to be stable -- VirtualizedList refuses to accept a new
-    // onViewableItemsChanged after mount.
-    const onViewableItemsChanged = useRef(({ viewableItems }) => {
-        const top = viewableItems.find((v) => v.section && v.index != null);
-        if (!top) return;
-        const { title, data } = top.section;
-        setPinnedSection((p) => (p && p.title === title ? p : { title, count: data.length }));
-    }).current;
-
-    const onListScroll = React.useCallback((e) => {
-        const past = e.nativeEvent.contentOffset.y > listHeaderHeight.current;
-        setPinnedVisible((v) => (v === past ? v : past));
-    }, []);
+    // The month label, pinned above the list rather than by it. See
+    // components/usePinnedSection, and the note on the SectionList below for
+    // why the list cannot be allowed to stick its own headers.
+    const { pinned, viewabilityConfigCallbackPairs } = usePinnedSection(sections);
 
     const handleOpenSession = (session) => {
         router.push(`/workout/${session}`);
@@ -939,11 +904,11 @@ const History = () => {
                 </TouchableOpacity>
             </View>
             <View style={{ flex: 1 }}>
-            {pinnedVisible && pinnedSection && (
+            {pinned && (
                 <View style={styles.pinnedHeader} pointerEvents="none">
-                    <Text style={styles.sectionHeaderTitle}>{pinnedSection.title}</Text>
+                    <Text style={styles.sectionHeaderTitle}>{pinned.title}</Text>
                     <Text style={styles.sectionHeaderCount}>
-                        {pinnedSection.count} {pinnedSection.count === 1 ? 'workout' : 'workouts'}
+                        {pinned.count} {pinned.count === 1 ? 'workout' : 'workouts'}
                     </Text>
                 </View>
             )}
@@ -973,25 +938,23 @@ const History = () => {
                 // sessions, not one decrease.
                 //
                 // The month label is pinned above the list instead — see
-                // pinnedSection. getItemLayout would also override the bad
+                // usePinnedSection. getItemLayout would also override the bad
                 // offsets, but only with exact heights, and these cards are
                 // text-sized (194.3 / 217.7 / 242 / 243dp) so any table of
                 // heights would drift a dp per card and re-open the same loop.
                 stickySectionHeadersEnabled={false}
-                onScroll={onListScroll}
-                scrollEventThrottle={16}
-                onViewableItemsChanged={onViewableItemsChanged}
-                viewabilityConfig={VIEWABILITY}
-                // Has to tolerate a non-array item: the viewability helper runs
-                // every viewable row through keyExtractor, SECTION HEADERS
-                // INCLUDED, and a section is a plain object. Destructuring one
-                // throws "iterator method is not callable" and takes the app
-                // down the moment the list scrolls.
+                viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
+                // Tolerates a non-array item on purpose. Passing
+                // onViewableItemsChanged (rather than the callback pairs below)
+                // makes VirtualizedSectionList run every viewable cell through
+                // this, SECTION HEADERS INCLUDED, and a section is a plain
+                // object — destructuring one throws "iterator method is not
+                // callable" and took the app down on the first scroll while
+                // this was being built.
                 keyExtractor={(item, index) => (Array.isArray(item) ? item[0] : `section-${index}`)}
                 extraData={exitingSessions}
                 ListHeaderComponent={
                     <ContributionGraph
-                        onMeasured={(h) => { listHeaderHeight.current = h + LIST_TOP_GAP; }}
                         workoutHistory={workoutHistory}
                         theme={theme}
                         styles={styles}

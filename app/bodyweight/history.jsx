@@ -10,6 +10,7 @@ import { formatWeight, unitLabel } from '../../utils/units';
 import { customAlert } from '../../utils/customAlert';
 import * as haptics from '../../utils/haptics';
 import { AppEvents, on, off, emit } from '../../utils/events';
+import usePinnedSection from '../../components/usePinnedSection';
 import ContextMenu from '../../components/ContextMenu';
 import WeightEntryModal from '../../components/WeightEntryModal';
 
@@ -125,6 +126,11 @@ const BodyWeightHistory = () => {
             },
         };
     }, [entries, useImperial]);
+
+    // The month label, pinned above the list rather than by it. See
+    // components/usePinnedSection, and the note on stickySectionHeadersEnabled
+    // below for why the list cannot be allowed to stick its own headers.
+    const { pinned, viewabilityConfigCallbackPairs } = usePinnedSection(sections);
 
     // Saving is not self-evident on this screen: a backdated entry lands in an
     // older month, out of view, so the list can refresh correctly and still look
@@ -292,11 +298,26 @@ const BodyWeightHistory = () => {
                     <Text style={styles.emptySubtitle}>Log your weight to start tracking a trend.</Text>
                 </View>
             ) : (
+                <View style={styles.listWrap}>
+                {pinned && (
+                    <View style={styles.pinnedHeader} pointerEvents="none">
+                        <Text style={styles.sectionTitle}>{pinned.title}</Text>
+                        <Text style={styles.sectionCount}>
+                            {pinned.count} {pinned.count === 1 ? 'entry' : 'entries'}
+                        </Text>
+                    </View>
+                )}
                 <SectionList
                     ref={listRef}
                     onScrollToIndexFailed={() => { /* row not realised yet; the flash still marks it */ }}
                     sections={sections}
-                    keyExtractor={(item) => item.datetime}
+                    // Tolerates a non-row item on purpose. Passing
+                    // onViewableItemsChanged (rather than the callback pairs
+                    // below) makes VirtualizedSectionList run every viewable
+                    // cell through this, SECTION HEADERS INCLUDED, and a
+                    // section has no datetime — which threw and took the app
+                    // down on the first scroll while this was being built.
+                    keyExtractor={(item, index) => item.datetime ?? `section-${index}`}
                     renderItem={renderRow}
                     renderSectionHeader={({ section }) => (
                         <View style={styles.sectionHeader}>
@@ -306,12 +327,30 @@ const BodyWeightHistory = () => {
                             </Text>
                         </View>
                     )}
-                    stickySectionHeadersEnabled
+                    // ── Must stay false ──────────────────────────────────
+                    // A stuck section header reports its STUCK position as its
+                    // layout offset and VirtualizedList caches that as the
+                    // cell's offset in the content. Measured on this screen
+                    // with 101 entries: EVERY month header was recorded at
+                    // offset 0 — cells 4, 9, 13 and 22 should have been at 206,
+                    // 494, 700 and 1318 — and the content height swung between
+                    // 9422 and 17741dp while scrolling, an 85% error, because
+                    // the spacers are sized from those offsets.
+                    //
+                    // Worse here than in the History tab (which juddered
+                    // outright) only because this list has a header every two
+                    // or three rows instead of every sixteen. Same defect, same
+                    // fix: the month label is pinned above the list instead,
+                    // where it cannot feed back into the list's geometry. See
+                    // components/usePinnedSection.
+                    stickySectionHeadersEnabled={false}
+                    viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{ paddingBottom: insets.bottom + SPACING.xl }}
                     initialNumToRender={14}
                     windowSize={7}
                 />
+                </View>
             )}
 
 
@@ -448,6 +487,25 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: TYPE.caption,
         fontFamily: FONTS.medium,
         color: theme.textSecondary,
+    },
+    listWrap: {
+        flex: 1,
+    },
+    // Sits exactly where a stuck month header sat, over the top of the list and
+    // opaque, so the rows pass underneath it. Same metrics as sectionHeader.
+    pinnedHeader: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 2,
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        paddingHorizontal: SPACING.l,
+        paddingTop: SPACING.l,
+        paddingBottom: SPACING.s,
+        backgroundColor: theme.background,
     },
     row: {
         flexDirection: 'row',
