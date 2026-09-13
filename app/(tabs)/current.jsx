@@ -1253,9 +1253,23 @@ const Current = () => {
                                     ? timeUntilSlugRecovery(recentUsage, accessoryWeight, slugs, 80, recoveryRate)
                                     : null;
                                 return (
-                                    <Animated.View
+                                    // Deliberately NOT a Reanimated entering
+                                    // animation. The whole screen already fades
+                                    // in one level up, so this only ever added a
+                                    // second fade over the same pixels -- and it
+                                    // was the one animation in the app whose
+                                    // subtree contains SVG. An ANR was traced to
+                                    // Reanimated failing to apply props to about
+                                    // twenty view tags and logging a 155-frame
+                                    // stack trace for each failure, 5,746 of them
+                                    // in fourteen seconds, which blocked the UI
+                                    // thread inside Log.println_native. The
+                                    // failing tag count matches the parts of a
+                                    // body figure. Not reproduced on demand, so
+                                    // this removes the suspect rather than
+                                    // claiming a fix.
+                                    <View
                                         key={`hero-${hero.template.id}`}
-                                        entering={FadeIn.duration(300)}
                                         style={styles.heroCard}
                                     >
                                         <TouchableOpacity
@@ -1310,7 +1324,7 @@ const Current = () => {
                                                 )}
                                             </ButtonBackground>
                                         </TouchableOpacity>
-                                    </Animated.View>
+                                    </View>
                                 );
                             })()}
 
