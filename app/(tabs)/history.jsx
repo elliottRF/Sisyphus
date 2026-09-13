@@ -19,6 +19,15 @@ import usePinnedSection from '../../components/usePinnedSection';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Where a jumped-to session lands: a third of the way down, clear of the
+// pinned month label and of the page header above it.
+const JUMP_VIEW_POSITION = 0.3;
+// A jump rides the edge of the measured range one round at a time; these bound
+// how long it may keep doing that. See scrollToSession.
+const JUMP_ROUND_MS = 60;
+const JUMP_MAX_ROUNDS = 60;
+const JUMP_TIMEOUT = 5000;
+
 
 const lightenColor = (color, percent) => {
     if (!color || typeof color !== 'string' || !color.startsWith('#')) return color;
@@ -341,7 +350,7 @@ const ContributionGraph = ({ workoutHistory, theme, styles, onOpenSession }) => 
 
 const AnimatedTouchableOpacity = RNAnimated.createAnimatedComponent(TouchableOpacity);
 
-const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styles, router, useImperial, onShowMenu, exiting = false, onExitDone }) => {
+const HistoryCard = React.memo(({ highlighted = false, session, exercises, exercisesList, theme, styles, router, useImperial, onShowMenu, exiting = false, onExitDone }) => {
     const groupedExercises = groupExercisesByName(exercises);
     const duration = exercises[0].duration;
     const [isLoading, setIsLoading] = useState(false);
@@ -466,7 +475,7 @@ const HistoryCard = React.memo(({ session, exercises, exercisesList, theme, styl
                 style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
                 disabled={isLoading}
             >
-                <View style={[styles.cardContent, { backgroundColor: theme.surface }]}>
+                <View style={[styles.cardContent, { backgroundColor: theme.surface }, highlighted && styles.cardHighlighted]}>
                     <View style={styles.cardHeader}>
                         <Text style={[styles.workoutName, { flex: 1, marginRight: 10 }]} numberOfLines={1}>
                             {exercises[0].name}
@@ -648,6 +657,10 @@ const History = () => {
         return `${n} WORKOUT${n === 1 ? '' : 'S'}`;
     }, [workoutsByMonth]);
 
+    // handleDatePress is declared before scrollToSession (it has to be, the
+    // calendar sheet is built further up), so it reaches it through a ref.
+    const scrollToSessionRef = useRef(() => {});
+
     const handleDatePress = (day) => {
         const match = workoutHistory.find(([, exercises]) => {
             const d = new Date(exercises[0]?.time);
@@ -655,9 +668,9 @@ const History = () => {
         });
         if (!match) return;
         calendarActionSheetRef.current?.hide();
-        // Let the sheet finish closing before pushing, so the transitions don't
-        // interrupt each other.
-        setTimeout(() => router.push(`/workout/${match[0]}`), 300);
+        // Let the sheet finish closing before scrolling, so the transitions
+        // don't interrupt each other.
+        setTimeout(() => scrollToSessionRef.current(match[0]), 300);
     };
 
     const loadWorkoutHistory = async () => {
@@ -778,9 +791,103 @@ const History = () => {
     // why the list cannot be allowed to stick its own headers.
     const { pinned, viewabilityConfigCallbackPairs } = usePinnedSection(sections);
 
-    const handleOpenSession = (session) => {
-        router.push(`/workout/${session}`);
-    };
+    // ── Jumping to a session ─────────────────────────────────────────────────
+    //
+    // Tapping a trained day -- on the activity graph or in the calendar --
+    // scrolls the list to that day's session and flashes it, rather than
+    // opening it. The whole history is in the list now, so every session is
+    // reachable this way.
+    //
+    // The loop below exists because of how far the list will let you scroll.
+    // With no getItemLayout (see the note on the SectionList) VirtualizedList
+    // does not pad its content out to an estimated full length: the scrollable
+    // range covers only the cells it has actually measured. Measured on the
+    // 646-session list, asking to jump to a session five months back:
+    //
+    //     scrollTo y=18848  ->  landed at 2705, content was only 3466
+    //
+    // The scroll was clamped to the end of what the list knew about. So one
+    // jump cannot get there, and scrollToLocation cannot either -- past the
+    // measured range it does not scroll at all, it just calls
+    // onScrollToIndexFailed. What works is to ride the edge: scroll to the end
+    // of what is known, which measures the next stretch, and ask again. Each
+    // round advanced about 2300dp, so a five-month jump takes roughly a second
+    // and reads as a fast scroll through the history rather than a teleport.
+    const [highlight, setHighlight] = useState(null);
+    const jumpTarget = useRef(null);
+    const jumpTimer = useRef(null);
+
+    const endJump = React.useCallback(() => {
+        jumpTarget.current = null;
+        if (jumpTimer.current) {
+            clearTimeout(jumpTimer.current);
+            jumpTimer.current = null;
+        }
+    }, []);
+
+    const runJump = React.useCallback(() => {
+        const t = jumpTarget.current;
+        if (!t) return;
+        try {
+            scrollRef.current?.scrollToLocation({
+                sectionIndex: t.sectionIndex,
+                // +1 because a section's cells are [header, ...rows, footer]
+                // and scrollToLocation counts from the header.
+                itemIndex: t.itemIndex + 1,
+                viewPosition: JUMP_VIEW_POSITION,
+                // Only the first hop is animated. Once the loop is riding the
+                // edge of the measured range, animating each hop would queue
+                // animations against each other and crawl.
+                animated: t.rounds === 0,
+            });
+        } catch {
+            // The flash still identifies the card once it is scrolled to.
+            endJump();
+        }
+    }, [endJump]);
+
+    // Called by the list when the target is past what it has measured.
+    const onJumpMiss = React.useCallback(() => {
+        const t = jumpTarget.current;
+        if (!t) return;
+        if (t.rounds >= JUMP_MAX_ROUNDS || Date.now() - t.startedAt > JUMP_TIMEOUT) {
+            endJump();
+            return;
+        }
+        t.rounds += 1;
+        // As far as the list currently knows how to go. That measures the next
+        // stretch of cells, which is what moves the target within reach.
+        scrollRef.current?.getScrollResponder()?.scrollToEnd({ animated: false });
+        jumpTimer.current = setTimeout(runJump, JUMP_ROUND_MS);
+    }, [endJump, runJump]);
+
+    const scrollToSession = React.useCallback((session) => {
+        if (!session) return;
+        for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+            const itemIndex = sections[sectionIndex].data.findIndex(([id]) => id === session);
+            if (itemIndex < 0) continue;
+            endJump();
+            setHighlight(session);
+            jumpTarget.current = { sectionIndex, itemIndex, rounds: 0, startedAt: Date.now() };
+            runJump();
+            return;
+        }
+    }, [sections, runJump, endJump]);
+
+    scrollToSessionRef.current = scrollToSession;
+
+    // HistoryCard is memoised and the list is virtualized, so both need telling
+    // when either of these changes.
+    const listExtraData = useMemo(() => ({ exitingSessions, highlight }), [exitingSessions, highlight]);
+
+    // Lit until well after a long jump lands.
+    useEffect(() => {
+        if (!highlight) return undefined;
+        const t = setTimeout(() => setHighlight(null), 3000);
+        return () => clearTimeout(t);
+    }, [highlight]);
+
+    useEffect(() => endJump, [endJump]);
 
     // ── Context menu actions ─────────────────────────────────────────────────
     const sessionDisplayName = (menu) =>
@@ -944,6 +1051,11 @@ const History = () => {
                 // heights would drift a dp per card and re-open the same loop.
                 stickySectionHeadersEnabled={false}
                 viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
+                onScrollToIndexFailed={onJumpMiss}
+                // A long jump rides the list forward for up to a second or so.
+                // If the user grabs the list in the meantime the jump has to
+                // let go, or it would keep yanking them onward.
+                onScrollBeginDrag={endJump}
                 // Tolerates a non-array item on purpose. Passing
                 // onViewableItemsChanged (rather than the callback pairs below)
                 // makes VirtualizedSectionList run every viewable cell through
@@ -952,13 +1064,13 @@ const History = () => {
                 // callable" and took the app down on the first scroll while
                 // this was being built.
                 keyExtractor={(item, index) => (Array.isArray(item) ? item[0] : `section-${index}`)}
-                extraData={exitingSessions}
+                extraData={listExtraData}
                 ListHeaderComponent={
                     <ContributionGraph
                         workoutHistory={workoutHistory}
                         theme={theme}
                         styles={styles}
-                        onOpenSession={handleOpenSession}
+                        onOpenSession={scrollToSession}
                     />
                 }
                 renderSectionHeader={({ section }) => (
@@ -971,6 +1083,7 @@ const History = () => {
                 )}
                 renderItem={({ item: [session, exercises] }) => (
                     <HistoryCard
+                        highlighted={session === highlight}
                         session={session}
                         exercises={exercises}
                         exercisesList={exercisesList}
@@ -1285,6 +1398,11 @@ const getStyles = (theme) => {
     cardContent: {
         padding: 18,
         borderRadius: 16,
+    },
+    // Marks the card a jump landed on. A tint rather than a border, because a
+    // border would resize the card and shove the rest of the list along.
+    cardHighlighted: {
+        backgroundColor: withAlpha(theme.primary, 0.16),
     },
     cardHeader: {
         flexDirection: 'row',
