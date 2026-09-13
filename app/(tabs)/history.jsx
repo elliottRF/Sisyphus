@@ -33,8 +33,10 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // reads as the card settling rather than as a second event.
 const GLOW_IN = 260;
 const GLOW_OUT = 620;
-// Measured from the start of the jump, not from the landing.
-const GLOW_HOLD = 3400;
+// Measured from the LANDING, not from the tap: a long jump can spend a second
+// travelling, and a hold timed from the tap would be most of the way gone by
+// the time the card was on screen.
+const GLOW_HOLD = 1600;
 
 // Where a jumped-to session lands: a third of the way down, clear of the
 // pinned month label and of the page header above it.
@@ -914,7 +916,11 @@ const History = () => {
         } catch {
             // The flash still identifies the card once it is scrolled to.
             endJump();
+            return;
         }
+        // A new object for the same session: same card stays lit, but the hold
+        // above restarts from here.
+        if (isSettle) setHighlight((h) => (h ? { session: h.session } : h));
     }, [endJump, armSettle]);
 
     // Called by the list when the target is past what it has measured.
@@ -938,7 +944,7 @@ const History = () => {
             const itemIndex = sections[sectionIndex].data.findIndex(([id]) => id === session);
             if (itemIndex < 0) continue;
             endJump();
-            setHighlight(session);
+            setHighlight({ session });
             jumpTarget.current = { sectionIndex, itemIndex, rounds: 0, settles: 0, startedAt: Date.now() };
             runJump();
             return;
@@ -951,9 +957,10 @@ const History = () => {
     // when either of these changes.
     const listExtraData = useMemo(() => ({ exitingSessions, highlight }), [exitingSessions, highlight]);
 
-    // Held lit, then faded out. Timed from the START of the jump, which is why
-    // it is longer than it looks: a long jump can spend a second travelling
-    // before the card is on screen at all.
+    // Held lit, then faded out. The hold restarts whenever the settle pass
+    // below re-stamps the highlight, so it runs from where the card came to
+    // rest rather than from the tap -- which is what lets it be this short
+    // without a long jump's glow being half over on arrival.
     useEffect(() => {
         if (!highlight) return undefined;
         const t = setTimeout(() => setHighlight(null), GLOW_HOLD);
@@ -1156,7 +1163,7 @@ const History = () => {
                 )}
                 renderItem={({ item: [session, exercises] }) => (
                     <HistoryCard
-                        highlighted={session === highlight}
+                        highlighted={session === highlight?.session}
                         glowTint={glowTint}
                         session={session}
                         exercises={exercises}
