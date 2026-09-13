@@ -42,10 +42,11 @@ const GLOW_HOLD = 800;
 // pinned month label and of the page header above it.
 const JUMP_VIEW_POSITION = 0.3;
 // A jump rides the edge of the measured range one round at a time; these bound
-// how long it may keep doing that. See scrollToSession.
+// how long it may keep doing that before giving up and opening the session
+// instead. See scrollToSession.
 const JUMP_ROUND_MS = 60;
-const JUMP_MAX_ROUNDS = 60;
-const JUMP_TIMEOUT = 5000;
+const JUMP_MAX_ROUNDS = 40;
+const JUMP_TIMEOUT = 2500;
 // How long after the last hop to reposition once more, and how many times.
 const JUMP_SETTLE_MS = 450;
 const JUMP_SETTLES = 2;
@@ -858,13 +859,32 @@ const History = () => {
     //
     //     scrollTo y=18848  ->  landed at 2705, content was only 3466
     //
-    // The scroll was clamped to the end of what the list knew about. So one
-    // jump cannot get there, and scrollToLocation cannot either -- past the
-    // measured range it does not scroll at all, it just calls
-    // onScrollToIndexFailed. What works is to ride the edge: scroll to the end
-    // of what is known, which measures the next stretch, and ask again. Each
-    // round advanced about 2300dp, so a five-month jump takes roughly a second
-    // and reads as a fast scroll through the history rather than a teleport.
+    // The scroll was clamped to the end of what the list knew about, and it is
+    // clamped there ON PURPOSE -- VirtualizedList limits its tail spacer to the
+    // highest cell it has measured, in its own words "to prevent the user for
+    // hyperscrolling into un-measured area because otherwise content will
+    // likely jump around as it renders in above the viewport". scrollToLocation
+    // is no better: past the measured range it does not scroll at all, it just
+    // calls onScrollToIndexFailed.
+    //
+    // So the jump rides the edge: scroll to the end of what is known, which
+    // measures the next stretch, and ask again. That only advances as fast as
+    // the cards can be rendered, and these render at about FIFTY A SECOND.
+    // Measured on a cold list: a five-month jump arrives in about a second, and
+    // a two-year one (582 cells) would need 9.4 seconds.
+    //
+    // Nobody waits 9 seconds, so the ride has a budget. Past it the session is
+    // opened instead, which is what tapping a day did before this screen could
+    // scroll at all. The budget covers roughly half a year, which is the whole
+    // span the activity graph shows before you page it back -- so ordinary taps
+    // scroll, and only deliberately ancient ones open.
+    //
+    // (initialScrollIndex looks like the way out -- it mounts the list AT the
+    // target, skipping everything in between, and did the same two-year jump in
+    // 616ms. It is not reliable here: without getItemLayout the remounted list
+    // draws nothing until a scroll event tells it where it is, and the nudge
+    // that provides one drags it back to the top. Three shapes of it were built
+    // and measured; each one left the list blank for seconds.)
     const [highlight, setHighlight] = useState(null);
     const jumpTarget = useRef(null);
     const jumpTimer = useRef(null);
@@ -928,7 +948,13 @@ const History = () => {
         const t = jumpTarget.current;
         if (!t) return;
         if (t.rounds >= JUMP_MAX_ROUNDS || Date.now() - t.startedAt > JUMP_TIMEOUT) {
+            // Out of reach. Leaving the list wherever the ride got to would be
+            // the worst answer -- it looks like the tap went to the wrong
+            // workout -- so open the one that was asked for.
+            const { session } = t;
             endJump();
+            setHighlight(null);
+            router.push(`/workout/${session}`);
             return;
         }
         t.rounds += 1;
@@ -936,7 +962,7 @@ const History = () => {
         // stretch of cells, which is what moves the target within reach.
         scrollRef.current?.getScrollResponder()?.scrollToEnd({ animated: false });
         jumpTimer.current = setTimeout(runJump, JUMP_ROUND_MS);
-    }, [endJump, runJump]);
+    }, [endJump, runJump, router]);
 
     const scrollToSession = React.useCallback((session) => {
         if (!session) return;
@@ -945,7 +971,7 @@ const History = () => {
             if (itemIndex < 0) continue;
             endJump();
             setHighlight({ session });
-            jumpTarget.current = { sectionIndex, itemIndex, rounds: 0, settles: 0, startedAt: Date.now() };
+            jumpTarget.current = { session, sectionIndex, itemIndex, rounds: 0, settles: 0, startedAt: Date.now() };
             runJump();
             return;
         }
