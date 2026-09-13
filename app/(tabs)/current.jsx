@@ -18,7 +18,7 @@ import { toStorageKg, formatWeight, loadLabel, unitLabel } from '../../utils/uni
 import { computeMuscleScores, slugRecoveryPercent, averageSlugRecovery, timeUntilSlugRecovery } from '../../utils/recovery';
 import { estimateOneRMForStorage } from '../../utils/oneRM';
 import { filterCompletedSets, buildWorkoutEntries, setWillBeSaved } from '../../utils/workoutEntries';
-import { muscleMapping } from '../../constants/muscles';
+import { muscleMapping, broadMuscleGroups } from '../../constants/muscles';
 
 
 import ExerciseEditable from '../../components/exerciseEditable'
@@ -330,6 +330,17 @@ const Current = () => {
         }));
         return [...slugs];
     }, [exercises]);
+
+    // The broad groups a template covers, for the chips on its card. The
+    // exercise list they replaced was the tallest thing on the card and the
+    // least scannable -- four truncated names in 12px.
+    const templateMuscleLabels = useCallback((slugs) => {
+        const labels = [];
+        for (const group of broadMuscleGroups) {
+            if (group.slugs.some((slug) => slugs.includes(slug))) labels.push(group.label);
+        }
+        return labels;
+    }, []);
 
     // Human "time until" string, e.g. "45m", "3h 20m", "1d 4h".
     const formatTimeUntil = (ms) => {
@@ -1238,20 +1249,69 @@ const Current = () => {
         // The starter pack is only ever offered when the user has nothing at all.
         const showStarter = templates.length === 0;
 
+        // The door promotes whatever is most recovered rather than entries[0]:
+        // the grid's order follows the user's sort preference, and under
+        // "oldest first" its head is arbitrary. Ties keep grid order, so the
+        // door and the first card agree whenever readiness doesn't separate
+        // them.
+        const lead = entries.length
+            ? entries.reduce((best, e) => ((e.readiness ?? -1) > (best.readiness ?? -1) ? e : best))
+            : null;
+        const leadSub = lead == null || lead.readiness == null
+            ? 'Ready when you are'
+            : lead.readiness >= 95
+                ? 'Fully recovered'
+                : `${lead.readiness}% recovered`;
+
         return (
             <View style={styles.splitPage}>
                 <ScrollView contentContainerStyle={styles.emptyStateScrollContent} showsVerticalScrollIndicator={false}>
                     {(templatesLoaded && exercises.length > 0) && (
-                            <Animated.View entering={FadeIn.duration(300)} style={styles.templatesGrid}>
+                            <Animated.View entering={FadeIn.duration(300)}>
+                                {/* Both starts, above the fold. This replaced the
+                                    floating button that used to hover over the grid
+                                    and overlap the tab bar on short screens. */}
+                                <View style={styles.doors}>
+                                    {lead && (
+                                        <TouchableOpacity
+                                            style={[styles.door, styles.doorPrimary]}
+                                            activeOpacity={0.85}
+                                            onPress={() => loadTemplate(lead.template)}
+                                            disabled={!!loadingTemplateId}
+                                        >
+                                            {loadingTemplateId === lead.template.id ? (
+                                                <ActivityIndicator size="small" color={theme.textAlternate} />
+                                            ) : (
+                                                <Ionicons name="play" size={16} color={theme.textAlternate} />
+                                            )}
+                                            <Text style={[styles.doorTitle, styles.doorTitlePrimary]} numberOfLines={1}>
+                                                Start {lead.template.name}
+                                            </Text>
+                                            <Text style={[styles.doorSub, styles.doorSubPrimary]} numberOfLines={1}>
+                                                {leadSub}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    <TouchableOpacity
+                                        style={styles.door}
+                                        activeOpacity={0.85}
+                                        onPress={startWorkout}
+                                        disabled={!!loadingTemplateId}
+                                    >
+                                        <AntDesign name="plus" size={16} color={theme.textSecondary} />
+                                        <Text style={styles.doorTitle} numberOfLines={1}>Empty workout</Text>
+                                        <Text style={styles.doorSub} numberOfLines={1}>Start from nothing</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={styles.templatesGrid}>
                                 {entries.map(({ template, readiness }) => {
-                                    const exerciseNames = template.data.flatMap(group =>
-                                        group.exercises.map(ex => {
-                                            const detail = exercises.find(e => e.exerciseID === ex.exerciseID);
-                                            return detail ? detail.name : 'Unknown';
-                                        })
-                                    );
-                                    const displayNames = exerciseNames.slice(0, 4);
-                                    const moreCount = exerciseNames.length - displayNames.length;
+                                    const exerciseCount = template.data.reduce(
+                                        (total, group) => total + group.exercises.length, 0);
+                                    // Two is as many as fit on one line at this width; a
+                                    // third would wrap and make the card a row taller than
+                                    // its neighbour for no extra information.
+                                    const labels = templateMuscleLabels(templateTargetSlugs(template)).slice(0, 2);
                                     const badge = readinessBadge(readiness);
 
                                     // No layout animation on these cards. LinearTransition
@@ -1276,7 +1336,7 @@ const Current = () => {
                                             onLongPress={(e) => openTemplateMenu(template, e)}
                                             delayLongPress={300}
                                         >
-                                            <View style={{ flex: 1 }}>
+                                            <View>
                                                 <View style={styles.templateCardHeader}>
                                                     <Text style={styles.templateName} numberOfLines={1}>{template.name}</Text>
                                                     <TouchableOpacity
@@ -1296,22 +1356,17 @@ const Current = () => {
                                                 </View>
 
                                                 <View style={styles.templateOverview}>
-                                                    {displayNames.map((name, idx) => (
-                                                        <Text key={idx} style={styles.templateExerciseItem} numberOfLines={1}>
-                                                            • {name}
-                                                        </Text>
+                                                    {labels.map((label) => (
+                                                        <View key={label} style={styles.muscleChip}>
+                                                            <Text style={styles.muscleChipText}>{label}</Text>
+                                                        </View>
                                                     ))}
-                                                    {moreCount > 0 ? (
-                                                        <Text style={styles.templateMoreCount}>
-                                                            + {moreCount} more
-                                                        </Text>
-                                                    ) : null}
                                                 </View>
                                             </View>
 
                                             <View style={styles.cardFooter}>
                                                 <Text style={styles.templateDetails}>
-                                                    {exerciseNames.length} {exerciseNames.length === 1 ? 'exercise' : 'exercises'}
+                                                    {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'}
                                                 </Text>
                                                 {badge ? (
                                                     <View style={styles.readinessPill}>
@@ -1370,6 +1425,7 @@ const Current = () => {
                                     </View>
                                 </TouchableOpacity>
                                 </Animated.View>
+                                </View>
                             </Animated.View>
                     )}
                 </ScrollView>
@@ -1485,13 +1541,6 @@ const Current = () => {
                                 />
                                 )}
 
-                                <View style={[styles.bottomButtonContainer, { bottom: Math.max(insets.bottom + 80, 115) }]}>
-                                    <TouchableOpacity onPress={startWorkout} activeOpacity={0.8} style={styles.startWorkoutButtonContainer}>
-                                        <ButtonBackground style={styles.startButton}>
-                                            <Text style={styles.startButtonText}>Start an Empty Workout</Text>
-                                        </ButtonBackground>
-                                    </TouchableOpacity>
-                                </View>
                             </View>
                         )}
 
@@ -1777,7 +1826,9 @@ const getStyles = (theme, width) => {
         emptyStateScrollContent: {
             paddingHorizontal: padding,
             paddingTop: 4,
-            paddingBottom: 240,
+            // Was 240, to clear the floating start button. That button is now a
+            // door at the top, so this only has to clear the tab bar.
+            paddingBottom: 120,
         },
         emptyStateHeader: {
             // Matches the header position on Home/History/Exercises exactly.
@@ -1936,7 +1987,13 @@ const getStyles = (theme, width) => {
         },
         templateCard: {
             width: itemWidth,
-            height: 200,
+            // No fixed height: the card is as tall as its contents. A wrapped
+            // flex line stretches its items to the tallest one, so the WRAPPER
+            // matches its neighbour -- flex:1 is what makes the card fill that
+            // wrapper rather than hugging inside it, which left the shorter
+            // "New Template" card floating above the row's baseline.
+            flex: 1,
+            minHeight: 104,
             backgroundColor: theme.surface,
             borderRadius: RADIUS.l,
             padding: 14,
@@ -1948,25 +2005,60 @@ const getStyles = (theme, width) => {
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 8,
         },
         templateOverview: {
-            flex: 1,
-            marginTop: 4,
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 5,
+            marginTop: 8,
         },
-        templateExerciseItem: {
-            fontSize: 12,
+        muscleChip: {
+            backgroundColor: theme.overlayInput,
+            borderRadius: RADIUS.pill,
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+        },
+        muscleChipText: {
+            fontSize: 11,
+            fontFamily: FONTS.semiBold,
+            color: theme.textSecondary,
+        },
+        // ── The two starts ──────────────────────────────────────────────────
+        doors: {
+            flexDirection: 'row',
+            gap: 10,
+            marginBottom: 16,
+        },
+        door: {
+            flex: 1,
+            minWidth: 0,
+            backgroundColor: theme.surface,
+            borderRadius: RADIUS.l,
+            padding: 13,
+            ...(isLightTheme(theme) ? getThemedShadow(theme, 'small') : null),
+        },
+        doorPrimary: {
+            backgroundColor: theme.primary,
+            boxShadow: 'none',
+        },
+        doorTitle: {
+            fontSize: 14,
+            fontFamily: FONTS.bold,
+            color: theme.text,
+            marginTop: 9,
+        },
+        doorTitlePrimary: {
+            color: theme.textAlternate,
+        },
+        doorSub: {
+            fontSize: 11,
             fontFamily: FONTS.medium,
             color: theme.textSecondary,
-            marginBottom: 2,
-            opacity: 0.8,
-        },
-        templateMoreCount: {
-            fontSize: 11,
-            fontFamily: FONTS.regular,
-            color: theme.textSecondary,
             marginTop: 2,
-            opacity: 0.6,
+        },
+        doorSubPrimary: {
+            color: theme.textAlternate,
+            opacity: 0.75,
         },
         cardFooter: {
             flexDirection: 'row',
@@ -2043,31 +2135,6 @@ const getStyles = (theme, width) => {
             fontSize: 12,
             fontFamily: FONTS.semiBold,
             color: theme.textSecondary,
-        },
-        bottomButtonContainer: {
-            position: 'absolute',
-            bottom: 75,
-            left: 0,
-            right: 0,
-            paddingHorizontal: 16,
-            backgroundColor: 'transparent',
-            zIndex: 100,
-        },
-        startWorkoutButtonContainer: {
-            width: '100%',
-            ...SHADOWS.medium,
-        },
-        startButton: {
-            paddingVertical: 16,
-            borderRadius: 16,
-            alignItems: 'center',
-            justifyContent: 'center',
-        },
-        startButtonText: {
-            color: theme.textAlternate,
-            fontSize: 16,
-            fontFamily: FONTS.bold,
-            letterSpacing: 0.5,
         },
         headerContainer: {
             paddingHorizontal: 16,
