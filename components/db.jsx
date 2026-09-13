@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import exerciseData from '../assets/exercises.json';
 import Papa from 'papaparse';
 import { parseCsv } from '../utils/csv';
+import { lbsToKg } from '../utils/units';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { emit, AppEvents } from '../utils/events';
 import {
@@ -1572,6 +1573,30 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
     return parseFloat(cleanup) || 0;
   };
 
+  // Three spellings of a workout's length are in circulation: Strong writes
+  // "2h 26m" under `Duration`, older Strong exports wrote a seconds count under
+  // `Duration (sec)`, and our own export writes plain minutes under `Duration`.
+  // Reading only the second is why an imported session showed "< 1m".
+  const parseDurationMinutes = (raw, isSeconds) => {
+    if (raw == null || raw === '') return 0;
+    const text = raw.toString().trim();
+    const parts = text.match(/\d+(?:\.\d+)?\s*[hms]/gi);
+    if (parts) {
+      let total = 0;
+      for (const part of parts) {
+        const n = parseFloat(part);
+        const unit = part.replace(/[\d.\s]/g, '').toLowerCase();
+        if (unit === 'h') total += n * 60;
+        else if (unit === 'm') total += n;
+        else total += n / 60;
+      }
+      return Math.floor(total);
+    }
+    const n = parseFloat(text);
+    if (!Number.isFinite(n)) return 0;
+    return isSeconds ? Math.floor(n / 60) : Math.floor(n);
+  };
+
   return new Promise((resolve, reject) => {
     const runImport = async (results) => {
         try {
@@ -1582,6 +1607,38 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             progressCallback({ stage: 'parsing', current: totalRows, total: totalRows });
           }
 
+
+          // ── Resolve the columns once, by shape rather than by name ──────
+          //
+          // Strong has shipped at least three header spellings for weight --
+          // `Weight (kg)`, `Weight (lbs)` and a bare `Weight` -- and our own
+          // export writes `Weight (kg)`. The importer only ever read the first,
+          // so any file using another spelling parsed every set as 0 kg. Same
+          // for duration. Distance and seconds were already resolved this way;
+          // now everything is.
+          const headerKeys = rows.length ? Object.keys(rows[0]) : [];
+          const weightKey = headerKeys.find((k) => /^\s*weight/i.test(k));
+          const durationKey = headerKeys.find((k) => /duration/i.test(k));
+          const durationInSeconds = durationKey ? /sec/i.test(durationKey) : false;
+
+          // A header that names its unit is the truth. A bare `Weight` does not
+          // say, because Strong exports in whatever unit the app was set to --
+          // so fall back to the unit THIS user works in, which is the only
+          // signal available and is right whenever both apps were set the same.
+          const weightHeader = (weightKey || '').toLowerCase();
+          let weightIsPounds = /lb/.test(weightHeader);
+          if (!weightIsPounds && !/kg/.test(weightHeader)) {
+            weightIsPounds = (await AsyncStorage.getItem('user_unit_imperial')) === 'true';
+          }
+          const readWeightKg = (row) => {
+            if (!weightKey) return 0;
+            const n = parseFloat(row[weightKey]);
+            if (!Number.isFinite(n)) return 0;
+            return weightIsPounds ? lbsToKg(n) : n;
+          };
+          console.log('[import] weight column', JSON.stringify(weightKey),
+            weightIsPounds ? '(pounds -> kg)' : '(kg)',
+            '| duration column', JSON.stringify(durationKey));
 
           const workoutMap = new Map();
           const notesMap = new Map();
@@ -1596,7 +1653,7 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
             const exerciseName = row['Exercise Name'].trim();
 
             if (exerciseName.toLowerCase() === 'body weight' || exerciseName.toLowerCase() === 'weight') {
-              const weight = parseFloat(row['Weight (kg)']) || 0;
+              const weight = readWeightKg(row);
               if (weight > 0) {
                 bodyWeightEntries.push({ date, weight });
               }
@@ -1621,10 +1678,10 @@ export const importStrongData = async (csvContent, progressCallback = null) => {
               continue;
             }
 
-            const weight = parseFloat(row['Weight (kg)']) || 0;
+            const weight = readWeightKg(row);
             const reps = parseInt(row['Reps'], 10) || 0;
-            const durationSeconds = parseInt(row['Duration (sec)'], 10) || 0;
-            const durationMinutes = Math.floor(durationSeconds / 60);
+            const durationMinutes = parseDurationMinutes(
+              durationKey ? row[durationKey] : null, durationInSeconds);
             const workoutTitle = row['Workout Name'] || 'Strong Import';
 
             const keys = Object.keys(row);
