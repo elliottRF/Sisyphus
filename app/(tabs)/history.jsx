@@ -2,13 +2,21 @@ import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicato
 import ActionSheet from 'react-native-actions-sheet';
 import AppCalendar from '../../components/AppCalendar';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import Animated, { ZoomIn, ZoomOut, FadeIn } from 'react-native-reanimated';
+import Animated, {
+    ZoomIn,
+    ZoomOut,
+    FadeIn,
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    interpolateColor,
+} from 'react-native-reanimated';
 import { useScrollToTop } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWorkoutHistory, fetchExercises, fetchWorkoutHistoryBySession, createTemplate, getSplits, getCachedWorkoutHistory, getCachedExercises } from '../../components/db';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as haptics from '../../utils/haptics';
-import { FONTS, RADIUS, getThemedShadow, isLightTheme, withAlpha, SPACING } from '../../constants/theme';
+import { FONTS, RADIUS, getThemedShadow, isLightTheme, withAlpha, flattenOverlay, SPACING } from '../../constants/theme';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { customAlert } from '../../utils/customAlert';
@@ -16,8 +24,17 @@ import { kgToLbs, unitLabel } from '../../utils/units';
 import { buildWorkoutDataFromSession } from '../../utils/workoutBuilders';
 import { AppEvents, on, off } from '../../utils/events';
 import usePinnedSection from '../../components/usePinnedSection';
+import { EASING_GENTLE } from '../../components/Expandable';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// The tint on a jumped-to card comes up quickly and leaves slowly: arriving is
+// the part that has to catch the eye, and a glow that lingers on the way out
+// reads as the card settling rather than as a second event.
+const GLOW_IN = 260;
+const GLOW_OUT = 620;
+// Measured from the start of the jump, not from the landing.
+const GLOW_HOLD = 3400;
 
 // Where a jumped-to session lands: a third of the way down, clear of the
 // pinned month label and of the page header above it.
@@ -27,6 +44,9 @@ const JUMP_VIEW_POSITION = 0.3;
 const JUMP_ROUND_MS = 60;
 const JUMP_MAX_ROUNDS = 60;
 const JUMP_TIMEOUT = 5000;
+// How long after the last hop to reposition once more, and how many times.
+const JUMP_SETTLE_MS = 450;
+const JUMP_SETTLES = 2;
 
 
 const lightenColor = (color, percent) => {
@@ -350,7 +370,7 @@ const ContributionGraph = ({ workoutHistory, theme, styles, onOpenSession }) => 
 
 const AnimatedTouchableOpacity = RNAnimated.createAnimatedComponent(TouchableOpacity);
 
-const HistoryCard = React.memo(({ highlighted = false, session, exercises, exercisesList, theme, styles, router, useImperial, onShowMenu, exiting = false, onExitDone }) => {
+const HistoryCard = React.memo(({ highlighted = false, session, exercises, exercisesList, theme, styles, glowTint, router, useImperial, onShowMenu, exiting = false, onExitDone }) => {
     const groupedExercises = groupExercisesByName(exercises);
     const duration = exercises[0].duration;
     const [isLoading, setIsLoading] = useState(false);
@@ -363,6 +383,30 @@ const HistoryCard = React.memo(({ highlighted = false, session, exercises, exerc
     // Exit: collapse this card's height + fade, then tell the parent to commit
     // the removal. Only the flagged (deleted) card animates — never the
     // scroll-recycled cells — so list performance is untouched.
+    // The tint fades rather than switching, and it is a shared value rather
+    // than an RNAnimated one because backgroundColor cannot take RN's native
+    // driver -- this way the fade runs on the UI thread instead of competing
+    // with whatever JS is doing, which during a long jump is a great deal.
+    //
+    // A card that mounts already flagged (the common case -- a long jump
+    // renders it for the first time when it is nearly on screen) starts at 0
+    // and animates up, so it fades in as it arrives rather than appearing lit.
+    const glow = useSharedValue(0);
+    useEffect(() => {
+        glow.value = withTiming(highlighted ? 1 : 0, {
+            duration: highlighted ? GLOW_IN : GLOW_OUT,
+            easing: EASING_GENTLE,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [highlighted]);
+
+    // Both ends are flat, opaque colours. Interpolating to a translucent tint
+    // would blend it over the card's own surface a second time and read lighter
+    // than the theme intends -- the same trap the equipment chips fell into.
+    const glowStyle = useAnimatedStyle(() => ({
+        backgroundColor: interpolateColor(glow.value, [0, 1], [theme.surface, glowTint]),
+    }));
+
     const exitProgress = useRef(new RNAnimated.Value(0)).current;
     const measuredHeightRef = useRef(0);
     const [collapsing, setCollapsing] = useState(false);
@@ -475,7 +519,7 @@ const HistoryCard = React.memo(({ highlighted = false, session, exercises, exerc
                 style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
                 disabled={isLoading}
             >
-                <View style={[styles.cardContent, { backgroundColor: theme.surface }, highlighted && styles.cardHighlighted]}>
+                <Animated.View style={[styles.cardContent, glowStyle]}>
                     <View style={styles.cardHeader}>
                         <Text style={[styles.workoutName, { flex: 1, marginRight: 10 }]} numberOfLines={1}>
                             {exercises[0].name}
@@ -561,7 +605,7 @@ const HistoryCard = React.memo(({ highlighted = false, session, exercises, exerc
                             <Text style={styles.moreText}>+ {groupedExercises.length - 4} more exercises</Text>
                         )}
                     </View>
-                </View>
+                </Animated.View>
             </AnimatedTouchableOpacity>
         </RNAnimated.View>
     );
@@ -629,6 +673,12 @@ const History = () => {
     // re-rendered on any state change here — opening the menu, the calendar,
     // a card animating out.
     const styles = useMemo(() => getStyles(theme), [theme]);
+    // Flattened once here rather than per card: the colour a jumped-to card
+    // fades to. See the note in HistoryCard for why it is flattened at all.
+    const glowTint = useMemo(
+        () => flattenOverlay(withAlpha(theme.primary, 0.16), theme.surface),
+        [theme],
+    );
 
     const scrollRef = useRef(null);
     useScrollToTop(scrollRef);
@@ -816,18 +866,39 @@ const History = () => {
     const [highlight, setHighlight] = useState(null);
     const jumpTarget = useRef(null);
     const jumpTimer = useRef(null);
+    const settleTimer = useRef(null);
 
     const endJump = React.useCallback(() => {
         jumpTarget.current = null;
-        if (jumpTimer.current) {
-            clearTimeout(jumpTimer.current);
-            jumpTimer.current = null;
+        for (const t of [jumpTimer, settleTimer]) {
+            if (t.current) {
+                clearTimeout(t.current);
+                t.current = null;
+            }
         }
     }, []);
 
-    const runJump = React.useCallback(() => {
+    // One last reposition after the loop goes quiet. The hop that finally lands
+    // is asked for while the list is still settling from the hop before it, so
+    // it can come to rest lower than the third of the way down it aimed for --
+    // measured landing a graph jump at 58% instead of 30%. By the time this
+    // fires everything around the target is measured and the answer is exact,
+    // and it is animated, so if the first landing was already right this does
+    // nothing visible.
+    const armSettle = React.useCallback((run) => {
+        if (settleTimer.current) clearTimeout(settleTimer.current);
+        settleTimer.current = setTimeout(() => {
+            settleTimer.current = null;
+            run(true);
+        }, JUMP_SETTLE_MS);
+    }, []);
+
+    const runJump = React.useCallback((isSettle = false) => {
         const t = jumpTarget.current;
         if (!t) return;
+        if (!isSettle) armSettle(runJump);
+        else if (t.settles >= JUMP_SETTLES) return;
+        else t.settles += 1;
         try {
             scrollRef.current?.scrollToLocation({
                 sectionIndex: t.sectionIndex,
@@ -838,13 +909,13 @@ const History = () => {
                 // Only the first hop is animated. Once the loop is riding the
                 // edge of the measured range, animating each hop would queue
                 // animations against each other and crawl.
-                animated: t.rounds === 0,
+                animated: t.rounds === 0 || isSettle,
             });
         } catch {
             // The flash still identifies the card once it is scrolled to.
             endJump();
         }
-    }, [endJump]);
+    }, [endJump, armSettle]);
 
     // Called by the list when the target is past what it has measured.
     const onJumpMiss = React.useCallback(() => {
@@ -868,7 +939,7 @@ const History = () => {
             if (itemIndex < 0) continue;
             endJump();
             setHighlight(session);
-            jumpTarget.current = { sectionIndex, itemIndex, rounds: 0, startedAt: Date.now() };
+            jumpTarget.current = { sectionIndex, itemIndex, rounds: 0, settles: 0, startedAt: Date.now() };
             runJump();
             return;
         }
@@ -880,10 +951,12 @@ const History = () => {
     // when either of these changes.
     const listExtraData = useMemo(() => ({ exitingSessions, highlight }), [exitingSessions, highlight]);
 
-    // Lit until well after a long jump lands.
+    // Held lit, then faded out. Timed from the START of the jump, which is why
+    // it is longer than it looks: a long jump can spend a second travelling
+    // before the card is on screen at all.
     useEffect(() => {
         if (!highlight) return undefined;
-        const t = setTimeout(() => setHighlight(null), 3000);
+        const t = setTimeout(() => setHighlight(null), GLOW_HOLD);
         return () => clearTimeout(t);
     }, [highlight]);
 
@@ -1084,6 +1157,7 @@ const History = () => {
                 renderItem={({ item: [session, exercises] }) => (
                     <HistoryCard
                         highlighted={session === highlight}
+                        glowTint={glowTint}
                         session={session}
                         exercises={exercises}
                         exercisesList={exercisesList}
@@ -1398,11 +1472,6 @@ const getStyles = (theme) => {
     cardContent: {
         padding: 18,
         borderRadius: 16,
-    },
-    // Marks the card a jump landed on. A tint rather than a border, because a
-    // border would resize the card and shove the rest of the list along.
-    cardHighlighted: {
-        backgroundColor: withAlpha(theme.primary, 0.16),
     },
     cardHeader: {
         flexDirection: 'row',
