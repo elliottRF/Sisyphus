@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Dimensions, AppState, Linking } from 'react-native'
-import Animated, { FadeIn, FadeInDown, FadeOutDown, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOutDown, FadeOutUp, LinearTransition } from 'react-native-reanimated';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useScrollToTop } from 'expo-router';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -25,6 +25,19 @@ import Fuse from 'fuse.js';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Both banners land after the page has already drawn -- the review check is
+// async, and the live-workout flag arrives from context on focus -- so they
+// were appearing instantly on a settled layout and shunting everything down.
+// They now descend into the gap as it opens. FadeInUp starts ABOVE (translateY
+// -25) and moves down into place, which is the direction the content below is
+// travelling; the offset is cut to 10 so it reads as settling rather than
+// sliding.
+const BANNER_ENTER = FadeInUp.duration(320).withInitialValues({ transform: [{ translateY: -10 }] });
+const BANNER_EXIT = FadeOutUp.duration(200);
+// What the banners push. Without this the card below them jumped the full
+// banner height in one frame while the banner itself was still fading in.
+const BANNER_SHIFT = LinearTransition.duration(320);
 
 // ── Review prompt config ───────────────────────────────────────────────────
 // Ask for a Play Store rating only once the user is clearly engaged, and never
@@ -463,7 +476,7 @@ const Home = () => {
 
                 {/* ── Live workout banner ───────────────────────────────────── */}
                 {workoutInProgress && workoutStartTime && (
-                    <Animated.View>
+                    <Animated.View entering={BANNER_ENTER} exiting={BANNER_EXIT}>
                         <TouchableOpacity
                             style={styles.liveCard}
                             onPress={() => router.navigate('/current')}
@@ -500,7 +513,7 @@ const Home = () => {
                 {/* ── Review prompt (same slot as the live banner; mutually
                     exclusive — never shown during an active workout) ────────── */}
                 {showReview && !workoutInProgress && (
-                    <Animated.View>
+                    <Animated.View entering={BANNER_ENTER} exiting={BANNER_EXIT}>
                         <TouchableOpacity style={styles.liveCard} onPress={handleRateApp} activeOpacity={0.85}>
                             <Feather name="star" size={20} color={theme.warning} />
                             <View style={{ flex: 1 }}>
@@ -525,7 +538,10 @@ const Home = () => {
                 {/* 4px below the header (→16 total, matching History/Current) when
                     it's the first card; a normal gap when a banner (live workout
                     or review prompt) sits above it. */}
-                <Animated.View style={{ marginTop: ((workoutInProgress && workoutStartTime) || showReview) ? 12 : 4 }}>
+                <Animated.View
+                    layout={BANNER_SHIFT}
+                    style={{ marginTop: ((workoutInProgress && workoutStartTime) || showReview) ? 12 : 4 }}
+                >
                         <View style={styles.altBodyCard}>
                             <View style={styles.altLegendContainer}>
                                 <Text style={styles.altCardTitle}>Fatigue Status</Text>
