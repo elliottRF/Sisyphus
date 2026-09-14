@@ -9,7 +9,7 @@ import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withTiming,
-    interpolateColor,
+
 } from 'react-native-reanimated';
 import { useScrollToTop } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -438,21 +438,40 @@ const HistoryCard = React.memo(({ highlighted = false, session, exercises, exerc
     // A card that mounts already flagged (the common case -- a long jump
     // renders it for the first time when it is nearly on screen) starts at 0
     // and animates up, so it fades in as it arrives rather than appearing lit.
+    // The glow is a separate layer that fades in over the card, NOT the card's
+    // own backgroundColor. Painting the background from an animated style meant
+    // every one of ~650 cards carried an animated node whose only job, almost
+    // always, was to paint a static colour -- and Reanimated's
+    // synchronouslyUpdateUIProps fails routinely for cells a virtualized list
+    // is creating and destroying mid-scroll. When it failed, the card was left
+    // holding whatever colour that node last had, which is how a batch of
+    // sessions ended up visibly tinted while their neighbours were correct.
+    //
+    // Now the fill is static (see cardContent) and the overlay is mounted only
+    // while a card is actually lit, so an update that never lands can only cost
+    // a glow -- and React unmounts the layer when the hold ends regardless of
+    // what the UI thread did.
     const glow = useSharedValue(0);
+    const [glowMounted, setGlowMounted] = useState(highlighted);
     useEffect(() => {
-        glow.value = withTiming(highlighted ? 1 : 0, {
-            duration: highlighted ? GLOW_IN : GLOW_OUT,
-            easing: EASING_GENTLE,
-        });
+        if (highlighted) {
+            setGlowMounted(true);
+            glow.value = withTiming(1, { duration: GLOW_IN, easing: EASING_GENTLE });
+            return undefined;
+        }
+        glow.value = withTiming(0, { duration: GLOW_OUT, easing: EASING_GENTLE });
+        // A JS timer rather than withTiming's completion callback: the unmount
+        // has to happen even when the UI thread dropped the update that would
+        // have completed the animation.
+        const t = setTimeout(() => setGlowMounted(false), GLOW_OUT + 60);
+        return () => clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [highlighted]);
 
-    // Both ends are flat, opaque colours. Interpolating to a translucent tint
-    // would blend it over the card's own surface a second time and read lighter
-    // than the theme intends -- the same trap the equipment chips fell into.
-    const glowStyle = useAnimatedStyle(() => ({
-        backgroundColor: interpolateColor(glow.value, [0, 1], [theme.surface, glowTint]),
-    }));
+    // Opacity, not backgroundColor: the tint is already flattened against the
+    // card's surface, so fading it in reads identically to interpolating the
+    // background did -- without the card's own fill depending on it.
+    const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
 
     const exitProgress = useRef(new RNAnimated.Value(0)).current;
     const measuredHeightRef = useRef(0);
@@ -566,7 +585,13 @@ const HistoryCard = React.memo(({ highlighted = false, session, exercises, exerc
                 style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}
                 disabled={isLoading}
             >
-                <Animated.View style={[styles.cardContent, glowStyle]}>
+                <View style={styles.cardContent}>
+                    {glowMounted && (
+                        <Animated.View
+                            pointerEvents="none"
+                            style={[styles.cardGlow, { backgroundColor: glowTint }, glowStyle]}
+                        />
+                    )}
                     <View style={styles.cardHeader}>
                         <Text style={[styles.workoutName, { flex: 1, marginRight: 10 }]} numberOfLines={1}>
                             {exercises[0].name}
@@ -652,7 +677,7 @@ const HistoryCard = React.memo(({ highlighted = false, session, exercises, exerc
                             <Text style={styles.moreText}>+ {groupedExercises.length - 4} more exercises</Text>
                         )}
                     </View>
-                </Animated.View>
+                </View>
             </AnimatedTouchableOpacity>
         </RNAnimated.View>
     );
@@ -1526,6 +1551,23 @@ const getStyles = (theme) => {
     },
     cardContent: {
         padding: 18,
+        borderRadius: 16,
+        // The card's own fill, so it never depends on the glow's animated style
+        // landing. Reanimated's synchronouslyUpdateUIProps fails routinely for
+        // cells this list is creating and destroying mid-scroll, and when it
+        // did, the card was left with no backgroundColor at all and showed the
+        // page through. The animated style still overrides this while a card is
+        // lit; a dropped update now costs a glow, not the card.
+        backgroundColor: theme.surface,
+    },
+    // Sits under the card's content and over its fill, clipped to the same
+    // radius. Absolute so it costs no layout.
+    cardGlow: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         borderRadius: 16,
     },
     cardHeader: {
