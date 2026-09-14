@@ -56,6 +56,13 @@ import ContextMenu from '../../components/ContextMenu';
 // useWindowDimensions() instead, which re-renders on resize.
 
 // Template ordering within a split. Persisted so it survives a restart.
+// EXPERIMENT: what a template card shows beneath its name.
+//   'chips' — the broad muscle groups it covers
+//   'names' — the first few exercises, like the old 200dp card
+//   'both'  — chips above a shortened name list
+const CARD_BODY = 'names';
+const CARD_NAME_ROWS = 4;
+
 const TEMPLATE_SORT_KEY = 'settings_templateSort';
 const LAST_SPLIT_KEY = 'settings_lastSplitId';
 const SORT_READINESS = 'readiness';
@@ -1306,12 +1313,26 @@ const Current = () => {
 
                                 <View style={styles.templatesGrid}>
                                 {entries.map(({ template, readiness }) => {
-                                    const exerciseCount = template.data.reduce(
-                                        (total, group) => total + group.exercises.length, 0);
+                                    const exerciseNames = template.data.flatMap(group =>
+                                        group.exercises.map(ex => {
+                                            const detail = exercises.find(e => e.exerciseID === ex.exerciseID);
+                                            // "Incline Bench Press (Dumbbell)" truncates to
+                                            // "Incline Bench Press (Du..." on a 158dp card --
+                                            // the qualifier costs the width and then loses to
+                                            // the ellipsis anyway. The footer already names
+                                            // the count; the equipment is on the card you get
+                                            // when you open the template.
+                                            return detail ? detail.name.replace(/\s*\([^)]*\)\s*$/, '') : 'Unknown';
+                                        })
+                                    );
+                                    const exerciseCount = exerciseNames.length;
                                     // Two is as many as fit on one line at this width; a
                                     // third would wrap and make the card a row taller than
                                     // its neighbour for no extra information.
                                     const labels = templateMuscleLabels(templateTargetSlugs(template)).slice(0, 2);
+                                    const nameRows = CARD_BODY === 'both' ? CARD_NAME_ROWS - 1 : CARD_NAME_ROWS;
+                                    const shownNames = exerciseNames.slice(0, nameRows);
+                                    const moreCount = exerciseNames.length - shownNames.length;
                                     const badge = readinessBadge(readiness);
 
                                     // No layout animation on these cards. LinearTransition
@@ -1355,13 +1376,30 @@ const Current = () => {
                                                     </TouchableOpacity>
                                                 </View>
 
-                                                <View style={styles.templateOverview}>
-                                                    {labels.map((label) => (
-                                                        <View key={label} style={styles.muscleChip}>
-                                                            <Text style={styles.muscleChipText}>{label}</Text>
-                                                        </View>
-                                                    ))}
-                                                </View>
+                                                {CARD_BODY !== 'names' && (
+                                                    <View style={styles.templateOverview}>
+                                                        {labels.map((label) => (
+                                                            <View key={label} style={styles.muscleChip}>
+                                                                <Text style={styles.muscleChipText}>{label}</Text>
+                                                            </View>
+                                                        ))}
+                                                    </View>
+                                                )}
+
+                                                {CARD_BODY !== 'chips' && (
+                                                    <View style={styles.templateNameList}>
+                                                        {shownNames.map((name, idx) => (
+                                                            <Text key={idx} style={styles.templateExerciseItem} numberOfLines={1}>
+                                                                {name}
+                                                            </Text>
+                                                        ))}
+                                                        {moreCount > 0 ? (
+                                                            <Text style={styles.templateMoreCount}>
+                                                                +{moreCount} more
+                                                            </Text>
+                                                        ) : null}
+                                                    </View>
+                                                )}
                                             </View>
 
                                             <View style={styles.cardFooter}>
@@ -2017,6 +2055,21 @@ const getStyles = (theme, width) => {
             borderRadius: RADIUS.pill,
             paddingHorizontal: 8,
             paddingVertical: 3,
+        },
+        templateNameList: {
+            marginTop: 8,
+            gap: 3,
+        },
+        templateExerciseItem: {
+            fontSize: 12,
+            fontFamily: FONTS.medium,
+            color: theme.textSecondary,
+        },
+        templateMoreCount: {
+            fontSize: 11,
+            fontFamily: FONTS.regular,
+            color: theme.textSecondary,
+            opacity: 0.6,
         },
         muscleChipText: {
             fontSize: 11,
