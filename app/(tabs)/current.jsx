@@ -1286,11 +1286,12 @@ const Current = () => {
                                             onPress={() => loadTemplate(lead.template)}
                                             disabled={!!loadingTemplateId}
                                         >
-                                            {loadingTemplateId === lead.template.id ? (
-                                                <ActivityIndicator size="small" color={theme.textAlternate} />
-                                            ) : (
-                                                <Ionicons name="play" size={16} color={theme.textAlternate} />
-                                            )}
+                                            {/* No spinner here. loadTemplate does not set
+                                                loadingTemplateId -- only the edit path does -- so
+                                                this could never fire for its own action, and it
+                                                DID fire whenever the lead template's pencil was
+                                                pressed, lighting the door and the card at once. */}
+                                            <Ionicons name="play" size={16} color={theme.textAlternate} />
                                             <Text style={[styles.doorTitle, styles.doorTitlePrimary]} numberOfLines={1}>
                                                 Start {lead.template.name}
                                             </Text>
