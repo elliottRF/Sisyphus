@@ -161,32 +161,34 @@ export const isLightColor = isLight;
 // iOS dark, elevated grouped style: charcoal canvas (not OLED black) so the
 // UI keeps contrast under harsh gym lighting, with each layer stepped up.
 const DEFAULT = {
-    primary: "#0A84FF",            // systemBlue (dark)
-    primaryDark: "#0974DE",
-    secondary: "#0A84FF",
-    background: "#1C1C1E",         // systemGroupedBackground (dark, elevated)
-    surface: "#2C2C2E",            // secondarySystemGroupedBackground (elevated)
-    surfaceElevated: "#3A3A3C",    // tertiarySystemGroupedBackground (elevated)
+    // Every derived value below is what buildCustomTheme() produces from
+    // primary/background/surface/text, so the shipped default and a custom
+    // theme built from the same four inputs render identically -- and so the
+    // store screenshots and the app are the same thing.
+    primary: "#5AA9FF",            // systemBlue, lifted for near-black
+    primaryDark: "#4A8BD1",        // mix(primary, black, 0.18)
+    secondary: "#5AA9FF",
+    background: "#0B0E12",
+    surface: "#141A21",
+    surfaceElevated: "#21272E",    // mix(surface, text, 0.06)
     // Off pure white. White on near-black halates -- the faint glow that
     // makes text look very slightly out of focus -- and a dark theme is
-    // mostly read at night, which is exactly when that shows. Still
-    // 12.25:1 on a card, well past AAA.
-    text: "#F0F0F2",               // label
-    textSecondary: "#A8A8AE",      // secondaryLabel, boosted for bright rooms
-    textTertiary: "#7C7C82",       // tertiaryLabel, boosted for bright rooms
-    textAlternate: "#FFFFFF",      // text on primary-filled controls
-    // Was #3A3A3C, the same value as surfaceElevated -- which meant every
-    // separator sitting on a raised row was invisible, drawn in exactly
-    // the colour underneath it. Lightened until a divider is actually a
-    // divider.
-    border: "#434345",             // separator flattened to hex
+    // mostly read at night, which is exactly when that shows.
+    text: "#F2F5F8",
+    textSecondary: "#919497",      // mix(text, background, 0.42) -- 6.3:1
+    textTertiary: "#636669",       // mix(text, background, 0.62)
+    // The accent is LIGHT by the YIQ test, so a filled button carries black
+    // text, not white. White on #5AA9FF is 3.5:1 and fails the 4.5 floor the
+    // custom-theme generator enforces; black is 8.6:1.
+    textAlternate: "#000000",      // text on primary-filled controls
+    border: "#33393F",             // mix(surface, text, 0.14)
     success: "#30D158",            // systemGreen (dark)
     danger: "#FF453A",             // systemRed (dark)
     error: "#FF453A",
     warning: "#FF9F0A",            // systemOrange (dark)
     info: "#64D2FF",               // systemCyan (dark)
-    bodyFill: "#3A3A3C",           // unworked muscle fill
-    chartFill: "rgba(10, 132, 255, 0.18)",
+    bodyFill: "#383D43",           // mix(surface, text, 0.16) -- unworked muscle
+    chartFill: "rgba(90, 169, 255, 0.16)",
     statusBar: "light",
     overlaySubtle: "rgba(255,255,255,0.04)",
     overlayMedium: "rgba(255,255,255,0.06)",
@@ -229,10 +231,41 @@ const LIGHT = {
     overlayInputFocused: "rgba(0,122,255,0.10)",
 };
 
+// The palette that shipped as DEFAULT until 1.5.11 -- a neutral charcoal canvas
+// rather than the cooler near-black. Kept as a preset so the old look is one
+// tap away instead of something to rebuild in the custom editor.
+const CHARCOAL = {
+    primary: "#0A84FF",            // systemBlue (dark)
+    primaryDark: "#0974DE",
+    secondary: "#0A84FF",
+    background: "#1C1C1E",         // systemGroupedBackground (dark, elevated)
+    surface: "#2C2C2E",            // secondarySystemGroupedBackground (elevated)
+    surfaceElevated: "#3A3A3C",    // tertiarySystemGroupedBackground (elevated)
+    text: "#F0F0F2",               // label
+    textSecondary: "#A8A8AE",      // secondaryLabel, boosted for bright rooms
+    textTertiary: "#7C7C82",       // tertiaryLabel, boosted for bright rooms
+    textAlternate: "#FFFFFF",      // #0A84FF is dark by the YIQ test, so white
+    border: "#434345",             // separator flattened to hex
+    success: "#30D158",            // systemGreen (dark)
+    danger: "#FF453A",             // systemRed (dark)
+    error: "#FF453A",
+    warning: "#FF9F0A",            // systemOrange (dark)
+    info: "#64D2FF",               // systemCyan (dark)
+    bodyFill: "#3A3A3C",           // unworked muscle fill
+    chartFill: "rgba(10, 132, 255, 0.18)",
+    statusBar: "light",
+    overlaySubtle: "rgba(255,255,255,0.04)",
+    overlayMedium: "rgba(255,255,255,0.06)",
+    overlayBorder: "rgba(255,255,255,0.09)",
+    overlayInput: "rgba(118,118,128,0.26)",   // systemFill-style input wells
+    overlayInputFocused: "rgba(118,118,128,0.40)",
+};
+
 // Export the dictionary. Previously saved theme ids that no longer exist
 // fall back to DEFAULT in ThemeContext (it checks `THEMES[storedThemeID]`).
 export const THEMES = {
     DEFAULT,
+    CHARCOAL,
     LIGHT,
 };
 
@@ -291,11 +324,13 @@ const hslToHex = (h, s, l) => {
 
 export const isValidHex = (hex) => parseHex(hex) !== null;
 
+// What the custom-theme creator starts from: the current default, so "Create"
+// opens on what the user is already looking at rather than a stale palette.
 export const DEFAULT_CUSTOM_INPUT = {
-    primary: '#0A84FF',
-    background: '#1C1C1E',
-    surface: '#2C2C2E',
-    text: '#FFFFFF',
+    primary: '#5AA9FF',
+    background: '#0B0E12',
+    surface: '#141A21',
+    text: '#F2F5F8',
 };
 
 export const buildCustomTheme = ({ primary, background, surface, text }) => {
