@@ -160,21 +160,38 @@ const WorkoutSummaryOverview = forwardRef(({ workoutDetails, exercisesList, onDo
             if (exercise.setType !== 'W') totalSets++;
             if (exercise.weight && exercise.reps) totalVolume += (exercise.weight * exercise.reps);
 
-            // PR extraction
+            // PR extraction. The three records are set-level flags, and a
+            // single exercise can take them on DIFFERENT sets -- a heavy first
+            // set for weight and 1RM, a longer later set for volume. The old
+            // code kept only the first PR set's flags and skipped the rest of
+            // the exercise, so those later records vanished from the card while
+            // still showing on the set in the breakdown below it.
             const isPR = exercise.is1rmPR || exercise.isVolumePR || exercise.isWeightPR;
             if (isPR) {
                 const exDetails = exercisesList?.find(ex => ex.exerciseID === exercise.exerciseID);
-                if (!prs.some(pr => pr.exerciseID === exercise.exerciseID)) {
-                    prs.push({
+                let entry = prs.find(pr => pr.exerciseID === exercise.exerciseID);
+                if (!entry) {
+                    entry = {
                         exerciseID: exercise.exerciseID,
                         name: exDetails ? exDetails.name : `Exercise ${exercise.exerciseID}`,
-                        records: [
-                            ...(exercise.is1rmPR ? ['1RM'] : []),
-                            ...(exercise.isVolumePR ? ['Volume'] : []),
-                            ...(exercise.isWeightPR ? ['Weight'] : [])
-                        ]
-                    });
+                        is1rm: false,
+                        isVolume: false,
+                        isWeight: false,
+                        records: []
+                    };
+                    prs.push(entry);
                 }
+                // OR the flags across every set of this exercise.
+                entry.is1rm = entry.is1rm || !!exercise.is1rmPR;
+                entry.isVolume = entry.isVolume || !!exercise.isVolumePR;
+                entry.isWeight = entry.isWeight || !!exercise.isWeightPR;
+                // Rebuilt each time so the badges keep a fixed order rather
+                // than the order the sets happened to fall in.
+                entry.records = [
+                    ...(entry.is1rm ? ['1RM'] : []),
+                    ...(entry.isVolume ? ['Volume'] : []),
+                    ...(entry.isWeight ? ['Weight'] : [])
+                ];
             }
         });
 
