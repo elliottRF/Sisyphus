@@ -746,15 +746,19 @@ export const insertWorkoutHistory = async (workoutEntries, workoutTitle, duratio
   try {
     await mergeSessionsIntoHistoryCache(database, workoutEntries.map(e => e.workoutSession));
   } catch (e) { /* cache refresh is best-effort */ }
-  // Defer the refresh broadcast until after the post-finish celebration.
+  // Defer the refresh broadcast past the screen transition into the summary.
   // Every mounted tab reloads on this event (Home's muscle radar + PR graphs,
-  // Exercises, History) — firing it immediately runs all that fetch + re-render
-  // work on the JS thread right as the summary's (JS-driven) count-up animates,
-  // which is what makes the count stutter. The summary reads its own data from
-  // route params, and History seeds from the cache refreshed just above, so the
-  // delay leaves nothing stale on screen. showCelebration:false — the trophy
-  // now plays inline on the summary, not as a full-screen overlay.
-  setTimeout(() => emit(AppEvents.WORKOUT_COMPLETED, { showCelebration: false }), 1600);
+  // Exercises, History), so firing it inline puts that fetch + re-render work
+  // on the JS thread during the navigation animation and the start of the
+  // summary's (JS-driven) count-up. This used to be 1600ms, long enough to
+  // clear the count-up entirely, because the cache refresh above was a SELECT *
+  // over the whole table and marshalled ~12k rows on the JS thread at the same
+  // moment; now it reads back only the rows just written, and what is left is
+  // short enough to hide behind the transition. Nothing is stale in the
+  // meantime: the summary reads its own data from route params and History
+  // seeds from the cache refreshed just above. showCelebration:false — the
+  // trophy now plays inline on the summary, not as a full-screen overlay.
+  setTimeout(() => emit(AppEvents.WORKOUT_COMPLETED, { showCelebration: false }), 300);
 };
 
 // Fetch workout history for a specific session
