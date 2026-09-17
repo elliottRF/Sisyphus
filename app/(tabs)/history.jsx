@@ -755,6 +755,17 @@ const History = () => {
     const scrollRef = useRef(null);
     useScrollToTop(scrollRef);
     const calendarActionSheetRef = useRef(null);
+    // react-native-actions-sheet measures the viewport it rests against on the
+    // frame its Modal mounts, and on Android that is before the new window goes
+    // edge-to-edge. The first open therefore rests against a viewport short by
+    // the status and navigation bars and sits exactly that far too high, leaving
+    // its own background showing under the calendar; every open after that is
+    // right, because the sheet keeps the measurement. It only recomputes when its
+    // content re-lays-out, and the calendar is a fixed height, so on its own
+    // nothing ever triggers that. Carrying one extra pixel of padding until the
+    // sheet is up, then dropping it, is the re-layout it needs. Reset on close so
+    // a fold or a rotation between opens re-measures too.
+    const [calendarSettled, setCalendarSettled] = useState(false);
 
     // Marks every trained day. Keys are built from local date parts (not
     // toISOString, which is UTC and can shift a late-evening session onto the
@@ -1284,8 +1295,10 @@ const History = () => {
                 containerStyle={styles.actionSheetContainer}
                 indicatorStyle={styles.indicator}
                 gestureEnabled={true}
+                onOpen={() => requestAnimationFrame(() => setCalendarSettled(true))}
+                onClose={() => setCalendarSettled(false)}
             >
-                <View style={styles.calendarContainer}>
+                <View style={[styles.calendarContainer, !calendarSettled && styles.calendarContainerMeasuring]}>
                     <AppCalendar
                         theme={theme}
                         markedDates={markedDates}
@@ -1400,6 +1413,11 @@ const getStyles = (theme) => {
         paddingTop: SPACING.s,
         paddingBottom: SPACING.l,
         backgroundColor: theme.surface,
+    },
+    // One pixel, held only until the sheet has opened, so its height changes
+    // once and the sheet re-measures itself. See calendarSettled above.
+    calendarContainerMeasuring: {
+        paddingBottom: SPACING.l + 1,
     },
     list: {
         flex: 1,
