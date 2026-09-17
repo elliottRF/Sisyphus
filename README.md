@@ -15,18 +15,18 @@ Now available on the Google Play Store.
 ## Screenshots
 
 <p align="center">
-  <img src="assets/screenshots/1.png" width="250"/>
-  <img src="assets/screenshots/2.png" width="250"/>
+  <img src="assets/phoneScreenshots/1.png" width="250"/>
+  <img src="assets/phoneScreenshots/2.png" width="250"/>
 </p>
 
 <p align="center">
-  <img src="assets/screenshots/3.png" width="250"/>
-  <img src="assets/screenshots/4.png" width="250"/>
+  <img src="assets/phoneScreenshots/3.png" width="250"/>
+  <img src="assets/phoneScreenshots/4.png" width="250"/>
 </p>
 
 <p align="center">
-  <img src="assets/screenshots/5.png" width="250"/>
-  <img src="assets/screenshots/6.png" width="250"/>
+  <img src="assets/phoneScreenshots/5.png" width="250"/>
+  <img src="assets/phoneScreenshots/6.png" width="250"/>
 </p>
 
 ---
