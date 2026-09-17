@@ -36,8 +36,12 @@ export const filterCompletedSets = (workout) => (workout || []).map(exerciseGrou
 /**
  * Builds workoutHistory rows from an already-filtered workout.
  *
- * PR flags: at most one set per exercise gets each of is1rmPR / isVolumePR /
- * isWeightPR, and only when this workout's best beats the historical best.
+ * PR flags: at most one set per exercise BLOCK gets each of is1rmPR /
+ * isVolumePR / isWeightPR, and only when that block's best beats the best to
+ * beat. An exercise can appear more than once in a workout, and each block is
+ * judged in turn against a best that the blocks before it may already have
+ * raised -- the same rule recalculateExercisePRs applies when it rewrites the
+ * flags after an edit, so the two agree.
  * Assisted exercises invert the weight logic (lower weight is better) and
  * never get 1RM/volume PRs. `pr` is the legacy 1RM flag.
  *
@@ -62,9 +66,14 @@ export const buildWorkoutEntries = async ({
 }) => {
     const workoutEntries = [];
     let globalExerciseNum = 1;
-    const maxOneRmsInWorkout = new Map();
-    const maxVolumesInWorkout = new Map();
-    const maxWeightsInWorkout = new Map();
+    // One entry per exercise block, in the order the blocks appear. Keying
+    // these by exerciseID instead lost PRs whenever a workout repeated an
+    // exercise: the second block overwrote the first block's maxima, so a
+    // second block that was lighter -- or that had no completed sets at all,
+    // which zeroed them -- left the first block's best matching nothing and
+    // beating nothing, and the whole exercise came out of the workout with no
+    // trophy despite setting a record.
+    const blockBests = [];
 
     for (const exerciseGroup of workout) {
         for (const exercise of exerciseGroup.exercises) {
@@ -111,11 +120,20 @@ export const buildWorkoutEntries = async ({
                     }
                 }
             }
-            maxOneRmsInWorkout.set(exercise.exerciseID, maxOneRM);
-            maxVolumesInWorkout.set(exercise.exerciseID, maxVolume);
-            maxWeightsInWorkout.set(exercise.exerciseID, { weight: isAssisted ? minWeight : maxWeight, reps: maxRepsAtMaxWeight });
+            blockBests.push({
+                maxOneRM,
+                maxVolume,
+                weight: isAssisted ? minWeight : maxWeight,
+                reps: maxRepsAtMaxWeight,
+            });
         }
     }
+
+    // What each exercise's blocks have to beat. Seeded from history the first
+    // time an exercise is reached, then raised by any block that takes a PR, so
+    // a later block of the same exercise is measured against the earlier one.
+    const bestsToBeat = new Map();
+    let blockIndex = 0;
 
     for (const exerciseGroup of workout) {
         for (const exercise of exerciseGroup.exercises) {
@@ -124,20 +142,38 @@ export const buildWorkoutEntries = async ({
             const exerciseDetails = exercises.find(e => e.exerciseID === exercise.exerciseID);
             const isAssisted = !!exerciseDetails?.isAssisted;
 
-            const maxOneRMForExercise = maxOneRmsInWorkout.get(exercise.exerciseID);
-            const maxVolumeForExercise = maxVolumesInWorkout.get(exercise.exerciseID);
-            const maxWeightInfo = maxWeightsInWorkout.get(exercise.exerciseID);
+            const block = blockBests[blockIndex++];
+            const maxOneRMForExercise = block.maxOneRM;
+            const maxVolumeForExercise = block.maxVolume;
+            const maxWeightInfo = { weight: block.weight, reps: block.reps };
 
-            const historicalPRs = await getHistoricalPRs(exercise.exerciseID);
+            let toBeat = bestsToBeat.get(exercise.exerciseID);
+            if (!toBeat) {
+                const historicalPRs = await getHistoricalPRs(exercise.exerciseID);
+                toBeat = {
+                    maxOneRM: historicalPRs.maxOneRM,
+                    maxVolume: historicalPRs.maxVolume,
+                    maxWeight: historicalPRs.maxWeight,
+                    maxRepsAtMaxWeight: historicalPRs.maxRepsAtMaxWeight,
+                };
+                bestsToBeat.set(exercise.exerciseID, toBeat);
+            }
 
-            const isOverall1rmPR = isAssisted ? false : (maxOneRMForExercise > historicalPRs.maxOneRM);
-            const isOverallVolumePR = isAssisted ? false : (maxVolumeForExercise > historicalPRs.maxVolume);
+            const isOverall1rmPR = isAssisted ? false : (maxOneRMForExercise > toBeat.maxOneRM);
+            const isOverallVolumePR = isAssisted ? false : (maxVolumeForExercise > toBeat.maxVolume);
 
             const isOverallWeightPR = isAssisted
-                ? (maxWeightInfo.weight < historicalPRs.maxWeight ||
-                    (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight))
-                : (maxWeightInfo.weight > historicalPRs.maxWeight ||
-                    (maxWeightInfo.weight === historicalPRs.maxWeight && maxWeightInfo.reps > historicalPRs.maxRepsAtMaxWeight));
+                ? (maxWeightInfo.weight < toBeat.maxWeight ||
+                    (maxWeightInfo.weight === toBeat.maxWeight && maxWeightInfo.reps > toBeat.maxRepsAtMaxWeight))
+                : (maxWeightInfo.weight > toBeat.maxWeight ||
+                    (maxWeightInfo.weight === toBeat.maxWeight && maxWeightInfo.reps > toBeat.maxRepsAtMaxWeight));
+
+            if (isOverall1rmPR) toBeat.maxOneRM = maxOneRMForExercise;
+            if (isOverallVolumePR) toBeat.maxVolume = maxVolumeForExercise;
+            if (isOverallWeightPR) {
+                toBeat.maxWeight = maxWeightInfo.weight;
+                toBeat.maxRepsAtMaxWeight = maxWeightInfo.reps;
+            }
 
             let pr1rmAssigned = false;
             let prVolumeAssigned = false;
